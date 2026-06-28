@@ -1,0 +1,1354 @@
+[
+ {
+  "name": "RuView",
+  "stars": 75658,
+  "pushed": "2026-06-27",
+  "lang": "Rust",
+  "desc": "π RuView turns commodity WiFi signals into real-time spatial intellige",
+  "recent": true
+ },
+ {
+  "name": "ruflo",
+  "stars": 61698,
+  "pushed": "2026-06-27",
+  "lang": "TypeScript",
+  "desc": "🌊 The leading agent meta-harness for Claude. Deploy intelligent multi",
+  "recent": true
+ },
+ {
+  "name": "RuVector",
+  "stars": 4296,
+  "pushed": "2026-06-27",
+  "lang": "Rust",
+  "desc": "RuVector is a High Performance, Real-Time, Self-Learning Ai, Vector GN",
+  "recent": true
+ },
+ {
+  "name": "agentic-flow",
+  "stars": 762,
+  "pushed": "2026-06-24",
+  "lang": "TypeScript",
+  "desc": "Easily switch between alternative low-cost AI models in Claude Code/Ag",
+  "recent": true
+ },
+ {
+  "name": "Bot-Generator-Bot",
+  "stars": 576,
+  "pushed": "2023-04-29",
+  "lang": "Nix",
+  "desc": "The ultimate bot generator bot prompt. Use this prompt to create power",
+  "recent": false
+ },
+ {
+  "name": "sparc",
+  "stars": 468,
+  "pushed": "2026-05-23",
+  "lang": "Python",
+  "desc": "",
+  "recent": true
+ },
+ {
+  "name": "rUv-dev",
+  "stars": 426,
+  "pushed": "2026-05-23",
+  "lang": "JavaScript",
+  "desc": "Ai power Dev using the rUv approach",
+  "recent": true
+ },
+ {
+  "name": "open-claude-code",
+  "stars": 416,
+  "pushed": "2026-06-27",
+  "lang": "JavaScript",
+  "desc": "Nightly Claude Code CLI Decompile — Reverse Engineered & Rebuilt",
+  "recent": true
+ },
+ {
+  "name": "ruv-FANN",
+  "stars": 370,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "A blazing-fast, memory-safe neural network library for Rust that bring",
+  "recent": true
+ },
+ {
+  "name": "agent-harness-generator",
+  "stars": 330,
+  "pushed": "2026-06-27",
+  "lang": "TypeScript",
+  "desc": "🛠️ The meta-harness for AI agents — scaffold your own focused, brande",
+  "recent": true
+ },
+ {
+  "name": "gpts",
+  "stars": 297,
+  "pushed": "2024-07-18",
+  "lang": "-",
+  "desc": "A collection of the GPTs created by rUv",
+  "recent": false
+ },
+ {
+  "name": "dspy.ts",
+  "stars": 261,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "DS.js (Declarative Self‑learning JavaScript",
+  "recent": true
+ },
+ {
+  "name": "SynthLang",
+  "stars": 261,
+  "pushed": "2026-05-23",
+  "lang": "Python",
+  "desc": "SynthLang is a hyper-efficient prompt language designed to optimize in",
+  "recent": true
+ },
+ {
+  "name": "daa",
+  "stars": 242,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "Decentralized Autonomous Applications (DAAs).  Building the Future wit",
+  "recent": true
+ },
+ {
+  "name": "ruvnet",
+  "stars": 217,
+  "pushed": "2026-06-14",
+  "lang": "-",
+  "desc": "ruvnet.",
+  "recent": true
+ },
+ {
+  "name": "QuDAG",
+  "stars": 189,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "QuDAG Protocol (Quantum-Resistant DAG-Based Anonymous Communication Sy",
+  "recent": true
+ },
+ {
+  "name": "FACT",
+  "stars": 179,
+  "pushed": "2026-05-23",
+  "lang": "Python",
+  "desc": "FACT – Fast Augmented Context Tools: FACT is a lean retrieval pattern ",
+  "recent": true
+ },
+ {
+  "name": "SAFLA",
+  "stars": 155,
+  "pushed": "2026-05-23",
+  "lang": "Python",
+  "desc": "Self-Aware Feedback Loop Algorithm (python)",
+  "recent": true
+ },
+ {
+  "name": "guardrail",
+  "stars": 152,
+  "pushed": "2023-12-12",
+  "lang": "Python",
+  "desc": "GuardRail: Advanced tool for data analysis and AI content generation u",
+  "recent": false
+ },
+ {
+  "name": "chatgpt-openai-api-plugin",
+  "stars": 147,
+  "pushed": "2023-05-02",
+  "lang": "Python",
+  "desc": "A powerful ChatGPT plugin that integrates with the OpenAI API, enablin",
+  "recent": false
+ },
+ {
+  "name": "promptlang",
+  "stars": 133,
+  "pushed": "2023-12-12",
+  "lang": "-",
+  "desc": "A Prompt based programming language for prompts and AI interactions. S",
+  "recent": false
+ },
+ {
+  "name": "midstream",
+  "stars": 125,
+  "pushed": "2026-06-08",
+  "lang": "Rust",
+  "desc": "MidStream is a powerful platform that makes AI conversations smarter a",
+  "recent": true
+ },
+ {
+  "name": "agentic-voice",
+  "stars": 119,
+  "pushed": "2024-07-15",
+  "lang": "TypeScript",
+  "desc": "Agentic Chat App is an advanced AI-powered chat application designed f",
+  "recent": false
+ },
+ {
+  "name": "rvm",
+  "stars": 113,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "RVM — The Virtual Machine Built for the Agentic Age, in Rust.",
+  "recent": true
+ },
+ {
+  "name": "rudevolution",
+  "stars": 108,
+  "pushed": "2026-05-23",
+  "lang": "JavaScript",
+  "desc": "ruDevolution — The first decompiler that understands code semantically",
+  "recent": true
+ },
+ {
+  "name": "marketing",
+  "stars": 108,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "The Best Agentic Marketing Swarm in the World",
+  "recent": true
+ },
+ {
+  "name": "voicebot",
+  "stars": 102,
+  "pushed": "2025-01-31",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "hello_world_agent",
+  "stars": 99,
+  "pushed": "2025-03-08",
+  "lang": "TypeScript",
+  "desc": "A simple demonstration agent using the ReACT methodology for analyzing",
+  "recent": false
+ },
+ {
+  "name": "chatgpt_plugin_python",
+  "stars": 97,
+  "pushed": "2023-03-23",
+  "lang": "Python",
+  "desc": "A simple To-do ChatGPT Plugin using python and deployed on replit. ",
+  "recent": false
+ },
+ {
+  "name": "q-star",
+  "stars": 96,
+  "pushed": "2024-01-31",
+  "lang": "Python",
+  "desc": "Q-Star Agent Code: A reinforcement learning-based framework for intell",
+  "recent": false
+ },
+ {
+  "name": "flow-nexus",
+  "stars": 95,
+  "pushed": "2025-09-10",
+  "lang": "JavaScript",
+  "desc": "Flow Nexus is the first competitive agentic platform built entirely on",
+  "recent": false
+ },
+ {
+  "name": "ultrasonic",
+  "stars": 94,
+  "pushed": "2025-06-09",
+  "lang": "TypeScript",
+  "desc": "A comprehensive steganography framework for embedding and extracting a",
+  "recent": false
+ },
+ {
+  "name": "auto-browser",
+  "stars": 94,
+  "pushed": "2025-01-24",
+  "lang": "Python",
+  "desc": "A command-line tool for configurable web automation with AI-assisted t",
+  "recent": false
+ },
+ {
+  "name": "rUv-Enterprise-AI-Guide",
+  "stars": 91,
+  "pushed": "2024-05-03",
+  "lang": "-",
+  "desc": "The rUv Enterprise AI Guide is a comprehensive resource designed to as",
+  "recent": false
+ },
+ {
+  "name": "Surfer",
+  "stars": 88,
+  "pushed": "2023-04-23",
+  "lang": "Python",
+  "desc": "ChatGPT Web Surfer Plugin",
+  "recent": false
+ },
+ {
+  "name": "Prompt-Engine",
+  "stars": 86,
+  "pushed": "2023-05-03",
+  "lang": "-",
+  "desc": "Prompt Engine is a powerful and flexible template designed to facilita",
+  "recent": false
+ },
+ {
+  "name": "symbolic-scribe",
+  "stars": 85,
+  "pushed": "2026-06-15",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": true
+ },
+ {
+  "name": "sublinear-time-solver",
+  "stars": 82,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "Rust + WASM sublinear-time solver for asymmetric diagonally dominant s",
+  "recent": true
+ },
+ {
+  "name": "Agent-Name-Service",
+  "stars": 78,
+  "pushed": "2025-05-16",
+  "lang": "TypeScript",
+  "desc": "Agent Name Service (ANS) Protocol, introduced by the OWASP GenAI Secur",
+  "recent": false
+ },
+ {
+  "name": "Synaptic-Mesh",
+  "stars": 74,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "Synaptic Neural Mesh: a self-evolving, peer to peer neural fabric wher",
+  "recent": true
+ },
+ {
+  "name": "agentdb",
+  "stars": 70,
+  "pushed": "2026-06-22",
+  "lang": "TypeScript",
+  "desc": "Vector memory that gets smarter every time your agent uses it.",
+  "recent": true
+ },
+ {
+  "name": "openai_devops",
+  "stars": 70,
+  "pushed": "2023-03-15",
+  "lang": "Shell",
+  "desc": "This script is a command-line tool that utilizes OpenAI's GPT-3.5 Turb",
+  "recent": false
+ },
+ {
+  "name": "AiToml",
+  "stars": 67,
+  "pushed": "2023-03-21",
+  "lang": "Rust",
+  "desc": "AI-TOML Workflow Specification (aiTWS), a comprehensive and flexible s",
+  "recent": false
+ },
+ {
+  "name": "federated-mcp",
+  "stars": 65,
+  "pushed": "2024-11-26",
+  "lang": "TypeScript",
+  "desc": "This implementation follows the official MCP specification, including ",
+  "recent": false
+ },
+ {
+  "name": "GenAI-Superstream",
+  "stars": 59,
+  "pushed": "2025-05-22",
+  "lang": "Python",
+  "desc": "Agentic Engineering for Data Analysis ",
+  "recent": false
+ },
+ {
+  "name": "strawberry-phi",
+  "stars": 59,
+  "pushed": "2024-09-13",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "reflective-engineer",
+  "stars": 57,
+  "pushed": "2024-12-19",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentic-employment",
+  "stars": 55,
+  "pushed": "2024-06-26",
+  "lang": "Python",
+  "desc": "The first platform designed to empower organizations by automating and",
+  "recent": false
+ },
+ {
+  "name": "ARCADIA",
+  "stars": 50,
+  "pushed": "2025-10-20",
+  "lang": "Rust",
+  "desc": "AI-powered game engine for dynamic, personalized experiences in evolvi",
+  "recent": false
+ },
+ {
+  "name": "dynamo-mcp",
+  "stars": 50,
+  "pushed": "2025-04-26",
+  "lang": "Python",
+  "desc": "A dyamic MCP Registry using Cookiecutter templates",
+  "recent": false
+ },
+ {
+  "name": "agentic-reports",
+  "stars": 48,
+  "pushed": "2024-06-03",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "ruvbot",
+  "stars": 47,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "ruvBot is an innovative tool designed to assist users in navigating an",
+  "recent": true
+ },
+ {
+  "name": "agentic-security",
+  "stars": 47,
+  "pushed": "2026-05-23",
+  "lang": "Python",
+  "desc": "",
+  "recent": true
+ },
+ {
+  "name": "ai-video",
+  "stars": 47,
+  "pushed": "2024-05-24",
+  "lang": "JavaScript",
+  "desc": "a web application that captures media streams from various sources suc",
+  "recent": false
+ },
+ {
+  "name": "agentic-devops",
+  "stars": 46,
+  "pushed": "2024-06-20",
+  "lang": "Python",
+  "desc": "Agentic DevOps is a powerful, interactive Command-Line Interface (CLI)",
+  "recent": false
+ },
+ {
+  "name": "inflight",
+  "stars": 44,
+  "pushed": "2025-01-09",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "Swagger-ChatGPT-Plugin-Creator",
+  "stars": 44,
+  "pushed": "2023-04-06",
+  "lang": "HTML",
+  "desc": "ChatGPT Plugin Creator is an open-source project that helps you conver",
+  "recent": false
+ },
+ {
+  "name": "quantum-magnetic-navigation",
+  "stars": 43,
+  "pushed": "2025-04-18",
+  "lang": "Python",
+  "desc": "A navigation system that uses quantum magnetometers to provide precise",
+  "recent": false
+ },
+ {
+  "name": "llamastack",
+  "stars": 43,
+  "pushed": "2024-09-10",
+  "lang": "JavaScript",
+  "desc": "An open source UI for Meta LLama Stack Apps / Agents",
+  "recent": false
+ },
+ {
+  "name": "vibecast",
+  "stars": 42,
+  "pushed": "2026-02-22",
+  "lang": "-",
+  "desc": "Weekly Vibecast Live coding sessions with rUv. Check branches for each",
+  "recent": false
+ },
+ {
+  "name": "agentic-search",
+  "stars": 42,
+  "pushed": "2025-05-20",
+  "lang": "JavaScript",
+  "desc": "An Agentic Github Copilot Extension",
+  "recent": false
+ },
+ {
+  "name": "agileagents",
+  "stars": 42,
+  "pushed": "2024-06-27",
+  "lang": "Python",
+  "desc": "Agile Agents (A2) is an open-source framework for the creation and dep",
+  "recent": false
+ },
+ {
+  "name": "VIVIAN",
+  "stars": 42,
+  "pushed": "2023-04-02",
+  "lang": "Rust",
+  "desc": "VIVIAN: Vector Index Virtual Infrastructure for Autonomous Networks",
+  "recent": false
+ },
+ {
+  "name": "nova",
+  "stars": 41,
+  "pushed": "2025-01-31",
+  "lang": "Python",
+  "desc": "NOVA is a knowledge distillation system that extracts domain-specific ",
+  "recent": false
+ },
+ {
+  "name": "genesis",
+  "stars": 39,
+  "pushed": "2025-09-05",
+  "lang": "Python",
+  "desc": "Genesis is a groundbreaking physics platform designed for robotics and",
+  "recent": false
+ },
+ {
+  "name": "drupaljs",
+  "stars": 37,
+  "pushed": "2026-06-04",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": true
+ },
+ {
+  "name": "code-mesh",
+  "stars": 37,
+  "pushed": "2025-10-27",
+  "lang": "Rust",
+  "desc": "Code Mesh",
+  "recent": false
+ },
+ {
+  "name": "agentic-difusion",
+  "stars": 37,
+  "pushed": "2025-05-12",
+  "lang": "Python",
+  "desc": "a comprehensive diffusion-based code refinement model",
+  "recent": false
+ },
+ {
+  "name": "aido",
+  "stars": 36,
+  "pushed": "2024-11-15",
+  "lang": "TypeScript",
+  "desc": " AI-Driven Decentralized Organization (AIDO) using Supabase and LangCh",
+  "recent": false
+ },
+ {
+  "name": "sparc-ide",
+  "stars": 35,
+  "pushed": "2025-05-06",
+  "lang": "Shell",
+  "desc": "A custom Ai driven IDE",
+  "recent": false
+ },
+ {
+  "name": "hacker-league",
+  "stars": 33,
+  "pushed": "2025-02-06",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agenticsjs",
+  "stars": 32,
+  "pushed": "2024-09-25",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "paris",
+  "stars": 32,
+  "pushed": "2023-03-30",
+  "lang": "Python",
+  "desc": "PARIS (Perpetual Adaptive Regenerative Intelligence System) is a conce",
+  "recent": false
+ },
+ {
+  "name": "yyz-agentics-june",
+  "stars": 31,
+  "pushed": "2025-06-25",
+  "lang": "Python",
+  "desc": " AI-Powered Neural Network Libraries built with Claude-Flow Swarm Orch",
+  "recent": false
+ },
+ {
+  "name": "skygraph",
+  "stars": 29,
+  "pushed": "2026-06-14",
+  "lang": "Rust",
+  "desc": "Realtime all-sky radar in the browser: live ADS-B aircraft, SGP4 satel",
+  "recent": true
+ },
+ {
+  "name": "pygentic",
+  "stars": 28,
+  "pushed": "2024-06-01",
+  "lang": "Python",
+  "desc": "Pygentic is an innovative system designed to enhance the capabilities ",
+  "recent": false
+ },
+ {
+  "name": "codex-one",
+  "stars": 27,
+  "pushed": "2025-05-19",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "coding-wingman",
+  "stars": 27,
+  "pushed": "2023-11-16",
+  "lang": "Python",
+  "desc": "A sample ChatGPT API Gateway. A robust interface for interacting with ",
+  "recent": false
+ },
+ {
+  "name": "agentic-robotics",
+  "stars": 26,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "The goal of this project is to create a modular Agentic Python framewo",
+  "recent": true
+ },
+ {
+  "name": "musicai",
+  "stars": 26,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "High-performance AI-powered auto-tune and music enhancement system for",
+  "recent": true
+ },
+ {
+  "name": "chatgpt-dev-mode",
+  "stars": 25,
+  "pushed": "2025-09-13",
+  "lang": "-",
+  "desc": "Scaffold and launch ChatGPT Developer Mode MCP servers in minutes. Run",
+  "recent": false
+ },
+ {
+  "name": "quantum_cryptocurrency",
+  "stars": 25,
+  "pushed": "2024-12-10",
+  "lang": "Python",
+  "desc": " Quantum-Secured Cryptocurrency",
+  "recent": false
+ },
+ {
+  "name": "AiHCC",
+  "stars": 23,
+  "pushed": "2024-05-07",
+  "lang": "Shell",
+  "desc": "AI Hackerspace Consulting Collective (AiHCC)",
+  "recent": false
+ },
+ {
+  "name": "omnipotent",
+  "stars": 22,
+  "pushed": "2025-03-04",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "onnx-agent",
+  "stars": 22,
+  "pushed": "2025-02-24",
+  "lang": "Python",
+  "desc": "A complete set of requirements—covering UX, CLI, and code—that builds ",
+  "recent": false
+ },
+ {
+  "name": "ChatGPT-Trading-Bot-for-KuCoin",
+  "stars": 22,
+  "pushed": "2023-03-24",
+  "lang": "Python",
+  "desc": "A trading script for KuCoin that continuously places buy and sell orde",
+  "recent": false
+ },
+ {
+  "name": "fireflies-webook",
+  "stars": 21,
+  "pushed": "2024-11-01",
+  "lang": "TypeScript",
+  "desc": "Webhook endpoint for Fireflies transcripts with intent detection",
+  "recent": false
+ },
+ {
+  "name": "vcbot",
+  "stars": 21,
+  "pushed": "2023-03-21",
+  "lang": "Python",
+  "desc": "This is a Streamlit-based UI for a GPT-3.5-powered venture capitalist ",
+  "recent": false
+ },
+ {
+  "name": "ruv-neural",
+  "stars": 20,
+  "pushed": "2026-06-18",
+  "lang": "Rust",
+  "desc": "The open closed-loop OS for gamma-entrainment research — a Rust/WASM/e",
+  "recent": true
+ },
+ {
+  "name": "ruv.io",
+  "stars": 20,
+  "pushed": "2025-11-16",
+  "lang": "-",
+  "desc": "One Library to Rule them all. npm @ruv.io/",
+  "recent": false
+ },
+ {
+  "name": "obsidian-brain",
+  "stars": 19,
+  "pushed": "2026-05-23",
+  "lang": "TypeScript",
+  "desc": "Obsidian plugin bridging your vault with the RuVector Brain — DiskANN ",
+  "recent": true
+ },
+ {
+  "name": "swarm-world",
+  "stars": 19,
+  "pushed": "2025-07-12",
+  "lang": "C#",
+  "desc": "Ai Game Builder",
+  "recent": false
+ },
+ {
+  "name": "aws-dev",
+  "stars": 19,
+  "pushed": "2024-05-20",
+  "lang": "Python",
+  "desc": "AWS Dev enviroment",
+  "recent": false
+ },
+ {
+  "name": "textclassifier",
+  "stars": 19,
+  "pushed": "2023-03-19",
+  "lang": "-",
+  "desc": "a language model Prompt trained by OpenAI that can classify text input",
+  "recent": false
+ },
+ {
+  "name": "powerprompt",
+  "stars": 19,
+  "pushed": "2023-02-15",
+  "lang": "JavaScript",
+  "desc": "Power Prompt - Enhance ChatGPT & OpenAi interaction. Seamless conversa",
+  "recent": false
+ },
+ {
+  "name": "phone-agent",
+  "stars": 18,
+  "pushed": "2025-04-04",
+  "lang": "TypeScript",
+  "desc": "This implementation creates a Cloudflare Worker that receives emails v",
+  "recent": false
+ },
+ {
+  "name": "aihl",
+  "stars": 18,
+  "pushed": "2024-11-13",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "supa-ruv",
+  "stars": 18,
+  "pushed": "2024-05-24",
+  "lang": "Shell",
+  "desc": "Everything you need to use Supabase + Ai",
+  "recent": false
+ },
+ {
+  "name": "helix",
+  "stars": 17,
+  "pushed": "2026-06-26",
+  "lang": "Rust",
+  "desc": "Helix — a private, local-first, anti-hallucination Personal Health Int",
+  "recent": true
+ },
+ {
+  "name": "rufield",
+  "stars": 17,
+  "pushed": "2026-06-14",
+  "lang": "Rust",
+  "desc": "RuField MFS — the open specification for camera-free multimodal field ",
+  "recent": true
+ },
+ {
+  "name": "musica",
+  "stars": 17,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "Structure-first audio separation via dynamic mincut — spectral graph m",
+  "recent": true
+ },
+ {
+  "name": "supabase-authentication",
+  "stars": 17,
+  "pushed": "2024-08-30",
+  "lang": "Python",
+  "desc": "This project showcases a comprehensive authentication system using Sup",
+  "recent": false
+ },
+ {
+  "name": "aiscreenplay",
+  "stars": 17,
+  "pushed": "2023-03-18",
+  "lang": "Python",
+  "desc": "The Screenplay Generator is a web application that allows users to gen",
+  "recent": false
+ },
+ {
+  "name": "alienator",
+  "stars": 16,
+  "pushed": "2025-08-14",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "AiCodeCalc",
+  "stars": 16,
+  "pushed": "2025-01-12",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "ai-gist",
+  "stars": 16,
+  "pushed": "2024-05-26",
+  "lang": "Python",
+  "desc": "This project provides a FastAPI application to create and update GitHu",
+  "recent": false
+ },
+ {
+  "name": "vsc-remote-mcp",
+  "stars": 15,
+  "pushed": "2025-04-27",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentXNG",
+  "stars": 15,
+  "pushed": "2024-07-05",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "retro-ai-ui",
+  "stars": 15,
+  "pushed": "2024-04-06",
+  "lang": "Python",
+  "desc": "A prompt building web application built in python with a retro style U",
+  "recent": false
+ },
+ {
+  "name": "2BotTalk",
+  "stars": 15,
+  "pushed": "2023-03-26",
+  "lang": "Python",
+  "desc": "AI-powered bot duo for code gen, refining, web search, GitHub imports,",
+  "recent": false
+ },
+ {
+  "name": "rupixel",
+  "stars": 14,
+  "pushed": "2026-06-26",
+  "lang": "Rust",
+  "desc": "Pixel-native visual RAG ported to Rust on the ruvector ANN substrate (",
+  "recent": true
+ },
+ {
+  "name": "PhotonLayer",
+  "stars": 14,
+  "pushed": "2026-06-18",
+  "lang": "Rust",
+  "desc": "Deterministic optical-AI front end in pure Rust: a learned phase mask ",
+  "recent": true
+ },
+ {
+  "name": "Quantum-Virtual-Machine",
+  "stars": 14,
+  "pushed": "2025-08-11",
+  "lang": "Rust",
+  "desc": "A backend-agnostic Rust crate with WASM support for quantum virtual ma",
+  "recent": false
+ },
+ {
+  "name": "local-logic",
+  "stars": 14,
+  "pushed": "2024-10-29",
+  "lang": "Python",
+  "desc": "A powerful environment that combines Open Interpreter with Aider, enab",
+  "recent": false
+ },
+ {
+  "name": "agentic-artifacts",
+  "stars": 14,
+  "pushed": "2024-06-24",
+  "lang": "Python",
+  "desc": "Agentic Artifacts is a tool for generating and managing CodeSandbox ar",
+  "recent": false
+ },
+ {
+  "name": "openai-cost-estimator",
+  "stars": 14,
+  "pushed": "2023-10-24",
+  "lang": "HTML",
+  "desc": "GPT API Cost Estimation for Enterprises",
+  "recent": false
+ },
+ {
+  "name": "rvcsi",
+  "stars": 13,
+  "pushed": "2026-05-23",
+  "lang": "Rust",
+  "desc": "rvCSI — edge RF sensing runtime: normalize WiFi CSI from Nexmon/ESP32/",
+  "recent": true
+ },
+ {
+  "name": "claude-test",
+  "stars": 13,
+  "pushed": "2025-06-24",
+  "lang": "Shell",
+  "desc": "test",
+  "recent": false
+ },
+ {
+  "name": "roomodes",
+  "stars": 13,
+  "pushed": "2025-04-06",
+  "lang": "-",
+  "desc": "Various Roo Mode Configurations",
+  "recent": false
+ },
+ {
+  "name": "agentic-preview",
+  "stars": 13,
+  "pushed": "2024-10-11",
+  "lang": "JavaScript",
+  "desc": "Agentic Preview is an asynchronous FastAPI backend service that allows",
+  "recent": false
+ },
+ {
+  "name": "electo1-js",
+  "stars": 13,
+  "pushed": "2024-09-23",
+  "lang": "JavaScript",
+  "desc": "What if you could predict every election at an individual level for th",
+  "recent": false
+ },
+ {
+  "name": "open-space",
+  "stars": 13,
+  "pushed": "2024-06-08",
+  "lang": "TypeScript",
+  "desc": "An open source code of the GitHub Copilot Workspace",
+  "recent": false
+ },
+ {
+  "name": "Ai-Code-Generator-",
+  "stars": 12,
+  "pushed": "2023-03-21",
+  "lang": "Rust",
+  "desc": "Automated Code Generation and Testing with OpenAI Codex and GitHub Int",
+  "recent": false
+ },
+ {
+  "name": "RuLake",
+  "stars": 11,
+  "pushed": "2026-06-08",
+  "lang": "Rust",
+  "desc": "A cache-coherent vector execution fabric — sits in front of any vector",
+  "recent": true
+ },
+ {
+  "name": "vibing",
+  "stars": 11,
+  "pushed": "2025-03-20",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentic-scraper",
+  "stars": 11,
+  "pushed": "2024-10-21",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "markov-chains",
+  "stars": 11,
+  "pushed": "2024-06-02",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "pipackager",
+  "stars": 11,
+  "pushed": "2024-05-26",
+  "lang": "Python",
+  "desc": "pipackager is a tool to manage your PyPI package, including cleaning o",
+  "recent": false
+ },
+ {
+  "name": "chatgpt_tatum_plugin",
+  "stars": 11,
+  "pushed": "2023-03-28",
+  "lang": "-",
+  "desc": "The Tatum ChatGPT Plugin is an OpenAPI plugin that allows the user to ",
+  "recent": false
+ },
+ {
+  "name": "agentic-capacity-exchange",
+  "stars": 10,
+  "pushed": "2024-06-08",
+  "lang": "Python",
+  "desc": "A decentralized GPU marketplace platform",
+  "recent": false
+ },
+ {
+  "name": "codecraft",
+  "stars": 10,
+  "pushed": "2024-05-26",
+  "lang": "Shell",
+  "desc": "CodeCraft is a powerful command-line interface (CLI) tool that simplif",
+  "recent": false
+ },
+ {
+  "name": "rvdna",
+  "stars": 9,
+  "pushed": "2026-06-18",
+  "lang": "JavaScript",
+  "desc": "rvDNA — AI-native genomic analysis in pure Rust + WASM: biomarker risk",
+  "recent": true
+ },
+ {
+  "name": "ruos-macair",
+  "stars": 9,
+  "pushed": "2026-04-18",
+  "lang": "Shell",
+  "desc": "ruOS for MacBook Air 2012 — custom Linux with DJ, Spotify, Tailscale, ",
+  "recent": true
+ },
+ {
+  "name": "infinity-ui",
+  "stars": 9,
+  "pushed": "2024-09-19",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "q-space",
+  "stars": 9,
+  "pushed": "2024-05-26",
+  "lang": "Rust",
+  "desc": " Q-Space, a cutting-edge deployment wizard designed to simplify the pr",
+  "recent": false
+ },
+ {
+  "name": "ruv-drone",
+  "stars": 8,
+  "pushed": "2026-06-16",
+  "lang": "Rust",
+  "desc": "Industrial cooperative-UAV fleet coordination in Rust — formation keep",
+  "recent": true
+ },
+ {
+  "name": "Connectome-OS",
+  "stars": 8,
+  "pushed": "2026-04-23",
+  "lang": "-",
+  "desc": "A debugging and control layer for embodied graph systems — cut the wir",
+  "recent": true
+ },
+ {
+  "name": "contextual-retrevial",
+  "stars": 8,
+  "pushed": "2024-10-18",
+  "lang": "-",
+  "desc": "This Contextual Retrieval System enhances the accuracy and relevance o",
+  "recent": false
+ },
+ {
+  "name": "Auto-GPT",
+  "stars": 8,
+  "pushed": "2023-04-17",
+  "lang": "-",
+  "desc": "An experimental open-source attempt to make GPT-4 fully autonomous.",
+  "recent": false
+ },
+ {
+  "name": "chatgpt-aws-price-list-plugin",
+  "stars": 8,
+  "pushed": "2023-03-28",
+  "lang": "-",
+  "desc": "ChatGPT plugin for managing and understanding AWS costs using the AWS ",
+  "recent": false
+ },
+ {
+  "name": "console-streamer",
+  "stars": 8,
+  "pushed": "2023-03-26",
+  "lang": "Python",
+  "desc": "An app that video streams console output to YouTube Live. Uses Python,",
+  "recent": false
+ },
+ {
+  "name": "SVGart",
+  "stars": 8,
+  "pushed": "2016-12-19",
+  "lang": "-",
+  "desc": "A collection of SVG images by rUv",
+  "recent": false
+ },
+ {
+  "name": "worldgraph",
+  "stars": 7,
+  "pushed": "2026-06-27",
+  "lang": "Rust",
+  "desc": "Privacy-aware environmental digital twin for ambient/RF sensing in Rus",
+  "recent": true
+ },
+ {
+  "name": "ruqu",
+  "stars": 6,
+  "pushed": "2026-06-18",
+  "lang": "Rust",
+  "desc": "High-performance quantum computing in pure Rust + WebAssembly: state-v",
+  "recent": true
+ },
+ {
+  "name": "ruvn",
+  "stars": 6,
+  "pushed": "2026-06-16",
+  "lang": "JavaScript",
+  "desc": "ruvn — AI research harness that turns a question into a graded, cited ",
+  "recent": true
+ },
+ {
+  "name": "ai-browse",
+  "stars": 6,
+  "pushed": "2025-01-11",
+  "lang": "-",
+  "desc": "Agent-based automation, focusing on browser tasks. ",
+  "recent": false
+ },
+ {
+  "name": "Electo1",
+  "stars": 6,
+  "pushed": "2024-09-22",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentic-dashboard",
+  "stars": 6,
+  "pushed": "2024-06-19",
+  "lang": "-",
+  "desc": "A web application for creating, managing, and testing algorithms using",
+  "recent": false
+ },
+ {
+  "name": "r-flow",
+  "stars": 6,
+  "pushed": "2024-04-08",
+  "lang": "JavaScript",
+  "desc": "Created with CodeSandbox",
+  "recent": false
+ },
+ {
+  "name": "santa-ai-workshop",
+  "stars": 6,
+  "pushed": "2023-12-22",
+  "lang": "-",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentX",
+  "stars": 6,
+  "pushed": "2023-12-14",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "p2pGPT",
+  "stars": 6,
+  "pushed": "2023-04-17",
+  "lang": "Python",
+  "desc": "peer 2 peer GPT",
+  "recent": false
+ },
+ {
+  "name": "ruvGPT2",
+  "stars": 6,
+  "pushed": "2023-04-17",
+  "lang": "-",
+  "desc": "An experimental open-source attempt to make GPT-4 fully autonomous.",
+  "recent": false
+ },
+ {
+  "name": "cognitum-claude-plugin",
+  "stars": 5,
+  "pushed": "2026-04-29",
+  "lang": "-",
+  "desc": "Cognitum Claude Code plugins (MCP server registration for cognitum.one",
+  "recent": true
+ },
+ {
+  "name": "agentic-gradio",
+  "stars": 5,
+  "pushed": "2024-06-25",
+  "lang": "-",
+  "desc": "Use Ai to dynamically Create Dashboards",
+  "recent": false
+ },
+ {
+  "name": "rUvGPT",
+  "stars": 5,
+  "pushed": "2023-04-16",
+  "lang": "-",
+  "desc": "An experimental open-source attempt to make GPT-4 fully autonomous.",
+  "recent": false
+ },
+ {
+  "name": "AIConverse",
+  "stars": 5,
+  "pushed": "2023-03-25",
+  "lang": "-",
+  "desc": "Autonomous Feedback Loops: AIConverse is an innovative project focused",
+  "recent": false
+ },
+ {
+  "name": "image-agent",
+  "stars": 4,
+  "pushed": "2025-04-25",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "demo-proxy-app",
+  "stars": 4,
+  "pushed": "2024-10-28",
+  "lang": "Python",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentic-flows",
+  "stars": 4,
+  "pushed": "2024-08-27",
+  "lang": "-",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "CodeGPT",
+  "stars": 4,
+  "pushed": "2023-04-17",
+  "lang": "-",
+  "desc": "An experimental open-source attempt to make GPT-4 fully autonomous.",
+  "recent": false
+ },
+ {
+  "name": "tariffic",
+  "stars": 3,
+  "pushed": "2025-04-07",
+  "lang": "TypeScript",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "hft",
+  "stars": 3,
+  "pushed": "2024-09-14",
+  "lang": "Shell",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "agentic-music",
+  "stars": 3,
+  "pushed": "2024-08-14",
+  "lang": "-",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "SonicChamber",
+  "stars": 2,
+  "pushed": "2026-06-22",
+  "lang": "Rust",
+  "desc": "Sonic Chamber — open-source Acoustic Digital Human Workbench for USCT ",
+  "recent": true
+ },
+ {
+  "name": "agentics-meetup",
+  "stars": 2,
+  "pushed": "2025-05-06",
+  "lang": "-",
+  "desc": "Sample Starting",
+  "recent": false
+ },
+ {
+  "name": "ai-stream",
+  "stars": 2,
+  "pushed": "2024-05-24",
+  "lang": "Shell",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "socket",
+  "stars": 2,
+  "pushed": "2024-05-08",
+  "lang": "-",
+  "desc": "",
+  "recent": false
+ },
+ {
+  "name": "AP-Casper",
+  "stars": 2,
+  "pushed": "2023-03-23",
+  "lang": "JavaScript",
+  "desc": "",
+  "recent": false
+ }
+]

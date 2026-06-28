@@ -1,0 +1,19 @@
+{
+  "builder": "rvf-kb-forge",
+  "builtUtc": "2026-06-28T02:27:26.743Z",
+  "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
+  "selfUpdate": "node forge-update.mjs",
+  "stores": {
+    "ruview": {
+      "kbName": "ruview",
+      "sourceRepo": "https://github.com/ruvnet/RuView",
+      "sourceCommit": "4bf88e12830053173bee1769da7cafe82e1195da",
+      "sourceDescribe": "v0.8.1-esp32-5-g4bf88e12",
+      "builtUtc": "2026-06-28T02:27:26.743Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruview-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruview"
+    }
+  }
+}

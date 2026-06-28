@@ -1,0 +1,18 @@
+[
+  {
+    "slug": "ruview-integrate-with-smart",
+    "q": "How does RuView integrate with smart-home ecosystems (Home Assistant MQTT, Matter, Apple Home)?"
+  },
+  {
+    "slug": "run-ruview-publish-sensing",
+    "q": "How do I run RuView and publish its sensing to Home Assistant end-to-end?"
+  },
+  {
+    "slug": "entities-semantic-states-ruview",
+    "q": "What entities and semantic states does RuView publish per node to Home Assistant?"
+  },
+  {
+    "slug": "ruview-s-core-concepts",
+    "q": "What are RuView's core concepts — CSI (Channel State Information), ESP32 sensors, WiFi-DensePose pose estimation, and RVF cognitive containers?"
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "slug": "ruvector-s-adrs-hnsw",
+    "q": "Where are RuVector's ADRs and HNSW documentation kept in the repo?"
+  },
+  {
+    "slug": "adr-029-decide-about",
+    "q": "What does ADR-029 decide about RVF being the canonical binary format across RuVector libraries, and which earlier ADRs does it supersede?"
+  }
+]

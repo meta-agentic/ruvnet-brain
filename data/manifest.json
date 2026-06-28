@@ -1,0 +1,711 @@
+{
+  "brainVersion": "v0.1.0-dev",
+  "generated": "2026-06-27T14:21:06.923Z",
+  "generatedHuman": "Sat, 27 Jun 2026 14:21:06 GMT",
+  "coverage": {
+    "total": 169,
+    "built": 1,
+    "pending": 168
+  },
+  "builtRepos": [
+    {
+      "name": "ruflo",
+      "builtFromSha": "322b2ae521bc1a133eea9f40d1b7afb4a337c445",
+      "status": "built"
+    },
+    {
+      "name": "ruvector",
+      "builtFromSha": "ed95f498bacd5957ae52ba8c6c1939dde6133f9b",
+      "status": "built"
+    },
+    {
+      "name": "agentdb",
+      "builtFromSha": "47c79b6158cf4f28b27e404e0bdfebc3beeba073",
+      "status": "built"
+    },
+    {
+      "name": "rulake",
+      "builtFromSha": "8f2c40863788eb38f260edb4fdbee4e07e1631d4",
+      "status": "built"
+    },
+    {
+      "name": "ruview",
+      "builtFromSha": "4bf88e12830053173bee1769da7cafe82e1195da",
+      "status": "built"
+    }
+  ],
+  "pendingRepos": [
+    {
+      "name": "RuView",
+      "tier": "T0"
+    },
+    {
+      "name": "RuVector",
+      "tier": "T0"
+    },
+    {
+      "name": "agentic-flow",
+      "tier": "T1"
+    },
+    {
+      "name": "sparc",
+      "tier": "T1"
+    },
+    {
+      "name": "ruv-FANN",
+      "tier": "T1"
+    },
+    {
+      "name": "agent-harness-generator",
+      "tier": "T1"
+    },
+    {
+      "name": "dspy.ts",
+      "tier": "T1"
+    },
+    {
+      "name": "SynthLang",
+      "tier": "T1"
+    },
+    {
+      "name": "daa",
+      "tier": "T1"
+    },
+    {
+      "name": "QuDAG",
+      "tier": "T1"
+    },
+    {
+      "name": "FACT",
+      "tier": "T1"
+    },
+    {
+      "name": "SAFLA",
+      "tier": "T1"
+    },
+    {
+      "name": "midstream",
+      "tier": "T1"
+    },
+    {
+      "name": "rvm",
+      "tier": "T1"
+    },
+    {
+      "name": "rudevolution",
+      "tier": "T1"
+    },
+    {
+      "name": "sublinear-time-solver",
+      "tier": "T1"
+    },
+    {
+      "name": "Synaptic-Mesh",
+      "tier": "T1"
+    },
+    {
+      "name": "agentdb",
+      "tier": "T1"
+    },
+    {
+      "name": "ruv-neural",
+      "tier": "T1"
+    },
+    {
+      "name": "rufield",
+      "tier": "T1"
+    },
+    {
+      "name": "rvcsi",
+      "tier": "T1"
+    },
+    {
+      "name": "RuLake",
+      "tier": "T1"
+    },
+    {
+      "name": "rUv-dev",
+      "tier": "T2"
+    },
+    {
+      "name": "open-claude-code",
+      "tier": "T2"
+    },
+    {
+      "name": "ruvnet",
+      "tier": "T2"
+    },
+    {
+      "name": "marketing",
+      "tier": "T2"
+    },
+    {
+      "name": "symbolic-scribe",
+      "tier": "T2"
+    },
+    {
+      "name": "ruvbot",
+      "tier": "T2"
+    },
+    {
+      "name": "agentic-security",
+      "tier": "T2"
+    },
+    {
+      "name": "drupaljs",
+      "tier": "T2"
+    },
+    {
+      "name": "skygraph",
+      "tier": "T2"
+    },
+    {
+      "name": "agentic-robotics",
+      "tier": "T2"
+    },
+    {
+      "name": "musicai",
+      "tier": "T2"
+    },
+    {
+      "name": "obsidian-brain",
+      "tier": "T2"
+    },
+    {
+      "name": "helix",
+      "tier": "T2"
+    },
+    {
+      "name": "musica",
+      "tier": "T2"
+    },
+    {
+      "name": "rupixel",
+      "tier": "T2"
+    },
+    {
+      "name": "PhotonLayer",
+      "tier": "T2"
+    },
+    {
+      "name": "rvdna",
+      "tier": "T2"
+    },
+    {
+      "name": "ruos-macair",
+      "tier": "T2"
+    },
+    {
+      "name": "ruv-drone",
+      "tier": "T2"
+    },
+    {
+      "name": "Connectome-OS",
+      "tier": "T2"
+    },
+    {
+      "name": "worldgraph",
+      "tier": "T2"
+    },
+    {
+      "name": "ruqu",
+      "tier": "T2"
+    },
+    {
+      "name": "ruvn",
+      "tier": "T2"
+    },
+    {
+      "name": "cognitum-claude-plugin",
+      "tier": "T2"
+    },
+    {
+      "name": "SonicChamber",
+      "tier": "T2"
+    },
+    {
+      "name": "Bot-Generator-Bot",
+      "tier": "T3"
+    },
+    {
+      "name": "gpts",
+      "tier": "T3"
+    },
+    {
+      "name": "guardrail",
+      "tier": "T3"
+    },
+    {
+      "name": "chatgpt-openai-api-plugin",
+      "tier": "T3"
+    },
+    {
+      "name": "promptlang",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-voice",
+      "tier": "T3"
+    },
+    {
+      "name": "voicebot",
+      "tier": "T3"
+    },
+    {
+      "name": "hello_world_agent",
+      "tier": "T3"
+    },
+    {
+      "name": "chatgpt_plugin_python",
+      "tier": "T3"
+    },
+    {
+      "name": "q-star",
+      "tier": "T3"
+    },
+    {
+      "name": "flow-nexus",
+      "tier": "T3"
+    },
+    {
+      "name": "ultrasonic",
+      "tier": "T3"
+    },
+    {
+      "name": "auto-browser",
+      "tier": "T3"
+    },
+    {
+      "name": "rUv-Enterprise-AI-Guide",
+      "tier": "T3"
+    },
+    {
+      "name": "Surfer",
+      "tier": "T3"
+    },
+    {
+      "name": "Prompt-Engine",
+      "tier": "T3"
+    },
+    {
+      "name": "Agent-Name-Service",
+      "tier": "T3"
+    },
+    {
+      "name": "openai_devops",
+      "tier": "T3"
+    },
+    {
+      "name": "AiToml",
+      "tier": "T3"
+    },
+    {
+      "name": "federated-mcp",
+      "tier": "T3"
+    },
+    {
+      "name": "GenAI-Superstream",
+      "tier": "T3"
+    },
+    {
+      "name": "strawberry-phi",
+      "tier": "T3"
+    },
+    {
+      "name": "reflective-engineer",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-employment",
+      "tier": "T3"
+    },
+    {
+      "name": "ARCADIA",
+      "tier": "T3"
+    },
+    {
+      "name": "dynamo-mcp",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-reports",
+      "tier": "T3"
+    },
+    {
+      "name": "ai-video",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-devops",
+      "tier": "T3"
+    },
+    {
+      "name": "inflight",
+      "tier": "T3"
+    },
+    {
+      "name": "Swagger-ChatGPT-Plugin-Creator",
+      "tier": "T3"
+    },
+    {
+      "name": "quantum-magnetic-navigation",
+      "tier": "T3"
+    },
+    {
+      "name": "llamastack",
+      "tier": "T3"
+    },
+    {
+      "name": "vibecast",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-search",
+      "tier": "T3"
+    },
+    {
+      "name": "agileagents",
+      "tier": "T3"
+    },
+    {
+      "name": "VIVIAN",
+      "tier": "T3"
+    },
+    {
+      "name": "nova",
+      "tier": "T3"
+    },
+    {
+      "name": "genesis",
+      "tier": "T3"
+    },
+    {
+      "name": "code-mesh",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-difusion",
+      "tier": "T3"
+    },
+    {
+      "name": "aido",
+      "tier": "T3"
+    },
+    {
+      "name": "sparc-ide",
+      "tier": "T3"
+    },
+    {
+      "name": "hacker-league",
+      "tier": "T3"
+    },
+    {
+      "name": "agenticsjs",
+      "tier": "T3"
+    },
+    {
+      "name": "paris",
+      "tier": "T3"
+    },
+    {
+      "name": "yyz-agentics-june",
+      "tier": "T3"
+    },
+    {
+      "name": "pygentic",
+      "tier": "T3"
+    },
+    {
+      "name": "codex-one",
+      "tier": "T3"
+    },
+    {
+      "name": "coding-wingman",
+      "tier": "T3"
+    },
+    {
+      "name": "chatgpt-dev-mode",
+      "tier": "T3"
+    },
+    {
+      "name": "quantum_cryptocurrency",
+      "tier": "T3"
+    },
+    {
+      "name": "AiHCC",
+      "tier": "T3"
+    },
+    {
+      "name": "omnipotent",
+      "tier": "T3"
+    },
+    {
+      "name": "onnx-agent",
+      "tier": "T3"
+    },
+    {
+      "name": "ChatGPT-Trading-Bot-for-KuCoin",
+      "tier": "T3"
+    },
+    {
+      "name": "fireflies-webook",
+      "tier": "T3"
+    },
+    {
+      "name": "vcbot",
+      "tier": "T3"
+    },
+    {
+      "name": "ruv.io",
+      "tier": "T3"
+    },
+    {
+      "name": "swarm-world",
+      "tier": "T3"
+    },
+    {
+      "name": "aws-dev",
+      "tier": "T3"
+    },
+    {
+      "name": "textclassifier",
+      "tier": "T3"
+    },
+    {
+      "name": "powerprompt",
+      "tier": "T3"
+    },
+    {
+      "name": "phone-agent",
+      "tier": "T3"
+    },
+    {
+      "name": "aihl",
+      "tier": "T3"
+    },
+    {
+      "name": "supa-ruv",
+      "tier": "T3"
+    },
+    {
+      "name": "supabase-authentication",
+      "tier": "T3"
+    },
+    {
+      "name": "aiscreenplay",
+      "tier": "T3"
+    },
+    {
+      "name": "alienator",
+      "tier": "T3"
+    },
+    {
+      "name": "AiCodeCalc",
+      "tier": "T3"
+    },
+    {
+      "name": "ai-gist",
+      "tier": "T3"
+    },
+    {
+      "name": "vsc-remote-mcp",
+      "tier": "T3"
+    },
+    {
+      "name": "agentXNG",
+      "tier": "T3"
+    },
+    {
+      "name": "retro-ai-ui",
+      "tier": "T3"
+    },
+    {
+      "name": "2BotTalk",
+      "tier": "T3"
+    },
+    {
+      "name": "Quantum-Virtual-Machine",
+      "tier": "T3"
+    },
+    {
+      "name": "local-logic",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-artifacts",
+      "tier": "T3"
+    },
+    {
+      "name": "openai-cost-estimator",
+      "tier": "T3"
+    },
+    {
+      "name": "claude-test",
+      "tier": "T3"
+    },
+    {
+      "name": "roomodes",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-preview",
+      "tier": "T3"
+    },
+    {
+      "name": "electo1-js",
+      "tier": "T3"
+    },
+    {
+      "name": "open-space",
+      "tier": "T3"
+    },
+    {
+      "name": "Ai-Code-Generator-",
+      "tier": "T3"
+    },
+    {
+      "name": "vibing",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-scraper",
+      "tier": "T3"
+    },
+    {
+      "name": "markov-chains",
+      "tier": "T3"
+    },
+    {
+      "name": "pipackager",
+      "tier": "T3"
+    },
+    {
+      "name": "chatgpt_tatum_plugin",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-capacity-exchange",
+      "tier": "T3"
+    },
+    {
+      "name": "codecraft",
+      "tier": "T3"
+    },
+    {
+      "name": "infinity-ui",
+      "tier": "T3"
+    },
+    {
+      "name": "q-space",
+      "tier": "T3"
+    },
+    {
+      "name": "contextual-retrevial",
+      "tier": "T3"
+    },
+    {
+      "name": "Auto-GPT",
+      "tier": "T3"
+    },
+    {
+      "name": "chatgpt-aws-price-list-plugin",
+      "tier": "T3"
+    },
+    {
+      "name": "console-streamer",
+      "tier": "T3"
+    },
+    {
+      "name": "SVGart",
+      "tier": "T3"
+    },
+    {
+      "name": "ai-browse",
+      "tier": "T3"
+    },
+    {
+      "name": "Electo1",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-dashboard",
+      "tier": "T3"
+    },
+    {
+      "name": "r-flow",
+      "tier": "T3"
+    },
+    {
+      "name": "santa-ai-workshop",
+      "tier": "T3"
+    },
+    {
+      "name": "agentX",
+      "tier": "T3"
+    },
+    {
+      "name": "p2pGPT",
+      "tier": "T3"
+    },
+    {
+      "name": "ruvGPT2",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-gradio",
+      "tier": "T3"
+    },
+    {
+      "name": "rUvGPT",
+      "tier": "T3"
+    },
+    {
+      "name": "AIConverse",
+      "tier": "T3"
+    },
+    {
+      "name": "image-agent",
+      "tier": "T3"
+    },
+    {
+      "name": "demo-proxy-app",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-flows",
+      "tier": "T3"
+    },
+    {
+      "name": "CodeGPT",
+      "tier": "T3"
+    },
+    {
+      "name": "tariffic",
+      "tier": "T3"
+    },
+    {
+      "name": "hft",
+      "tier": "T3"
+    },
+    {
+      "name": "agentic-music",
+      "tier": "T3"
+    },
+    {
+      "name": "agentics-meetup",
+      "tier": "T3"
+    },
+    {
+      "name": "ai-stream",
+      "tier": "T3"
+    },
+    {
+      "name": "socket",
+      "tier": "T3"
+    },
+    {
+      "name": "AP-Casper",
+      "tier": "T3"
+    }
+  ]
+}

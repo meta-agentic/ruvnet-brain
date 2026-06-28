@@ -1,0 +1,13 @@
+{
+  "//": "Add this block to your project's .mcp.json under \"mcpServers\". Replace KBNAME and the absolute paths. KB_DIR must hold KBNAME.rvf + KBNAME.passages.jsonl. DO NOT use @ruvector/rvf-mcp-server (a non-functional stub).",
+  "mcpServers": {
+    "KBNAME-kb": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/KB-DIR/forge-mcp.mjs"],
+      "env": {
+        "KB_DIR": "/ABSOLUTE/PATH/TO/KB-DIR",
+        "KB_NAME": "KBNAME"
+      }
+    }
+  }
+}

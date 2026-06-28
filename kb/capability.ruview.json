@@ -1,0 +1,15 @@
+{
+  "repo": "ruview",
+  "note": "Capability-confidence set for RuView / WiFi-DensePose (WiFi-CSI sensing on ESP32, camera-free). YES = real capabilities; NO = outside its domain (esp. camera-based vision, which RuView explicitly avoids).",
+  "questions": [
+    { "q": "Can RuView detect human presence and activity from WiFi Channel State Information?", "expectRepo": "ruview", "evidence": ["csi", "presence", "activity"], "truth": "yes" },
+    { "q": "Can RuView sense vitals or motion through walls without cameras?", "expectRepo": "ruview", "evidence": ["wall", "vital", "camera"], "truth": "yes" },
+    { "q": "Does RuView run on low-cost ESP32 sensor nodes?", "expectRepo": "ruview", "evidence": ["esp32", "sensor", "node"], "truth": "yes" },
+    { "q": "Does RuView store sensing data using the RVF format?", "expectRepo": "ruview", "evidence": ["rvf", "vector"], "truth": "yes" },
+    { "q": "Can RuView integrate with Home Assistant, Matter or Apple Home?", "expectRepo": "ruview", "evidence": ["home assistant", "matter", "mqtt"], "truth": "yes" },
+    { "q": "Does RuView expose an MCP server (rvagent / SENSE-BRIDGE) for agents?", "expectRepo": "ruview", "evidence": ["rvagent", "mcp", "sense"], "truth": "yes" },
+    { "q": "Does RuView verify signed RVF/WASM modules on the device?", "expectRepo": "ruview", "evidence": ["rvf", "signature", "wasm"], "truth": "yes" },
+    { "q": "Can RuView do facial recognition from camera images?", "expectRepo": "ruview", "evidence": ["facial recognition", "camera image", "face"], "truth": "no" },
+    { "q": "Can RuView stream and play Spotify music?", "expectRepo": "ruview", "evidence": ["spotify", "music streaming", "playlist"], "truth": "no" }
+  ]
+}

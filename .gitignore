@@ -1,0 +1,21 @@
+# deps + caches (regenerable via npm i)
+node_modules/
+**/node_modules/
+
+# build artifacts (regenerable in seconds via scripts/build-bundle.mjs)
+dist/
+
+# external source clones (themselves git repos; regenerable via self-update --include-new)
+clones/
+data/adrs-cache/
+
+# logs + scratch
+*.log
+logs/
+*.tmp
+.DS_Store
+
+# NOTE: kb/*.rvf, *.passages.jsonl, *.meta.json, primers, l2/, concepts.* ARE committed —
+# they are the expensive embeddings (hours to regenerate) and the irreplaceable knowledge work.
+
+node_modules

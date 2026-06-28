@@ -1,0 +1,14 @@
+[
+  {
+    "slug": "agentdb-s-documentation-organized",
+    "q": "Where is AgentDB's documentation organized — guides, implementation reports, and ADRs?"
+  },
+  {
+    "slug": "agentdb",
+    "q": "What is AgentDB and who is it for?"
+  },
+  {
+    "slug": "agentdb-s-core-concepts",
+    "q": "What are AgentDB's core concepts — the .rvf cognitive container, Reflexion episodic memory, causal graph, skill library, ReasoningBank, and the self-learning bandit?"
+  }
+]

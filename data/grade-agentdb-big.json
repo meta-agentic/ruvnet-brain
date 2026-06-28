@@ -1,0 +1,289 @@
+{
+  "summary": {
+    "name": "agentdb",
+    "variant": "big",
+    "questions": 10,
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    "avgStrict": 59.7,
+    "avgRealUse": 81.97,
+    "minStrict": 15,
+    "minRealUse": 45,
+    "poisonStrict": 4,
+    "poisonRealUse": 1,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What problem does AgentDB solve that ordinary vector databases do not?",
+      "topPath": "docs/adrs/ADR-002-ruvector-wasm-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 50,
+          "reason": "Source does not address AgentDB's unique problem compared to vector databases."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 35,
+          "realUse": 45,
+          "reason": "Partial mentions no clear differentiation"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Lack of direct answer"
+        }
+      ],
+      "avgStrict": 21.666666666666668,
+      "avgRealUse": 45
+    },
+    {
+      "q": "What is the single-file .rvf cognitive container, and what does it bundle for AgentDB?",
+      "topPath": "docs/adrs/ADR-003-rvf-native-format-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "Document provides comprehensive details on .rvf format and its features."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 45,
+          "realUse": 92,
+          "reason": "Incomplete in STRICT, complete in REAL-USE"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 40,
+          "realUse": 90,
+          "reason": "Incomplete definition"
+        }
+      ],
+      "avgStrict": 61,
+      "avgRealUse": 94
+    },
+    {
+      "q": "How does AgentDB run in the browser, on edge runtimes, and offline?",
+      "topPath": "docs/guides/BROWSER_V2_MIGRATION.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 30,
+          "realUse": 70,
+          "reason": "Source lacks details on edge runtimes and offline capabilities."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 85,
+          "reason": "v2 mentions WASM backend"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Incomplete info"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 78.33333333333333
+    },
+    {
+      "q": "What is Reflexion (episodic) memory in AgentDB and what does it store?",
+      "topPath": "docs/guides/FRONTIER_MEMORY_GUIDE.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "Complete explanation of Reflexion memory and its stored elements."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete and correct answer"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 95,
+          "reason": "Complete answer in #1 doc"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 97.66666666666667
+    },
+    {
+      "q": "How does the causal graph with Cypher querying work in AgentDB?",
+      "topPath": "ui/docs/CAUSAL_GRAPH_ENHANCEMENT_SUMMARY.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 70,
+          "reason": "Source lacks specific details on Cypher querying in AgentDB."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 35,
+          "realUse": 72,
+          "reason": "No explicit Cypher query details"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Lack of Cypher query details"
+        }
+      ],
+      "avgStrict": 28.333333333333332,
+      "avgRealUse": 60.666666666666664
+    },
+    {
+      "q": "What does ADR-002 (RuVector WASM integration) cover for AgentDB?",
+      "topPath": "docs/ADR-002-ruvector-wasm-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 85,
+          "realUse": 98,
+          "reason": "Partially answers integration details; lacks full implementation specifics."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete coverage of integration phases"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 90,
+          "realUse": 95,
+          "reason": "Mostly complete"
+        }
+      ],
+      "avgStrict": 91,
+      "avgRealUse": 97
+    },
+    {
+      "q": "What hybrid retrieval does AgentDB support, and how does it combine BM25 with dense vectors?",
+      "topPath": "plugins/agentdb-search/skills/agentdb-hybrid-search/SKILL.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source fully explains hybrid retrieval and its combination method."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete answer in first doc"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Fully answered"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    },
+    {
+      "q": "How does AgentDB back the agentic-flow / ruflo / Claude Code memory layer?",
+      "topPath": "docs/implementation/AGENTIC_FLOW_INTEGRATION_REPORT.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Source lacks specific details on AgentDB's memory layer functionality."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 15,
+          "realUse": 85,
+          "reason": "Source shows integration but no memory details"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Missing memory layer details"
+        }
+      ],
+      "avgStrict": 15,
+      "avgRealUse": 68.33333333333333
+    },
+    {
+      "q": "What database backends does AgentDB benchmark against (better-sqlite3, sql.js, @ruvector/core)?",
+      "topPath": "benchmarks/database/database-bench.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 50,
+          "realUse": 70,
+          "reason": "Only mentions better-sqlite3 and sql.js, missing @ruvector/core."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Explicitly compares sqlite3 vs sql.js"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Missing @ruvector/core"
+        }
+      ],
+      "avgStrict": 56,
+      "avgRealUse": 82.66666666666667
+    },
+    {
+      "q": "How do I run AgentDB's benchmark suite, and what report formats does it produce?",
+      "topPath": "src/benchmark/index.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete instructions for running benchmarks and report formats are provided."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete CLI and API usage"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "error": "meta-llama/llama-3.3-70b-instruct no-json"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    }
+  ]
+}

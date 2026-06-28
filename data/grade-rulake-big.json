@@ -1,0 +1,291 @@
+{
+  "summary": {
+    "name": "rulake",
+    "variant": "big",
+    "questions": 10,
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    "avgStrict": 50.37,
+    "avgRealUse": 77.43,
+    "minStrict": 15,
+    "minRealUse": 25,
+    "poisonStrict": 5,
+    "poisonRealUse": 2,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What problem does ruLake solve compared to standing up your own vector database?",
+      "topPath": "crates/rvdna-backend/benches/t2_pull_vectors.rs",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source does not address ruLake's advantages over self-hosted vector databases."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 65,
+          "reason": "Inconsistent benchmarks, no clear problem statement"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Insufficient info"
+        }
+      ],
+      "avgStrict": 23.333333333333332,
+      "avgRealUse": 55
+    },
+    {
+      "q": "Why is ruLake positioned as a good memory substrate for agent brain systems?",
+      "topPath": "docs/adrs/ADR-156-rulake-as-memory-substrate.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document thoroughly explains ruLake's properties for agent brain systems."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 50,
+          "realUse": 95,
+          "reason": "STRICT: document mentions properties but lacks direct 'why'. REAL-USE: context from related docs completes answer."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 99,
+          "reason": "Fully answered"
+        }
+      ],
+      "avgStrict": 82,
+      "avgRealUse": 97.33333333333333
+    },
+    {
+      "q": "What is a table.rulake.json sidecar, and what fields does it carry?",
+      "topPath": "examples/nodejs/04-mcp-tool/src/snapshot.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 98,
+          "reason": "Source mentions the sidecar but lacks specific fields."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 45,
+          "realUse": 98,
+          "reason": "Incomplete fields listing"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 98,
+          "reason": "Top-5 provides fields"
+        }
+      ],
+      "avgStrict": 35,
+      "avgRealUse": 98
+    },
+    {
+      "q": "How does ruLake achieve roughly 1.02x overhead on the cache-hit path versus raw RaBitQ?",
+      "topPath": "examples/nodejs/04-mcp-tool/src/search.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "Source does not address ruLake's overhead on cache-hit path."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 25,
+          "reason": "Source mentions RaBitQ but lacks overhead details"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 10,
+          "reason": "No overhead info"
+        }
+      ],
+      "avgStrict": 16.666666666666668,
+      "avgRealUse": 25
+    },
+    {
+      "q": "What does ADR-008 decide about ruQu (quantum execution intelligence) as a ruLake substrate, and what is its status?",
+      "topPath": "docs/adrs/ADR-008-ruqu-as-rulake-substrate.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source fully details ruQu's status and decision as a substrate."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 95,
+          "realUse": 98,
+          "reason": "complete details in ADR-008"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 99,
+          "reason": "Complete"
+        }
+      ],
+      "avgStrict": 97,
+      "avgRealUse": 98.33333333333333
+    },
+    {
+      "q": "What does the ruLake Console SPA do, and how does it flip from DEMO to LIVE?",
+      "topPath": "docs/gists/console-deep.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete explanation of ruLake Console and mode switching."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source comprehensively explains Console's tri-mode functionality and DEMO-to-LIVE switching"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 80,
+          "realUse": 98,
+          "reason": "Lacking flip details"
+        }
+      ],
+      "avgStrict": 92,
+      "avgRealUse": 98
+    },
+    {
+      "q": "What language SDKs does ruLake ship (Rust, Python, Node, WASM) and what are their package names?",
+      "topPath": "sdk/node/Cargo.toml",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Only Node.js SDK and package name provided; others missing."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 25,
+          "realUse": 98,
+          "reason": "strict=only Node;pkg=rulake-node"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 98,
+          "reason": "Top-5 provides full answer"
+        }
+      ],
+      "avgStrict": 21.666666666666668,
+      "avgRealUse": 92
+    },
+    {
+      "q": "How does ruLake handle cache invalidation and refreshing from a bundle directory?",
+      "topPath": "plugins/rulake-memory/commands/memory-forget.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 90,
+          "reason": "Strictly, it only mentions cache invalidation, lacks bundle directory refresh details."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 85,
+          "realUse": 92,
+          "reason": "source explains invalidation but not refresh"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 40,
+          "realUse": 80,
+          "reason": "Incomplete cache invalidation details"
+        }
+      ],
+      "avgStrict": 65,
+      "avgRealUse": 87.33333333333333
+    },
+    {
+      "q": "What auth modes and access control does the ruLake MCP server support?",
+      "topPath": "docs/adrs/sdk/ADR-004-rulake-mcp-server.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 80,
+          "realUse": 95,
+          "reason": "Strictly mentions RBAC, JWT, bearer auth, but lacks full detail on access control."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 48,
+          "realUse": 95,
+          "reason": "Strict misses modes, realUse lists RBAC+JWT+mTLS"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 40,
+          "realUse": 90,
+          "reason": "Auth modes in v0.4, v0.5, v0.6"
+        }
+      ],
+      "avgStrict": 56,
+      "avgRealUse": 93.33333333333333
+    },
+    {
+      "q": "Where is the Cloud Run deploy recipe for hosting your own ruLake MCP server?",
+      "topPath": "docs/userguide/10-troubleshooting.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "Source does not mention Cloud Run deploy recipe for ruLake MCP server."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "Source unrelated to deployment recipe"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 5,
+          "realUse": 10,
+          "reason": "No deploy recipe"
+        }
+      ],
+      "avgStrict": 15,
+      "avgRealUse": 30
+    }
+  ]
+}

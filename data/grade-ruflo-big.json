@@ -1,0 +1,345 @@
+{
+  "summary": {
+    "name": "ruflo",
+    "variant": "big",
+    "questions": 12,
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    "avgStrict": 55.89,
+    "avgRealUse": 76.72,
+    "minStrict": 10,
+    "minRealUse": 21.666666666666668,
+    "poisonStrict": 6,
+    "poisonRealUse": 2,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What is ruflo and who is it for?",
+      "topPath": "ruflo/src/nginx/static/manifest.json",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 90,
+          "reason": "Source describes RuFlo as an AI platform but lacks user details."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 98,
+          "reason": "STRICT: Manifest lacks details. REAL-USE: Package defines platform."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Lack of target audience"
+        }
+      ],
+      "avgStrict": 43.333333333333336,
+      "avgRealUse": 89.33333333333333
+    },
+    {
+      "q": "What is a swarm in ruflo and what topologies does it support?",
+      "topPath": "v3/@claude-flow/cli/.claude/skills/swarm-orchestration/SKILL.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source provides complete information on swarms and supported topologies."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete definition and topologies listed"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Fully answered"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    },
+    {
+      "q": "How does @claude-flow/memory persist and recall data — what storage backend does it use and what is the store/search code path?",
+      "topPath": "v3/@claude-flow/memory/src/domain/repositories/memory-repository.interface.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 85,
+          "reason": "Source lacks specific storage backend details and code path."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 85,
+          "reason": "Interface-only definition without implementation"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 80,
+          "reason": "Missing storage backend details"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 83.33333333333333
+    },
+    {
+      "q": "How does swarm_init initialize a topology — what does the code actually do?",
+      "topPath": ".claude/agents/templates/coordinator-swarm-init.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 90,
+          "reason": "Describes topology selection but lacks specific code details."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 45,
+          "realUse": 35,
+          "reason": "Document describes what, not code specifics"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 90,
+          "realUse": 98,
+          "reason": "Top-5 provides comprehensive swarm init details"
+        }
+      ],
+      "avgStrict": 68.33333333333333,
+      "avgRealUse": 74.33333333333333
+    },
+    {
+      "q": "How does the guidance system produce a recommendation (guidance_recommend) — what is the mechanism?",
+      "topPath": "v3/@claude-flow/cli/src/mcp-tools/guidance-tools.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 70,
+          "reason": "Source lacks specific mechanism details for guidance recommendation."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 75,
+          "reason": "Source shows catalog only, not mechanism"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Missing guidance_recommend mechanism"
+        }
+      ],
+      "avgStrict": 16.666666666666668,
+      "avgRealUse": 61.666666666666664
+    },
+    {
+      "q": "What does ADR-048 (Claude Code Auto Memory Integration) decide, and is it implemented or proposed?",
+      "topPath": "v3/implementation/adrs/ADR-048-auto-memory-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 90,
+          "reason": "Source describes features but lacks clarity on implementation status."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 85,
+          "realUse": 92,
+          "reason": "ADR-048 phases shown, partial implementation"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Incomplete details"
+        }
+      ],
+      "avgStrict": 58.333333333333336,
+      "avgRealUse": 87.33333333333333
+    },
+    {
+      "q": "Where are ruflo's ADRs kept and what areas do they cover?",
+      "topPath": "v3/implementation/adrs/v3-adrs.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 50,
+          "reason": "Source does not mention ruflo's ADRs or their coverage areas."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 10,
+          "realUse": 15,
+          "reason": "No mention of ruflo's ADRs"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 0,
+          "realUse": 0,
+          "reason": "No info on ruflo's ADRs"
+        }
+      ],
+      "avgStrict": 10,
+      "avgRealUse": 21.666666666666668
+    },
+    {
+      "q": "How do I initialize and use ruflo's memory in a project end-to-end?",
+      "topPath": "ruflo/src/ruvocal/mcp-bridge/index.js",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "Source lacks specific initialization and usage details for ruflo's memory."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 10,
+          "realUse": 30,
+          "reason": "Source does not explain initialization or usage."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 20,
+          "reason": "No memory init example"
+        }
+      ],
+      "avgStrict": 13.333333333333334,
+      "avgRealUse": 30
+    },
+    {
+      "q": "How does ruflo's memory integrate AgentDB — what is the adapter and how is it used?",
+      "topPath": "v3/@claude-flow/memory/docs/AGENTDB-INTEGRATION.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source provides complete integration details and usage examples."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete integration details"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 80,
+          "realUse": 90,
+          "reason": "Adapter details lacking"
+        }
+      ],
+      "avgStrict": 92,
+      "avgRealUse": 95.33333333333333
+    },
+    {
+      "q": "How are MCP tools defined and registered in ruflo v3 — where is the code?",
+      "topPath": "ruflo/src/ruvocal/src/lib/server/mcp/tools.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 90,
+          "reason": "Code shows tool definition but lacks registration details."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 50,
+          "realUse": 75,
+          "reason": "Source shows tool types and cache, but lacks registration details."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Incomplete definition"
+        }
+      ],
+      "avgStrict": 46.666666666666664,
+      "avgRealUse": 81.66666666666667
+    },
+    {
+      "q": "What is the npm package name and CLI entry point for ruflo?",
+      "topPath": "v3/@claude-flow/cli/package.json",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "Complete and correct information on npm package and CLI entry point."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete and correct information provided."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 90,
+          "realUse": 98,
+          "reason": "Missing CLI entry point detail"
+        }
+      ],
+      "avgStrict": 95.33333333333333,
+      "avgRealUse": 98.66666666666667
+    },
+    {
+      "q": "What does the @claude-flow/neural package implement — which algorithms?",
+      "topPath": "v3/@claude-flow/neural/src/algorithms/a2c.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "The source details A2C algorithm; top-5 confirm multiple algorithms."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "A2C algorithm fully documented"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 100,
+          "realUse": 100,
+          "reason": "A2C algorithm"
+        }
+      ],
+      "avgStrict": 98.66666666666667,
+      "avgRealUse": 99.33333333333333
+    }
+  ]
+}

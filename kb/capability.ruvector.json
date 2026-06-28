@@ -1,0 +1,15 @@
+{
+  "repo": "ruvector",
+  "note": "Capability-confidence set for RuVector (self-learning vector DB / RVF cognitive container engine). YES = real capabilities that must be confidently source-evidenced; NO = outside its domain.",
+  "questions": [
+    { "q": "Can RuVector build and search an HNSW vector index?", "expectRepo": "ruvector", "evidence": ["hnsw", "ef_construction", "index"], "truth": "yes" },
+    { "q": "Does RuVector self-optimize its index at runtime with SONA feedback learning?", "expectRepo": "ruvector", "evidence": ["sona", "learn", "feedback"], "truth": "yes" },
+    { "q": "Does RuVector support RaBitQ and multiple quantization tiers?", "expectRepo": "ruvector", "evidence": ["rabitq", "quantiz"], "truth": "yes" },
+    { "q": "Does RuVector store vectors, index and content in a single RVF cognitive-container file?", "expectRepo": "ruvector", "evidence": ["rvf", "container", "segment"], "truth": "yes" },
+    { "q": "Can RuVector branch a store copy-on-write (RVCOW)?", "expectRepo": "ruvector", "evidence": ["cow", "branch", "refcount"], "truth": "yes" },
+    { "q": "Does RuVector anchor integrity with a SHAKE-256 witness chain?", "expectRepo": "ruvector", "evidence": ["witness", "shake", "integrity"], "truth": "yes" },
+    { "q": "Can RuVector run in the browser or on edge via WASM?", "expectRepo": "ruvector", "evidence": ["wasm", "edge"], "truth": "yes" },
+    { "q": "Can RuVector generate images with a diffusion model?", "expectRepo": "ruvector", "evidence": ["diffusion", "image generation", "stable diffusion"], "truth": "no" },
+    { "q": "Can RuVector provision and manage Kubernetes clusters?", "expectRepo": "ruvector", "evidence": ["kubernetes", "kubectl", "cluster orchestration"], "truth": "no" }
+  ]
+}
