@@ -4,7 +4,6 @@
 
 ## What it is & who it's for
 
-# What It Is & Who It's For
 
 Ruvector is a **high-performance vector database system** built in Rust with native cross-platform support (`linux-arm64-gnu`, `linux-x64-gnu`, `win32-x64-msvc`) and Node.js bindings (`npm/packages/ruvector/src/index.ts`). It specializes in:
 
@@ -91,9 +90,7 @@ Each capability is directly sourced from implementing files, with no speculation
 
 ## Core concepts & how they work
 
-# Core Concepts & How They Work
 
-## Vector Storage & Retrieval
 RuVector provides **SIMD-optimized vector storage** through multiple index types (`flat.rs`, `hnsw.rs`) in `crates/ruvector-core/src/index/`, with memory management handled by `memory.rs` (`crates/ruvector-core/src/memory.rs`). The system supports:
 - HNSW indexing for approximate nearest neighbor search (`index/hnsw.rs`)
 - Flat indexes for exact search (`index/flat.rs`)
@@ -149,9 +146,7 @@ JavaScript integration exists through `@ruvector/core` NAPI-RS bindings, falling
 
 ## Maturity (shipped vs proposed)
 
-# Maturity (shipped vs proposed)
 
-## Shipped & Production-Ready Features
 
 **RuVector Core IS COMPLETE AND SHIPPED** (`docs/adr/ADR-001-ruvector-core-architecture.md`):
  Achieving sub-100μs HNSW searches at 16.4K QPS with:
@@ -200,7 +195,6 @@ JavaScript integration exists through `@ruvector/core` NAPI-RS bindings, falling
 
 ## Where the documentation lives
 
-## Where the Documentation Lives
 
 RuVector's documentation is rigorously organized with authoritative sources across these key locations:
 
@@ -232,9 +226,7 @@ No documentation exists for undocumented components - all current capabilities a
 
 ## How to use it end-to-end
 
-# How to use RuVector end-to-end  
 
-## Installation  
 
 RuVector provides multiple installation methods depending on your use case:  
 

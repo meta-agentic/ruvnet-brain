@@ -1,94 +1,154 @@
 {
-  "brainVersion": "v0.1.0-dev",
-  "generated": "2026-06-27T14:21:06.923Z",
-  "generatedHuman": "Sat, 27 Jun 2026 14:21:06 GMT",
+  "brainVersion": "v0.3.0-dev",
+  "generated": "2026-06-29T10:15:23.115Z",
+  "generatedHuman": "Mon, 29 Jun 2026 10:15:23 GMT",
   "coverage": {
-    "total": 169,
-    "built": 1,
-    "pending": 168
+    "built": 18,
+    "catalogued": 169,
+    "orgTotalApprox": 248,
+    "pending": 151
   },
   "builtRepos": [
     {
-      "name": "ruflo",
-      "builtFromSha": "322b2ae521bc1a133eea9f40d1b7afb4a337c445",
+      "name": "RuView",
+      "tier": "T0",
+      "stars": 75658,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
       "status": "built"
     },
     {
-      "name": "ruvector",
-      "builtFromSha": "ed95f498bacd5957ae52ba8c6c1939dde6133f9b",
+      "name": "ruflo",
+      "tier": "T0",
+      "stars": 61698,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "RuVector",
+      "tier": "T0",
+      "stars": 4296,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "agentic-flow",
+      "tier": "T1",
+      "stars": 762,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "sparc",
+      "tier": "T1",
+      "stars": 468,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "ruv-FANN",
+      "tier": "T1",
+      "stars": 370,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "agent-harness-generator",
+      "tier": "T1",
+      "stars": 330,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "dspy.ts",
+      "tier": "T1",
+      "stars": 261,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "SynthLang",
+      "tier": "T1",
+      "stars": 261,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "daa",
+      "tier": "T1",
+      "stars": 242,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "QuDAG",
+      "tier": "T1",
+      "stars": 189,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "FACT",
+      "tier": "T1",
+      "stars": 179,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "SAFLA",
+      "tier": "T1",
+      "stars": 155,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "rvm",
+      "tier": "T1",
+      "stars": 113,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
       "status": "built"
     },
     {
       "name": "agentdb",
-      "builtFromSha": "47c79b6158cf4f28b27e404e0bdfebc3beeba073",
+      "tier": "T1",
+      "stars": 70,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
       "status": "built"
     },
     {
-      "name": "rulake",
-      "builtFromSha": "8f2c40863788eb38f260edb4fdbee4e07e1631d4",
+      "name": "RuLake",
+      "tier": "T1",
+      "stars": 11,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
       "status": "built"
     },
     {
-      "name": "ruview",
-      "builtFromSha": "4bf88e12830053173bee1769da7cafe82e1195da",
+      "name": "rupixel",
+      "tier": "T2",
+      "stars": 14,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
       "status": "built"
     }
   ],
   "pendingRepos": [
     {
-      "name": "RuView",
-      "tier": "T0"
-    },
-    {
-      "name": "RuVector",
-      "tier": "T0"
-    },
-    {
-      "name": "agentic-flow",
-      "tier": "T1"
-    },
-    {
-      "name": "sparc",
-      "tier": "T1"
-    },
-    {
-      "name": "ruv-FANN",
-      "tier": "T1"
-    },
-    {
-      "name": "agent-harness-generator",
-      "tier": "T1"
-    },
-    {
-      "name": "dspy.ts",
-      "tier": "T1"
-    },
-    {
-      "name": "SynthLang",
-      "tier": "T1"
-    },
-    {
-      "name": "daa",
-      "tier": "T1"
-    },
-    {
-      "name": "QuDAG",
-      "tier": "T1"
-    },
-    {
-      "name": "FACT",
-      "tier": "T1"
-    },
-    {
-      "name": "SAFLA",
-      "tier": "T1"
-    },
-    {
       "name": "midstream",
-      "tier": "T1"
-    },
-    {
-      "name": "rvm",
       "tier": "T1"
     },
     {
@@ -104,10 +164,6 @@
       "tier": "T1"
     },
     {
-      "name": "agentdb",
-      "tier": "T1"
-    },
-    {
       "name": "ruv-neural",
       "tier": "T1"
     },
@@ -117,10 +173,6 @@
     },
     {
       "name": "rvcsi",
-      "tier": "T1"
-    },
-    {
-      "name": "RuLake",
       "tier": "T1"
     },
     {
@@ -172,15 +224,7 @@
       "tier": "T2"
     },
     {
-      "name": "helix",
-      "tier": "T2"
-    },
-    {
       "name": "musica",
-      "tier": "T2"
-    },
-    {
-      "name": "rupixel",
       "tier": "T2"
     },
     {

@@ -35,7 +35,6 @@ All cited features exist in the codebase today with paths provided. For implemen
 
 ## Capabilities (what it can do)
 
-## Capabilities (what it can do)
 
 AgentDB provides comprehensive agent memory and cognitive capabilities with these CORE features:
 
@@ -87,7 +86,6 @@ Capabilities NOT currently shown in sources:
 
 ## Core concepts & how they work
 
-# Core Concepts & How They Work
 
 AgentDB is built around several foundational concepts that work together to provide high-performance agent memory and reasoning capabilities. Here are the key components:
 
@@ -127,7 +125,6 @@ Note: Some initialization workflows currently require CLI usage before programma
 
 ## Maturity (shipped vs proposed)
 
-### Maturity (shipped vs proposed)
 
 AgentDB demonstrates a high level of maturity, with many features already shipped and actively used in production. Below is a breakdown of the shipped vs proposed features, supported by concrete evidence from the source files.
 
@@ -176,7 +173,6 @@ AgentDB is a mature system with a robust set of shipped features, particularly i
 
 ## Where the documentation lives
 
-# Where the documentation lives
 
 AgentDB's documentation is systematically organized across multiple directories with clear versioning and purpose. Here's the authoritative breakdown:
 
@@ -215,9 +211,7 @@ Documentation is version-controlled with clear timestamps (e.g., "Last Updated: 
 
 ## How to use it end-to-end
 
-# How to use it end-to-end
 
-## Installation
 AgentDB installs as a standard npm package with zero native dependencies (`scripts/postinstall.cjs` verifies this). Run:
 
 ```bash

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 942 184"
+     width="942"
+     height="184">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+    </style>
+  </defs>
+
+  <text class="title" x="471" y="28" text-anchor="middle">Grounding is enforced, not suggested</text>
+
+  <!-- 1 prompt -->
+  <rect class="box" x="24" y="70" width="150" height="64" rx="4"/>
+  <text class="label" x="99" y="98" text-anchor="middle">Your prompt</text>
+  <text class="sublabel" x="99" y="118" text-anchor="middle">names a RuvNet repo</text>
+
+  <line class="arrow" x1="174" y1="102" x2="208" y2="102" marker-end="url(#arrowhead)"/>
+
+  <!-- 2 hook -->
+  <rect class="accent" x="210" y="70" width="150" height="64" rx="4"/>
+  <text class="label" x="285" y="98" text-anchor="middle">Enforcement hook</text>
+  <text class="sublabel" x="285" y="118" text-anchor="middle">injects directive</text>
+
+  <line class="arrow" x1="360" y1="102" x2="394" y2="102" marker-end="url(#arrowhead)"/>
+
+  <!-- 3 search -->
+  <rect class="accent" x="396" y="70" width="150" height="64" rx="4"/>
+  <text class="label" x="471" y="98" text-anchor="middle">search_ruvnet</text>
+  <text class="sublabel" x="471" y="118" text-anchor="middle">all repos at once</text>
+
+  <line class="arrow" x1="546" y1="102" x2="580" y2="102" marker-end="url(#arrowhead)"/>
+
+  <!-- 4 source -->
+  <rect class="box" x="582" y="70" width="150" height="64" rx="4"/>
+  <text class="label" x="657" y="98" text-anchor="middle">Whole source files</text>
+  <text class="sublabel" x="657" y="118" text-anchor="middle">labeled repo + path</text>
+
+  <line class="arrow" x1="732" y1="102" x2="766" y2="102" marker-end="url(#arrowhead)"/>
+
+  <!-- 5 answer -->
+  <rect class="good" x="768" y="70" width="150" height="64" rx="4"/>
+  <text class="label" x="843" y="98" text-anchor="middle">Claude answers</text>
+  <text class="sublabel" x="843" y="118" text-anchor="middle">from cited source</text>
+
+  <!-- caption -->
+  <text class="sublabel" x="471" y="160" text-anchor="middle">hook stdout is consumed by the harness every turn &#8212; structural, can&apos;t drift</text>
+
+</svg>

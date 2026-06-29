@@ -2,6 +2,29 @@
 
 `Updated: 2026-06-28 ~23:10 PDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
 
+---
+
+## ★ CURRENT STATUS (corrected headline — read this first)
+
+`Version: v0.3.0-dev`
+
+- **19 repos built** (both embedding variants + symbol indexes): `agent-harness-generator`, `agentdb`,
+  `agentic-flow`, `agenticow`, `cve-bench`, `daa`, `dspy.ts`, `fact`, `helix`, `qudag`, `ruflo`, `rulake`,
+  `rupixel`, `ruv-fann`, `ruvector`, `ruview`, `safla`, `sparc`, `synthlang`.
+- **~75,000 chunks** total across the 19 repos (the older "46,845 / 5 repos" and "42,718 / 4 repos" figures
+  in the session log below are stale snapshots from when only the first 5 were built).
+- The ruvnet org has **~248 non-fork repos (~297 public total)** — the old "169" everywhere below is a stale
+  org snapshot. Current scope = **19 of ~248**; the rest are roadmap, pullable on demand.
+- **Graded core = 5** (`ruflo`, `ruvector`, `agentdb`, `rulake`, `ruview`): 3-vendor ground-truth grade
+  REAL-USE 63–85, **0 hallucinated citations** (tuned + held-out). **Primers now exist for all 19** so
+  capability claims are grounded across the full covered set (the other 14 are *covered*, not yet *graded*).
+- Shipped bundle = **`dist/ruvnet-brain.zip`** (the old `ruflo-brain.zip` name is retired).
+
+> Everything below this banner is the **historical session log** — preserved as a timestamped record of how
+> we got here. It reflects the original 5-repo milestone (5/169) and is intentionally **not** rewritten.
+
+---
+
 ## Session 2 (post-compact 2026-06-28) — scaling T0/T1, LIVE
 Three real parallel streams running, each labeled as what it actually is (no Ruflo-agent overclaim):
 1. **Background processes (`b28c1h8vy`)** — bge-768 ("big") builds for the 4 non-ruflo repos. 7 procs:
@@ -167,7 +190,7 @@ only with explicit approval). Task board live (TaskList).
   own screenshot review confirms): v0.3 tag; hero defines `search_ruvnet`; stat tiles = 46,845 chunks/5 repos ·
   5/169 proven · **100% capability confidence 45/45** · 0 hallucinated cites; a green "HEADLINE GUARANTEE —
   capability confidence" callout (84%→100%, ruflo 4/9→9/9, controls invent nothing); honest per-repo table
-  (shows ruview 63). 0 `ruflo-brain.zip` refs remain. Aesthetic untouched. Fixed hero `.hero-fig img` mobile
+  (shows ruview 63). 0 stale bundle-name refs remain. Aesthetic untouched. Fixed hero `.hero-fig img` mobile
   clip (added width:100%;height:auto). Explainer is standalone (NOT in the zip) → no re-zip needed.
 - **PROJECT STATUS: bundle COMPLETE+PROVEN, explainer DONE.** Only open item: self-update LaunchAgent install
   (needs Stuart's explicit approval per security rule) — asked; awaiting his call. Optional polish remains
@@ -261,7 +284,7 @@ RuvNet ecosystem — points to exact code, never skims, can't drift — proven �
 | Grading (ground-truth + 3-vendor) | ✅ proven, ruthless, 0 hallucinated cites |
 | L2 concept/synthesis layer | ✅ **PROVEN + HARDENED** — citation gate enforces ≥2 real refs (rejects ungrounded). 2 accepted @98. |
 | Explainer / presentation | ✅ built + visually verified (`explainer/index.html`, blueprint-terminal design, real numbers) |
-| ruflo bundle | ✅ packaged `dist/ruflo-brain.zip` (55 MB, self-contained per ADR-0001) |
+| ruflo bundle | ✅ packaged `dist/ruvnet-brain.zip` (self-contained per ADR-0001) |
 | Repo deep-walks (parallel) | ✅ **4/5 T0+T1**: ruflo 9,648 · RuVector 28,297 · AgentDB 3,624 · RuLake 1,149 = **42,718 chunks**. RuView pending (reuse Cognitum's). |
 | Explainer images | ✅ 5 generated (gpt-image-1) + integrated w/ plain-language captions; visually verified. UX-grade in progress. |
 | Ruflo swarm | swarm-1782612880654-iup3az (ux-reviewer/synthesizer/grader/builder) |

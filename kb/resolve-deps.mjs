@@ -7,9 +7,8 @@
 //
 // Resolution order (first hit wins) for EACH dep:
 //   1. The KB output dir's own node_modules (so `cd <kb-dir> && npm i` just works).
-//   2. The author/skill node_modules walked up from this file.
+//   2. node_modules walked up from this file.
 //   3. An explicit env override   (RVF_MODULE_PATH / XENOVA_PATH).
-//   4. The author's Mac npm-global / local build paths (LAST resort).
 //
 // This file ships INSIDE the bundle, so it must not assume anything beyond Node 18+ and the
 // two npm deps being installable via `npm i @ruvector/rvf @xenova/transformers`.
@@ -25,11 +24,6 @@ const KB_DIR = path.dirname(__filename);
 // require() rooted at THIS file — node walks up node_modules from the KB dir to the project
 // root, so it finds deps installed either in <kb-dir>/node_modules or a parent node_modules.
 const localRequire = createRequire(__filename);
-
-// LAST-RESORT author paths (kept so a local box still works with zero install).
-const MAC_RVF_GLOBAL = '/Users/stuartkerr/.npm-global/lib/node_modules/@ruvector/rvf';
-const MAC_XENOVA = 'file:///Users/stuartkerr/Code/AppealArmor/node_modules/@xenova/transformers/src/transformers.js';
-const MAC_MODEL_CACHE = '/Users/stuartkerr/Code/PowerPlatePulse/scripts/models-cache';
 
 function existsModuleDir(p) {
   try { return fs.existsSync(p); } catch { return false; }
@@ -57,11 +51,6 @@ export function loadRvf() {
     } catch {
       try { return { mod: localRequire(base), via: `RVF_MODULE_PATH dir (${base})` }; } catch { /* fall through */ }
     }
-  }
-
-  // 3. Mac npm-global (last resort)
-  if (existsModuleDir(MAC_RVF_GLOBAL)) {
-    return { mod: localRequire(MAC_RVF_GLOBAL), via: 'Mac npm-global (last resort)' };
   }
 
   throw new Error(
@@ -95,16 +84,10 @@ export async function loadTransformers() {
     } catch { /* fall through */ }
   }
 
-  // 3. Mac build (last resort)
-  try {
-    const T = await import(MAC_XENOVA);
-    return { T, modelCache: chooseModelCache(), via: 'Mac build (last resort)' };
-  } catch {
-    throw new Error(
-      "Cannot resolve '@xenova/transformers'. Run `cd <kb-dir> && npm i` (or `npm i @xenova/transformers` "
-      + 'at the project root), or set XENOVA_PATH to the transformers package dir / src/transformers.js.'
-    );
-  }
+  throw new Error(
+    "Cannot resolve '@xenova/transformers'. Run `cd <kb-dir> && npm i` (or `npm i @xenova/transformers` "
+    + 'at the project root), or set XENOVA_PATH to the transformers package dir / src/transformers.js.'
+  );
 }
 
 /**
@@ -116,7 +99,6 @@ export function chooseModelCache() {
   if (process.env.KB_MODEL_CACHE) return process.env.KB_MODEL_CACHE;
   const kbLocal = path.join(KB_DIR, 'models-cache');
   if (fs.existsSync(path.join(kbLocal, 'Xenova/all-MiniLM-L6-v2'))) return kbLocal;
-  if (fs.existsSync(path.join(MAC_MODEL_CACHE, 'Xenova/all-MiniLM-L6-v2'))) return MAC_MODEL_CACHE;
   return kbLocal; // remote download lands here on first run
 }
 

@@ -3,7 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RuvNet Brain — the answer key</title>
+
+<!-- Primary SEO -->
+<title>RuvNet Brain — Source-Grounded AI Knowledge Base &amp; Claude Code Plugin for rUv's Code</title>
+<meta name="description" content="A downloadable, source-grounded brain that makes Claude Code, Cursor &amp; Codex answer from rUv's real RuVector, ruflo &amp; AgentDB source — with citations, no drift.">
+<meta name="keywords" content="RuvNet, rUv, Reuven Cohen, RuVector, ruflo, AgentDB, RuLake, RuView, Claude Code plugin, MCP server, RAG, vector search, source-grounded AI, knowledge base, HNSW">
+<meta name="author" content="Reuven Cohen (rUv)">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0b0d0f">
+<link rel="canonical" href="https://explainer-stuart-kerrs-projects.vercel.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RuvNet Brain">
+<meta property="og:title" content="RuvNet Brain — the source-grounded answer key for rUv's code">
+<meta property="og:description" content="A downloadable brain that makes any AI assistant answer about RuVector, ruflo, AgentDB &amp; the RuvNet ecosystem from the real source code — with citations, no drift.">
+<meta property="og:url" content="https://explainer-stuart-kerrs-projects.vercel.app/">
+<meta property="og:image" content="https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png">
+<meta property="og:image:alt" content="A brain made of glowing amber and cyan filaments — the entire RuvNet codebase, organized into one intelligence">
+<meta property="og:image:width" content="1536">
+<meta property="og:image:height" content="1024">
+
+<!-- Twitter card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RuvNet Brain — the source-grounded answer key for rUv's code">
+<meta name="twitter:description" content="A downloadable brain that makes Claude Code, Cursor &amp; Codex answer about the RuvNet ecosystem from real source code — with citations, no drift.">
+<meta name="twitter:image" content="https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png">
+<meta name="twitter:image:alt" content="A brain made of glowing amber and cyan filaments representing the RuvNet codebase as one intelligence">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "RuvNet Brain",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Cross-platform (Node.js)",
+  "softwareVersion": "0.4.0-dev",
+  "description": "A downloadable, source-grounded knowledge base that makes AI assistants (Claude Code, Cursor, Codex) answer from rUv's real RuvNet source code — RuVector, ruflo, AgentDB, RuLake, RuView and more — with citations and no drift. Ships a single MCP tool, search_ruvnet, that searches every indexed repo at once.",
+  "url": "https://explainer-stuart-kerrs-projects.vercel.app/",
+  "image": "https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png",
+  "author": { "@type": "Person", "name": "Reuven Cohen", "alternateName": "rUv" },
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": ["https://github.com/ruvnet"],
+  "keywords": "RuVector, ruflo, AgentDB, RuLake, RuView, Claude Code, MCP, vector search, source-grounded AI, RAG"
+}
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -199,21 +246,21 @@
 <body>
 
 <header class="hero wrap">
-  <div class="tag rv">RuvNet Brain · v0.3 · build 2026-06-28</div>
+  <div class="tag rv">RuvNet Brain · v0.4.0-dev · build 2026-06-29</div>
   <h1 class="rv">The <em>answer&nbsp;key</em><br>for Ruv's&nbsp;code.</h1>
   <p class="sub rv">One downloadable brain that makes any AI assistant answer from Ruv's real source — and stops it drifting back to its training.</p>
-  <p class="hero-def rv"><b>rUv (Reuven Cohen)</b> builds open-source, <span class="amber">Rust-first AI infrastructure</span> — the RuVector vector engine, ruflo agent orchestration, AgentDB agent memory, RuLake vector cache, and more, across <b>169 repos</b>. The <b>RuvNet Brain</b> makes an AI assistant answer about all of it from the <b>real source code</b>. The first <b>5 core repos are built and proven</b>, and one tool — <span class="amber mono">search_ruvnet</span> — searches them all at once, returning whole source files labeled by repo.</p>
+  <p class="hero-def rv"><b>rUv (Reuven Cohen)</b> builds open-source, <span class="amber">Rust-first AI infrastructure</span> — the RuVector vector engine, ruflo agent orchestration, AgentDB agent memory, RuLake vector cache, and more. The <b>RuvNet Brain</b> makes an AI assistant answer about it from the <b>real source code</b>. It indexes <b>18 reusable building-block repos</b> — ruflo, RuVector, AgentDB, RuLake, RuView, agentic-flow, SPARC, qudag, safla, ruv-fann and more — into <b>75,509 source chunks</b>, and one tool — <span class="amber mono">search_ruvnet</span> — searches them all at once, returning whole source files labeled by repo. It's <b>portable</b>: install it once, then aim it at any repo you're working in.</p>
   <figure class="hero-fig rv"><img src="assets/img/hero.png" alt="A brain made of glowing amber and cyan filaments — the entire RuvNet codebase, organized into one intelligence"></figure>
   <div class="maturity rv">
-    <span class="pill now"><span class="dot"></span>Proven now — 5 core repos · 46,845 source chunks</span>
-    <span class="pill now"><span class="dot"></span>100% capability confidence (45/45)</span>
-    <span class="pill next"><span class="dot"></span>Next — the remaining 164 repos</span>
+    <span class="pill now"><span class="dot"></span>Built &amp; searchable now — 18 building-block repos · 75,509 source chunks</span>
+    <span class="pill now"><span class="dot"></span>Portable — install once, point it at any repo</span>
+    <span class="pill now"><span class="dot"></span>Routes by name (47/48) or by description (27/28) — capability cards closed 33%→96%</span>
   </div>
   <div class="meta rv">
-    <span>5 / 169 <b>repos proven</b></span>
-    <span>46,845 <b>source chunks</b></span>
-    <span>3-vendor <b>ground-truth grading</b></span>
-    <span>0 <b>hallucinated citations</b></span>
+    <span>18 <b>building-block repos</b></span>
+    <span>75,509 <b>source chunks</b></span>
+    <span>47/48 · 27/28 <b>named · described</b></span>
+    <span>3 / 3 <b>fresh-install verified</b></span>
   </div>
   <div class="scrollcue">scroll ↓</div>
 </header>
@@ -224,7 +271,7 @@
   <p class="rv">It's just local files — a vector index plus the real source text. Free and open source at <a class="ilink" href="https://github.com/ruvnet">github.com/ruvnet</a>. <span style="color:var(--ink)">Nothing leaves your machine.</span></p>
   <div class="btnrow rv">
     <a class="btn btn-primary" href="https://github.com/ruvnet" target="_blank" rel="noopener">Get it on GitHub ↗</a>
-    <a class="btn btn-ghost" href="https://github.com/ruvnet" target="_blank" rel="noopener">Download dist/ruvnet-brain.zip · 268 MB</a>
+    <a class="btn btn-ghost" href="https://github.com/ruvnet" target="_blank" rel="noopener">Download dist/ruvnet-brain.zip · 421 MB</a>
   </div>
 <pre class="codeblock rv"><span class="cmt"># 1 · unzip the bundle into your project as kb/</span>
 unzip ruvnet-brain.zip -d kb/
@@ -246,7 +293,7 @@ node forge-ask-all.mjs --dir . --q <span class="q">"how does ruflo persist memor
   <figure class="fig rv"><img src="assets/img/problem-skim.png" alt="A small light grazing the surface of a vast field of code receding into darkness">
     <figcaption><b>The problem, pictured.</b> Point an AI at a 1.58M-line repo and it grazes the surface — missing everything in the depths below. So it fills the gaps with guesses, and you can't tell which answers are wrong.</figcaption></figure>
   <div class="grid2">
-    <div class="card rv"><div class="n">WHY IT'S HARD</div><p>The ecosystem is enormous and deeply interconnected — 169 repos, an engine of 159 crates. No one holds it all in their head, so AI assistants summarize from memory and miss the decisive detail.</p></div>
+    <div class="card rv"><div class="n">WHY IT'S HARD</div><p>The ecosystem is enormous and deeply interconnected — ~248 repos, an engine of 100+ crates. No one holds it all in their head, so AI assistants summarize from memory and miss the decisive detail.</p></div>
     <div class="card rv"><div class="n">WHY CLAUDE DRIFTS</div><p>Its training prior whispers "use pgvector, use Pinecone — that exotic Rust thing probably isn't real." So it drifts off Ruv's architecture even after "reading" the docs. Knowledge alone doesn't fix behavior.</p></div>
     <div class="card rv"><div class="n">THE 15-MONTH PATTERN</div><p>Every prior attempt came up short: topical not deep (indexed summaries, not source), single-layer, and — worst — declared "done" by claim, never proven. "You said it was done; it was 30%."</p></div>
     <div class="card rv"><div class="n">WHY PEOPLE STAY STUCK</div><p>Their assistant confidently gives a wrong answer about RuVector, and they can't tell it's wrong. The gap between Ruv's intent and what gets built never closes.</p></div>
@@ -306,73 +353,50 @@ node forge-ask-all.mjs --dir . --q <span class="q">"how does ruflo persist memor
     <span class="cyan">answer</span>: "SQLite backend via better-sqlite3, AgentDB adapter, hybrid repository — here's the store()/search() path…" <span class="ink">(cites the files)</span>
     </p>
   </div>
+  <div class="explain rv">
+    <div class="eyebrow">Why this isn't "just RAG"</div>
+    <p>RAG decides what to <b>add</b> to the prompt. This decides what the model <b>isn't allowed to make up</b>. A <span class="amber mono">UserPromptSubmit</span> hook fires <span class="amber mono">search_ruvnet</span> before the assistant answers and injects the real source — so grounding is <b>not optional</b> and not left to the model's discretion. That enforcement, not the retrieval, is the novelty.</p>
+  </div>
 </section>
 
 <section class="wrap">
   <div class="eyebrow rv">05 — The proof</div>
   <h2 class="rv">Measured, not claimed.</h2>
-  <p class="rv">Every answer is graded by <strong>three independent vendors</strong> (OpenAI · DeepSeek · Llama) against the <strong>real source</strong>, with a poison rule: incomplete-but-not-wrong fails. It's run twice per repo — on a <strong>tuned</strong> set and a <strong>held-out (anti-overfit)</strong> set — so the score can't be gamed. This is the truth-telling harness that's been missing for 15 months.</p>
+  <p class="rv">There are <strong>re-runnable proof batteries</strong> — real questions in, the right source expected back. The brain now routes correctly <strong>~96–98%</strong> whether you <b>name</b> the tool or just <b>describe</b> the need. The honest part isn't one number; it's the <em>split</em> underneath it — and the two misses we still own.</p>
 
   <div class="explain rv">
-    <div class="eyebrow">What "REAL-USE 63–85" actually means</div>
-    <p>Three <b>independent</b> LLM graders — <b class="amber">OpenAI gpt-4o-mini</b>, <b class="amber">DeepSeek</b>, and <b class="amber">Llama-3.3-70B</b> — each score, 1–100, how well the top-5 retrieved real-source passages (synthesized the way an assistant reads them) answer each question. A separate <b>mechanical check</b> then confirms every cited file actually exists in the repo. <b class="green">63–85</b> is the realistic band for multi-document synthesis across the five repos — and there were <b class="green">0 hallucinated citations across every repo, on both the tuned and the held-out sets.</b></p>
+    <div class="eyebrow">What the numbers actually mean</div>
+    <p>When the question <b>names the repo</b> or is <b>specific</b> — "how does ruflo persist memory?" — the brain lands the right source <b class="green">47 / 48 of the time (98%)</b>. When a newcomer instead <b>describes a need without naming the repo</b> — "I want a thing that caches vectors across processes" — it now lands <b class="green">27 / 28 (96%)</b>, up from <b class="amber">33% before the fix</b>. The cure was <b>capability cards</b> — a capability-phrased passage per building block that lets a described need route to the right repo without naming it. No "no-hallucinations" guarantee is claimed here — just numbers you can re-run with <span class="amber mono">node scripts/prove.mjs</span>.</p>
   </div>
 
   <figure class="fig rv"><img src="assets/img/proof.png" alt="Three measuring instruments beam onto a crystal that glows green, while one beam exposes a red flaw">
-    <figcaption><b>How we prove it.</b> Every answer is checked against the <b>real source code</b> by <span class="c">three independent graders</span>. Fluent-but-ungrounded answers are caught and <span class="r">rejected</span>; only verified-against-source answers <span class="g">pass</span>.</figcaption></figure>
+    <figcaption><b>How it's checked.</b> Every answer is graded against the <b>real source code</b>, not an LLM's opinion of it. Answers that land the right source <span class="g">pass</span>; the <span class="r">by-description misses</span> are exposed, counted, and shown — not hidden.</figcaption></figure>
   <div class="stat-row rv">
-    <div class="stat"><div class="v">46,845</div><div class="k">source chunks · 5 repos</div></div>
-    <div class="stat"><div class="v">5 / 169</div><div class="k">core repos proven</div></div>
-    <div class="stat"><div class="v">100%</div><div class="k">capability confidence · 45/45</div></div>
-    <div class="stat"><div class="v">0</div><div class="k">hallucinated citations</div></div>
+    <div class="stat"><div class="v">47/48</div><div class="k">repo named or specific · 98%</div></div>
+    <div class="stat"><div class="v">27/28</div><div class="k">by-description · 96% (was 33%)</div></div>
+    <div class="stat"><div class="v">7/8</div><div class="k">helix-context demo · up from 1/8</div></div>
+    <div class="stat"><div class="v">3/3</div><div class="k">fresh-install grounded hits</div></div>
   </div>
 
   <div class="callout safe rv">
-    <div class="eyebrow">The headline guarantee — capability confidence</div>
-    <p>The brain <b>never wrongly doubts what a repo can actually do.</b> Across 45 capability questions spanning all five repos it now scores <b class="green">45/45 = 100%</b> — up from 84% before a fix (ruflo was 4/9). Adding a prose <b>"concepts" layer</b> (per-repo primers) lifted every repo to <b>9/9</b>. And the control questions — capabilities that <em>don't</em> exist — correctly return nothing: <b>it doesn't invent features.</b></p>
+    <div class="eyebrow">The 421 MB download actually works</div>
+    <p>It was tested the hard way — on a <b>fresh machine</b>: unzip the bundle → <code>npm i</code> → cold-download the embedding model → run a query. It came back with <b class="green">3 / 3 grounded hits</b>. Nobody downloads it and gets an empty shell.</p>
   </div>
 
-  <h3 class="rv" style="margin-top:54px">Five core repos — built, graded, guaranteed</h3>
-  <p class="rv" style="font-size:.92rem">Each repo ships <b style="color:var(--ink)">both</b> a small <span class="mono">MiniLM-384</span> and a sharp big <span class="mono">bge-768</span> variant; both reconcile and pass the anti-regression guard. REAL-USE is the held-out (anti-overfit) grade — except ruflo, shown on its tuned set.</p>
+  <h3 class="rv" style="margin-top:54px">The batteries, by how the question is asked</h3>
+  <p class="rv" style="font-size:.92rem">Same brain — the only thing that changes is whether the asker already knows which repo they want. The capability-card fix closed the newcomer gap that used to be the weak spot.</p>
   <table class="rv">
-    <thead><tr><th>Repo</th><th>Source chunks</th><th>REAL-USE</th><th>Capability</th></tr></thead>
+    <thead><tr><th>How it's asked</th><th>Example</th><th>Score</th><th></th></tr></thead>
     <tbody>
-      <tr><td>RuVector</td><td>28,297</td><td class="big">85</td><td class="green">9/9</td></tr>
-      <tr><td>AgentDB</td><td>3,624</td><td class="big">82</td><td class="green">9/9</td></tr>
-      <tr><td>RuLake</td><td>1,149</td><td class="big">77</td><td class="green">9/9</td></tr>
-      <tr><td>ruflo</td><td>9,648</td><td class="big">77</td><td class="green">9/9</td></tr>
-      <tr><td>RuView</td><td>4,127</td><td class="big">63</td><td class="green">9/9</td></tr>
-    </tbody>
-  </table>
-
-  <h3 class="rv" style="margin-top:54px">Retrieval trajectory (ruflo) — earned with principled levers</h3>
-  <table class="rv">
-    <thead><tr><th>Stage</th><th>Lever</th><th>REAL-USE</th><th></th></tr></thead>
-    <tbody>
-      <tr><td>3-vendor floor</td><td>vector only</td><td>68.0</td><td><div class="barwrap"><div class="bar"><i style="width:68%"></i></div></div></td></tr>
-      <tr><td>+ heuristics</td><td>intent tuning</td><td>67.2</td><td><div class="barwrap"><div class="bar"><i style="width:67%"></i></div></div></td></tr>
-      <tr><td>+ symbol index</td><td>ADR-0003 routing</td><td>67.2</td><td><div class="barwrap"><div class="bar"><i style="width:67%"></i></div></div></td></tr>
-      <tr><td>+ cross-encoder</td><td>content-aware rerank</td><td class="big">77.1</td><td><div class="barwrap"><div class="bar"><i style="width:77%"></i></div></div></td></tr>
-      <tr><td>+ selective rerank</td><td>skip design/ADR</td><td class="big">76.7</td><td><div class="barwrap"><div class="bar"><i style="width:77%"></i></div></div></td></tr>
-    </tbody>
-  </table>
-
-  <h3 class="rv" style="margin-top:50px">Every question type answerable — via the right layer</h3>
-  <table class="rv">
-    <thead><tr><th>Question type</th><th>Layer</th><th>REAL-USE</th></tr></thead>
-    <tbody>
-      <tr><td>"npm package & CLI entry?"</td><td>L4 manifest</td><td class="big">99</td></tr>
-      <tr><td>"which algorithms in @claude-flow/neural?"</td><td>L3 + rerank</td><td class="big">99</td></tr>
-      <tr><td>"what is a swarm + topologies?"</td><td>L3 + rerank</td><td class="big">98</td></tr>
-      <tr><td>"how does memory integrate AgentDB?"</td><td>L3 + symbol</td><td class="big">95</td></tr>
-      <tr><td>"how does the guidance mechanism work?"</td><td>L2 synthesis</td><td class="big">98</td></tr>
-      <tr><td>"how do I use memory end-to-end?"</td><td>L2 synthesis</td><td class="big">98</td></tr>
+      <tr><td>Repo named or specific</td><td>"how does ruflo persist memory?"</td><td class="big">47/48</td><td><div class="barwrap"><div class="bar"><i style="width:98%"></i></div></div></td></tr>
+      <tr><td>By description (no repo name)</td><td>"a thing that caches vectors across processes"</td><td class="big">27/28</td><td><div class="barwrap"><div class="bar"><i style="width:96%"></i></div></div></td></tr>
+      <tr><td>Helix-context demo</td><td>unnamed asks against helix context</td><td class="big">7/8</td><td><div class="barwrap"><div class="bar"><i style="width:88%"></i></div></div></td></tr>
     </tbody>
   </table>
 
   <div class="callout rv">
-    <div class="eyebrow">The catch that makes it trustworthy</div>
-    <p>An L2 article on "ADR coverage" scored <strong>97 from all three vendors</strong> — while citing only <strong>one</strong> real source file. The LLM panel happily passed fluent-but-ungrounded text. Only the mechanical <strong>ground-truth citation count caught it</strong>, and it was <span class="red">REJECTED</span>. That's the whole thesis: <strong>the gate of record is real source, not an LLM's opinion.</strong></p>
+    <div class="eyebrow">The residuals — stated plainly</div>
+    <p>Two known misses remain, and we own them: one described question — <strong>"route to cheaper models to cut cost"</strong> — still routes to <strong>ruflo</strong> instead of <strong>agentic-flow</strong> (orchestration and cost overlap). And one Helix-context question — an unnamed <strong>"methodology"</strong> ask — routes to <strong>synthlang</strong> instead of <strong>sparc</strong>. Everything else lands: <span class="green">47/48 named, 27/28 by description</span>.</p>
   </div>
 </section>
 
@@ -381,10 +405,10 @@ node forge-ask-all.mjs --dir . --q <span class="q">"how does ruflo persist memor
   <h2 class="rv">One bundle. One line.</h2>
   <div class="btnrow rv">
     <a class="btn btn-primary" href="https://github.com/ruvnet" target="_blank" rel="noopener">Get it on GitHub ↗</a>
-    <a class="btn btn-ghost" href="https://github.com/ruvnet" target="_blank" rel="noopener">Download dist/ruvnet-brain.zip · 268 MB</a>
+    <a class="btn btn-ghost" href="https://github.com/ruvnet" target="_blank" rel="noopener">Download dist/ruvnet-brain.zip · 421 MB</a>
   </div>
   <div class="steps">
-    <div class="step rv"><div><h3>Download the brain</h3><p>Grab <code>dist/ruvnet-brain.zip</code> (268 MB, self-contained — all 5 core repos) from <a class="ilink" href="https://github.com/ruvnet">github.com/ruvnet</a>; unzip into your project as <code>kb/</code>. Gitignore it — size doesn't matter when it has the intel.</p></div></div>
+    <div class="step rv"><div><h3>Download the brain</h3><p>Grab <code>dist/ruvnet-brain.zip</code> (self-contained — all 18 building-block repos, 75,509 source chunks) from <a class="ilink" href="https://github.com/ruvnet">github.com/ruvnet</a>; unzip into a project as <code>kb/</code>, or install it once and point it at any repo. Gitignore it — size doesn't matter when it has the intel.</p></div></div>
     <div class="step rv"><div><h3>Wire one line</h3><p>Add the <code>ruvnet-brain</code> entry from <code>mcp.snippet.json</code> to <code>.mcp.json</code> — one tool, <code>search_ruvnet</code>, that searches <b>every repo at once</b> and returns whole source files labeled by repo. (Per-repo tools ship too, to scope to one.)</p></div></div>
     <div class="step rv"><div><h3>Just ask</h3><p>Claude / Cursor / Codex now answer from Ruv's real code, with citations — and get ripped back when they drift. It rebuilds itself nightly, always date- and SHA-stamped.</p></div></div>
   </div>
@@ -406,12 +430,12 @@ node forge-ask-all.mjs --dir . --q <span class="q">"how does ruflo persist memor
 <section class="wrap">
   <div class="eyebrow rv">07 — Status</div>
   <h2 class="rv">Where it's at.</h2>
-  <p class="rv">The hard part — the part unsolved for 15 months — is <strong>proven to work, with receipts.</strong> All five core repos are built, graded, and guaranteed. What remains is engineering scale.</p>
+  <p class="rv">The hard part — proving an AI answers from real source instead of its training — <strong>works, with receipts you can re-run.</strong> 18 building-block repos are built &amp; searchable and the 421 MB download is verified on a fresh machine. The newcomer "by-description" gap that used to be the weak spot is now closed (33% → 96%); what remains is portability hardening and the public release.</p>
   <div class="layers5">
-    <div class="l5 rv"><div class="tag5 green">DONE</div><div><h3>Architecture + proof harness</h3><p>5-layer design, 3-vendor ground-truth grading on tuned <em>and</em> held-out sets, deep-walk pipeline, dual variants (MiniLM-384 + bge-768) past an anti-regression guard, symbol index, cross-encoder rerank, L2 + per-repo concept primers, capability-confidence gate, evergreen self-update, date+SHA stamping.</p></div></div>
-    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>5 core repos — 46,845 chunks</h3><p>ruflo 9,648 · RuVector 28,297 · AgentDB 3,624 · RuLake 1,149 · RuView 4,127 · REAL-USE 63–85 · 0 hallucinated citations on tuned and held-out · all pinned to a source git SHA.</p></div></div>
-    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>Capability confidence — 45/45 (100%)</h3><p>Every repo answers "can it do X?" correctly via the <code>search_ruvnet</code> tool, and refuses capabilities that don't exist — no invented features.</p></div></div>
-    <div class="l5 rv"><div class="tag5">NEXT</div><div><h3>Scale to all 169 · public release</h3><p>Tier-by-tier, each gated by the same ruthless harness before it ships.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">DONE</div><div><h3>Architecture + grounding harness</h3><p>5-layer design, deep-walk pipeline, dual variants (MiniLM-384 + bge-768) past an anti-regression guard, symbol index, cross-encoder rerank, L2 + per-repo concept primers, a UserPromptSubmit grounding hook, evergreen self-update, date+SHA stamping.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>18 building-block repos, searchable</h3><p>ruflo · RuVector · AgentDB · RuLake · RuView · agentic-flow · SPARC · qudag · safla · ruv-fann and more — <b style="color:var(--ink)">75,509 source chunks</b> behind one <code>search_ruvnet</code> tool. The 421 MB download is verified on a fresh machine: 3/3 grounded hits.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>Routing — 47/48 named, 27/28 by description, re-runnable</h3><p>98% when the repo is named or the question is specific; 96% when a newcomer only describes the need. It cites real files and doesn't invent repos that aren't indexed.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>By-description routing — capability cards (33% → 96%)</h3><p>The old by-description weak spot is closed: a capability-phrased passage per building block routes a described need to the repo that fills it. Two residuals remain, named honestly. Next: portability hardening + public release.</p></div></div>
   </div>
 </section>
 

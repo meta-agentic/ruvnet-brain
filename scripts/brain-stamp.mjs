@@ -11,14 +11,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
-const BRAIN_VERSION = arg('--brain-version', 'v0.1.0-dev');
+const BRAIN_VERSION = arg('--brain-version', 'v0.3.0-dev');
 const NOW = new Date().toISOString();
 
 // Known local clones (extend as repos are added). Self-update resolves remote SHAs for the rest.
-const CLONES = {
-  ruflo: '/Users/stuartkerr/Code/ruvnet-repos/ruflo',
-  RuLake: '/Users/stuartkerr/Code/RuLake',
-};
+const CLONES = JSON.parse(process.env.RUVNET_KNOWN_CLONES || '{}');
 const builtName = (n) => fs.existsSync(path.join(ROOT, 'kb', `${n}.rvf`));
 const shaOf = (dir) => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir }).toString().trim(); } catch { return null; } };
 // no shell: slug is placed in a URL arg, never interpreted by a shell
@@ -42,7 +39,7 @@ const manifest = {
   brainVersion: BRAIN_VERSION,
   generated: NOW,
   generatedHuman: new Date(NOW).toUTCString(),
-  coverage: { total: repos.length, built: built.length, pending: repos.length - built.length },
+  coverage: { built: built.length, catalogued: repos.length, orgTotalApprox: 248, pending: repos.length - built.length },
   builtRepos: built,
   pendingRepos: repos.filter((r) => r.status === 'pending').map((r) => ({ name: r.name, tier: r.tier })),
 };

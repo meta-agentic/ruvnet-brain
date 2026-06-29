@@ -15,7 +15,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KB = path.join(ROOT, 'kb');
-const REPOS = ['ruflo', 'ruvector', 'agentdb', 'rulake', 'ruview'];
+// Auto-discover every repo that has a primer. (Was hardcoded to the original 5; now folds in all
+// built repos so the concepts/capability layer covers the whole brain, not just the first tier.)
+const REPOS = fs.readdirSync(KB)
+  .filter((f) => f.endsWith('-primer.md'))
+  .map((f) => f.replace(/-primer\.md$/, ''))
+  .sort();
 
 // slug -> repo, from the per-repo l2-topics files (+ ruflo defaults that predate them)
 const slugRepo = new Map([['guidance-mechanism', 'ruflo'], ['memory-end-to-end', 'ruflo'], ['adr-coverage', 'ruflo']]);
@@ -67,6 +72,24 @@ for (const r of REPOS) {
   add(r, 'PRIMER', `${r}-primer`, `${r} — Primer`, fs.readFileSync(pf, 'utf8')); pn++;
 }
 
+// 3) capability cards — short, capability-phrased, one per building block. These are the high-signal
+// passages that let a BY-DESCRIPTION query ("what caches vector queries?") rerank to the right repo
+// even when the user never names it. Each card is attributed to its repo via the path prefix.
+let cn = 0;
+const cardsFile = path.join(KB, 'capability-cards.md');
+if (fs.existsSync(cardsFile)) {
+  const raw = fs.readFileSync(cardsFile, 'utf8');
+  for (const sec of raw.split(/^##\s+/m).slice(1)) {
+    const nl = sec.indexOf('\n');
+    if (nl < 0) continue;
+    const repo = sec.slice(0, nl).trim();
+    const body = sec.slice(nl + 1).trim();
+    if (!repo || !body) continue;
+    add(repo, 'CARD', `${repo}-card`, `${repo} — Capability`, `${repo} — ${body}`);
+    cn++;
+  }
+}
+
 fs.writeFileSync(path.join(KB, 'concepts.passages.jsonl'), passages.map((p) => JSON.stringify(p)).join('\n') + '\n');
 fs.writeFileSync(path.join(KB, 'concepts.meta.json'), JSON.stringify({
   model: 'concepts', dimensions: 0, metric: 'cosine', name: 'concepts',
@@ -74,5 +97,5 @@ fs.writeFileSync(path.join(KB, 'concepts.meta.json'), JSON.stringify({
   note: 'L2 synthesis + per-repo primers; embedded into concepts.big.rvf via forge-big.',
   entries,
 }, null, 2));
-console.log(`concepts: ${l2n} L2 articles + ${pn} primers → ${passages.length} passages → kb/concepts.passages.jsonl`);
+console.log(`concepts: ${l2n} L2 articles + ${pn} primers + ${cn} capability cards → ${passages.length} passages → kb/concepts.passages.jsonl`);
 console.log('next: node kb/forge-big.mjs both --dir kb --name concepts   (builds concepts.big.rvf)');

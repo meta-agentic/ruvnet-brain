@@ -4,7 +4,6 @@
 
 ## What it is & who it's for
 
-# What it is & who it's for  
 
 RuView is a **camera-free WiFi sensing system** (`harness/ruview/bin/cli.js`) that extracts human presence, activity, and physiological signals from Channel State Information (CSI) data. It exists as both:  
 - A **toolchain** (`harness/ruview/package.json`) for ESP32 hardware provisioning (`ruview-flash`), calibration (`ruview-calibrate`), and model training (`ruview-train`)  
@@ -74,7 +73,6 @@ All capabilities are fail-closed per ADR-262 §3.3 (`harness/ruview/src/tools.js
 
 ## Core concepts & how they work
 
-# Core Concepts & How They Work
 
 RuView is a WiFi-based dense pose sensing system with three core capabilities proven in source files:
 
@@ -157,7 +155,6 @@ This section avoids speculation — every claim is backed by explicit ADR refere
 
 ## Where the documentation lives
 
-## Where the documentation lives
 
 RuView maintains rigorous **documentation covering all aspects** of the system across these locations:
 
@@ -184,7 +181,6 @@ RuView maintains rigorous **documentation covering all aspects** of the system a
 
 ## How to use it end-to-end
 
-### How to use it end-to-end
 
 To install and use RuView end-to-end, follow these steps:
 

@@ -8,7 +8,7 @@ narrative of the entire conversation that conceived this solution. Read this + P
 
 ## 1. What this is (the one-paragraph truth)
 A downloadable, source-grounded **brain for the entire RuvNet open-source ecosystem** (rUv / Reuven Cohen's
-169 repos) that is becoming a **drop-in autonomous engineering system**. Phase 1 (DONE): make Claude/Codex
+~248 non-fork repos, ~297 public total) that is becoming a **drop-in autonomous engineering system**. Phase 1 (DONE): make Claude/Codex
 answer about RuvNet from Ruv's REAL source code — point to exact files, never skim, never drift to training
 priors (pgvector/Pinecone), and **never wrongly doubt what a repo can do**. Phase 2 (NEXT — ADR-0008): turn
 that grounded brain into a system that, given a request or an ADR, **autonomously architects → builds →
@@ -18,7 +18,7 @@ drifting.
 ## 2. WHY it matters (the problem we're killing)
 Claude Code (and Cursor/Codex) has a chronic, expensive failure mode with RuvNet: it **drifts** to its
 training priors, **hallucinates** APIs, **doubts** that a repo can do something it actually can, and **skims**
-instead of reading the real implementation. For a Rust-first, 169-repo ecosystem that Claude's training barely
+instead of reading the real implementation. For a Rust-first, ~248-repo ecosystem that Claude's training barely
 covers, that makes the assistant unreliable — it second-guesses Ruv's own tools. The brain fixes the
 KNOWLEDGE half; the autonomous loop fixes the ACTION half. The end state: **Claude Code builds with the RuvNet
 stack as fluently and confidently as Ruv would** — "the ultimate intelligence source" for the ecosystem,
@@ -45,17 +45,21 @@ auto-wires everything · **visuals** are a gated build step, not an afterthought
 
 ## 4. HONEST grade against that ultimate bar: ~30 / 100 (as of 2026-06-28)
 Per the no-inflated-scores rule. The brain (grounding floor) is real and strong; the autonomous loop — the
-bulk of the vision — is **unbuilt**. Breakdown: anti-drift grounding 65 (but 5/169 repos + passive, not
+bulk of the vision — is **unbuilt**. Breakdown: anti-drift grounding 65 (but 19/~248 repos + passive, not
 enforced) · drop-in global install 15 · autonomous build-from-ADR 10 · generalized score-to-98 loop 20 ·
 auto-visuals 35 · Ruflo-orchestration integration 20. The foundation FOR the product is ~70; the product
 itself ~30. **We are at base camp with a proven base; the climb (ADR-0008) is next.**
 
 ## 5. What is DONE and PROVEN (Phase 1 — the brain)
-- **`dist/ruvnet-brain.zip`** (268 MB, SHA-stamped, acceptance-tested as a real consumer: unzip → npm i → ask).
-- **5 repos loaded** (of 169): ruflo, RuVector, AgentDB, RuLake, RuView + a **concepts store** (L2 + primers).
-  The other 164 are roadmap; `scripts/self-update.mjs --include-new` deep-walks any on demand.
+- **`dist/ruvnet-brain.zip`** (SHA-stamped, acceptance-tested as a real consumer: unzip → npm i → ask).
+- **19 repos loaded** (of ~248): agent-harness-generator, agentdb, agentic-flow, agenticow, cve-bench, daa,
+  dspy.ts, fact, helix, qudag, ruflo, rulake, rupixel, ruv-fann, ruvector, ruview, safla, sparc, synthlang +
+  a **concepts store** (L2 + primers). ≈75,000 chunks total. The other ~229 are roadmap;
+  `scripts/self-update.mjs --include-new` deep-walks any on demand.
 - Both embedding variants (MiniLM-384 + bge-768), all reconcile + pass the anti-regression guard.
-- **3-vendor ground-truth grade:** REAL-USE 63–85, **0 hallucinated citations** on tuned AND held-out sets.
+- **3-vendor ground-truth grade** (the **graded core of 5** — ruflo, ruvector, agentdb, rulake, ruview):
+  REAL-USE 63–85, **0 hallucinated citations** on tuned AND held-out sets. Primers now exist for all 19, so
+  capability claims are grounded across the full covered set (the other 14 are *covered*, not yet *graded*).
 - **★ Capability-confidence gate = 45/45 (100%)** — the "never wrongly doubt a capability" guarantee. Started
   84% (ruflo 4/9); the fix (prose capability primers in the concepts store) took it to 100%. Controls prove it
   also won't INVENT capabilities. KEY INSIGHT: the cross-encoder trusts PROSE that describes a capability but

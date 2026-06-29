@@ -9,6 +9,9 @@ dist/
 clones/
 data/adrs-cache/
 
+# Helix removed from the brain (it's a separate consumer app); kept locally, not committed
+kb/_excluded-helix/
+
 # logs + scratch
 *.log
 logs/
@@ -19,3 +22,9 @@ logs/
 # they are the expensive embeddings (hours to regenerate) and the irreplaceable knowledge work.
 
 node_modules
+
+# secrets — NEVER commit (protection travels with the repo, not just global git excludes)
+.env
+.env.*
+!.env.example
+*.bak

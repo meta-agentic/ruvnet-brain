@@ -20,7 +20,7 @@ const KB = path.join(ROOT, 'kb');
 const DATA = path.join(ROOT, 'data');
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const OUT = path.resolve(ROOT, arg('--out', 'dist/ruvnet-brain'));
-const BRAIN_VERSION = arg('--version', 'v0.2.0-dev');
+const BRAIN_VERSION = arg('--version', 'v0.3.0-dev');
 
 // ---- registry: tier + the full 169-repo pending list -------------------------------------------
 const registry = JSON.parse(fs.readFileSync(path.join(DATA, 'registry.tiers.json'), 'utf8'));
@@ -143,7 +143,7 @@ const manifest = {
   brainVersion: BRAIN_VERSION,
   generated: now.toISOString(),
   generatedHuman: now.toUTCString(),
-  coverage: { total: regFlat.length, built: builtRepos.length, pending: pendingRepos.length },
+  coverage: { built: builtRepos.length, catalogued: regFlat.length, orgTotalApprox: 248, pending: pendingRepos.length },
   crossRepoTool: { mcp: 'forge-mcp-all.mjs', cli: 'forge-ask-all.mjs', tool: 'search_ruvnet' },
   conceptsStore: hasConcepts ? { store: 'concepts.big.rvf', note: 'L2 synthesis + per-repo primers embedded as prose; unioned by search_ruvnet so code-implemented capabilities are retrievable as high-confidence prose.' } : null,
   builtRepos,

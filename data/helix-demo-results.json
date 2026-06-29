@@ -1,0 +1,134 @@
+{
+  "started": "2026-06-29T19:57:46.025Z",
+  "finished": "2026-06-29T19:58:47.197Z",
+  "k": 2,
+  "passed": 1,
+  "total": 8,
+  "bySet": {
+    "helix-DESCRIBED (newcomer, no repo name)": {
+      "pass": 0,
+      "total": 4
+    },
+    "helix-NAMED (knows the RuvNet tool)": {
+      "pass": 1,
+      "total": 4
+    }
+  },
+  "results": [
+    {
+      "n": 1,
+      "set": "helix-DESCRIBED (newcomer, no repo name)",
+      "query": "How should I store and search a patient's medical history locally and privately using vectors?",
+      "expect": [
+        "ruvector",
+        "rulake",
+        "concepts"
+      ],
+      "got": "ruflo",
+      "eff": "ruflo",
+      "score": -3.7303316593170166,
+      "citedPath": "ruflo/v3/plugins/healthcare-clinical/src/index.ts",
+      "pass": false
+    },
+    {
+      "n": 2,
+      "set": "helix-DESCRIBED (newcomer, no repo name)",
+      "query": "How do I give a health agent persistent memory of past visits, labs, and medications?",
+      "expect": [
+        "agentdb",
+        "concepts"
+      ],
+      "got": "ruvector",
+      "eff": "ruvector",
+      "score": 1.678643822669983,
+      "citedPath": "ruvector/examples/rvf/examples/agent_memory.rs",
+      "pass": false
+    },
+    {
+      "n": 3,
+      "set": "helix-DESCRIBED (newcomer, no repo name)",
+      "query": "How can I run several agents in parallel to analyze one medical record?",
+      "expect": [
+        "ruflo",
+        "concepts"
+      ],
+      "got": "agenticow",
+      "eff": "agenticow",
+      "score": -0.08334746956825256,
+      "citedPath": "agenticow/examples/parallel-agents.mjs",
+      "pass": false
+    },
+    {
+      "n": 4,
+      "set": "helix-DESCRIBED (newcomer, no repo name)",
+      "query": "What methodology should I follow to plan and build the Helix data-ingestion pipeline step by step?",
+      "expect": [
+        "sparc",
+        "concepts",
+        "ruflo"
+      ],
+      "got": "helix",
+      "eff": "helix",
+      "score": 0.5623329877853394,
+      "citedPath": "helix/IMPLEMENTATION_STATUS.md",
+      "pass": false
+    },
+    {
+      "n": 5,
+      "set": "helix-NAMED (knows the RuvNet tool)",
+      "query": "Should I use RuVector RVF with HNSW to store medical embeddings in Helix?",
+      "expect": [
+        "ruvector",
+        "concepts"
+      ],
+      "got": "helix",
+      "eff": "helix",
+      "score": 1.7523983120918274,
+      "citedPath": "helix/docs/adr/ADR-025-visual-rag-medical-documents.md",
+      "pass": false
+    },
+    {
+      "n": 6,
+      "set": "helix-NAMED (knows the RuvNet tool)",
+      "query": "Can ruflo orchestrate the diagnostic agents and swarms in Helix?",
+      "expect": [
+        "ruflo",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruflo",
+      "score": 4.801114797592163,
+      "citedPath": "concepts/ruflo/PRIMER/ruflo-primer#0",
+      "pass": true
+    },
+    {
+      "n": 7,
+      "set": "helix-NAMED (knows the RuvNet tool)",
+      "query": "Can AgentDB hold the patient's longitudinal health memory across sessions?",
+      "expect": [
+        "agentdb",
+        "concepts"
+      ],
+      "got": "safla",
+      "eff": "safla",
+      "score": -0.6875355839729309,
+      "citedPath": "safla/docs/memory-bank.md",
+      "pass": false
+    },
+    {
+      "n": 8,
+      "set": "helix-NAMED (knows the RuvNet tool)",
+      "query": "Should I follow the SPARC methodology to build the Helix pipeline?",
+      "expect": [
+        "sparc",
+        "concepts",
+        "ruflo"
+      ],
+      "got": "helix",
+      "eff": "helix",
+      "score": 1.0282841324806213,
+      "citedPath": "helix/IMPLEMENTATION_STATUS.md",
+      "pass": false
+    }
+  ]
+}

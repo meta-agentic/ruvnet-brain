@@ -27,7 +27,6 @@ The platform is prescriptive in its architecture, with 80+ verifiable checks acr
 
 ## Capabilities (what it can do)
 
-# Capabilities (what it can do)
 
 1. **Agent Management & Coordination**  
    EXISTS: Full lifecycle management (create/delete/update agents) and swarm coordination (hive-mind workflows, task routing) implemented in `ruflo/src/ruvocal/mcp-bridge/index.js` under the agents tool group with prefixes `agent_`, `swarm_`, and `hive-mind_`.
@@ -51,9 +50,7 @@ The platform is prescriptive in its architecture, with 80+ verifiable checks acr
 
 ## Core concepts & how they work
 
-# Core Concepts & How They Work (Authoritative)
 
-## 1. Tool Groups & Modular Architecture
 Ruflo organizes capabilities into toggleable tool groups that serve distinct functional domains (`ruflo/src/ruvocal/mcp-bridge/index.js`). These groups are:
 
 - **Core Tools** (Always enabled): Search/research infrastructure and fundamental guidance systems (`source: "builtin"`)
@@ -115,7 +112,6 @@ Uncovered Areas: The sources reveal no implementation details about model traini
 
 ## Maturity (shipped vs proposed)
 
-### Maturity (shipped vs proposed)
 
 Ruflo is a mature, production-ready framework with a clear distinction between shipped/accepted features and proposed ones. Below is the breakdown:
 
@@ -161,7 +157,6 @@ Ruflo's shipped features are robust, well-documented, and actively maintained, w
 
 ## Where the documentation lives
 
-# Where the documentation lives
 
 Ruflo's documentation is architecturally organized across several formal systems with clear ownership and maintenance paths:
 
@@ -193,9 +188,7 @@ All documentation follows the principle of "versioned truth" - each major versio
 
 ## How to use it end-to-end
 
-# How to use it end-to-end
 
-## Installation
 
 1. Install ruflo globally via npm (`npm install -g ruflo`) or use directly from the cloned repository (`node bin/ruflo.js`). The CLI entrypoint is explicitly defined at `ruflo/bin/ruflo.js`.
 

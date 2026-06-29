@@ -1,111 +1,110 @@
-# The RuvNet Primer — the whole ecosystem, on one page
+# The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v0.1.0-dev · Built: 2026-06-27 · Covers: 1/169 repos built @ pinned SHAs (see data/manifest.json)`
+`Brain version: v0.4.0-dev · Updated: 2026-06-29 · Covers: ~18 building-block repos @ pinned SHAs (169 catalogued; pull more on demand — see data/manifest.json)`
 
-> **What this is:** a drop-in "brain" that already knows RuvNet's entire codebase, so your AI assistant
-> answers from Ruv's real source instead of guessing. This page is the human map; the searchable brain is
-> the bundle. Every claim here is meant to be backed by a real passage in the brain — ask it to verify.
-
----
-
-## The 30-second version
-
-RuvNet (by **rUv** / `github.com/ruvnet`) is a **Rust-first, server-less AI infrastructure** delivered as
-plain files and libraries. One engine — **RuVector** (1.58M lines) — provides self-learning vector search,
-graphs, coherence/safety gates, local LLM inference and an agent runtime. Everything else is built on it:
-**ruflo** orchestrates agents, **AgentDB** remembers, **RuLake** caches, **RuView** turns WiFi into spatial
-sensing, **Cognitum** ships it as a device. The thing people get wrong is **how big and how interconnected**
-it is — so they skim, guess, and fight it. This brain fixes that.
+> **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
+> **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
+> source — with citations — instead of guessing. This page is the human map; the brain is the searchable
+> bundle. Every claim here is meant to be backed by a real passage — ask the brain to verify it.
 
 ---
 
-## How it all hangs together (the stack)
+## What the brain is
 
-![The RuvNet stack: apps and products (RuView, Cognitum) build on ruflo orchestration, which coordinates over AgentDB and RuLake memory/cache, all running on the RuVector engine delivered as RVF files, with specialized projects sitting on the engine](assets/diagrams/ruvnet-stack.svg)
-
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
-
-```
-            ┌────────────────────────── APPS & PRODUCTS ──────────────────────────┐
-            │  RuView (WiFi→spatial)   Cognitum (device)   your app   marketing    │
-            └───────────────┬─────────────────────────────────────────────────────┘
-                            │  build on
-            ┌───────────────▼───────────── ORCHESTRATION ─────────────────────────┐
-            │  ruflo  — agent meta-harness: swarms, hooks, MCP tools, guidance     │
-            │  agentic-flow · agent-harness-generator · SPARC · DAA                │
-            └───────────────┬─────────────────────────────────────────────────────┘
-                            │  coordinate over
-   ┌────────────────────────▼──────────── MEMORY & CACHE ────────────────────────┐
-   │  AgentDB (smart vector memory)        RuLake (cache-coherent vector fabric)  │
-   └────────────────────────┬────────────────────────────────────────────────────┘
-                            │  persist / serve vectors via
-   ┌────────────────────────▼──────────── THE ENGINE: RuVector ──────────────────┐
-   │  HNSW vector search · GNN self-learning · graph+Cypher · coherence/min-cut   │
-   │  gates · sublinear solvers · ruvllm (local LLM) · attention · WASM/edge      │
-   │  ───────────────────── delivered as ─────────────────────                   │
-   │  RVF files (.rvf: vectors+index+witness in one) · crates.io+npm · PG ext     │
-   └─────────────────────────────────────────────────────────────────────────────┘
-
-   Specialized on top of the engine:  QuDAG (quantum-resistant DAG) · ruv-FANN (neural)
-   · Synaptic-Mesh · rvm (agentic VM) · midstream (live AI) · sublinear-time-solver
-   · rvcsi/rufield (RF sensing) · ruqu (quantum) · rvdna (genomics) · …
-```
-
-</details>
-
-**The one-line mental model:** *RVF is the file format, RuVector is the engine that reads/writes it,
-everything above is a consumer.* If a task is vector/agent/memory-shaped, RuVector is the backend under it.
+- A **portable brain** over **~18 RuvNet building-block repos**, embedded and indexed at pinned SHAs.
+- Delivered as a **Claude Code plugin**: **one tool (`search_ruvnet`)** + **one enforcement hook** (a
+  UserPromptSubmit grounding directive, so the model can't silently drift) + **one skill**.
+- **Installed once at user scope**, then active in **any** repo you open — not tied to one project.
+- **Building blocks only.** Reusable infrastructure goes in; end-user apps stay out. **Helix** (a separate
+  health app) is **intentionally not in the brain** — the brain carries components you build *with*, not
+  finished products.
 
 ---
 
-## The component map (tiered by how deeply the brain knows it)
+## The building blocks (one line each)
 
-**T0 — Pillars (max depth):**
-- **RuVector** ⭐4.3k — the 1.58M-line Rust engine. Self-learning vector DB + agent runtime. Everything's foundation.
-- **ruflo** ⭐61.7k — the leading agent meta-harness for Claude (swarms, hooks, MCP tools, memory, guidance).
-- **RuView** ⭐75.7k — commodity WiFi → real-time spatial intelligence (the renamed wifi-densepose).
+**Core stack**
+- **ruflo** — agent orchestration: swarms, hooks, MCP tools, memory.
+- **RuVector** — the vector engine: RVF files + HNSW on-disk vector search.
+- **AgentDB** — agent memory + graph / Cypher queries.
+- **RuLake** — cache-coherent vector cache over RVF.
+- **RuView** — camera-free WiFi / CSI sensing: turns ordinary WiFi radio (Channel State Information) into through-wall presence/occupancy detection, pose estimation, fall/gesture recognition, and contactless medical-grade vitals (breathing + heart rate) on ESP32-S3/C6 hardware.
 
-**T1 — Core stack (full depth):** RuLake (vector cache fabric) · AgentDB (smart vector memory) · ruv-FANN
-(memory-safe neural nets) · QuDAG (quantum-resistant anonymous comms) · DAA (decentralized autonomous apps)
-· SynthLang (prompt language) · dspy.ts (declarative self-learning JS) · FACT (fast augmented context) ·
-SAFLA (self-aware feedback loop) · Synaptic-Mesh · rvm (agentic VM) · midstream (live AI conversations) ·
-sublinear-time-solver · SPARC (methodology) · agentic-flow · agent-harness-generator · rvcsi · rufield ·
-ruv-neural · rudevolution.
+**Method & routing**
+- **agentic-flow** — cheap multi-model routing for agents.
+- **SPARC** — 5-phase build methodology (Spec → Pseudocode → Architecture → Refinement → Completion).
+- **agent-harness-generator / metaharness** — generate and evaluate agent harnesses.
 
-**T2 — Latest (≤3 months, full source):** helix · rupixel · worldgraph · PhotonLayer · rvdna · ruqu · ruvn
-· ruv-drone · skygraph · musica · obsidian-brain · SonicChamber · open-claude-code · symbolic-scribe · … (25).
-
-**T3 — Long tail (~121):** indexed at primer depth, deep-walked on demand.
-
----
-
-## How a real question gets answered (point-deeper, not skim)
-
-```
-   You ask Claude:  "how does ruflo persist agent memory?"
-        │
-        ▼
-   [hook] auto-queries the Brain  ──►  symbol index resolves → @claude-flow/memory/src/sqlite-backend.ts
-        │                                                        + agentdb-adapter.ts + hybrid-repository
-        ▼
-   real source passages injected into Claude's context (it can't skim past them)
-        │
-        ▼
-   Claude answers: "SQLite backend via better-sqlite3, with an AgentDB adapter and a hybrid
-                    memory repository — here's the store()/search() path …"  (cites the files)
-```
-
-*(That answer is real — it's what the ruflo brain returns today.)*
+**Specialized**
+- **qudag** — quantum-resistant DAG / anonymous comms.
+- **safla** — Self-Aware Feedback Loop Algorithm: recursive self-improvement / meta-cognition.
+- **ruv-fann** — memory-safe neural nets (FANN, in Rust).
+- **synthlang** — high-performance LLM middleware: prompt compression + agentic framework.
+- **rupixel** — zero-server, client-side visual retrieval (search pixels/video by meaning).
+- **agenticow** — "Git for agent memory": copy-on-write vector branching for multi-agent memory.
+- **cve-bench** — SWE-bench-style benchmark for fixing real CVEs (security capability eval).
+- **daa** — decentralized autonomous agents.
+- **dspy.ts** — declarative, self-improving LLM programs in TypeScript.
+- **fact** — Fast-Access Cached Tools (advanced caching — *not* "fast augmented context"; the brain
+  corrects that common mis-read from real source).
 
 ---
 
-## Use it in 3 steps
+## Why it exists
 
-1. **Download** the bundle zip; unzip into your project as `kb/`.
-2. **Add one line** to `.mcp.json` pointing at the bundled reader.
-3. **Paste the gate** into your `CLAUDE.md` (or run the hook-installer) so Claude *must* ground RuvNet
-   answers in the brain. Then just ask.
+Claude and Codex **under-cover this Rust-first ecosystem**, so they:
+- **drift** — reach for pgvector / Pinecone / hand-rolled cosine instead of RVF + HNSW; and
+- **wrongly doubt** real, shipping tools they haven't memorized.
 
-> **Always current:** the brain rebuilds itself nightly from Ruv's latest commits and re-stamps its version
-> + per-repo SHAs, so a download today and a download in six months both carry the latest source.
+The brain fixes both. It makes the assistant:
+- **answer from real source, with citations**;
+- **prefer RuvNet building blocks** over training-prior defaults; and
+- **work like Ruv** — assess → SPARC → ADR/DDD → QA each step → score → revise.
+
+---
+
+## The proof / confidence concept (honest, exact numbers)
+
+**Re-runnable proof batteries** (`node scripts/prove.mjs`, k=3; `bash scripts/gate.sh` for the gate) now
+score ~96–98% **whether the question names the tool or just describes the need**:
+
+| When the question… | Score | |
+|---|---|---|
+| **names a repo or is specific** (helix-free; tuned, held-out, cross-repo, implementation, coverage) | **47/48** | **98%** |
+| **is by-description only** (newcomer phrasing, no repo names) | **27/28** | **96%** |
+| **Helix-context demo** (`HELIX-DEMO-NOHELIX.md`) | **7/8** | **88%** (up from 1/8) |
+
+- The by-description path **was 33% before the fix** and is now **96% after** adding **capability cards** —
+  a capability-phrased passage per building block that lets a described need route to the right repo without
+  naming it. Artifacts: `PROOF.md`, `DESCRIBED-PROOF.md`, `HELIX-DEMO-NOHELIX.md`.
+- Two honest residuals, not hidden: one described question (*"route to cheaper models to cut cost"*) still
+  routes to **ruflo** instead of **agentic-flow** (orchestration/cost overlap); one Helix question (an unnamed
+  *"methodology"* ask) routes to **synthlang** instead of **sparc**.
+- The **421 MB bundle** (`dist/ruvnet-brain.zip`) was **acceptance-tested as a fresh consumer** — extracted
+  on its own, `npm i`, queried, **3/3 grounded** — so it runs off the dev machine, not just on it.
+
+**The guarantee is narrow and true:** grounded, non-drifting, cited answers over this corpus **whether the
+target is named (47/48) or only described (27/28)**, with the two residuals above named honestly; and
+**no autonomous builder yet**. Nothing here is "done" or "complete" — it's a verified floor you can re-run.
+
+---
+
+## How to use it
+
+1. **Install the plugin** (once, user scope — active everywhere):
+   ```
+   claude plugin marketplace add stuinfla/ruvnet-brain && \
+     claude plugin install ruvnet-brain@ruvnet-brain --scope user
+   ```
+2. **Open any repo and ask.** The hook grounds the turn; the model calls `search_ruvnet` and answers from
+   cited source. Example: *"How does ruflo persist agent memory, and what implements it?"*
+3. **Pull in an uncovered repo on demand** (any of the ~169 catalogued, or any rUv repo):
+   ```
+   node scripts/ingest-repo.mjs --name <repo>
+   ```
+   It clones, embeds both vector variants, builds symbols, and is searchable with no restart.
+
+---
+
+> **Stay honest:** every number above is re-runnable. If the brain can't ground a claim, it should say so —
+> that refusal *is* the product. Re-run `scripts/prove.mjs` and check the output yourself.

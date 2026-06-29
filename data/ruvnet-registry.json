@@ -784,14 +784,6 @@
   "recent": false
  },
  {
-  "name": "helix",
-  "stars": 17,
-  "pushed": "2026-06-26",
-  "lang": "Rust",
-  "desc": "Helix — a private, local-first, anti-hallucination Personal Health Int",
-  "recent": true
- },
- {
   "name": "rufield",
   "stars": 17,
   "pushed": "2026-06-14",

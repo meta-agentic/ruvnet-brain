@@ -49,7 +49,7 @@ source**, at every altitude — and when Claude starts to drift ("just use pgvec
 **grounds it in the real source before it answers** rather than hoping a mandate sticks.
 
 **Honest scope of the promise:** *world-class on Tier-0/Tier-1 (~25 core repos where ~95% of the value
-lives), primer-grade + breadth-attested on the long tail.* Not "equally expert on all 169" — that claim
+lives), primer-grade + breadth-attested on the long tail.* Not "equally expert on all ~248" — that claim
 is not supported by any feasible eval and we will not make it.
 
 **Two proofs, never conflated:**
@@ -83,8 +83,9 @@ measured drift-rate at/below SLO — all pasted. Never "files exist," never "the
 
 ## 2. Scope — the RuvNet repo universe
 
-Live from `github.com/ruvnet` 2026-06-27 (`data/ruvnet-registry.json`): **169 non-fork repos** — 3 ≥1k,
-12 in 200–1k, 12 in 100–200, 23 in 50–100, 81 in 10–50, 38 <10. **48 pushed ≤3 months. 29 Rust, ~127 code total.**
+From `github.com/ruvnet` (`data/ruvnet-registry.json`): **~248 non-fork repos (~297 public total)**. The
+2026-06-27 snapshot counted **169 non-fork** — 3 ≥1k, 12 in 200–1k, 12 in 100–200, 23 in 50–100, 81 in 10–50,
+38 <10; **48 pushed ≤3 months. 29 Rust, ~127 code total** — those bucket figures are from that snapshot.
 
 `IN_SCOPE = (stars ≥ 1000) ∪ (pushed ≤ 3 months) ∪ (core-architecture allowlist)`, **tiered by ingest depth:**
 
@@ -168,7 +169,7 @@ bundle is honestly **~1–1.5 GB**; we ship it anyway because effectiveness wins
 | SKU | Contents | Rough size (f32, effectiveness-first) | Delivery |
 |---|---|---|---|
 | **Core** (T0+T1, default) | ~25 repos | **~600 MB–1 GB** | downloadable **zip** (or `npx @ruvnet/brain` fetch) |
-| **Full** (all tiers) | 169 repos | **~1–1.5 GB** | zip / `npx` fetch |
+| **Full** (all tiers) | ~248 repos | **~1–1.5 GB** | zip / `npx` fetch |
 | **T0-only** (convenience) | 3 pillars | **~200–350 MB** | zip / `npx` fetch |
 
 A smaller "lite" (quantized) build is a **later** deliverable, only after the full build is proven

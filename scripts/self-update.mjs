@@ -20,9 +20,10 @@ const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && proc
 const APPLY = has('--apply');
 const TIER = arg('--tier', null);
 const ONLY = arg('--repo', null);
-const MODEL_CACHE = '/Users/stuartkerr/Code/PowerPlatePulse/scripts/models-cache';
+const MODEL_CACHE = process.env.KB_MODEL_CACHE || path.join(ROOT, 'kb', 'models-cache');
 
-const KNOWN_CLONES = { ruflo: '/Users/stuartkerr/Code/ruvnet-repos/ruflo', RuLake: '/Users/stuartkerr/Code/RuLake' };
+// Optional author-side clone overrides via env (JSON map); default empty → uses CLONE_DIR/<name>.
+const KNOWN_CLONES = JSON.parse(process.env.RUVNET_KNOWN_CLONES || '{}');
 const CLONE_DIR = path.join(ROOT, 'clones');
 // --full source-dir hints per repo (extend as repos onboard; default = whole tree, docs+manifests+lead-comments)
 const FULL_HINTS = { ruflo: 'v3/@claude-flow,v3/mcp,ruflo/src' };
@@ -90,7 +91,7 @@ for (const p of todo) {
     const kb = p.name.toLowerCase();                 // artifacts are lowercase (ruvector.rvf), registry name is RuVector
     const full = FULL_HINTS[kb];
     const buildArgs = ['forge-build.mjs', '--repo', dir, '--out', '.', '--name', kb,
-      '--canonical-url', `https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb`];
+      '--canonical-url', process.env.RUVNET_CANONICAL_URL || 'https://raw.githubusercontent.com/ruvnet/ruvnet-brain/main/kb'];
     if (full) buildArgs.push('--full', full);
     console.log(`[build] ${kb}`);
     execFileSync('node', buildArgs, { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });

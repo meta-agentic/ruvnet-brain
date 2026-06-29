@@ -1,0 +1,10 @@
+[
+  { "set": "helix-DESCRIBED (newcomer, no repo name)", "query": "How should I store and search a patient's medical history locally and privately using vectors?", "expectRepo": ["ruvector", "rulake", "concepts"], "minRelevance": -5 },
+  { "set": "helix-DESCRIBED (newcomer, no repo name)", "query": "How do I give a health agent persistent memory of past visits, labs, and medications?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -5 },
+  { "set": "helix-DESCRIBED (newcomer, no repo name)", "query": "How can I run several agents in parallel to analyze one medical record?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -5 },
+  { "set": "helix-DESCRIBED (newcomer, no repo name)", "query": "What methodology should I follow to plan and build the Helix data-ingestion pipeline step by step?", "expectRepo": ["sparc", "concepts", "ruflo"], "minRelevance": -5 },
+  { "set": "helix-NAMED (knows the RuvNet tool)", "query": "Should I use RuVector RVF with HNSW to store medical embeddings in Helix?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -5 },
+  { "set": "helix-NAMED (knows the RuvNet tool)", "query": "Can ruflo orchestrate the diagnostic agents and swarms in Helix?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -5 },
+  { "set": "helix-NAMED (knows the RuvNet tool)", "query": "Can AgentDB hold the patient's longitudinal health memory across sessions?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -5 },
+  { "set": "helix-NAMED (knows the RuvNet tool)", "query": "Should I follow the SPARC methodology to build the Helix pipeline?", "expectRepo": ["sparc", "concepts", "ruflo"], "minRelevance": -5 }
+]

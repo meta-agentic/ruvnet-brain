@@ -39,7 +39,11 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   const perRepo = {};
   for (const name of list) {
     try {
-      const hits = await searchKb({ dir, name, query, k: pool, n: pool });
+      // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
+      // single source repo — otherwise the queried repo's own primer is crowded out by the other 18 before
+      // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
+      const repoPool = name === 'concepts' ? Math.max(pool, 24) : pool;
+      const hits = await searchKb({ dir, name, query, k: repoPool, n: repoPool });
       perRepo[name] = hits.length;
       for (const h of hits) candidates.push({ ...h, repo: name });
     } catch (e) {
@@ -48,6 +52,24 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   }
   // ONE cross-encoder pass over the whole cross-repo pool → a single comparable relevance scale.
   const ranked = await rerankPairs(query, candidates);
+  // Repo-name affinity: when the question explicitly NAMES a repo ("Does QuDAG…", "what can SAFLA do",
+  // "can ruflo orchestrate…"), that repo should win ties/near-ties over a sibling that merely mentions it.
+  // Capability questions almost always name their repo; without this the larger/prose-richer sibling wins
+  // the tie (daa over qudag, dspy.ts over safla, agentic-flow over ruflo). A modest additive boost only
+  // re-orders near-ties — it never lifts an unrelated repo, since non-named repos are untouched.
+  // Word-boundary match on the repo name (not substring) so `fact` doesn't fire on "facts", while
+  // multi-word names like `agent-harness-generator` still match. Boost clears a sibling that merely
+  // *contains a file named after* the repo (e.g. dspy.ts/…/safla.ts) when the question names the repo.
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const isNamed = (repo) => repo.length >= 4 && new RegExp(`\\b${esc(repo)}\\b`, 'i').test(query);
+  const NAME_BOOST = 2.0;
+  for (const r of ranked) {
+    // A concepts hit is labelled repo="concepts" but its path is "<repo>/<kind>/<slug>" — attribute the
+    // boost to the UNDERLYING repo so a named repo's PRIMER (which lives in the concepts store) counts too.
+    const eff = (r.repo === 'concepts' && r.path) ? (r.path.split('/')[0] || r.repo) : r.repo;
+    if (r.ceScore != null && isNamed(eff)) { r.ceScore += NAME_BOOST; r.nameBoosted = true; }
+  }
+  ranked.sort((a, b) => (b.ceScore ?? -Infinity) - (a.ceScore ?? -Infinity));
   return { repos: list, perRepo, results: ranked.slice(0, k), pooled: candidates.length };
 }
 

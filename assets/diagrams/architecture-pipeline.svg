@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 620 762"
+     width="620"
+     height="762">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+    </style>
+  </defs>
+
+  <!-- ===== BUILD TIME ===== -->
+  <text class="title" x="310" y="28" text-anchor="middle" fill="#4a90d9">BUILD TIME (run once)</text>
+
+  <rect class="box" x="90" y="40" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="67" text-anchor="middle">~18 RuvNet building-block repos (by rUv)</text>
+  <line class="arrow" x1="310" y1="84" x2="310" y2="108" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="90" y="110" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="137" text-anchor="middle">Deep source walk &#8212; whole files + symbol index</text>
+  <line class="arrow" x1="310" y1="154" x2="310" y2="178" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="90" y="180" width="440" height="50" rx="4"/>
+  <text class="label" x="310" y="202" text-anchor="middle">Dual embeddings &#8212; MiniLM-384 + bge-768</text>
+  <text class="sublabel" x="310" y="220" text-anchor="middle">75,509 source chunks</text>
+  <line class="arrow" x1="310" y1="230" x2="310" y2="254" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="90" y="256" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="283" text-anchor="middle">RVF / HNSW &#8212; per-repo on-disk vector stores</text>
+  <line class="arrow" x1="310" y1="300" x2="310" y2="324" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="90" y="326" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="353" text-anchor="middle">Concepts + capability layer (per-repo primers, L2)</text>
+
+  <line class="arrow" x1="310" y1="370" x2="310" y2="392" marker-end="url(#arrowhead)"/>
+
+  <!-- ===== QUERY TIME ===== -->
+  <text class="title" x="310" y="416" text-anchor="middle" fill="#4a90d9">QUERY TIME (every RuvNet-relevant prompt)</text>
+
+  <rect class="box" x="90" y="428" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="455" text-anchor="middle">Search every store &#8594; pool hits across all repos</text>
+  <line class="arrow" x1="310" y1="472" x2="310" y2="496" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="90" y="498" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="525" text-anchor="middle">ONE cross-encoder rerank &#8594; common relevance scale</text>
+  <line class="arrow" x1="310" y1="542" x2="310" y2="566" marker-end="url(#arrowhead)"/>
+
+  <rect class="accent" x="90" y="568" width="440" height="50" rx="4"/>
+  <text class="label" x="310" y="590" text-anchor="middle">search_ruvnet (MCP) &#8212; top-k whole files</text>
+  <text class="sublabel" x="310" y="608" text-anchor="middle">each labeled by repo + path</text>
+  <line class="arrow" x1="310" y1="618" x2="310" y2="642" marker-end="url(#arrowhead)"/>
+
+  <rect class="accent" x="90" y="644" width="440" height="44" rx="4"/>
+  <text class="label" x="310" y="671" text-anchor="middle">Plugin: UserPromptSubmit hook + grounding skill</text>
+  <line class="arrow" x1="310" y1="688" x2="310" y2="712" marker-end="url(#arrowhead)"/>
+
+  <rect class="good" x="90" y="714" width="440" height="40" rx="4"/>
+  <text class="label" x="310" y="738" text-anchor="middle">Claude answers from cited rUv source</text>
+
+</svg>

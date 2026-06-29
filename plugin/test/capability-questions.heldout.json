@@ -1,0 +1,12 @@
+[
+  { "query": "How does RuVector store and search vectors on disk?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -3 },
+  { "query": "What graph-database features does AgentDB provide?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -3 },
+  { "query": "Is ruv-FANN a fast neural network library written in Rust?", "expectRepo": ["ruv-fann", "concepts"], "minRelevance": -3 },
+  { "query": "What does SynthLang compress or optimize?", "expectRepo": ["synthlang", "concepts"], "minRelevance": -3 },
+  { "query": "Can rupixel retrieve documents using visual embeddings?", "expectRepo": ["rupixel", "concepts"], "minRelevance": -3 },
+  { "query": "What is agenticow's copy-on-write approach to agent memory?", "expectRepo": ["agenticow", "concepts"], "minRelevance": -3 },
+  { "query": "Does CVE-bench benchmark security fixes reproduced from real CVEs?", "expectRepo": ["cve-bench", "concepts"], "minRelevance": -3 },
+  { "query": "What is dspy.ts and what does it do?", "expectRepo": ["dspy.ts", "concepts"], "minRelevance": -3 },
+  { "query": "Does FACT provide fast-access cached tools for reliable AI integration?", "expectRepo": ["fact", "concepts"], "minRelevance": -3 },
+  { "query": "What does the daa project enable for decentralized autonomous applications?", "expectRepo": ["daa", "concepts"], "minRelevance": -3 }
+]

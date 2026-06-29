@@ -4,7 +4,6 @@
 
 ## What it is & who it's for
 
-# What it is & who it's for
 
 ruLake is a **witness-anchored vector federation system for agentic AI**, providing deterministic retrieval and memory optimization capabilities. It consists of multiple installable components (`plugins/rulake-memory/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`):
 
@@ -49,7 +48,6 @@ The system is explicitly designed for cases where **provenance matters** and **p
 
 ## Capabilities (what it can do)
 
-### Capabilities (what it can do)
 
 1. **Serve as an MCP server with tool filtering based on capabilities**  
    The MCP server (`rulake-mcp`) can filter tools based on effective capabilities, exposing only the tools that match the granted permissions. This is implemented in `crates/mcp-server/src/server.rs` (`list_tools` function) and enforced through `effective_caps` and `required_cap_for_tool` checks.
@@ -91,9 +89,7 @@ These capabilities are explicitly implemented and documented in the provided sou
 
 ## Core concepts & how they work
 
-# Core Concepts & How They Work
 
-## 1. RaBitQ Vector Search (`crates/core/src/lake.rs`)
 The primary search mechanism uses RaBitQ (Random Binary Quantization) for approximate nearest neighbor search with L2² scoring. Key capabilities:
 - **Search results** include backend origin, collection name, ID, and score (`SearchResult` struct)
 - **Cache persistence**: Saves indices to disk via `save_cache_to_dir`/`warm_from_dir` using `PERSISTED_INDEX_FILENAME` and `table.rulake.json` (`SOURCE 2`)
@@ -140,7 +136,6 @@ EXISTS: Rust binary interop via:
 
 ## Maturity (shipped vs proposed)
 
-### Maturity (shipped vs proposed)
 
 **Shipped Features:**
 
@@ -183,7 +178,6 @@ In summary, ruLake's core features are fully shipped and operational, with a cle
 
 ## Where the documentation lives
 
-# Where the documentation lives
 
 ruLake's documentation lives in four tightly integrated forms across the repository and ecosystem:
 

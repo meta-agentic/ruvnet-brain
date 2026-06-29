@@ -9,12 +9,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { searchKb } from './forge-ask.mjs';
+import { loadTransformers } from './resolve-deps.mjs';
 
 const CE_MODEL = process.env.CE_MODEL || 'Xenova/ms-marco-MiniLM-L-6-v2';
 let _ce = null;
 async function loadCE() {
   if (_ce) return _ce;
-  const T = await import('@xenova/transformers');
+  const { T } = await loadTransformers();   // same resolver as forge-ask (KB node_modules / XENOVA_PATH), not a bare import
   if (process.env.KB_MODEL_CACHE) { T.env.cacheDir = process.env.KB_MODEL_CACHE; T.env.localModelPath = process.env.KB_MODEL_CACHE; }
   T.env.allowRemoteModels = true;
   const tok = await T.AutoTokenizer.from_pretrained(CE_MODEL);
