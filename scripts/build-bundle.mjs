@@ -35,16 +35,30 @@ try {
   for (const b of (prev.builtRepos || [])) if (b.builtFromSha) priorSha[b.name.toLowerCase()] = b.builtFromSha;
 } catch { /* none yet */ }
 
+// ---- PRIVATE stores (excluded from any publishable bundle) --------------------------------------
+// kb/PRIVATE-STORES.json lists store names built from PRIVATE source that MUST NOT ship. We read it
+// here and drop those names during discovery so private code can never leak into dist/.
+function loadPrivateStores() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(KB, 'PRIVATE-STORES.json'), 'utf8'));
+    return new Set((j.privateStores || []).map((s) => String(s).toLowerCase()));
+  } catch { return new Set(); }
+}
+const PRIVATE_STORES = loadPrivateStores();
+
 // ---- discover BUILT repos (those with <name>.rvf in kb/) ----------------------------------------
 function discoverBuilt() {
   const names = new Set();
+  const excludedPrivate = [];
   for (const f of fs.readdirSync(KB)) {
     const m = f.match(/^(.+?)\.rvf$/);                       // base store only (skip .big.rvf via the .big match below)
     if (!m) continue;
     if (/\.(idmap|embed)\b/.test(f)) continue;
     if (m[1].endsWith('.big')) continue;
+    if (PRIVATE_STORES.has(m[1].toLowerCase())) { excludedPrivate.push(m[1]); continue; }
     names.add(m[1]);
   }
+  if (excludedPrivate.length) console.log(`[build-bundle] EXCLUDED ${excludedPrivate.length} PRIVATE store(s): ${[...new Set(excludedPrivate)].sort().join(', ')}`);
   return [...names].sort();
 }
 

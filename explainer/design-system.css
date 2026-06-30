@@ -427,9 +427,13 @@ section { scroll-margin-top: calc(var(--head-h) + 1rem); }
 }
 .section .head-text { flex: 1 1 auto; min-width: 0; }
 .section .head-text h2 { margin: 0; font-size: clamp(1.3rem, 3vw, 2rem); }
-.section .head-text .q {            /* the arc question, in mono */
+.section .head-text .q {            /* the arc question the body answers — framed as a question, not a label */
   display: block; margin-top: 6px;
-  font-family: var(--mono); font-size: var(--step--1); letter-spacing: 0.02em; color: var(--muted);
+  font-family: var(--mono); font-size: var(--step--1); letter-spacing: 0.02em; color: var(--ink-2);
+}
+.section .head-text .q::before {    /* a small "Q" chip so the reader reads it as a question */
+  content: "Q"; display: inline-block; margin-right: 0.55em; padding: 0.02em 0.5em;
+  background: var(--fill); border-radius: 4px; color: var(--accent-2); font-weight: 700;
 }
 .section .chev {
   flex: 0 0 auto; align-self: center;

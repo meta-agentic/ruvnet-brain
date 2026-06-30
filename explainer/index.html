@@ -188,7 +188,9 @@
       <p class="prov-attr">
         An <strong>independent explainer</strong> for the RuvNet ecosystem by
         <strong>Reuven Cohen</strong> (<a href="https://github.com/ruvnet" target="_blank" rel="noopener">@ruvnet</a>).
-        The Brain indexes his open-source work so AI assistants can use it correctly. Built by <strong>Stuart Kerr</strong>.
+        The Brain indexes his open-source work so AI assistants can use it correctly.
+        Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
+        <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
       <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v0.4.0-dev</p>
     </div>
@@ -211,8 +213,10 @@
         <a href="#s02">02 the gap</a>
         <a href="#s03">03 why others failed</a>
         <a href="#s04">04 how it steps in</a>
+        <a href="#s05">05 what&rsquo;s inside</a>
         <a href="#s06">06 ecosystem</a>
         <a href="#seeit">07 see it</a>
+        <a href="#s08">08 proof</a>
         <a href="#s09">09 install</a>
       </nav>
     </div>
@@ -782,7 +786,7 @@
         </details>
 
         <!-- ============ S05 — WHAT'S ACTUALLY IN THE BRAIN ============ -->
-        <details class="section" id="s05">
+        <details class="section" id="s05" open>
           <summary>
             <span class="num">05</span>
             <span class="head-text">
@@ -797,322 +801,6 @@
               18 of rUv&rsquo;s building blocks, <strong>75,509 source chunks</strong>, in a real vector brain (RVF).
               Not docs &mdash; the source.
             </p>
-            <p>
-              Plus human-written primers and the <strong>capability cards</strong> that make routing work. Everything is
-              read once, up front, so Claude can be pointed straight at the exact line of code instead of skimming and
-              giving up.
-            </p>
-            <div class="oh">
-              If rUv open-sourced it and it matters, <strong>it&rsquo;s in here.</strong> When he ships more, the Brain
-              updates.
-            </div>
-          </div>
-        </details>
-
-        <!-- ============ S06 — THE ECOSYSTEM ============ -->
-        <details class="section" id="s06" open>
-          <summary>
-            <span class="num">06</span>
-            <span class="head-text">
-              <h2>The ecosystem</h2>
-              <span class="q">What can I actually build with?</span>
-            </span>
-            <span class="chev" aria-hidden="true">&rsaquo;</span>
-          </summary>
-          <div class="body">
-            <p class="lead-in">
-              You never choose between these and you never read their docs &mdash; Claude reaches for the right one
-              automatically. Here&rsquo;s the <strong>whole toolkit</strong>, in plain terms, grouped five ways. Open any
-              one for the human version and the one thing it does that nobody else does yet.
-            </p>
-
-            <h3 class="tier tech">Orchestration &mdash; running the agents</h3>
-            <div class="gallery">
-              <div class="grid">
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">1</span>
-                    <span class="uc-title">The conductor that runs a swarm of agents</span>
-                    <span class="uc-tag">ruflo</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Coordinates swarms of parallel agents that share state and memory &mdash; the conductor of the
-                      whole stack. <strong>Ahead:</strong> attention-based multi-agent coordination across three
-                      topologies; the hierarchical one hit <strong>100% success</strong> in reported swarm benchmarks.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">2</span>
-                    <span class="uc-title">54+ ready-made coding agents that swarm in Claude Code</span>
-                    <span class="uc-tag">agentic-flow</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Coder, reviewer, architect, PR-manager &mdash; a roster of agents that work together right inside
-                      Claude Code. <strong>Ahead:</strong> each agent&rsquo;s confidence <em>evolves 0.6 &rarr; 0.95</em>
-                      via meta-learning, with persistent ReasoningBank memory and Helm charts for 3&ndash;100+ pods.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">3</span>
-                    <span class="uc-title">Idea &rarr; shipped code, in disciplined gated steps</span>
-                    <span class="uc-tag">sparc</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Build properly instead of &ldquo;vibe it&rdquo;: Spec &rarr; Pseudocode &rarr; Architecture &rarr;
-                      Refinement &rarr; Completion, with a quality gate between each phase. <strong>Ahead:</strong> a
-                      <code>--research-only</code> pass runs <em>before</em> you write a line, with human-in-the-loop
-                      controls.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">4</span>
-                    <span class="uc-title">An agent that rewrites itself to improve</span>
-                    <span class="uc-tag">safla</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Monitors its own performance and edits itself to get better, recursively, across three layers
-                      (operational / meta-cognitive / self-modification). <strong>Ahead:</strong> a formal Delta
-                      Evaluation Model <em>rolls back</em> any unsafe self-modification.</p>
-                  </div>
-                </details>
-
-              </div>
-            </div>
-
-            <h3 class="tier tech">Vectors + memory &mdash; what the agents know</h3>
-            <div class="gallery">
-              <div class="grid">
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">5</span>
-                    <span class="uc-title">A vector database that&rsquo;s just one file</span>
-                    <span class="uc-tag">ruvector</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>SIMD-optimized HNSW in Rust, the <code>.rvf</code> format, even in-browser via WASM &mdash; no
-                      server, no Docker, no API. <strong>Ahead:</strong> epoch reconciliation means a crash never
-                      permanently corrupts the index. <em>This Brain runs on it.</em></p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">6</span>
-                    <span class="uc-title">A cache that gets faster the more you use it</span>
-                    <span class="uc-tag">rulake</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>A smart, sub-millisecond read layer in front of your vector DB, so agents recall instantly.
-                      <strong>Ahead:</strong> cryptographic witness-chain provenance that <em>rotates when your embedding
-                      model bumps</em> &mdash; so the cache can&rsquo;t go stale after an upgrade.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">7</span>
-                    <span class="uc-title">Memory that can explain why it remembered</span>
-                    <span class="uc-tag">agentdb</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Durable agent memory that survives sessions &mdash; a SQLite + vector hybrid. <strong>Ahead:</strong>
-                      a causal memory graph with feature-attribution recall (it answers &ldquo;why did I recall that?&rdquo;),
-                      benchmarked <strong>150&times; faster</strong> than the HNSWLib fallback.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">8</span>
-                    <span class="uc-title">Git for agent memory</span>
-                    <span class="uc-tag">agenticow</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Branch, roll back, promote and trace agent memory like code. <strong>Ahead:</strong> forks
-                      <strong>1,000,000 vectors in 162 bytes / ~0.5 ms</strong> &mdash; 83&times; faster, ~3000&times;
-                      smaller than a copy. A primitive <em>no mainstream vector DB offers at any price.</em></p>
-                  </div>
-                </details>
-
-              </div>
-            </div>
-
-            <h3 class="tier tech">Agents + tooling &mdash; building &amp; running them well</h3>
-            <div class="gallery">
-              <div class="grid">
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">9</span>
-                    <span class="uc-title">A factory that builds &amp; evolves agent harnesses</span>
-                    <span class="uc-tag">metaharness</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Point it at your repo; it builds, scores and evolutionarily improves a custom agent harness.
-                      <strong>Ahead:</strong> Darwin G&ouml;del Machine-inspired (the paper took SWE-bench <strong>20% &rarr;
-                      50%</strong>), evolving the harness &mdash; not the model &mdash; inside a safe 7-file allowlist.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">10</span>
-                    <span class="uc-title">Prompts that program themselves</span>
-                    <span class="uc-tag">dspy.ts</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Write LLM pipelines as typed code and let the framework auto-tune the prompts for you.
-                      <strong>Ahead:</strong> runs <em>fully in-browser</em> on ONNX Runtime Web, with hierarchical memory
-                      on AgentDB.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">11</span>
-                    <span class="uc-title">Keeps tool calls fast and crash-proof</span>
-                    <span class="uc-tag">fact</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Wraps LLM tool calls with a cache + circuit-breaker so they stay fast and don&rsquo;t cascade-fail.
-                      <strong>Ahead:</strong> production alert rules on error, latency and hit-rate, with graceful
-                      degradation through a LiteLLM gateway.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">12</span>
-                    <span class="uc-title">Agents that manage their own budget</span>
-                    <span class="uc-tag">daa</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Autonomous agents with auditable spending rules and their own token economies, in Rust.
-                      <strong>Ahead:</strong> a portfolio-VaR risk manager and <em>post-quantum (ML-DSA)</em> transaction
-                      signing, with limits enforced at the rule layer.</p>
-                  </div>
-                </details>
-
-              </div>
-            </div>
-
-            <h3 class="tier tech">Safety + security &mdash; trust, measured</h3>
-            <div class="gallery">
-              <div class="grid">
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">13</span>
-                    <span class="uc-title">Agent messaging a quantum computer can&rsquo;t crack</span>
-                    <span class="uc-tag">qudag</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Quantum-resistant encrypted messaging between agents &mdash; today, not someday.
-                      <strong>Ahead:</strong> NIST post-quantum crypto (ML-KEM-768 + ML-DSA + HQC), sub-second finality,
-                      and anonymous multi-hop routing.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">14</span>
-                    <span class="uc-title">Scores how well an AI fixes real CVEs</span>
-                    <span class="uc-tag">cve-bench</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Measures how well an agent actually fixes real, published security flaws. <strong>Ahead:</strong>
-                      a conformance firewall keeps the model from ever seeing the gold fix, on a cost-aware
-                      <em>resolves-per-dollar</em> leaderboard.</p>
-                  </div>
-                </details>
-
-              </div>
-            </div>
-
-            <h3 class="tier tech">Specialized &mdash; the wild edge</h3>
-            <div class="gallery">
-              <div class="grid">
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">15</span>
-                    <span class="uc-title">Sense people through walls with plain WiFi</span>
-                    <span class="uc-tag">ruview</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Detect people, count occupants, even read heart rate <em>through walls</em> &mdash; no cameras.
-                      <strong>Ahead:</strong> WiFi CSI sensing via ESP32 &rarr; 17 body keypoints, vitals and sleep-apnea
-                      detection, with a mass-casualty mode.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">16</span>
-                    <span class="uc-title">Search images by describing what you want</span>
-                    <span class="uc-tag">rupixel</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Search document screenshots or a live video feed by plain description &mdash; all in-browser,
-                      nothing uploaded. <strong>Ahead:</strong> client-side CLIP ViT-B/32 at <strong>50&ndash;200 ms</strong>
-                      per keyframe.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">17</span>
-                    <span class="uc-title">Neural nets in Rust, run in the browser</span>
-                    <span class="uc-tag">ruv-fann</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Train and run neural networks with zero dependencies, deploy to the browser via WASM.
-                      <strong>Ahead:</strong> <em>zero <code>unsafe</code> code</em>, plus a CUDA-WASM GPU bridge.</p>
-                  </div>
-                </details>
-
-                <details class="case">
-                  <summary>
-                    <span class="uc-num">18</span>
-                    <span class="uc-title">Cut LLM token cost 83% with a drop-in proxy</span>
-                    <span class="uc-tag">synthlang</span>
-                    <span class="chev" aria-hidden="true">&rsaquo;</span>
-                  </summary>
-                  <div class="uc-body">
-                    <p>Sit a proxy in front of your LLM API and shrink prompts &mdash; no app change.
-                      <strong>Ahead:</strong> a measured <strong>83% token reduction</strong> per step (25 vs 150) and 40%
-                      faster, with PII masking at the proxy.</p>
-                  </div>
-                </details>
-
-              </div>
-            </div>
-
             <p class="tier tech">Coverage map &mdash; everything gathered in one brain</p>
             <figure class="figure diagram">
               <svg class="diagram-svg dgm-s06" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="s06-title s06-desc">
@@ -1185,6 +873,340 @@
 </svg>
               <figcaption>Reassuring breadth, not a wall of jargon: 18 building blocks, all gathered and already read, behind one <code>search_ruvnet</code> tool.</figcaption>
             </figure>
+            <p>
+              Plus human-written primers and the <strong>capability cards</strong> that make routing work. Everything is
+              read once, up front, so Claude can be pointed straight at the exact line of code instead of skimming and
+              giving up.
+            </p>
+          </div>
+        </details>
+
+        <!-- ============ S06 — THE ECOSYSTEM ============ -->
+        <details class="section" id="s06" open>
+          <summary>
+            <span class="num">06</span>
+            <span class="head-text">
+              <h2>The ecosystem</h2>
+              <span class="q">What can I actually build with?</span>
+            </span>
+            <span class="chev" aria-hidden="true">&rsaquo;</span>
+          </summary>
+          <div class="body">
+            <p class="lead-in">
+              You never choose between these and you never read their docs &mdash; Claude reaches for the right one
+              automatically. Here&rsquo;s the <strong>whole toolkit</strong>, in plain terms, grouped five ways. Open any
+              one for the human version and the one thing it does that nobody else does yet.
+            </p>
+
+            <h3 class="tier tech">Orchestration &mdash; running the agents</h3>
+            <div class="gallery">
+              <div class="grid">
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">1</span>
+                    <span class="uc-title">The conductor that runs a swarm of agents</span>
+                    <span class="uc-tag">ruflo</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Coordinates swarms of parallel agents that share state and memory &mdash; spawning them, routing and
+                      orchestrating multi-step tasks, and adding hooks and MCP tools. The conductor of the whole stack, with 60+
+                      specialized agents and a hierarchical topology backed by Raft consensus. <strong>Ahead:</strong> a built-in
+                      self-learning layer with HNSW-indexed pattern storage reported at <strong>150&times;&ndash;12,500&times;</strong>
+                      speedup and sub-10&nbsp;ms ONNX embeddings &mdash; so the swarm gets measurably better the more it runs.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">2</span>
+                    <span class="uc-title">54+ ready-made coding agents that swarm in Claude Code</span>
+                    <span class="uc-tag">agentic-flow</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A roster of 54+ specialized agents &mdash; coder, reviewer, architect, PR-manager &mdash; that work together
+                      right inside Claude Code across three swarm topologies (mesh, hierarchical, ring), routed over Anthropic,
+                      OpenRouter and Gemini to manage cost. <strong>Ahead:</strong> each agent&rsquo;s confidence
+                      <em>evolves 0.6 &rarr; 0.95</em> via meta-learning with persistent ReasoningBank memory, and the hierarchical
+                      topology reported a <strong>100% success rate</strong>.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">3</span>
+                    <span class="uc-title">Idea &rarr; shipped code, in disciplined gated steps</span>
+                    <span class="uc-tag">sparc</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Build properly instead of &ldquo;vibe it&rdquo;: Specification &rarr; Pseudocode &rarr; Architecture &rarr;
+                      Refinement &rarr; Completion, with a quality gate between every phase and a CLI driving the AI analysis,
+                      planning and execution. <strong>Ahead:</strong> a <code>--research-only</code> pass runs <em>before</em> you
+                      write a line, with human-in-the-loop (<code>--hil</code>) approval at each gate.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">4</span>
+                    <span class="uc-title">An agent that rewrites itself to improve</span>
+                    <span class="uc-tag">safla</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A self-improvement architecture that monitors, evaluates and edits its own behavior across three layers
+                      &mdash; operational, meta-cognitive and self-modification &mdash; with episodic, semantic and vector memory.
+                      <strong>Ahead:</strong> continuous self-evaluation with <em>divergence and novelty detection</em> plus
+                      automated error-recovery workflows, so it adapts its own strategy and policy at runtime.</p>
+                  </div>
+                </details>
+
+              </div>
+            </div>
+
+            <h3 class="tier tech">Vectors + memory &mdash; what the agents know</h3>
+            <div class="gallery">
+              <div class="grid">
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">5</span>
+                    <span class="uc-title">A vector database that&rsquo;s just one file</span>
+                    <span class="uc-tag">ruvector</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A high-performance Rust vector database: SIMD-optimized HNSW indexing in a single <code>.rvf</code> binary file,
+                      with WASM bindings for in-browser search &mdash; a zero-server replacement for Pinecone, Qdrant or pgvector.
+                      <strong>Ahead:</strong> sub-100&nbsp;&micro;s HNSW search at <strong>~16.4K QPS</strong>, packaged as a
+                      cryptographically-signed RVF container with witness chains for offline-capable deployments. <em>This Brain runs
+                      on it.</em></p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">6</span>
+                    <span class="uc-title">A cache that gets faster the more you use it</span>
+                    <span class="uc-tag">rulake</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A self-optimizing read and working-memory layer that sits in front of your index, giving agents a
+                      remember / recall / forget surface with sub-millisecond RaBitQ recall. <strong>Ahead:</strong> cryptographic
+                      witness-chain provenance (SHAKE-256) with automatic bundle-rotation refresh and an auto-tuning hit ratio
+                      &mdash; deterministic, verifiable retrieval that improves with usage.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">7</span>
+                    <span class="uc-title">Memory that can explain why it remembered</span>
+                    <span class="uc-tag">agentdb</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Durable agent memory that survives sessions &mdash; a SQLite + vector hybrid that also stores n-ary hyperedge
+                      graph relationships between memories. <strong>Ahead:</strong> a causal memory graph with explainable,
+                      feature-attribution recall (it answers &ldquo;why did I recall that?&rdquo;), benchmarked
+                      <strong>150&times; faster</strong> than brute-force search.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">8</span>
+                    <span class="uc-title">Git for agent memory</span>
+                    <span class="uc-tag">agenticow</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Copy-on-write vector branching: branch, checkpoint, roll back, promote and trace agent memory like code, so
+                      parallel agents share one base while keeping isolated edits. <strong>Ahead:</strong> forks a store in constant
+                      time and size &mdash; <strong>~0.5&nbsp;ms and ~162 bytes per branch</strong> regardless of base, proven
+                      83&times; faster and ~3000&times; smaller than copying 1,000,000 vectors &mdash; plus GDPR right-to-erasure by
+                      dropping a branch.</p>
+                  </div>
+                </details>
+
+              </div>
+            </div>
+
+            <h3 class="tier tech">Agents + tooling &mdash; building &amp; running them well</h3>
+            <div class="gallery">
+              <div class="grid">
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">9</span>
+                    <span class="uc-title">A factory that builds &amp; evolves agent harnesses</span>
+                    <span class="uc-tag">agent-harness-generator</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Scaffolds a complete, host-agnostic agent harness (Claude Code, Codex, pi.dev and other MCP hosts) with a
+                      single command, then scores the repo for fit and the harness for readiness, safety and SBOM. <strong>Ahead:</strong>
+                      <em>Darwin Mode</em> evolutionarily improves the harness itself &mdash; A/B-tested and mutated under
+                      <em>immutable safety rails</em> &mdash; instead of fine-tuning the model.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">10</span>
+                    <span class="uc-title">Prompts that program themselves</span>
+                    <span class="uc-tag">dspy.ts</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A TypeScript implementation of DSPy: build LLM pipelines from composable modules and typed signatures
+                      (classification, sentiment, QA, ReAct) and let optimizers auto-tune the prompts and few-shot examples against a
+                      metric. <strong>Ahead:</strong> runs <em>fully in-browser</em> on ONNX Runtime Web, with hierarchical
+                      (working / short / long) vector memory on AgentDB.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">11</span>
+                    <span class="uc-title">Keeps tool calls fast and crash-proof</span>
+                    <span class="uc-tag">fact</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Wraps LLM tool calls with aggressive caching plus a circuit-breaker and graceful degradation, so tools stay
+                      fast and don&rsquo;t cascade-fail. <strong>Ahead:</strong> a three-tier cache reporting <strong>85%+ hit rate
+                      at sub-50&nbsp;ms</strong>, with production alert rules and a LiteLLM multi-provider gateway.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">12</span>
+                    <span class="uc-title">Agents that manage their own budget</span>
+                    <span class="uc-tag">daa</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A Rust framework for decentralized autonomous agents that govern themselves with auditable rules
+                      (MaxDailySpending, RiskThreshold), run token economies and accounting, and integrate AI decisions over MCP.
+                      <strong>Ahead:</strong> rule-enforced governance combined with post-quantum (ML-DSA / ML-KEM-768) transaction
+                      signing and self-running MRAP autonomy loops.</p>
+                  </div>
+                </details>
+
+              </div>
+            </div>
+
+            <h3 class="tier tech">Safety + security &mdash; trust, measured</h3>
+            <div class="gallery">
+              <div class="grid">
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">13</span>
+                    <span class="uc-title">Agent messaging a quantum computer can&rsquo;t crack</span>
+                    <span class="uc-tag">qudag</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A quantum-resistant, DAG-based platform for end-to-end encrypted, anonymous agent-to-agent messaging over
+                      peer-to-peer QUIC, with resource metering. <strong>Ahead:</strong> NIST post-quantum crypto
+                      (<strong>ML-KEM-768 + ML-DSA</strong>) on a DAG with QR-Avalanche consensus and anonymous multi-hop routing
+                      that resists traffic analysis.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">14</span>
+                    <span class="uc-title">Scores how well an AI fixes real CVEs</span>
+                    <span class="uc-tag">cve-bench</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A SWE-bench-style benchmark that measures whether an agent can actually fix real, publicly disclosed CVEs by
+                      passing each project&rsquo;s own FAIL_TO_PASS security regression test. <strong>Ahead:</strong> a conformance
+                      firewall ensures the model <em>never sees the gold fix</em>, scored on a cost-aware
+                      <em>resolves-per-dollar</em> leaderboard.</p>
+                  </div>
+                </details>
+
+              </div>
+            </div>
+
+            <h3 class="tier tech">Specialized &mdash; the wild edge</h3>
+            <div class="gallery">
+              <div class="grid">
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">15</span>
+                    <span class="uc-title">Sense people through walls with plain WiFi</span>
+                    <span class="uc-tag">ruview</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Camera-free WiFi sensing: turns ordinary WiFi Channel State Information (CSI) into presence, occupancy,
+                      17-keypoint pose, and fall / gesture recognition &mdash; privacy-preserving, no cameras (needs ESP32-S3/C6).
+                      <strong>Ahead:</strong> reads <em>medical-grade vitals</em> &mdash; breathing and heart rate &mdash; from radio
+                      alone, with sleep-apnea screening and a mass-casualty assessment mode, and it fails closed rather than
+                      fabricating a reading.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">16</span>
+                    <span class="uc-title">Search images by describing what you want</span>
+                    <span class="uc-tag">rupixel</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>Zero-server, client-side visual retrieval: searches document screenshots and live video frames by semantic
+                      meaning using on-device CLIP embeddings &mdash; OCR-free, nothing uploaded. <strong>Ahead:</strong> real-time
+                      CLIP ViT-B/32 search running entirely in the browser at <strong>~50&ndash;200&nbsp;ms</strong> per keyframe,
+                      with keyframe de-duplication.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">17</span>
+                    <span class="uc-title">Neural nets in Rust, run in the browser</span>
+                    <span class="uc-tag">ruv-fann</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>A fast, memory-safe FANN-style neural network library in Rust &mdash; MLPs and cascade-correlation networks
+                      that grow dynamically &mdash; that compiles to WASM for browser and edge, with time-series forecasting.
+                      <strong>Ahead:</strong> <em>zero <code>unsafe</code> code</em>, plus a CUDA-WASM bridge for GPU-accelerated
+                      inference in portable targets.</p>
+                  </div>
+                </details>
+
+                <details class="case">
+                  <summary>
+                    <span class="uc-num">18</span>
+                    <span class="uc-title">Cut LLM token cost with a drop-in proxy</span>
+                    <span class="uc-tag">synthlang</span>
+                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                  </summary>
+                  <div class="uc-body">
+                    <p>LLM middleware with an OpenAI-compatible proxy that compresses prompts and cuts token cost
+                      (<strong>~75% reduction</strong>), plus semantic caching and PII masking &mdash; no app rewrite &mdash; and a
+                      CLI for mathematical / symbolic prompt transforms. <strong>Ahead:</strong> symbolic compression reported at
+                      ~75% fewer tokens while <em>raising</em> task accuracy to <strong>97% vs an 85% baseline</strong>, applied at
+                      the proxy.</p>
+                  </div>
+                </details>
+
+              </div>
+            </div>
           </div>
         </details>
 
@@ -1354,7 +1376,7 @@
               <tbody>
                 <tr class="reveal-row"><td>Named routing</td><td class="before">you name the tool</td><td class="win">47 / 48 &middot; 98%</td></tr>
                 <tr class="reveal-row"><td>Described routing</td><td class="before">you only describe it (was 33%)</td><td class="win">27 / 28 &middot; 96%</td></tr>
-                <tr class="reveal-row"><td>Helix context</td><td class="before">unnamed asks, live in a real repo</td><td class="win">7 / 8</td></tr>
+                <tr class="reveal-row"><td>Code-level depth</td><td class="before">&ldquo;how is it implemented?&rdquo; &mdash; not the docs</td><td class="win">actual code, not summaries</td></tr>
                 <tr class="reveal-row"><td>Fresh-download install</td><td class="before">brand-new machine: download, unzip, ask</td><td class="win">4 / 4</td></tr>
               </tbody>
             </table>
@@ -1403,7 +1425,7 @@ npx github:stuinfla/ruvnet-brain</code></pre>
             <ol class="steps">
               <li><strong>Install once.</strong> Run the one line above. Watch it download and wire itself up &mdash;
                 you&rsquo;ll see it confirm each step. (Constant feedback = confidence.)</li>
-              <li><strong>Open Claude Code in any repo.</strong> Your own, Helix, anything. Nothing to copy in. The
+              <li><strong>Open Claude Code in any repo.</strong> Your own, anything. Nothing to copy in. The
                 Brain is user-scoped &mdash; it travels with <em>you</em>, not the project.</li>
               <li><strong>Just ask, normally.</strong> &ldquo;Use RuVector for search.&rdquo; &ldquo;Set this up the way
                 rUv would.&rdquo; The Brain grounds Claude automatically. You&rsquo;ll see Claude cite rUv&rsquo;s real
@@ -1456,7 +1478,7 @@ npx github:stuinfla/ruvnet-brain</code></pre>
               The Brain isn&rsquo;t copied into a repo. Install once, and every Claude session in every folder has it.
             </p>
             <p>
-              Point it at a fresh repo &mdash; a healthcare app like Helix, say &mdash; and Claude builds there <em>as
+              Point it at a fresh repo &mdash; your own product, say &mdash; and Claude builds there <em>as
               if rUv were pairing with you.</em>
             </p>
 
@@ -1512,9 +1534,10 @@ npx github:stuinfla/ruvnet-brain</code></pre>
   <footer class="explainer-footer" role="contentinfo">
     <div class="wrap explainer-footer-inner">
       <p class="ef-credit">
-        Built by <strong>Stuart Kerr</strong> &middot; RuvNet ecosystem by
+        Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" rel="author">Isovision.ai</a> &middot; RuvNet ecosystem by
         <a href="https://github.com/ruvnet" rel="author">Reuven Cohen (@ruvnet)</a> &middot;
         <a href="https://github.com/stuinfla/ruvnet-brain">github.com/stuinfla/ruvnet-brain</a>
+        <br /><span class="ef-license">Free &amp; fair use &mdash; so everyone can fully leverage the high end of agentic coding.</span>
       </p>
       <a class="ef-cta" href="https://github.com/stuinfla/ruvnet-brain">
         <span class="ef-cta-lead">Build on the front edge &mdash;</span>
