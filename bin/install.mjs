@@ -447,8 +447,18 @@ function doctor() {
       allGreen ? 'The brain is installed and reachable.' : 'Re-run the installer to fix the warnings above.'
     }`,
   );
+  if (allGreen) {
+    console.log(`\n  ${c.bold('What this means for you:')}`);
+    console.log(`    • ${c.bold('It works in EVERY project')} — user-level (global). Open Claude Code in any repo or VS Code`);
+    console.log(`      window and it's there. ${c.bold('No reinstall per project. No second download.')} One brain, shared.`);
+    console.log(`    • ${c.bold('Nothing to git-ignore')} in your projects — it drops zero files into your working repos.`);
+    console.log(`    • ${c.bold('To use it:')} just ask Claude about rUv's stack (RuVector, Ruflo, AgentDB, SPARC…) — it`);
+    console.log(`      grounds the answer automatically and takes the lead on builds. You don't invoke anything.`);
+    console.log(`    • ${c.bold("To know it's on:")} a fresh session greets you with "🧠 RuvNet Brain active". Or run this`);
+    console.log(`      ${c.bold('--doctor')} command any time.`);
+  }
   console.log(
-    c.dim('  Remember: the grounding hook activates on your NEXT Claude Code session — restart it if you just installed.\n'),
+    c.dim('\n  Heads-up: a window that was ALREADY open when you installed needs a restart to pick it up;\n  newly-opened windows are fine.\n'),
   );
 }
 
