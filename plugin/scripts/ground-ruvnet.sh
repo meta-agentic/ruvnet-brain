@@ -70,12 +70,14 @@ A. PROPOSE THE ARCHITECTURE FIRST (don't just start typing, don't just answer th
 
 B. ON A YES (or when it's clearly authorized / low-risk), EXECUTE END-TO-END — actually orchestrate it:
    - Run SPARC for non-trivial features: Specification → Pseudocode → Architecture → Refinement → Completion, with a QA gate between phases.
+   - For a non-trivial domain, model it first (DDD: bounded contexts, aggregates, domain events) and capture key decisions as ADRs — design before code.
    - Spin up PARALLEL work where it helps (a Ruflo swarm / multiple agents) instead of serial drudgery.
    - Persist decisions + state to AgentDB memory so nothing is lost across sessions or compaction.
-   - Use the right tool when it adds value; skip it when it doesn't. Capture key decisions as ADRs.
-   - Drive all the way to a verified, PROVEN result — test → validate → score → revise. Never fake completion or claim done without showing the proof.
+   - If it has a UI, treat design as a BUILD STEP, not a coat of paint: apply the frontend-design discipline and GENERATE the visuals (AI image generation for UI mockups / diagrams / the explainer page). Never ship working-but-ugly.
+   - Drive all the way to a verified, PROVEN result — test → validate → SCORE 1–100 → revise, and loop the score to ≥98 (or a stated budget cap). Never fake completion or claim done without showing the proof.
+   - If a step needs an API key the user hasn't set (image generation, an LLM grader/panel, a model provider), ASK for it once — say what it unlocks and offer a no-key fallback — rather than silently skipping the capability or hard-failing.
 
-C. TAKE OVER what you can do well; only surface a decision when it's genuinely the user's call (ambiguous product intent, or an expensive/irreversible choice). Make every other call yourself — don't pepper the user with inane questions they lack the context to answer; making the call IS the job.
+C. TAKE OVER what you can do well; only surface a decision when it's genuinely the user's call (ambiguous product intent, or an expensive/irreversible choice). Make every other call yourself — don't pepper the user with inane questions they lack the context to answer; making the call IS the job. And proactively recommend a better path when you see one — a sharper rUv primitive or a higher-leverage approach — don't wait to be asked.
 
 D. Keep the user oriented and confident: say what you're doing and why as you go, signal progress, and when you use an esoteric concept (RVF, agenticow COW branching, witness chains, AIMDS, swarm topologies…), explain it in one plain line first.
 

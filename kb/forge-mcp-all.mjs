@@ -104,6 +104,12 @@ let buf = '';
 let inFlight = 0;
 let ended = false;
 function maybeExit() { if (ended && inFlight === 0) process.exit(0); }
+// Orphan guard: if the parent (the plugin proxy / Claude Code) is force-quit, our stdin may never
+// EOF, leaving this model-laden server (~0.5 GB) resident forever — observed as multi-hour orphans.
+// Re-parenting to PID 1 (launchd/init) means the parent is gone, so exit. Unref'd so it never keeps
+// the event loop alive on its own (normal stdin-'end' exit still applies).
+const orphanGuard = setInterval(() => { if (process.ppid === 1) process.exit(0); }, 30000);
+orphanGuard.unref();
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   buf += chunk;

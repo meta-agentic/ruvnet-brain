@@ -328,7 +328,11 @@ function chunkText(text) {
 const chunks = []; // {id, path, kind, title, chunk, of, embedText, text, preview}
 let nextId = 1;
 for (const d of docsFiles) {
-  const parts = chunkText(d.text);
+  // Drop empty/whitespace-only chunks: an empty source file (e.g. a placeholder
+  // .txt or an empty mod.rs) would otherwise emit a blank passage and trip
+  // forge-guard's empty-text check. Filtering before the map keeps chunk/of numbering
+  // consistent; a fully-empty file simply contributes zero chunks (not indexed).
+  const parts = chunkText(d.text).filter((p) => p && p.trim());
   parts.forEach((p, i) => {
     chunks.push({
       id: String(nextId++),
