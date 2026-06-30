@@ -1,0 +1,15 @@
+{
+  "repo": "rulake",
+  "note": "Capability-confidence set for RuLake (cache-coherent vector federation intermediary). YES = real capabilities; NO = outside its domain.",
+  "questions": [
+    { "q": "Can RuLake federate vector queries across heterogeneous backends like GCS, IPFS and S3?", "expectRepo": "rulake", "evidence": ["backend", "gcs", "ipfs"], "truth": "yes" },
+    { "q": "Does RuLake serve cache-coherent results with selectable freshness modes?", "expectRepo": "rulake", "evidence": ["cache", "freshness", "coheren"], "truth": "yes" },
+    { "q": "Does RuLake serve RaBitQ-compressed vector bundles?", "expectRepo": "rulake", "evidence": ["rabitq", "bundle", "compress"], "truth": "yes" },
+    { "q": "Does RuLake anchor bundles with a SHAKE-256 witness?", "expectRepo": "rulake", "evidence": ["witness", "shake"], "truth": "yes" },
+    { "q": "Can RuLake be queried through a Rust-native MCP server with capability-gated tools?", "expectRepo": "rulake", "evidence": ["mcp", "tool", "capabilit"], "truth": "yes" },
+    { "q": "Can RuLake publish and refresh a bundle directory cache?", "expectRepo": "rulake", "evidence": ["publish", "refresh", "bundle"], "truth": "yes" },
+    { "q": "Does RuLake support a verify/explain decision trace for queries?", "expectRepo": "rulake", "evidence": ["verify", "explain", "trace"], "truth": "yes" },
+    { "q": "Can RuLake run a full relational SQL database with multi-table joins?", "expectRepo": "rulake", "evidence": ["sql join", "relational", "foreign key"], "truth": "no" },
+    { "q": "Can RuLake edit and transcode video files?", "expectRepo": "rulake", "evidence": ["video", "transcode", "ffmpeg"], "truth": "no" }
+  ]
+}

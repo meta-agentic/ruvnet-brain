@@ -1,0 +1,248 @@
+{
+  "summary": {
+    "name": "ruflo",
+    "variant": "small",
+    "questions": 12,
+    "models": [
+      "openai/gpt-4o-mini",
+      "google/gemini-flash-1.5"
+    ],
+    "avgStrict": 49.5,
+    "avgRealUse": 81.83,
+    "minStrict": 20,
+    "minRealUse": 50,
+    "poisonStrict": 7,
+    "poisonRealUse": 0,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What is ruflo and who is it for?",
+      "topPath": "v3/implementation/adrs/ADR-046-ruflo-rebrand.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 30,
+          "realUse": 90,
+          "reason": "Source lacks specific details on ruflo's purpose and target audience."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 90
+    },
+    {
+      "q": "What is a swarm in ruflo and what topologies does it support?",
+      "topPath": ".claude/agents/github/code-review-swarm.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source does not define 'swarm' or its topologies."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 20,
+      "avgRealUse": 60
+    },
+    {
+      "q": "How does @claude-flow/memory persist and recall data — what storage backend does it use and what is the store/search code path?",
+      "topPath": "v3/implementation/adrs/ADR-048-auto-memory-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 80,
+          "reason": "Source lacks specific details on storage backend and code path."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 40,
+      "avgRealUse": 80
+    },
+    {
+      "q": "How does swarm_init initialize a topology — what does the code actually do?",
+      "topPath": ".claude/agents/github/code-review-swarm.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source does not explain swarm_init's topology initialization."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 20,
+      "avgRealUse": 60
+    },
+    {
+      "q": "How does the guidance system produce a recommendation (guidance_recommend) — what is the mechanism?",
+      "topPath": "v3/implementation/adrs/ADR-045-guidance-system-v31-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 30,
+          "realUse": 70,
+          "reason": "Document lacks specific mechanism details for guidance recommendation."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 70
+    },
+    {
+      "q": "What does ADR-048 (Claude Code Auto Memory Integration) decide, and is it implemented or proposed?",
+      "topPath": "v3/implementation/adrs/ADR-048-auto-memory-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document clearly states decision and implementation status."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    },
+    {
+      "q": "Where are ruflo's ADRs kept and what areas do they cover?",
+      "topPath": "v3/implementation/adrs/v3-adrs.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 50,
+          "reason": "Source does not mention ruflo's ADRs or their coverage areas."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 20,
+      "avgRealUse": 50
+    },
+    {
+      "q": "How do I initialize and use ruflo's memory in a project end-to-end?",
+      "topPath": "v3/@claude-flow/cli/src/memory/memory-initializer.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Source lacks end-to-end initialization steps for ruflo's memory."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 20,
+      "avgRealUse": 80
+    },
+    {
+      "q": "How does ruflo's memory integrate AgentDB — what is the adapter and how is it used?",
+      "topPath": "v3/@claude-flow/memory/src/agentdb-adapter.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "The source provides complete details on the AgentDB adapter and its usage."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 100
+    },
+    {
+      "q": "How are MCP tools defined and registered in ruflo v3 — where is the code?",
+      "topPath": "v3/mcp/tools/IMPLEMENTATION.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source provides complete details on MCP tools definition and registration."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    },
+    {
+      "q": "What is the npm package name and CLI entry point for ruflo?",
+      "topPath": "v3/implementation/adrs/ADR-046-ruflo-rebrand.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 50,
+          "realUse": 98,
+          "reason": "Source mentions ruflo but lacks specific npm package name and CLI entry point."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 50,
+      "avgRealUse": 98
+    },
+    {
+      "q": "What does the @claude-flow/neural package implement — which algorithms?",
+      "topPath": "v3/implementation/adrs/ADR-029-gnn-integration.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 70,
+          "realUse": 98,
+          "reason": "Source mentions GNN algorithms but lacks complete details on all algorithms."
+        },
+        {
+          "model": "google/gemini-flash-1.5",
+          "error": "google/gemini-flash-1.5 HTTP 404"
+        }
+      ],
+      "avgStrict": 70,
+      "avgRealUse": 98
+    }
+  ]
+}

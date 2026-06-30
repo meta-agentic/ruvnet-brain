@@ -1,0 +1,14 @@
+[
+  { "q": "What is ruflo and who is it for?", "why": "1. what is this product (newcomer)", "strict": null, "realUse": null, "note": "" },
+  { "q": "What is a swarm in ruflo and what topologies does it support?", "why": "2. concepts (practitioner)", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does @claude-flow/memory persist and recall data — what storage backend does it use and what is the store/search code path?", "why": "3. mechanism / deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does swarm_init initialize a topology — what does the code actually do?", "why": "3. mechanism / deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does the guidance system produce a recommendation (guidance_recommend) — what is the mechanism?", "why": "3. mechanism / deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "What does ADR-048 (Claude Code Auto Memory Integration) decide, and is it implemented or proposed?", "why": "4. maturity / proposal-vs-reality", "strict": null, "realUse": null, "note": "" },
+  { "q": "Where are ruflo's ADRs kept and what areas do they cover?", "why": "5. where is the documentation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How do I initialize and use ruflo's memory in a project end-to-end?", "why": "6. end-to-end usage playbook", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo's memory integrate AgentDB — what is the adapter and how is it used?", "why": "integration boundary", "strict": null, "realUse": null, "note": "" },
+  { "q": "How are MCP tools defined and registered in ruflo v3 — where is the code?", "why": "deep implementation lookup", "strict": null, "realUse": null, "note": "" },
+  { "q": "What is the npm package name and CLI entry point for ruflo?", "why": "manifest / config detail", "strict": null, "realUse": null, "note": "" },
+  { "q": "What does the @claude-flow/neural package implement — which algorithms?", "why": "contributor-depth / subsystem", "strict": null, "realUse": null, "note": "" }
+]

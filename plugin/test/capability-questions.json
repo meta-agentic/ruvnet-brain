@@ -1,0 +1,11 @@
+[
+  { "query": "Can ruflo orchestrate agent swarms, and what implements it?", "expectRepo": ["ruflo", "concepts"], "minRelevance": 0 },
+  { "query": "Does RuVector use HNSW for vector search?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -1.5 },
+  { "query": "Can AgentDB run Cypher graph queries over agent memory?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -1.5 },
+  { "query": "Can agentic-flow switch between alternative low-cost AI models in Claude Code?", "expectRepo": ["agentic-flow", "concepts"], "minRelevance": -3 },
+  { "query": "What phases does the SPARC methodology define?", "expectRepo": ["sparc", "concepts", "ruflo"], "minRelevance": -3 },
+  { "query": "Does QuDAG provide quantum-resistant DAG-based anonymous communication?", "expectRepo": ["qudag", "concepts"], "minRelevance": -3 },
+  { "query": "Can RuLake cache vector queries in front of a vector store?", "expectRepo": ["rulake", "concepts"], "minRelevance": -3 },
+  { "query": "Does SAFLA implement a self-aware feedback loop?", "expectRepo": ["safla", "concepts"], "minRelevance": -3 },
+  { "query": "What is agent-harness-generator (metaharness) and what does it scaffold?", "expectRepo": ["agent-harness-generator", "concepts"], "minRelevance": -3 }
+]

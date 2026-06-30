@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 720 444"
+     width="720"
+     height="444">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .warn { fill: #fdf3e3; stroke: #d98c00; stroke-width: 1.5px; }
+      .decision { fill: #f8f9fa; stroke: #4a90d9; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .result { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+    </style>
+  </defs>
+
+  <text class="title" x="360" y="22" text-anchor="middle">Capability-confidence routing</text>
+
+  <!-- question -->
+  <rect class="box" x="210" y="36" width="300" height="44" rx="4"/>
+  <text class="label" x="360" y="63" text-anchor="middle">A question about the RuvNet stack</text>
+
+  <line class="arrow" x1="360" y1="80" x2="360" y2="98" marker-end="url(#arrowhead)"/>
+
+  <!-- decision diamond -->
+  <polygon class="decision" points="360,100 500,156 360,212 220,156"/>
+  <text class="label" x="360" y="152" text-anchor="middle">Does it name the</text>
+  <text class="label" x="360" y="170" text-anchor="middle">repo / specific?</text>
+
+  <!-- branch arrows -->
+  <line class="arrow" x1="248" y1="174" x2="190" y2="230" marker-end="url(#arrowhead)"/>
+  <text class="sublabel" x="206" y="200" text-anchor="middle" fill="#2e7d32">yes &#8212; named</text>
+
+  <line class="arrow" x1="472" y1="174" x2="530" y2="230" marker-end="url(#arrowhead)"/>
+  <text class="sublabel" x="556" y="200" text-anchor="middle" fill="#d98c00">no &#8212; by description</text>
+
+  <!-- LEFT column -->
+  <rect class="box" x="60" y="232" width="240" height="44" rx="4"/>
+  <text class="label" x="180" y="259" text-anchor="middle">Named / specific query</text>
+  <line class="arrow" x1="180" y1="276" x2="180" y2="296" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="60" y="298" width="240" height="44" rx="4"/>
+  <text class="label" x="180" y="325" text-anchor="middle">Direct repo match</text>
+  <line class="arrow" x1="180" y1="342" x2="180" y2="362" marker-end="url(#arrowhead)"/>
+
+  <rect class="good" x="60" y="364" width="240" height="56" rx="4"/>
+  <text class="result" x="180" y="388" text-anchor="middle" fill="#2e7d32">35 / 35 &#8212; 100%</text>
+  <text class="sublabel" x="180" y="408" text-anchor="middle">resolves to the right repo</text>
+
+  <!-- RIGHT column -->
+  <rect class="box" x="420" y="232" width="240" height="44" rx="4"/>
+  <text class="label" x="540" y="259" text-anchor="middle">By description (no name)</text>
+  <line class="arrow" x1="540" y1="276" x2="540" y2="296" marker-end="url(#arrowhead)"/>
+
+  <rect class="accent" x="420" y="298" width="240" height="44" rx="4"/>
+  <text class="label" x="540" y="325" text-anchor="middle">Capability-profile routing</text>
+  <line class="arrow" x1="540" y1="342" x2="540" y2="362" marker-end="url(#arrowhead)"/>
+
+  <rect class="good" x="420" y="364" width="240" height="56" rx="4"/>
+  <text class="result" x="540" y="388" text-anchor="middle" fill="#2e7d32">27 / 28 &#8212; 96%</text>
+  <text class="sublabel" x="540" y="408" text-anchor="middle">after capability cards (was 33%)</text>
+
+</svg>

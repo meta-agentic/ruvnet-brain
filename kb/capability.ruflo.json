@@ -1,0 +1,15 @@
+{
+  "repo": "ruflo",
+  "note": "Capability-confidence set for ruflo (claude-flow agent meta-harness / orchestration brain). YES = real capabilities; NO = outside its domain.",
+  "questions": [
+    { "q": "Can ruflo initialize a swarm and spawn coordinated agents?", "expectRepo": "ruflo", "evidence": ["swarm", "agent", "spawn"], "truth": "yes" },
+    { "q": "Does ruflo orchestrate multi-step tasks across agents?", "expectRepo": "ruflo", "evidence": ["orchestrat", "task"], "truth": "yes" },
+    { "q": "Does ruflo provide hooks that route and learn from agent actions?", "expectRepo": "ruflo", "evidence": ["hook", "route"], "truth": "yes" },
+    { "q": "Can ruflo persist agent memory across sessions?", "expectRepo": "ruflo", "evidence": ["memory", "store", "persist"], "truth": "yes" },
+    { "q": "Does ruflo expose MCP tools for agent coordination?", "expectRepo": "ruflo", "evidence": ["mcp", "tool"], "truth": "yes" },
+    { "q": "Does ruflo support multiple swarm topologies?", "expectRepo": "ruflo", "evidence": ["topology", "mesh", "hierarch"], "truth": "yes" },
+    { "q": "Can ruflo give guidance/recommendations about which capability to use?", "expectRepo": "ruflo", "evidence": ["guidance", "recommend"], "truth": "yes" },
+    { "q": "Can ruflo mine cryptocurrency on a GPU?", "expectRepo": "ruflo", "evidence": ["crypto mining", "hashrate", "gpu mining"], "truth": "no" },
+    { "q": "Can ruflo render real-time 3D game graphics?", "expectRepo": "ruflo", "evidence": ["3d render", "game engine", "webgl"], "truth": "no" }
+  ]
+}

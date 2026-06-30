@@ -1,0 +1,37 @@
+# deps + caches (regenerable via npm i)
+node_modules/
+**/node_modules/
+
+# build artifacts (regenerable in seconds via scripts/build-bundle.mjs)
+dist/
+
+# external source clones (themselves git repos; regenerable via self-update --include-new)
+clones/
+data/adrs-cache/
+
+# Helix removed from the brain (it's a separate consumer app); kept locally, not committed
+kb/_excluded-helix/
+
+# logs + scratch
+*.log
+logs/
+*.tmp
+.DS_Store
+
+# Brain store binaries are NOT committed — they ship via the GitHub Release (the 421MB bundle) so the
+# repo stays light for fast clone / plugin install. Human-authored knowledge (primers, capability-cards,
+# l2/, SOURCE.json) + the forge tools ARE committed; regenerate stores via ingest-repo.mjs + build-concepts.
+kb/*.rvf
+kb/*.passages.jsonl
+kb/*.idmap.json
+kb/*.embed.json
+kb/*.meta.json
+kb/*.symbols.json
+
+node_modules
+
+# secrets — NEVER commit (protection travels with the repo, not just global git excludes)
+.env
+.env.*
+!.env.example
+*.bak

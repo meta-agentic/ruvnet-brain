@@ -1,0 +1,289 @@
+{
+  "summary": {
+    "name": "ruview",
+    "variant": "big",
+    "questions": 10,
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    "avgStrict": 41.62,
+    "avgRealUse": 62.58,
+    "minStrict": 10,
+    "minRealUse": 18.333333333333332,
+    "poisonStrict": 6,
+    "poisonRealUse": 4,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What can RuView actually sense (presence, vital signs, activity), and how does it do this without cameras or wearables?",
+      "topPath": "plugins/ruview/skills/ruview-applications/SKILL.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 100,
+          "reason": "Source details sensing capabilities and methods without cameras or wearables."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Complete answer in retrieved document"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 90,
+          "realUse": 98,
+          "reason": "Mostly complete, minor gaps"
+        }
+      ],
+      "avgStrict": 95.33333333333333,
+      "avgRealUse": 98.66666666666667
+    },
+    {
+      "q": "What is Channel State Information (CSI), and why does RuView use it for sensing?",
+      "topPath": "ui/pose-fusion/js/csi-simulator.js",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source only describes CSI generation, lacks explanation of its use in RuView."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 30,
+          "realUse": 50,
+          "reason": "Incomplete explanation of CSI and RuView's use"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 80,
+          "reason": "Lack of CSI definition"
+        }
+      ],
+      "avgStrict": 20,
+      "avgRealUse": 63.333333333333336
+    },
+    {
+      "q": "What does ADR-011 (proof-of-reality / mock elimination) address about placeholder CSI parsers?",
+      "topPath": "docs/adr/ADR-011-python-proof-of-reality-mock-elimination.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 85,
+          "realUse": 95,
+          "reason": "Source details mock issues but lacks specific ADR-011 solutions."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 22,
+          "realUse": 22,
+          "reason": "No direct answer to placeholder CSI parsers"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "error": "meta-llama/llama-3.3-70b-instruct no-json"
+        }
+      ],
+      "avgStrict": 53.5,
+      "avgRealUse": 58.5
+    },
+    {
+      "q": "What is the Mass Casualty Assessment / disaster survivor detection capability in RuView?",
+      "topPath": "plugins/ruview/skills/ruview-applications/SKILL.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Source provides complete details on Mass Casualty Assessment capabilities."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 96,
+          "reason": "Complete MAT capability documentation"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 99,
+          "reason": "Complete"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 97.66666666666667
+    },
+    {
+      "q": "How does RuView use RuVector for model training and neural inference?",
+      "topPath": "plugins/ruview/skills/ruview-applications/SKILL.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "#1 document lacks specific details on RuVector's role in training and inference."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 15,
+          "realUse": 30,
+          "reason": "Source lacks model training specifics"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "RuVector usage not described"
+        }
+      ],
+      "avgStrict": 15,
+      "avgRealUse": 43.333333333333336
+    },
+    {
+      "q": "How does RuView pair into Apple Home or any Matter controller as a bridge?",
+      "topPath": "docs/benchmarks/homecore-vs-home-assistant.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source lacks specific details on RuView pairing with Apple Home or Matter."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "Source does not explain RuView pairing as bridge."
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Lack of direct info"
+        }
+      ],
+      "avgStrict": 16.666666666666668,
+      "avgRealUse": 46.666666666666664
+    },
+    {
+      "q": "What neural-network backends does the wifi-densepose-nn crate support for inference?",
+      "topPath": "docs/adr/ADR-002-ruvector-rvf-integration-strategy.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 40,
+          "reason": "No information on neural-network backends for inference in the source."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 10,
+          "realUse": 30,
+          "reason": "no backend info in sources"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Inference backends not listed"
+        }
+      ],
+      "avgStrict": 13.333333333333334,
+      "avgRealUse": 36.666666666666664
+    },
+    {
+      "q": "How do I integrate RuView with Home Assistant via MQTT auto-discovery (HA-DISCO)?",
+      "topPath": "docs/benchmarks/homecore-vs-home-assistant.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 10,
+          "realUse": 20,
+          "reason": "Source does not address MQTT auto-discovery integration."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 10,
+          "realUse": 15,
+          "reason": "Source benchmarks only, no integration details"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 20,
+          "reason": "No MQTT auto-discovery info"
+        }
+      ],
+      "avgStrict": 10,
+      "avgRealUse": 18.333333333333332
+    },
+    {
+      "q": "What signal-processing does the wifi-densepose-signal crate implement?",
+      "topPath": "python/src/lib.rs",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 50,
+          "realUse": 70,
+          "reason": "Source mentions signal DSP but lacks details on implementation."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 75,
+          "reason": "phase P3 not implemented yet"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Incomplete signal-processing details"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 75
+    },
+    {
+      "q": "What does the wifi-densepose CLI binary do, and how is the sensing server launched?",
+      "topPath": "docs/ddd/sensing-server-domain-model.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "The document fully explains the CLI binary and server launch."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 75,
+          "realUse": 85,
+          "reason": "source partially answers"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Missing CLI binary details"
+        }
+      ],
+      "avgStrict": 64.33333333333333,
+      "avgRealUse": 87.66666666666667
+    }
+  ]
+}

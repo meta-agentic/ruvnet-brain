@@ -1,0 +1,12 @@
+[
+  { "q": "What problem does AgentDB solve that ordinary vector databases do not?", "why": "held-out: positioning", "strict": null, "realUse": null, "note": "grounded: README.md — most vector DBs store embeddings and stop; AgentDB learns which results the agent used" },
+  { "q": "What is the single-file .rvf cognitive container, and what does it bundle for AgentDB?", "why": "held-out: concept identity", "strict": null, "realUse": null, "note": "grounded: README.md + docs/adrs/ADR-003 — vectors, indexes, learning state, cryptographic audit trail in one file" },
+  { "q": "How does AgentDB run in the browser, on edge runtimes, and offline?", "why": "held-out: deployment mechanism", "strict": null, "realUse": null, "note": "grounded: README.md + docs/implementation/WASM-VECTOR-README.md / WASM-VECTOR-ACCELERATION.md" },
+  { "q": "What is Reflexion (episodic) memory in AgentDB and what does it store?", "why": "held-out: concept", "strict": null, "realUse": null, "note": "grounded: package.json (episodic Reflexion memory) + benchmarks (episode retrieval/filtering)" },
+  { "q": "How does the causal graph with Cypher querying work in AgentDB?", "why": "held-out: subsystem", "strict": null, "realUse": null, "note": "grounded: package.json (causal graph + Cypher) + benchmarks causal-reasoning scenario" },
+  { "q": "What does ADR-002 (RuVector WASM integration) cover for AgentDB?", "why": "held-out: ADR-specific", "strict": null, "realUse": null, "note": "grounded: docs/adrs/ADR-002-ruvector-wasm-integration.md" },
+  { "q": "What hybrid retrieval does AgentDB support, and how does it combine BM25 with dense vectors?", "why": "held-out: retrieval mechanism", "strict": null, "realUse": null, "note": "grounded: package.json — hybrid (BM25 + dense) retrieval, GNN attention" },
+  { "q": "How does AgentDB back the agentic-flow / ruflo / Claude Code memory layer?", "why": "held-out: integration boundary", "strict": null, "realUse": null, "note": "grounded: package.json — 'Backs the agentic-flow / ruflo / Claude Code memory layer'" },
+  { "q": "What database backends does AgentDB benchmark against (better-sqlite3, sql.js, @ruvector/core)?", "why": "held-out: manifest / backends", "strict": null, "realUse": null, "note": "grounded: benchmarks/README.md — backend comparison section" },
+  { "q": "How do I run AgentDB's benchmark suite, and what report formats does it produce?", "why": "held-out: end-to-end usage", "strict": null, "realUse": null, "note": "grounded: benchmarks/README.md — npm run benchmark; HTML, JSON, Markdown reports" }
+]

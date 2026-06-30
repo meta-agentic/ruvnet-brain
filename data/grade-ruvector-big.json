@@ -1,0 +1,289 @@
+{
+  "summary": {
+    "name": "ruvector",
+    "variant": "big",
+    "questions": 10,
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    "avgStrict": 57.87,
+    "avgRealUse": 85.2,
+    "minStrict": 16.666666666666668,
+    "minRealUse": 63.333333333333336,
+    "poisonStrict": 5,
+    "poisonRealUse": 0,
+    "groundTruthCitationFailures": 0
+  },
+  "report": [
+    {
+      "q": "What is a 'cognitive container' in RVF, and what can a single .rvf file actually hold?",
+      "topPath": "crates/rvf/rvf-kernel/Cargo.toml",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 60,
+          "reason": "Source lacks specific details on 'cognitive container' and .rvf file contents."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 20,
+          "realUse": 50,
+          "reason": "Incomplete, no details on .rvf contents"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 80,
+          "reason": "Incomplete definition"
+        }
+      ],
+      "avgStrict": 16.666666666666668,
+      "avgRealUse": 63.333333333333336
+    },
+    {
+      "q": "How does RuVector differ from typical vector databases like Pinecone, Qdrant, and FAISS?",
+      "topPath": "docs/research/gnn-v2/executive-summary.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Source mentions advantages but lacks direct comparison details."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "source fully answers question"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "Top doc lacks direct comparison"
+        }
+      ],
+      "avgStrict": 46,
+      "avgRealUse": 86
+    },
+    {
+      "q": "What is RVCOW branching in RVF, and what does ADR-031 cover?",
+      "topPath": "crates/rvf/docs/adr/ADR-031-rvcow-branching-and-real-cognitive-containers.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document fully explains RVCOW and ADR-031's scope."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete coverage in source"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 99,
+          "reason": "Fully answered"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98.33333333333333
+    },
+    {
+      "q": "How does the RVF format provide crash safety and progressive (partial) loading?",
+      "topPath": "crates/rvf/tests/rvf-integration/tests/e2e_crash_safety.rs",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 85,
+          "reason": "Source partially addresses crash safety; lacks details on progressive loading."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 85,
+          "reason": "Source shows partial validation only"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 80,
+          "reason": "Incomplete info"
+        }
+      ],
+      "avgStrict": 30,
+      "avgRealUse": 83.33333333333333
+    },
+    {
+      "q": "What distance metrics and query operators does the ruvector PostgreSQL HNSW index support?",
+      "topPath": "docs/postgres/zero-copy/zero-copy-operators.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 30,
+          "realUse": 98,
+          "reason": "Only partial distance metrics mentioned; lacks query operators."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 99,
+          "reason": "Complete coverage in #1 doc"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 40,
+          "realUse": 98,
+          "reason": "Top 5 docs provide complete info"
+        }
+      ],
+      "avgStrict": 56,
+      "avgRealUse": 98.33333333333333
+    },
+    {
+      "q": "Which crate provides coherence-gated search, and what is a coherence gate?",
+      "topPath": "docs/adr/ADR-254-coherence-hnsw-search.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document fully explains the crate and coherence gate."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "complete and correct"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "error": "meta-llama/llama-3.3-70b-instruct no-json"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 98
+    },
+    {
+      "q": "How do I add ruvector-core as a Rust dependency and insert then search vectors as a library?",
+      "topPath": "crates/ruvector-core/src/advanced_features/matryoshka.rs",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document provides complete instructions for adding and using ruvector-core."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 40,
+          "realUse": 70,
+          "reason": "Missing dependency syntax"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 40,
+          "reason": "Missing dependency info"
+        }
+      ],
+      "avgStrict": 49.333333333333336,
+      "avgRealUse": 69.33333333333333
+    },
+    {
+      "q": "What hardware acceleration does ruvector-core use for distance calculations?",
+      "topPath": "docs/benchmarks/BENCHMARK_COMPARISON.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "Document provides complete details on hardware acceleration used."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 98,
+          "realUse": 98,
+          "reason": "AVX2 + SimSIMD confirmed"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 98,
+          "realUse": 95,
+          "reason": "AVX2 intrinsics"
+        }
+      ],
+      "avgStrict": 98,
+      "avgRealUse": 97
+    },
+    {
+      "q": "What is the relationship between ruvector-core and the broader RuVector ecosystem libraries (agentdb, claude-flow, rvlite, sona)?",
+      "topPath": "crates/ruvector-core/README.md",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 80,
+          "realUse": 90,
+          "reason": "Source describes ruvector-core but lacks details on other ecosystem libraries."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 60,
+          "realUse": 85,
+          "reason": "STRICT: core info only, REAL: ecosystem context"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 10,
+          "realUse": 80,
+          "reason": "Lack of ecosystem details"
+        }
+      ],
+      "avgStrict": 50,
+      "avgRealUse": 85
+    },
+    {
+      "q": "What does the rvf-node package provide, and which platforms ship prebuilt binaries?",
+      "topPath": "npm/packages/ruvector/src/index.ts",
+      "groundTruthPathExists": true,
+      "grades": [
+        {
+          "model": "openai/gpt-4o-mini",
+          "strict": 40,
+          "realUse": 70,
+          "reason": "Source lacks specific details on rvf-node package and prebuilt binaries."
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "strict": 50,
+          "realUse": 70,
+          "reason": "Incomplete platforms list, partial functionality"
+        },
+        {
+          "model": "meta-llama/llama-3.3-70b-instruct",
+          "strict": 20,
+          "realUse": 80,
+          "reason": "rvf-node details in top-5"
+        }
+      ],
+      "avgStrict": 36.666666666666664,
+      "avgRealUse": 73.33333333333333
+    }
+  ]
+}

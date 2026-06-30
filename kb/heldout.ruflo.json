@@ -1,0 +1,12 @@
+[
+  { "q": "How do ruflo hooks work — what hook types fire and where in the code?", "why": "held-out: mechanism", "strict": null, "realUse": null, "note": "" },
+  { "q": "What is SPARC in the context of ruflo and how is it used?", "why": "held-out: concept", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo coordinate multiple agents — the coordination/consensus mechanism?", "why": "held-out: mechanism", "strict": null, "realUse": null, "note": "" },
+  { "q": "What database schema does the SQLite memory backend create?", "why": "held-out: deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo's hive-mind differ from a swarm?", "why": "held-out: concept distinction", "strict": null, "realUse": null, "note": "" },
+  { "q": "What does agent_spawn do and how is an agent represented in code?", "why": "held-out: deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo handle session persistence and restore?", "why": "held-out: mechanism", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo's memory do vector / semantic search — which code path?", "why": "held-out: deep implementation", "strict": null, "realUse": null, "note": "" },
+  { "q": "How does ruflo integrate with Claude Code hooks via settings.json?", "why": "held-out: integration boundary", "strict": null, "realUse": null, "note": "" },
+  { "q": "What MCP tools does ruflo expose for memory operations?", "why": "held-out: capability/manifest", "strict": null, "realUse": null, "note": "" }
+]

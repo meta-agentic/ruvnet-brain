@@ -1,0 +1,19 @@
+{
+  "builder": "rvf-kb-forge",
+  "builtUtc": "2026-06-29T05:43:23.820Z",
+  "canonicalManifestUrl": "https://raw.githubusercontent.com/ruvnet/ruvnet-brain/main/kb/.last-built.json",
+  "selfUpdate": "node forge-update.mjs",
+  "stores": {
+    "rvm": {
+      "kbName": "rvm",
+      "sourceRepo": "https://github.com/ruvnet/rvm",
+      "sourceCommit": "af97d18f29d5704f2fbbeecccce192d712bb9a80",
+      "sourceDescribe": "af97d18",
+      "builtUtc": "2026-06-29T05:43:23.820Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://raw.githubusercontent.com/ruvnet/ruvnet-brain/main/kb/.last-built.json",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/ruvnet/ruvnet-brain/main/kb/rvm-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs rvm"
+    }
+  }
+}

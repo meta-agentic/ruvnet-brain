@@ -1,0 +1,15 @@
+{
+  "repo": "agentdb",
+  "note": "Capability-confidence set: YES = real AgentDB capabilities that must be confidently source-evidenced; NO = capabilities outside AgentDB's domain that the bundle must NOT confidently assert. evidence terms are lowercased substrings expected in the proving document.",
+  "questions": [
+    { "q": "Can AgentDB store and query a causal graph using Cypher?", "expectRepo": "agentdb", "evidence": ["cypher", "causal", "graph"], "truth": "yes" },
+    { "q": "Does AgentDB provide Reflexion-style episodic memory for agents?", "expectRepo": "agentdb", "evidence": ["reflexion", "episodic", "memory"], "truth": "yes" },
+    { "q": "Does AgentDB include reinforcement-learning algorithms and a Thompson-Sampling bandit?", "expectRepo": "agentdb", "evidence": ["thompson", "bandit", "reinforcement"], "truth": "yes" },
+    { "q": "Can AgentDB learn from feedback through a recordFeedback loop?", "expectRepo": "agentdb", "evidence": ["feedback", "learn", "reward"], "truth": "yes" },
+    { "q": "Does AgentDB persist agent memory in a single RVF file?", "expectRepo": "agentdb", "evidence": ["rvf", "single", "file"], "truth": "yes" },
+    { "q": "Does AgentDB expose MCP tools that agents can call?", "expectRepo": "agentdb", "evidence": ["mcp", "tool"], "truth": "yes" },
+    { "q": "Does AgentDB include a skill library and a ReasoningBank?", "expectRepo": "agentdb", "evidence": ["skill", "reasoning"], "truth": "yes" },
+    { "q": "Can AgentDB process real-time video streams for object detection?", "expectRepo": "agentdb", "evidence": ["video", "object detection", "frame"], "truth": "no" },
+    { "q": "Can AgentDB send SMS text messages to phone numbers?", "expectRepo": "agentdb", "evidence": ["sms", "twilio", "text message"], "truth": "no" }
+  ]
+}

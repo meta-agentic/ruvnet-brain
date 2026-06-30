@@ -1,0 +1,409 @@
+{
+  "started": "2026-06-29T20:45:07.721Z",
+  "finished": "2026-06-29T20:48:44.555Z",
+  "k": 2,
+  "passed": 27,
+  "total": 28,
+  "bySet": {
+    "described": {
+      "pass": 27,
+      "total": 28
+    }
+  },
+  "results": [
+    {
+      "n": 1,
+      "set": "described",
+      "query": "What should I use to coordinate a swarm of agents working in parallel?",
+      "expect": [
+        "ruflo",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruflo",
+      "score": 8.228023529052734,
+      "citedPath": "concepts/ruflo/CARD/ruflo-card",
+      "pass": true
+    },
+    {
+      "n": 2,
+      "set": "described",
+      "query": "How do I run several coding agents at once and have them share state and memory?",
+      "expect": [
+        "ruflo",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruflo",
+      "score": 6.812454700469971,
+      "citedPath": "concepts/ruflo/CARD/ruflo-card",
+      "pass": true
+    },
+    {
+      "n": 3,
+      "set": "described",
+      "query": "What is the best way to store and search embeddings on disk locally and privately?",
+      "expect": [
+        "ruvector",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruvector",
+      "score": 5.014137268066406,
+      "citedPath": "concepts/ruvector/CARD/ruvector-card",
+      "pass": true
+    },
+    {
+      "n": 4,
+      "set": "described",
+      "query": "I need on-disk approximate nearest neighbor vector search with an HNSW graph. What should I use?",
+      "expect": [
+        "ruvector",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruvector",
+      "score": 5.4089179039001465,
+      "citedPath": "concepts/ruvector/CARD/ruvector-card",
+      "pass": true
+    },
+    {
+      "n": 5,
+      "set": "described",
+      "query": "How do I give an agent persistent structured memory that survives across sessions?",
+      "expect": [
+        "agentdb",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "agentdb",
+      "score": 8.158548355102539,
+      "citedPath": "concepts/agentdb/CARD/agentdb-card",
+      "pass": true
+    },
+    {
+      "n": 6,
+      "set": "described",
+      "query": "What stores agent memory and lets me run graph queries over it?",
+      "expect": [
+        "agentdb",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "agentdb",
+      "score": 5.964118480682373,
+      "citedPath": "concepts/agentdb/CARD/agentdb-card",
+      "pass": true
+    },
+    {
+      "n": 7,
+      "set": "described",
+      "query": "How do I make repeated vector queries return in under a millisecond with a cache?",
+      "expect": [
+        "rulake",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "rulake",
+      "score": 3.759127140045166,
+      "citedPath": "concepts/rulake/CARD/rulake-card",
+      "pass": true
+    },
+    {
+      "n": 8,
+      "set": "described",
+      "query": "Is there a caching layer that sits in front of a vector store to speed up recall?",
+      "expect": [
+        "rulake",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "rulake",
+      "score": 8.34541130065918,
+      "citedPath": "concepts/rulake/CARD/rulake-card",
+      "pass": true
+    },
+    {
+      "n": 9,
+      "set": "described",
+      "query": "How can I detect people, occupancy, and falls through walls using only WiFi signals and no camera?",
+      "expect": [
+        "ruview",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruview",
+      "score": 6.842498302459717,
+      "citedPath": "concepts/ruview/CARD/ruview-card",
+      "pass": true
+    },
+    {
+      "n": 10,
+      "set": "described",
+      "query": "How do I read breathing rate and heart rate contactlessly from radio signals, with no wearable?",
+      "expect": [
+        "ruview",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruview",
+      "score": 2.073152542114258,
+      "citedPath": "concepts/ruview/CARD/ruview-card",
+      "pass": true
+    },
+    {
+      "n": 11,
+      "set": "described",
+      "query": "How do I route to cheaper models automatically to cut my AI bill in Claude Code?",
+      "expect": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "got": "ruflo",
+      "eff": "ruflo",
+      "score": -0.7009855508804321,
+      "citedPath": "ruflo/v3/implementation/adrs/ADR-047-fast-mode-integration.md",
+      "pass": false
+    },
+    {
+      "n": 12,
+      "set": "described",
+      "query": "What picks the cheapest good-enough model for each task automatically?",
+      "expect": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "got": "agentic-flow",
+      "eff": "agentic-flow",
+      "score": 0.2784355580806732,
+      "citedPath": "agentic-flow/agentic-flow/docs/guides/MULTI-MODEL-ROUTER.md",
+      "pass": true
+    },
+    {
+      "n": 13,
+      "set": "described",
+      "query": "What structured methodology should I follow to plan and build a non-trivial feature step by step?",
+      "expect": [
+        "sparc",
+        "concepts",
+        "ruflo"
+      ],
+      "got": "concepts",
+      "eff": "sparc",
+      "score": 0.8258680105209351,
+      "citedPath": "concepts/sparc/CARD/sparc-card",
+      "pass": true
+    },
+    {
+      "n": 14,
+      "set": "described",
+      "query": "Is there a phased build process with quality gates between each stage?",
+      "expect": [
+        "sparc",
+        "concepts",
+        "ruflo"
+      ],
+      "got": "concepts",
+      "eff": "sparc",
+      "score": 4.471526622772217,
+      "citedPath": "concepts/sparc/CARD/sparc-card",
+      "pass": true
+    },
+    {
+      "n": 15,
+      "set": "described",
+      "query": "How do I get quantum-resistant secure messaging between agents?",
+      "expect": [
+        "qudag",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "qudag",
+      "score": 5.780867576599121,
+      "citedPath": "concepts/qudag/CARD/qudag-card",
+      "pass": true
+    },
+    {
+      "n": 16,
+      "set": "described",
+      "query": "What provides anonymous DAG-based communication that resists quantum attacks?",
+      "expect": [
+        "qudag",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "qudag",
+      "score": 7.819543838500977,
+      "citedPath": "concepts/qudag/CARD/qudag-card",
+      "pass": true
+    },
+    {
+      "n": 17,
+      "set": "described",
+      "query": "What gives an agent a self-aware feedback loop so it improves itself over time?",
+      "expect": [
+        "safla",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "safla",
+      "score": 5.855085849761963,
+      "citedPath": "concepts/safla/CARD/safla-card",
+      "pass": true
+    },
+    {
+      "n": 18,
+      "set": "described",
+      "query": "Is there a fast neural network library I can run in Rust or compile to WASM?",
+      "expect": [
+        "ruv-fann",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruv-fann",
+      "score": 7.918942451477051,
+      "citedPath": "concepts/ruv-fann/CARD/ruv-fann-card",
+      "pass": true
+    },
+    {
+      "n": 19,
+      "set": "described",
+      "query": "How do I compress prompts to cut token cost without losing meaning?",
+      "expect": [
+        "synthlang",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "synthlang",
+      "score": 4.544946193695068,
+      "citedPath": "concepts/synthlang/CARD/synthlang-card",
+      "pass": true
+    },
+    {
+      "n": 20,
+      "set": "described",
+      "query": "How do I retrieve documents using visual or page-image embeddings instead of text?",
+      "expect": [
+        "rupixel",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "rupixel",
+      "score": 2.7668116092681885,
+      "citedPath": "concepts/rupixel/CARD/rupixel-card",
+      "pass": true
+    },
+    {
+      "n": 21,
+      "set": "described",
+      "query": "What uses copy-on-write to fork and branch agent memory cheaply?",
+      "expect": [
+        "agenticow",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "agenticow",
+      "score": 7.687665939331055,
+      "citedPath": "concepts/agenticow/CARD/agenticow-card",
+      "pass": true
+    },
+    {
+      "n": 22,
+      "set": "described",
+      "query": "How do I benchmark whether an agent can actually fix real security vulnerabilities?",
+      "expect": [
+        "cve-bench",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "cve-bench",
+      "score": 8.665559768676758,
+      "citedPath": "concepts/cve-bench/CARD/cve-bench-card",
+      "pass": true
+    },
+    {
+      "n": 23,
+      "set": "described",
+      "query": "What framework supports decentralized autonomous agents and applications?",
+      "expect": [
+        "daa",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "daa",
+      "score": 8.19757080078125,
+      "citedPath": "concepts/daa/CARD/daa-card",
+      "pass": true
+    },
+    {
+      "n": 24,
+      "set": "described",
+      "query": "Is there a TypeScript way to program and optimize LLM pipelines the way DSPy does in Python?",
+      "expect": [
+        "dspy.ts",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "dspy.ts",
+      "score": 6.126091003417969,
+      "citedPath": "concepts/dspy.ts/CARD/dspy.ts-card",
+      "pass": true
+    },
+    {
+      "n": 25,
+      "set": "described",
+      "query": "What gives fast cached tool results for reliable, low-latency AI tool integration?",
+      "expect": [
+        "fact",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "fact",
+      "score": 7.5763092041015625,
+      "citedPath": "concepts/fact/CARD/fact-card",
+      "pass": true
+    },
+    {
+      "n": 26,
+      "set": "described",
+      "query": "How do I scaffold, A/B test, and score different agent harnesses?",
+      "expect": [
+        "agent-harness-generator",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "agent-harness-generator",
+      "score": 5.5985918045043945,
+      "citedPath": "concepts/agent-harness-generator/CARD/agent-harness-generator-card",
+      "pass": true
+    },
+    {
+      "n": 27,
+      "set": "described",
+      "query": "What is the building block for orchestrating parallel work across many specialized agents?",
+      "expect": [
+        "ruflo",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "agentic-flow",
+      "score": 1.2286098003387451,
+      "citedPath": "concepts/agentic-flow/CARD/agentic-flow-card",
+      "pass": true
+    },
+    {
+      "n": 28,
+      "set": "described",
+      "query": "I want private local semantic search over my own documents. Which engine should I build on?",
+      "expect": [
+        "ruvector",
+        "concepts"
+      ],
+      "got": "concepts",
+      "eff": "ruvector",
+      "score": 2.1587655544281006,
+      "citedPath": "concepts/ruvector/CARD/ruvector-card",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Primary SEO -->
+<title>RuvNet Brain — Source-Grounded AI Knowledge Base &amp; Claude Code Plugin for rUv's Code</title>
+<meta name="description" content="A downloadable, source-grounded brain that makes Claude Code, Cursor &amp; Codex answer from rUv's real RuVector, ruflo &amp; AgentDB source — with citations, no drift.">
+<meta name="keywords" content="RuvNet, rUv, Reuven Cohen, RuVector, ruflo, AgentDB, RuLake, RuView, Claude Code plugin, MCP server, RAG, vector search, source-grounded AI, knowledge base, HNSW">
+<meta name="author" content="Reuven Cohen (rUv)">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0b0d0f">
+<link rel="canonical" href="https://explainer-stuart-kerrs-projects.vercel.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RuvNet Brain">
+<meta property="og:title" content="RuvNet Brain — the source-grounded answer key for rUv's code">
+<meta property="og:description" content="A downloadable brain that makes any AI assistant answer about RuVector, ruflo, AgentDB &amp; the RuvNet ecosystem from the real source code — with citations, no drift.">
+<meta property="og:url" content="https://explainer-stuart-kerrs-projects.vercel.app/">
+<meta property="og:image" content="https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png">
+<meta property="og:image:alt" content="A brain made of glowing amber and cyan filaments — the entire RuvNet codebase, organized into one intelligence">
+<meta property="og:image:width" content="1536">
+<meta property="og:image:height" content="1024">
+
+<!-- Twitter card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RuvNet Brain — the source-grounded answer key for rUv's code">
+<meta name="twitter:description" content="A downloadable brain that makes Claude Code, Cursor &amp; Codex answer about the RuvNet ecosystem from real source code — with citations, no drift.">
+<meta name="twitter:image" content="https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png">
+<meta name="twitter:image:alt" content="A brain made of glowing amber and cyan filaments representing the RuvNet codebase as one intelligence">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "RuvNet Brain",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Cross-platform (Node.js)",
+  "softwareVersion": "0.4.0-dev",
+  "description": "A downloadable, source-grounded knowledge base that makes AI assistants (Claude Code, Cursor, Codex) answer from rUv's real RuvNet source code — RuVector, ruflo, AgentDB, RuLake, RuView and more — with citations and no drift. Ships a single MCP tool, search_ruvnet, that searches every indexed repo at once.",
+  "url": "https://explainer-stuart-kerrs-projects.vercel.app/",
+  "image": "https://explainer-stuart-kerrs-projects.vercel.app/assets/img/hero.png",
+  "author": { "@type": "Person", "name": "Reuven Cohen", "alternateName": "rUv" },
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": ["https://github.com/stuinfla/ruvnet-brain"],
+  "keywords": "RuVector, ruflo, AgentDB, RuLake, RuView, Claude Code, MCP, vector search, source-grounded AI, RAG"
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#e8e4d8; --ink-dim:#a39d8c; --bg:#0b0d0f; --bg2:#11151a;
+    --amber:#f0a830; --amber-soft:#f5c46b; --cyan:#5ad6ff; --green:#5fd38a; --red:#ff6b5e;
+    --line:rgba(232,228,216,.12); --line2:rgba(232,228,216,.06);
+    --mono:'JetBrains Mono',monospace; --disp:'Fraunces',serif; --body:'Hanken Grotesk',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  /* blueprint grid + grain */
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(var(--line2) 1px,transparent 1px),linear-gradient(90deg,var(--line2) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(ellipse 120% 90% at 50% 0%,#000 40%,transparent 100%)}
+  body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 28px}
+  section{padding:104px 0;border-bottom:1px solid var(--line2)}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--amber);display:flex;align-items:center;gap:14px;margin-bottom:26px}
+  .eyebrow::before{content:"";width:34px;height:1px;background:var(--amber)}
+  h1,h2,h3{font-family:var(--disp);font-weight:900;line-height:1.02;letter-spacing:-.02em}
+  h2{font-size:clamp(2rem,5vw,3.4rem);margin-bottom:24px}
+  h3{font-size:1.4rem;font-weight:600;margin-bottom:10px}
+  p{color:var(--ink-dim);font-size:1.05rem;max-width:64ch;margin-bottom:18px}
+  p strong{color:var(--ink);font-weight:700}
+  .mono{font-family:var(--mono)}
+  .amber{color:var(--amber)} .cyan{color:var(--cyan)} .green{color:var(--green)} .red{color:var(--red)}
+
+  /* HERO */
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;border-bottom:none;position:relative}
+  .hero .tag{font-family:var(--mono);font-size:.74rem;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:30px}
+  .hero h1{font-size:clamp(3.2rem,11vw,8.5rem);font-weight:900}
+  .hero h1 em{font-style:italic;font-weight:400;color:var(--amber)}
+  .hero .sub{font-size:clamp(1.1rem,2.4vw,1.5rem);color:var(--ink);max-width:30ch;margin:34px 0 0;font-family:var(--disp);font-weight:400;font-style:italic}
+  .hero .meta{position:static;margin-top:44px;display:flex;flex-wrap:wrap;gap:16px 28px;
+    font-family:var(--mono);font-size:.72rem;color:var(--ink-dim);letter-spacing:.05em;
+    border-top:1px solid var(--line);padding-top:18px}
+  .hero .meta b{color:var(--amber);font-weight:700}
+  .scrollcue{position:absolute;bottom:42px;right:28px;font-family:var(--mono);font-size:.7rem;color:var(--ink-dim);animation:bob 2s infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+
+  .lead{font-size:1.3rem;color:var(--ink);max-width:60ch;font-family:var(--disp);font-weight:400;line-height:1.45}
+
+  /* problem cards */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:34px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:3px;padding:26px;position:relative}
+  .card .n{font-family:var(--mono);font-size:.72rem;color:var(--amber);letter-spacing:.2em;margin-bottom:12px}
+  .card p{font-size:.96rem;margin-bottom:0}
+
+  /* quote / failed assumption */
+  .quote{border-left:3px solid var(--amber);padding:8px 0 8px 30px;margin:40px 0;
+    font-family:var(--disp);font-size:clamp(1.5rem,3.6vw,2.3rem);font-weight:400;font-style:italic;color:var(--ink);line-height:1.25;max-width:24ch}
+  .quote span{color:var(--red);font-style:normal}
+
+  /* stack diagram */
+  .stack{margin-top:38px;display:flex;flex-direction:column;gap:8px}
+  .layer{border:1px solid var(--line);border-radius:3px;padding:18px 22px;position:relative;
+    background:linear-gradient(90deg,var(--bg2),transparent);transition:.4s}
+  .layer:hover{border-color:var(--amber);transform:translateX(6px)}
+  .layer .ll{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px}
+  .layer.engine{border-color:rgba(240,168,48,.4);background:linear-gradient(90deg,rgba(240,168,48,.08),transparent)}
+  .layer.engine .ll{color:var(--amber)}
+  .layer b{color:var(--ink);font-weight:700} .layer small{color:var(--ink-dim);font-size:.86rem}
+  .arrow{text-align:center;color:var(--ink-dim);font-family:var(--mono);font-size:.8rem}
+
+  /* 5 layers list */
+  .layers5{margin-top:34px;border-top:1px solid var(--line)}
+  .l5{display:grid;grid-template-columns:88px 1fr;gap:20px;padding:22px 0;border-bottom:1px solid var(--line2);align-items:baseline}
+  .l5 .tag5{font-family:var(--mono);color:var(--amber);font-size:.8rem;font-weight:700;letter-spacing:.1em}
+  .l5 h3{font-size:1.15rem;margin-bottom:4px} .l5 p{font-size:.95rem;margin:0}
+
+  /* data / proof */
+  table{width:100%;border-collapse:collapse;margin-top:30px;font-family:var(--mono);font-size:.85rem}
+  th{text-align:left;color:var(--amber);font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:.68rem;
+    padding:12px 14px;border-bottom:1px solid var(--line)}
+  td{padding:13px 14px;border-bottom:1px solid var(--line2);color:var(--ink-dim)}
+  td:first-child{color:var(--ink)}
+  tr:hover td{background:rgba(240,168,48,.04)}
+  .big{color:var(--green);font-weight:700}
+  .barwrap{display:flex;align-items:center;gap:10px}
+  .bar{height:7px;background:var(--line);border-radius:4px;flex:1;overflow:hidden;min-width:60px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),var(--amber-soft))}
+
+  .callout{margin-top:40px;border:1px solid var(--red);border-radius:3px;padding:28px;
+    background:linear-gradient(135deg,rgba(255,107,94,.07),transparent)}
+  .callout .eyebrow{color:var(--red)} .callout .eyebrow::before{background:var(--red)}
+  .callout p{color:var(--ink)}
+
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);margin-top:34px}
+  @media(max-width:760px){.stat-row{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--bg);padding:26px 20px}
+  .stat .v{font-family:var(--disp);font-size:2.6rem;font-weight:900;color:var(--amber);line-height:1}
+  .stat .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-top:10px}
+
+  /* steps */
+  .steps{counter-reset:s;margin-top:34px}
+  .step{display:flex;gap:22px;padding:20px 0;border-bottom:1px solid var(--line2)}
+  .step::before{counter-increment:s;content:counter(s);font-family:var(--disp);font-weight:900;font-size:1.6rem;color:var(--amber);min-width:40px}
+  .step code{font-family:var(--mono);background:var(--bg2);border:1px solid var(--line);padding:2px 8px;border-radius:3px;color:var(--cyan);font-size:.86rem}
+  .step h3{font-size:1.05rem}
+
+  .foot{padding:70px 0 90px;text-align:center}
+  .foot .mark{font-family:var(--disp);font-style:italic;font-size:1.6rem;color:var(--ink)}
+  .foot p{margin:18px auto 0;font-size:.92rem}
+
+  /* reveal */
+  .fig{margin:36px 0 8px;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--bg2);box-shadow:0 24px 60px -30px rgba(0,0,0,.9)}
+  .fig img{display:block;width:100%;height:auto}
+  .fig figcaption{font-size:.95rem;color:var(--ink-dim);padding:16px 20px;border-top:1px solid var(--line2);line-height:1.5}
+  .fig figcaption b{color:var(--amber);font-weight:700} .fig figcaption .c{color:var(--cyan)} .fig figcaption .g{color:var(--green)} .fig figcaption .r{color:var(--red)}
+  .hero-fig{margin:38px 0 0;max-width:560px;border:none;background:transparent;box-shadow:none}
+  .hero-fig img{width:100%;height:auto;display:block;border-radius:10px;mask-image:radial-gradient(ellipse 82% 82% at 50% 45%,#000 58%,transparent 100%)}
+  .rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+  .rv.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion: reduce){.rv{opacity:1;transform:none;transition:none}}
+
+  /* === added: links, hero definition, maturity pills, CTA, code block, labeled arch diagram, pipeline chips, explainers === */
+  .ilink{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(90,214,255,.4)}
+  .ilink:hover{color:var(--amber);border-color:var(--amber)}
+  /* plain-language gloss — a quiet definition aside for first-use jargon */
+  .gloss{color:var(--cyan);opacity:.72;font-style:italic;font-weight:400;font-size:.95em}
+
+  .hero{padding-bottom:132px}
+  .hero-def{max-width:62ch;margin:22px 0 0;font-size:.98rem;color:var(--ink-dim);line-height:1.6}
+  .hero-def b{color:var(--ink);font-weight:700} .hero-def .amber{color:var(--amber)}
+
+  .maturity{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+  .pill{font-family:var(--mono);font-size:.69rem;letter-spacing:.05em;padding:8px 13px;border-radius:100px;
+    border:1px solid var(--line);color:var(--ink-dim);display:inline-flex;align-items:center;gap:9px;background:var(--bg2)}
+  .pill .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  .pill.now{border-color:rgba(95,211,138,.5);color:var(--ink)} .pill.now .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .pill.bld{border-color:rgba(240,168,48,.45);color:var(--ink)} .pill.bld .dot{background:var(--amber)}
+  .pill.next .dot{background:var(--ink-dim)}
+
+  .btnrow{display:flex;flex-wrap:wrap;gap:13px;align-items:center;margin-top:24px}
+  .btn{font-family:var(--mono);font-size:.8rem;letter-spacing:.03em;text-decoration:none;cursor:pointer;
+    padding:13px 22px;border-radius:4px;display:inline-flex;align-items:center;gap:9px;transition:.22s}
+  .btn-primary{background:var(--amber);color:var(--bg);font-weight:700;border:1px solid var(--amber)}
+  .btn-primary:hover{background:var(--amber-soft);transform:translateY(-1px)}
+  .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn-ghost:hover{border-color:var(--amber);color:var(--amber)}
+
+  .cta-top{padding:60px 0;border-bottom:1px solid var(--line2)}
+  .codeblock{background:#08090b;border:1px solid var(--line);border-radius:6px;padding:20px 22px;margin-top:18px;
+    font-family:var(--mono);font-size:.8rem;line-height:1.85;color:var(--ink);overflow-x:auto;white-space:pre;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+  .codeblock .cmt{color:var(--ink-dim)} .codeblock .q{color:var(--amber)} .codeblock .v{color:var(--cyan)}
+
+  /* labeled architecture diagram (primary) + metaphor art (secondary) */
+  .archwrap{display:grid;grid-template-columns:1.25fr .75fr;gap:24px;align-items:start;margin-top:34px}
+  @media(max-width:760px){.archwrap{grid-template-columns:1fr}}
+  .archstack{display:flex;flex-direction:column;gap:8px}
+  .apane{border:1px solid var(--line);border-left-width:3px;border-radius:4px;padding:13px 18px;background:var(--bg2);
+    display:grid;grid-template-columns:42px 1fr;grid-template-rows:auto auto;gap:2px 14px;align-items:center;transition:.3s}
+  .apane:hover{transform:translateX(5px);border-color:var(--amber)}
+  .apane .pl{grid-row:1/3;font-family:var(--disp);font-weight:900;font-size:1.45rem;line-height:1}
+  .apane .pt{font-weight:700;color:var(--ink);font-size:1.1rem}
+  .apane .pd{font-size:.82rem;color:var(--ink-dim);line-height:1.4}
+  .apane.p0{border-left-color:var(--amber)} .apane.p0 .pl{color:var(--amber)}
+  .apane.p1{border-left-color:#eeb84e} .apane.p1 .pl{color:#eeb84e}
+  .apane.p2{border-left-color:#c2c76a} .apane.p2 .pl{color:#c2c76a}
+  .apane.p3{border-left-color:#86cfc6} .apane.p3 .pl{color:#86cfc6}
+  .apane.p4{border-left-color:var(--cyan)} .apane.p4 .pl{color:var(--cyan)}
+  .archart{margin:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--bg2);align-self:stretch}
+  .archart img{display:block;width:100%;height:auto;opacity:.9}
+  .archart figcaption{font-size:.82rem;color:var(--ink-dim);padding:12px 15px;border-top:1px solid var(--line2);line-height:1.5}
+
+  /* pipeline chips */
+  .pipe{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:20px 0 6px}
+  .pipe .lbl{font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);margin-right:4px}
+  .pchip{font-family:var(--mono);font-size:.74rem;letter-spacing:.03em;padding:8px 13px;border:1px solid var(--line);
+    border-radius:4px;background:var(--bg2);color:var(--cyan)}
+  .pchip.start{color:var(--amber);border-color:rgba(240,168,48,.4)}
+  .parr{color:var(--ink-dim);font-family:var(--mono)}
+
+  /* explainer + safe callout */
+  .explain{margin-top:30px;border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:4px;padding:22px 24px;background:var(--bg2)}
+  .explain .eyebrow{color:var(--cyan)} .explain .eyebrow::before{background:var(--cyan)}
+  .explain p{color:var(--ink);margin:0;font-size:1rem}
+  .callout.safe{border-color:rgba(95,211,138,.5);background:linear-gradient(135deg,rgba(95,211,138,.07),transparent)}
+  .callout.safe .eyebrow{color:var(--green)} .callout.safe .eyebrow::before{background:var(--green)}
+  .callout.safe p{color:var(--ink)}
+  .callout.safe code,.cta-top code{font-family:var(--mono);background:var(--bg);border:1px solid var(--line);padding:2px 7px;border-radius:3px;color:var(--cyan);font-size:.85em}
+
+  ::selection{background:var(--amber);color:var(--bg)}
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <div class="tag rv">RuvNet Brain · v0.4.0-dev · build 2026-06-29</div>
+  <h1 class="rv">The <em>answer&nbsp;key</em><br>for Ruv's&nbsp;code.</h1>
+  <p class="sub rv">One downloadable brain that makes any AI assistant answer from Ruv's real source — and stops it drifting back to its training.</p>
+  <p class="hero-def rv"><b>rUv (Reuven Cohen)</b> builds open-source, <span class="amber">Rust-first AI infrastructure</span> — the RuVector engine, ruflo orchestration, AgentDB memory, RuLake cache, and more. The <b>RuvNet Brain</b> indexes <b>18 building-block repos</b> into <b>75,509 source chunks</b>, and one tool — <span class="amber mono">search_ruvnet</span> — searches them all at once, returning whole source files labeled by repo. Install it once, then point it at any repo you're working in.</p>
+  <figure class="hero-fig rv"><img src="assets/img/hero.png" alt="A brain made of glowing amber and cyan filaments — the entire RuvNet codebase, organized into one intelligence"></figure>
+  <div class="maturity rv">
+    <span class="pill now"><span class="dot"></span>Built &amp; searchable now — 18 building-block repos · 75,509 source chunks</span>
+    <span class="pill now"><span class="dot"></span>Portable — install once, point it at any repo</span>
+    <span class="pill now"><span class="dot"></span>Routes the right source ~96–98% — whether you name the repo or just describe the need</span>
+  </div>
+  <div class="scrollcue">scroll ↓</div>
+</header>
+
+<section class="wrap cta-top">
+  <div class="eyebrow rv">Get it — open source</div>
+  <h2 class="rv" style="font-size:clamp(1.7rem,4vw,2.6rem);margin-bottom:14px">Download it. Wire one file. Ask.</h2>
+  <p class="rv">It's just local files — a vector index plus the real source text. Free and open source at <a class="ilink" href="https://github.com/stuinfla/ruvnet-brain">github.com/stuinfla/ruvnet-brain</a>. <span style="color:var(--ink)">Nothing leaves your machine.</span></p>
+  <div class="btnrow rv">
+    <a class="btn btn-primary" href="https://github.com/stuinfla/ruvnet-brain" target="_blank" rel="noopener">Get it on GitHub ↗</a>
+    <a class="btn btn-ghost" href="https://github.com/stuinfla/ruvnet-brain/releases/download/v0.4.0-dev/ruvnet-brain.zip">Download the brain · 421 MB</a>
+  </div>
+<pre class="codeblock rv"><span class="cmt"># the one line — downloads the brain + wires the Claude Code plugin</span>
+npx github:stuinfla/ruvnet-brain
+<span class="cmt"># (npm publish pending — then simply:  npx ruvnet-brain)</span>
+
+<span class="cmt"># …prefer to wire it by hand? do this instead:</span>
+<span class="cmt"># 1 · unzip the bundle into your project as kb/</span>
+unzip ruvnet-brain.zip -d kb/
+
+<span class="cmt"># 2 · install the local reader</span>
+cd kb && npm i
+
+<span class="cmt"># 3 · add the ruvnet-brain entry from mcp.snippet.json — one tool, search_ruvnet, searches ALL repos</span>
+"ruvnet-brain": { "command": "node", "args": ["kb/forge-mcp-all.mjs"] }
+
+<span class="cmt"># 4 · …or just ask across every repo from the CLI right now</span>
+node forge-ask-all.mjs --dir . --q <span class="q">"how does ruflo persist memory?"</span></pre>
+</section>
+
+<!-- ============ SEE IT WORK — self-contained interactive demo ============ -->
+<section class="wrap" id="seeit" aria-label="Interactive demo — answering with and without the RuvNet Brain">
+  <style>
+    /* scoped to #seeit — uses the page's global CSS vars, adds nothing global */
+    #seeit{padding-top:72px;padding-bottom:104px}
+    #seeit .seeit-lead{max-width:60ch}
+    #seeit .seeit-qs{display:flex;flex-wrap:wrap;gap:10px;margin:30px 0 24px}
+    #seeit .seeit-q{font-family:var(--mono);font-size:.77rem;letter-spacing:.01em;cursor:pointer;line-height:1.3;
+      padding:10px 15px;border-radius:100px;border:1px solid var(--line);background:var(--bg2);color:var(--ink-dim);
+      text-align:left;transition:border-color .2s,color .2s,background .2s}
+    #seeit .seeit-q:hover{border-color:var(--amber);color:var(--ink)}
+    #seeit .seeit-q[aria-pressed="true"]{border-color:var(--amber);color:var(--bg);background:var(--amber);font-weight:700}
+    #seeit .seeit-q:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+    #seeit .seeit-stage{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+    @media(max-width:760px){#seeit .seeit-stage{grid-template-columns:1fr}}
+
+    #seeit .seeit-pane{border:1px solid var(--line);border-radius:7px;background:var(--bg2);
+      display:flex;flex-direction:column;overflow:hidden;min-height:318px}
+    #seeit .seeit-head{font-family:var(--mono);font-size:.71rem;letter-spacing:.13em;text-transform:uppercase;
+      padding:14px 18px;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:10px}
+    #seeit .seeit-head .d{width:8px;height:8px;border-radius:50%;flex:none}
+    #seeit .seeit-bdy{padding:22px 18px;display:flex;flex-direction:column;gap:15px;flex:1}
+    #seeit .seeit-echo{font-family:var(--mono);font-size:.78rem;line-height:1.5;color:var(--ink-dim)}
+    #seeit .seeit-ql{color:var(--amber);font-weight:700;margin-right:7px}
+    #seeit .seeit-qt{color:var(--ink)}
+    #seeit .seeit-ans{font-family:var(--body);font-size:1.06rem;line-height:1.5;min-height:1.5em}
+    #seeit .seeit-ans.typing::after{content:'▌';margin-left:1px;animation:seeit-blink 1s steps(1) infinite}
+    #seeit .seeit-cite{font-family:var(--mono);font-size:.73rem;align-self:flex-start;border-radius:4px;
+      padding:7px 11px;display:inline-flex;align-items:center;gap:8px;color:var(--green);
+      border:1px solid rgba(95,211,138,.4);background:rgba(95,211,138,.07);
+      opacity:0;transform:translateY(6px);transition:opacity .45s,transform .45s}
+    #seeit .seeit-cite::before{content:'✓';font-weight:700}
+    #seeit .seeit-cite.show{opacity:1;transform:none}
+    #seeit .seeit-foot{margin-top:auto;font-family:var(--mono);font-size:.67rem;letter-spacing:.03em;
+      padding:12px 18px;border-top:1px solid var(--line2)}
+
+    /* left — drift, visibly less sure */
+    #seeit .seeit-left{border-color:rgba(255,107,94,.3)}
+    #seeit .seeit-left .seeit-head{color:var(--red);background:linear-gradient(180deg,rgba(255,107,94,.06),transparent)}
+    #seeit .seeit-left .seeit-head .d{background:var(--red);box-shadow:0 0 9px rgba(255,107,94,.7)}
+    #seeit .seeit-left .seeit-ans{color:var(--ink-dim)}
+    #seeit .seeit-left .seeit-ans.typing::after{color:var(--red)}
+    #seeit .seeit-left .seeit-foot{color:rgba(255,107,94,.78)}
+    #seeit .seeit-left .seeit-foot::before{content:'✗  '}
+
+    /* right — grounded, calm and confident */
+    #seeit .seeit-right{border-color:rgba(95,211,138,.42);
+      box-shadow:0 0 0 1px rgba(95,211,138,.06),0 26px 60px -42px rgba(95,211,138,.45)}
+    #seeit .seeit-right .seeit-head{color:var(--green);background:linear-gradient(180deg,rgba(95,211,138,.08),transparent)}
+    #seeit .seeit-right .seeit-head .d{background:var(--green);box-shadow:0 0 10px rgba(95,211,138,.8)}
+    #seeit .seeit-right .seeit-ans{color:var(--ink)}
+    #seeit .seeit-right .seeit-ans.typing::after{color:var(--green)}
+    #seeit .seeit-right .seeit-foot{color:rgba(95,211,138,.82)}
+    #seeit .seeit-right .seeit-foot::before{content:'✓  '}
+
+    #seeit .seeit-dots{display:flex;gap:8px;justify-content:center;margin-top:22px}
+    #seeit .seeit-dot{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .25s,transform .25s}
+    #seeit .seeit-dot.on{background:var(--amber);transform:scale(1.35)}
+    #seeit .seeit-cap{margin:20px auto 0;text-align:center;max-width:62ch;line-height:1.6;
+      font-size:.95rem;color:var(--ink-dim)}
+    #seeit .seeit-cap b{color:var(--cyan);font-weight:700}
+
+    /* left-pane second hedge line — the drift answer trailing off, unsure */
+    #seeit .seeit-hedge{font-family:var(--body);font-size:.93rem;line-height:1.45;font-style:italic;
+      color:rgba(163,157,140,.5);opacity:0;transition:opacity .5s}
+    #seeit .seeit-hedge.show{opacity:1}
+
+    /* pause / replay control, sat beside the progress dots */
+    #seeit .seeit-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:18px;margin-top:24px}
+    #seeit .seeit-controls .seeit-dots{margin-top:0}
+    #seeit .seeit-toggle{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;cursor:pointer;
+      display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:100px;
+      border:1px solid var(--line);background:var(--bg2);color:var(--ink-dim);
+      transition:border-color .2s,color .2s,background .2s}
+    #seeit .seeit-toggle:hover{border-color:var(--amber);color:var(--ink)}
+    #seeit .seeit-toggle:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+    #seeit .seeit-toggle .ic{font-size:.78rem;line-height:1}
+
+    @keyframes seeit-blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+    @media (prefers-reduced-motion:reduce){
+      #seeit .seeit-ans.typing::after{display:none}
+      #seeit .seeit-cite{transition:none}
+      #seeit .seeit-dot{transition:none}
+      #seeit .seeit-hedge{transition:none}
+    }
+  </style>
+
+  <div class="eyebrow rv">See it work</div>
+  <h2 class="rv">Same question. Two answers.</h2>
+  <p class="seeit-lead rv">Pick a question. Left: an assistant guessing from training. Right: the <b style="color:var(--ink)">same model</b> with the brain wired in — grounded in Ruv's real source, every claim cited. Watch what changes.</p>
+
+  <div class="seeit-qs rv" role="group" aria-label="Example questions — click one to run it">
+    <button type="button" class="seeit-q" aria-pressed="true">Where should I store embeddings?</button>
+    <button type="button" class="seeit-q" aria-pressed="false">Can Ruflo agents edit files on disk?</button>
+    <button type="button" class="seeit-q" aria-pressed="false">What caches repeated vector queries?</button>
+    <button type="button" class="seeit-q" aria-pressed="false">How should I structure a non-trivial build?</button>
+  </div>
+
+  <div class="seeit-stage">
+    <div class="seeit-pane seeit-left">
+      <div class="seeit-head"><span class="d"></span>Without the brain → drift</div>
+      <div class="seeit-bdy">
+        <div class="seeit-echo"><span class="seeit-ql">Q</span><span class="seeit-qt">Where should I store embeddings?</span></div>
+        <div class="seeit-ans seeit-ans-l">Use pgvector or Pinecone.</div>
+        <div class="seeit-hedge show">…or maybe Redis? Hard to say.</div>
+      </div>
+      <div class="seeit-foot">answered from training · no source</div>
+    </div>
+    <div class="seeit-pane seeit-right">
+      <div class="seeit-head"><span class="d"></span>With RuvNet Brain → grounded</div>
+      <div class="seeit-bdy">
+        <div class="seeit-echo"><span class="seeit-ql">Q</span><span class="seeit-qt">Where should I store embeddings?</span></div>
+        <div class="seeit-ans seeit-ans-r">RuVector RVF + HNSW — local, on-disk, zero-server.</div>
+        <div class="seeit-cite show">cited: concepts/ruvector/CARD</div>
+      </div>
+      <div class="seeit-foot">called search_ruvnet · answered from real source</div>
+    </div>
+  </div>
+
+  <div class="seeit-controls">
+    <button type="button" class="seeit-toggle" aria-label="Pause the demo" aria-pressed="false"><span class="ic" aria-hidden="true">⏸</span><span class="tx">pause</span></button>
+    <div class="seeit-dots" aria-hidden="true">
+      <span class="seeit-dot on"></span><span class="seeit-dot"></span><span class="seeit-dot"></span><span class="seeit-dot"></span>
+    </div>
+  </div>
+  <p class="seeit-cap rv">No backend, no API key. The only difference is the brain in context: it called <b>search_ruvnet</b>, pulled the real passage, and answered from Ruv's own source — not its training prior.</p>
+
+  <script>
+  (function(){
+    var root=document.getElementById('seeit');
+    if(!root) return;
+    var reduce=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var DATA=[
+      {q:"Where should I store embeddings?",
+       l:"Use pgvector or Pinecone.",
+       h:"…or maybe Redis? Hard to say.",
+       r:"RuVector RVF + HNSW — local, on-disk, zero-server.",
+       c:"concepts/ruvector/CARD"},
+      {q:"Can Ruflo agents edit files on disk?",
+       l:"I don't think so — it's just chat.",
+       h:"…or maybe a plugin does? Not certain.",
+       r:"Yes — Ruflo's terminal_execute writes files.",
+       c:"concepts/ruflo/CARD"},
+      {q:"What caches repeated vector queries?",
+       l:"Maybe Redis? Roll your own.",
+       h:"…or Memcached, possibly? Your call.",
+       r:"RuLake — sub-millisecond vector cache.",
+       c:"concepts/rulake/CARD"},
+      {q:"How should I structure a non-trivial build?",
+       l:"Just start coding.",
+       h:"…or grab some framework? Whatever fits.",
+       r:"SPARC — Spec→Pseudocode→Architecture→Refinement→Completion.",
+       c:"concepts/sparc/CARD"}
+    ];
+
+    var btns=Array.prototype.slice.call(root.querySelectorAll('.seeit-q'));
+    var qts=Array.prototype.slice.call(root.querySelectorAll('.seeit-qt'));
+    var dots=Array.prototype.slice.call(root.querySelectorAll('.seeit-dot'));
+    var ansL=root.querySelector('.seeit-ans-l');
+    var ansR=root.querySelector('.seeit-ans-r');
+    var cite=root.querySelector('.seeit-cite');
+    var hedge=root.querySelector('.seeit-hedge');
+    var toggle=root.querySelector('.seeit-toggle');
+    var togIc=toggle?toggle.querySelector('.ic'):null;
+    var togTx=toggle?toggle.querySelector('.tx'):null;
+
+    var idx=0, timers=[], adv=null, settled=false, started=false;
+    var hovering=false, focusing=false, inview=true, userPaused=false;
+    function isPaused(){ return hovering||focusing||!inview||userPaused; }
+
+    function clearT(){ for(var i=0;i<timers.length;i++) clearTimeout(timers[i]); timers=[]; if(adv){clearTimeout(adv);adv=null;} }
+    function stopAdvance(){ if(adv){clearTimeout(adv);adv=null;} }
+
+    function type(el,text,speed,done){
+      if(reduce){ el.textContent=text; el.classList.remove('typing'); if(done) done(); return; }
+      el.classList.add('typing'); el.textContent='';
+      var i=0;
+      (function step(){
+        el.textContent=text.slice(0,i);
+        if(i<text.length){ i++; timers.push(setTimeout(step,speed)); }
+        else { el.classList.remove('typing'); if(done) done(); }
+      })();
+    }
+
+    function setActive(n){
+      for(var i=0;i<btns.length;i++) btns[i].setAttribute('aria-pressed', i===n?'true':'false');
+      for(var j=0;j<dots.length;j++) dots[j].className='seeit-dot'+(j===n?' on':'');
+    }
+
+    function schedule(){
+      if(reduce||isPaused()||!settled) return;
+      stopAdvance();
+      adv=setTimeout(function(){ render((idx+1)%DATA.length); }, 3400);
+    }
+
+    function render(n){
+      clearT(); idx=n; settled=false;
+      var d=DATA[n];
+      setActive(n);
+      for(var i=0;i<qts.length;i++) qts[i].textContent=d.q;
+      cite.classList.remove('show'); cite.textContent='cited: '+d.c;
+      if(hedge){ hedge.classList.remove('show'); hedge.textContent=d.h; }
+
+      if(reduce){
+        ansL.textContent=d.l; ansR.textContent=d.r;
+        if(hedge) hedge.classList.add('show');
+        cite.classList.add('show'); settled=true; return;
+      }
+      ansL.textContent=''; ansR.textContent='';
+      type(ansL, d.l, 26, function(){
+        if(hedge) hedge.classList.add('show');
+        timers.push(setTimeout(function(){
+          type(ansR, d.r, 18, function(){
+            cite.classList.add('show'); settled=true; schedule();
+          });
+        }, 360));
+      });
+    }
+
+    for(var b=0;b<btns.length;b++){ (function(i){
+      btns[i].addEventListener('click', function(){ render(i); });
+    })(b); }
+
+    function setToggle(){
+      if(!toggle) return;
+      if(userPaused){
+        if(togIc) togIc.textContent='▶'; if(togTx) togTx.textContent='replay';
+        toggle.setAttribute('aria-label','Replay and resume the demo');
+        toggle.setAttribute('aria-pressed','true');
+      } else {
+        if(togIc) togIc.textContent='⏸'; if(togTx) togTx.textContent='pause';
+        toggle.setAttribute('aria-label','Pause the demo');
+        toggle.setAttribute('aria-pressed','false');
+      }
+    }
+    if(toggle){
+      if(reduce){ toggle.style.display='none'; }
+      toggle.addEventListener('click', function(){
+        if(userPaused){ userPaused=false; setToggle(); render(idx); }   // resume: replay this pair, then auto-advance
+        else { userPaused=true; stopAdvance(); setToggle(); }            // stop: hold on this pair
+      });
+    }
+
+    root.addEventListener('mouseenter', function(){ hovering=true; stopAdvance(); });
+    root.addEventListener('mouseleave', function(){ hovering=false; schedule(); });
+    root.addEventListener('focusin',   function(){ focusing=true; stopAdvance(); });
+    root.addEventListener('focusout',  function(){ focusing=false; schedule(); });
+
+    if(reduce){ render(0); return; }
+
+    if('IntersectionObserver' in window){
+      var io=new IntersectionObserver(function(es){
+        for(var i=0;i<es.length;i++){
+          var e=es[i];
+          if(e.isIntersecting){ inview=true; if(!started){ started=true; render(0); } else { schedule(); } }
+          else { inview=false; stopAdvance(); }
+        }
+      }, {threshold:.25});
+      io.observe(root);
+    } else {
+      render(0);
+    }
+  })();
+  </script>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">01 — The problem</div>
+  <h2 class="rv">"It works for me."</h2>
+  <p class="lead rv">Ruv ships extraordinary infrastructure — RuVector alone is 1.58&nbsp;million lines. But when you're not Ruv, it doesn't work for you: point an AI at the repo and it skims, guesses, and quietly argues against an architecture it doesn't understand.</p>
+  <div class="grid2">
+    <div class="card rv"><div class="n">WHY IT'S HARD</div><p>~248 repos, an engine of 100+ crates — too big for anyone to hold in their head. So AI assistants summarize from memory and miss the decisive detail.</p></div>
+    <div class="card rv"><div class="n">WHY CLAUDE DRIFTS</div><p>Its training prior whispers "use pgvector, use Pinecone — that exotic Rust thing probably isn't real," so it drifts off Ruv's architecture even after "reading" the docs. Knowledge alone doesn't fix behavior.</p></div>
+    <div class="card rv"><div class="n">THE 15-MONTH PATTERN</div><p>Every prior attempt came up short: topical not deep, single-layer, and — worst — declared "done" by claim. "You said it was done; it was 30%."</p></div>
+    <div class="card rv"><div class="n">WHY PEOPLE STAY STUCK</div><p>Their assistant gives a confidently wrong answer about RuVector — and they can't tell it's wrong. The gap between Ruv's intent and what gets built never closes.</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">02 — The failed assumption</div>
+  <div class="quote rv">"Point Claude at a deep repo and it'll keep reading until it finds the answer." <span>— It doesn't.</span></div>
+  <p class="rv">It skims, falls back to training, and quits. So the fix isn't a KB the assistant <em>can</em> search — it's a brain that has <strong>already done the deep traversal</strong> and <strong>points the assistant to the exact line of code</strong>, removing its discretion to give up. That single inversion is the whole design.</p>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">03 — The architecture</div>
+  <h2 class="rv">Five layers, one bundle.</h2>
+  <p class="rv">Each layer closes exactly the gap the others can't. The engine does the digging at build time; the assistant just answers.</p>
+  <div class="archwrap rv">
+    <div class="archstack">
+      <div class="apane p0"><span class="pl">L0</span><span class="pt">Human primer</span><span class="pd">the readable map — solves "too big to grok"</span></div>
+      <div class="apane p1"><span class="pl">L1</span><span class="pt">AI verification gate</span><span class="pd">embedded directive + hooks that force grounding</span></div>
+      <div class="apane p2"><span class="pl">L2</span><span class="pt">Concept / synthesis</span><span class="pd">best-practice articles, each grounded in ≥2 real files</span></div>
+      <div class="apane p3"><span class="pl">L3</span><span class="pt">Deep source</span><span class="pd">the full walked source — the quotable ground truth</span></div>
+      <div class="apane p4"><span class="pl">L4</span><span class="pt">Structure</span><span class="pd">symbol index + cross-repo graph + ADR status</span></div>
+    </div>
+    <figure class="archart"><img src="assets/img/architecture.png" alt="Five translucent glass layers stacked, amber at top fading to cyan at the bottom — a metaphor for the five-layer brain">
+      <figcaption>The same five layers, pictured — amber concept fading to cyan structure. You don't pick a layer; the brain routes each question to the right one.</figcaption></figure>
+  </div>
+  <div class="stack">
+    <div class="layer rv"><div class="ll">Apps & products</div><b>RuView · Cognitum · your app</b> &nbsp;<small>— built on the orchestration + engine below</small></div>
+    <div class="arrow rv">▼ build on</div>
+    <div class="layer rv"><div class="ll">Orchestration</div><b>ruflo</b> <small>— agent meta-harness: swarms · hooks · MCP tools <span class="gloss">(MCP = the standard way an AI assistant calls an external tool)</span> · memory · guidance</small></div>
+    <div class="arrow rv">▼ coordinate over</div>
+    <div class="layer rv"><div class="ll">Memory & cache</div><b>AgentDB</b> <small>· smart vector memory &nbsp;</small><b>RuLake</b> <small>· cache-coherent vector fabric</small></div>
+    <div class="arrow rv">▼ persist / serve via</div>
+    <div class="layer engine rv"><div class="ll">The engine — RuVector · 1.58M lines</div><b>HNSW <span class="gloss">(fast on-disk vector search)</span> · GNN self-learning · graph+Cypher · min-cut coherence gates · ruvllm · WASM</b><br><small>delivered as RVF files <span class="gloss">(RVF = RuVector's file format — vectors + index + witness in one .rvf)</span> · crates.io + npm · PG ext</small></div>
+  </div>
+  <p class="rv" style="margin-top:18px;font-size:.92rem">↑ The five <b style="color:var(--ink)">L0–L4</b> layers above are how the <b style="color:var(--ink)">brain</b> stores knowledge; this stack is the <b style="color:var(--ink)">RuvNet ecosystem</b> it indexes — apps on top, the RuVector engine at the base.</p>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">04 — How it works</div>
+  <h2 class="rv">Point deeper. Don't hope.</h2>
+  <p class="rv">A question doesn't get a doc that's <em>near</em> the answer — it gets the exact implementation, served into context, so the assistant answers from the code it would otherwise have skimmed past.</p>
+  <div class="pipe rv"><span class="lbl">the path</span><span class="pchip start">query</span><span class="parr">→</span><span class="pchip">symbol index</span><span class="parr">→</span><span class="pchip">exact file:line</span><span class="parr">→</span><span class="pchip">cross-encoder rerank</span></div>
+  <div class="card rv" style="margin-top:26px">
+    <p class="mono" style="font-size:.86rem;color:var(--ink);line-height:1.9;margin:0">
+    <span class="cyan">you</span> ask · <span class="amber">"how does ruflo persist agent memory?"</span><br>
+    &nbsp;&nbsp;↓<br>
+    <span class="green">[hook]</span> auto-queries the brain — symbol index → <span class="amber">memory/src/agentdb-backend.ts</span> + adapter + repository<br>
+    &nbsp;&nbsp;↓<br>
+    <span class="green">[rerank]</span> a cross-encoder reads query + passage together → keeps the file that <em>implements</em> it<br>
+    &nbsp;&nbsp;↓<br>
+    real source injected into context — <span class="ink">it can't skim past it</span><br>
+    &nbsp;&nbsp;↓<br>
+    <span class="cyan">answer</span>: "SQLite backend via better-sqlite3, AgentDB adapter, hybrid repository — here's the store()/search() path…" <span class="ink">(cites the files)</span>
+    </p>
+  </div>
+  <div class="explain rv">
+    <div class="eyebrow">Why this isn't "just RAG"</div>
+    <p>RAG decides what to <b>add</b> to the prompt. This decides what the model <b>isn't allowed to make up</b>. A <span class="amber mono">UserPromptSubmit</span> hook <span class="gloss">(a rule that runs on every prompt)</span> fires <span class="amber mono">search_ruvnet</span> before the assistant answers and injects the real source — so grounding is <b>not optional</b>. That enforcement, not the retrieval, is the novelty.</p>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">05 — The proof</div>
+  <h2 class="rv">Measured, not claimed.</h2>
+  <p class="rv">There are <strong>re-runnable proof batteries</strong> — real questions in, the right source expected back. The honest part isn't one number; it's the <em>split</em> underneath it — and the two misses we still own.</p>
+
+  <div class="explain rv">
+    <div class="eyebrow">What the split actually means</div>
+    <p>The hard case is a newcomer who only <b>describes a need</b> — "a thing that caches vectors across processes" — which used to route correctly just <b class="amber">33%</b> of the time. The fix: <b>capability cards</b> — a capability-phrased passage per building block that lets a described need find the right repo without naming it. Re-run it yourself with <span class="amber mono">node scripts/prove.mjs</span>.</p>
+  </div>
+
+  <figure class="fig rv"><img src="assets/img/proof.png" alt="Three measuring instruments beam onto a crystal that glows green, while one beam exposes a red flaw">
+    <figcaption><b>How it's checked.</b> Every answer is graded against the <b>real source code</b>, not an LLM's opinion of it. Hits <span class="g">pass</span>; the <span class="r">by-description misses</span> are counted and shown — not hidden.</figcaption></figure>
+  <div class="stat-row rv">
+    <div class="stat"><div class="v">47/48</div><div class="k">repo named or specific · 98%</div></div>
+    <div class="stat"><div class="v">27/28</div><div class="k">by-description · 96% (was 33%)</div></div>
+    <div class="stat"><div class="v">7/8</div><div class="k">helix-context demo · up from 1/8</div></div>
+    <div class="stat"><div class="v">3/3</div><div class="k">fresh-install grounded hits</div></div>
+  </div>
+
+  <div class="callout safe rv">
+    <div class="eyebrow">The 421 MB download actually works</div>
+    <p>Tested the hard way — on a <b>fresh machine</b>: unzip → <code>npm i</code> → cold-download the embedding model → query. It came back <b class="green">3 / 3 grounded hits</b>. Nobody downloads it and gets an empty shell.</p>
+  </div>
+
+  <h3 class="rv" style="margin-top:48px">The batteries, by how you ask</h3>
+  <table class="rv">
+    <thead><tr><th>How it's asked</th><th>Example</th><th>Score</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Repo named or specific</td><td>"how does ruflo persist memory?"</td><td class="big">47/48</td><td><div class="barwrap"><div class="bar"><i style="width:98%"></i></div></div></td></tr>
+      <tr><td>By description (no repo name)</td><td>"a thing that caches vectors across processes"</td><td class="big">27/28</td><td><div class="barwrap"><div class="bar"><i style="width:96%"></i></div></div></td></tr>
+      <tr><td>Helix-context demo</td><td>unnamed asks against helix context</td><td class="big">7/8</td><td><div class="barwrap"><div class="bar"><i style="width:88%"></i></div></div></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout rv">
+    <div class="eyebrow">The two residuals — stated plainly</div>
+    <p>Two known misses remain, and we own them: <strong>"route to cheaper models to cut cost"</strong> still routes to <strong>ruflo</strong> instead of <strong>agentic-flow</strong> (orchestration and cost overlap), and an unnamed <strong>"methodology"</strong> ask routes to <strong>synthlang</strong> instead of <strong>sparc</strong>. Everything else lands.</p>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">06 — Use it</div>
+  <h2 class="rv">After you wire it in.</h2>
+  <p class="rv">The install one-liner up top does all of this for you. By hand it's just as short — here's what each step buys you.</p>
+  <div class="steps">
+    <div class="step rv"><div><h3>The brain lands as local files</h3><p>The bundle (all 18 building-block repos, 75,509 source chunks) unzips into your project as <code>kb/</code> — or install once and point it at any repo. Gitignore it; size doesn't matter when it carries the intel.</p></div></div>
+    <div class="step rv"><div><h3>One tool gets wired</h3><p>The <code>ruvnet-brain</code> entry in <code>.mcp.json</code> exposes a single tool, <code>search_ruvnet</code>, that searches <b>every repo at once</b> and returns whole source files labeled by repo. (Per-repo tools ship too, to scope to one.)</p></div></div>
+    <div class="step rv"><div><h3>Your assistant answers from source</h3><p>Claude / Cursor / Codex now answer from Ruv's real code, with citations — and get pulled back when they drift. The brain rebuilds itself nightly, always date- and SHA-stamped.</p></div></div>
+  </div>
+  <div class="callout safe rv">
+    <div class="eyebrow">Is it safe to install?</div>
+    <p>Yes — the bundle is just <b>local files</b> (a vector index + the source text). The <code>.mcp.json</code> wires a <b>local stdio server</b> (<code>forge-mcp-all.mjs</code>) that only reads those files and returns text. Embeddings run <b>on your machine</b> via <code>@xenova/transformers</code>. <b class="green">Nothing is sent anywhere — no network calls at query time.</b></p>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow rv">07 — Status</div>
+  <h2 class="rv">Where it's at.</h2>
+  <p class="rv">The hard part — proving an AI answers from real source instead of its training — <strong>works, with receipts you can re-run.</strong> 18 building-block repos are built &amp; searchable, and the 421 MB download is verified on a fresh machine. The newcomer "by-description" gap is now closed; what remains is portability hardening and the public release.</p>
+  <div class="layers5">
+    <div class="l5 rv"><div class="tag5 green">DONE</div><div><h3>Architecture + grounding harness</h3><p>5-layer design, deep-walk pipeline, dual variants (MiniLM-384 + bge-768) past an anti-regression guard, symbol index, cross-encoder rerank, L2 + per-repo concept primers, a UserPromptSubmit grounding hook, evergreen self-update, date+SHA stamping.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>18 building-block repos, searchable</h3><p>ruflo · RuVector · AgentDB · RuLake · RuView · agentic-flow · SPARC · qudag · safla · ruv-fann and more — <b style="color:var(--ink)">75,509 source chunks</b> behind one <code>search_ruvnet</code> tool, verified on a fresh machine.</p></div></div>
+    <div class="l5 rv"><div class="tag5 green">PROVEN</div><div><h3>Routing — re-runnable, ~96–98%</h3><p>It lands the right source whether the repo is <b style="color:var(--ink)">named</b> or only <b style="color:var(--ink)">described</b> — the newcomer gap that used to be the weak spot is now closed by capability cards. It cites real files, never invents repos, and the two residuals are named honestly above.</p></div></div>
+  </div>
+</section>
+
+<footer class="foot wrap">
+  <div class="mark rv">The last mile of making Ruv's technology<br>work for everyone — not just Ruv.</div>
+  <p class="rv">RuvNet Brain · proven, not asserted · every number on this page is measured.</p>
+</footer>
+
+<script>
+  const els=document.querySelectorAll('.rv');
+  const io=new IntersectionObserver((es)=>{es.forEach((e,i)=>{if(e.isIntersecting){setTimeout(()=>e.target.classList.add('in'),(i%6)*70);io.unobserve(e.target)}})},{threshold:.08});
+  els.forEach(el=>io.observe(el));
+  // safety net: content must NEVER stay invisible (observer misfire / no-scroll / static capture)
+  const revealAll=()=>els.forEach(el=>el.classList.add('in'));
+  addEventListener('load',()=>setTimeout(revealAll,2000));
+  setTimeout(revealAll,3500);
+</script>
+<noscript><style>.rv{opacity:1!important;transform:none!important}</style></noscript>
+</body>
+</html>

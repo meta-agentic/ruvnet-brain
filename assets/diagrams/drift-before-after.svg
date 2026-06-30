@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 728 410"
+     width="728"
+     height="410">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .bad { fill: #fdecec; stroke: #c0392b; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+      .divider { stroke: #cccccc; stroke-width: 1px; stroke-dasharray: 4 4; }
+    </style>
+  </defs>
+
+  <!-- divider -->
+  <line class="divider" x1="380" y1="30" x2="380" y2="384"/>
+
+  <!-- headers -->
+  <text class="title" x="200" y="28" text-anchor="middle" fill="#c0392b">WITHOUT the brain — drift</text>
+  <text class="title" x="560" y="28" text-anchor="middle" fill="#2e7d32">WITH RuvNet Brain — grounded</text>
+
+  <!-- Row 1: request -->
+  <rect class="box" x="56" y="44" width="288" height="46" rx="4"/>
+  <text class="label" x="200" y="71" text-anchor="middle">You: build with Ruflo / RuVector</text>
+
+  <rect class="box" x="416" y="44" width="288" height="46" rx="4"/>
+  <text class="label" x="560" y="71" text-anchor="middle">You: the same request</text>
+
+  <line class="arrow" x1="200" y1="90" x2="200" y2="118" marker-end="url(#arrowhead)"/>
+  <line class="arrow" x1="560" y1="90" x2="560" y2="118" marker-end="url(#arrowhead)"/>
+
+  <!-- Row 2 -->
+  <rect class="bad" x="56" y="120" width="288" height="46" rx="4"/>
+  <text class="label" x="200" y="147" text-anchor="middle">Claude falls back to training priors</text>
+
+  <rect class="accent" x="416" y="120" width="288" height="46" rx="4"/>
+  <text class="label" x="560" y="147" text-anchor="middle">Enforcement hook grounds the turn</text>
+
+  <line class="arrow" x1="200" y1="166" x2="200" y2="194" marker-end="url(#arrowhead)"/>
+  <line class="arrow" x1="560" y1="166" x2="560" y2="194" marker-end="url(#arrowhead)"/>
+
+  <!-- Row 3 -->
+  <rect class="bad" x="56" y="196" width="288" height="86" rx="4"/>
+  <text class="label" x="200" y="220" text-anchor="middle">&quot;just use pgvector&quot;</text>
+  <text class="label" x="200" y="242" text-anchor="middle">hand-rolls its own cosine similarity</text>
+  <text class="label" x="200" y="264" text-anchor="middle">&quot;ruflo can&apos;t edit files&quot;</text>
+
+  <rect class="accent" x="416" y="196" width="288" height="86" rx="4"/>
+  <text class="label" x="560" y="226" text-anchor="middle">search_ruvnet &#8594; cited rUv source</text>
+  <text class="sublabel" x="560" y="252" text-anchor="middle">whole source files, labeled by repo + path</text>
+
+  <line class="arrow" x1="200" y1="282" x2="200" y2="310" marker-end="url(#arrowhead)"/>
+  <line class="arrow" x1="560" y1="282" x2="560" y2="310" marker-end="url(#arrowhead)"/>
+
+  <!-- Row 4 -->
+  <rect class="bad" x="56" y="312" width="288" height="46" rx="4"/>
+  <text class="label" x="200" y="339" text-anchor="middle">Drifts OFF the stack</text>
+
+  <rect class="good" x="416" y="312" width="288" height="46" rx="4"/>
+  <text class="label" x="560" y="339" text-anchor="middle">Builds ON the stack (RVF/HNSW, swarms)</text>
+
+</svg>

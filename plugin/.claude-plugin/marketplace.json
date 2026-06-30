@@ -1,0 +1,13 @@
+{
+  "name": "ruvnet-brain",
+  "owner": {
+    "name": "Stuart Kerr"
+  },
+  "plugins": [
+    {
+      "name": "ruvnet-brain",
+      "source": "./",
+      "description": "RuvNet brain transplant for Claude Code: source-grounded knowledge of the rUv ecosystem (19+ repos) + enforced grounding so Claude stops arguing about RuvNet and actually uses it + on-demand repo ingestion."
+    }
+  ]
+}

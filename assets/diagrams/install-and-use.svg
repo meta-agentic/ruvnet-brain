@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 560 422"
+     width="560"
+     height="422">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+    </style>
+  </defs>
+
+  <text class="title" x="280" y="24" text-anchor="middle">Install &amp; use</text>
+
+  <rect class="accent" x="40" y="40" width="480" height="44" rx="4"/>
+  <text class="label" x="280" y="67" text-anchor="middle">1. Install once &#8212; one line, user scope</text>
+  <line class="arrow" x1="280" y1="84" x2="280" y2="108" marker-end="url(#arrowhead)"/>
+
+  <rect class="accent" x="40" y="110" width="480" height="56" rx="4"/>
+  <text class="label" x="280" y="132" text-anchor="middle">2. Plugin registers globally</text>
+  <text class="sublabel" x="280" y="152" text-anchor="middle">search_ruvnet (MCP) + enforcement hook + skill</text>
+  <line class="arrow" x1="280" y1="166" x2="280" y2="190" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="40" y="192" width="480" height="44" rx="4"/>
+  <text class="label" x="280" y="219" text-anchor="middle">3. Aim it at ANY repo (cd into your project)</text>
+  <line class="arrow" x1="280" y1="236" x2="280" y2="260" marker-end="url(#arrowhead)"/>
+
+  <rect class="box" x="40" y="262" width="480" height="44" rx="4"/>
+  <text class="label" x="280" y="289" text-anchor="middle">4. Ask Claude about the RuvNet stack</text>
+  <line class="arrow" x1="280" y1="306" x2="280" y2="330" marker-end="url(#arrowhead)"/>
+
+  <rect class="good" x="40" y="332" width="480" height="60" rx="4"/>
+  <text class="label" x="280" y="358" text-anchor="middle">5. Grounded, cited answer</text>
+  <text class="sublabel" x="280" y="378" text-anchor="middle">works like Ruv: assess &#8594; clean &#8594; SPARC &#8594; ADRs/DDDs &#8594; QA &#8594; score</text>
+
+</svg>
