@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="RuvNet Brain — amber mind">
+  <defs>
+    <radialGradient id="fg" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#1a2230"/>
+      <stop offset="100%" stop-color="#0a0c10"/>
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#fg)" stroke="#2a3140"/>
+  <g stroke="#f0a830" stroke-width="1.5" fill="none" stroke-linecap="round">
+    <path d="M16 7v18"/>
+    <path d="M12 9.5c-3.5 1.8-3.5 6 0 7.8s3.5 6 0 7.8"/>
+    <path d="M20 9.5c3.5 1.8 3.5 6 0 7.8s-3.5 6 0 7.8"/>
+    <path d="M12.5 13h2.2M12.5 19h2.2M17.3 13h2.2M17.3 19h2.2" stroke-width="1.2"/>
+  </g>
+  <circle cx="16" cy="7" r="1.6" fill="#5ad6ff"/>
+  <circle cx="11.4" cy="25.1" r="1.5" fill="#5fd38a"/>
+  <circle cx="20.6" cy="25.1" r="1.5" fill="#5fd38a"/>
+</svg>

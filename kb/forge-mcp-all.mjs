@@ -17,6 +17,7 @@
 
 import path from 'node:path';
 import { searchAll, discoverRepos } from './forge-ask-all.mjs';
+import { guardPassages } from './forge-guard-injection.mjs';
 
 const KB_DIR = process.env.KB_DIR || process.cwd();
 const REPOS = (process.env.KB_REPOS || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -73,7 +74,12 @@ async function handle(msg) {
         const query = String(args.query || '').trim();
         const k = Math.max(1, parseInt(args.k ?? 6, 10) || 6);
         if (!query) return err(id, -32602, 'query is required');
-        const { results, repos } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const { results: rawResults, repos } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        // SECURITY FLOOR: scan each retrieved passage for prompt-injection right before it leaves
+        // the MCP boundary (the highest-value, lowest-risk choke point). A flagged passage is WRAPPED
+        // as inert reference data so an autonomous Claude won't execute an instruction injected into
+        // an untrusted ingested repo. Exit-safe: guardPassages never throws into the search path.
+        const results = guardPassages(rawResults);
         const text = results.map((r, i) =>
           `#${i + 1}  repo=${r.repo}  (relevance ${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}; vec ${r.bestDistance?.toFixed(4)})\n`
           + `path : ${r.repo}/${r.path}\n`

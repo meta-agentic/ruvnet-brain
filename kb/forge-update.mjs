@@ -69,17 +69,41 @@ async function fetchBuffer(url) {
   return Buffer.from(await res.arrayBuffer());
 }
 
-// Canonical manifest may be a forge .last-built.json ({ generated, stores:{name:{sha,describe}} })
-// OR a SOURCE.json-shaped file ({ builtUtc, stores:{name:{builtUtc,sourceCommit,...}} }). Handle both.
+// The canonical manifest can be ONE of three shapes — handle all three:
+//   1. a forge .last-built.json            ({ generated, stores:{name:{sha,describe}} })
+//   2. a SOURCE.json-shaped file           ({ builtUtc, stores:{name:{builtUtc,sourceCommit,...}} })
+//   3. a GitHub "releases/latest" payload  ({ tag_name, published_at, target_commitish })
+// Shape 3 is what this project actually publishes (the brain ships as a GitHub Release, not as
+// committed files), so we detect it by the presence of tag_name and map its fields across.
+function isGithubReleasePayload(canon) {
+  return Boolean(canon && typeof canon === 'object' && canon.tag_name);
+}
 function canonicalFor(canon, kbName) {
+  if (isGithubReleasePayload(canon)) {
+    // The whole Release advances together — every store shares the Release tag + publish time.
+    return {
+      builtUtc: canon.published_at || canon.created_at || null,
+      // No per-store git sha in a Release payload; use the tag as the version identity instead.
+      sourceCommit: null,
+      sourceDescribe: canon.tag_name,
+      releaseTag: canon.tag_name,
+    };
+  }
   const cs = (canon.stores && canon.stores[kbName]) || {};
   return {
     builtUtc: cs.builtUtc || canon.generated || canon.builtUtc || null,
     sourceCommit: cs.sha || cs.sourceCommit || null,
     sourceDescribe: cs.describe || cs.sourceDescribe || null,
+    releaseTag: null,
   };
 }
 function isBehind(local, canon) {
+  // Release-tag identity is AUTHORITATIVE when both sides carry a tag. The publish time of a
+  // Release is later than when the store was forged, so timestamps would always (falsely) read
+  // "behind" — the tag is the truth: same tag = up to date, different tag = behind.
+  if (canon.releaseTag && local.releaseTag) {
+    return canon.releaseTag !== local.releaseTag;
+  }
   const lt = local.builtUtc ? Date.parse(local.builtUtc) : NaN;
   const ct = canon.builtUtc ? Date.parse(canon.builtUtc) : NaN;
   if (!Number.isNaN(lt) && !Number.isNaN(ct) && ct > lt) return true;
@@ -101,9 +125,12 @@ async function main() {
   const targets = ONLY ? stores.filter((s) => s.kbName === ONLY) : stores;
   if (ONLY && targets.length === 0) die(`SOURCE.json has no store named "${ONLY}". Known: ${stores.map((s) => s.kbName).join(', ')}`);
 
+  const canonLabel = canon.tag_name
+    ? `${canon.tag_name} (published ${canon.published_at || canon.created_at || '?'})`
+    : canon.generated || canon.builtUtc || '(unknown)';
   console.log(`\n=== rvf-kb-forge evergreen check ===`);
   console.log(`canonical manifest: ${manifestUrl}`);
-  console.log(`canonical built:    ${canon.generated || canon.builtUtc || '(unknown)'}\n`);
+  console.log(`canonical built:    ${canonLabel}\n`);
 
   let anyBehind = false; const behindStores = [];
   for (const local of targets) {
@@ -159,7 +186,7 @@ async function main() {
     console.log(`\n(no forge-guard.mjs found to re-verify — skipped)`);
   }
 
-  console.log(`\n=== DONE — KB updated to the canonical build (${canon.generated || canon.builtUtc}). ===`);
+  console.log(`\n=== DONE — KB updated to the canonical build (${canon.tag_name || canon.generated || canon.builtUtc}). ===`);
   process.exit(0);
 }
 

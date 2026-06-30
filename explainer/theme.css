@@ -1,0 +1,63 @@
+/* ============================================================================
+   THEME OVERRIDE — "RuvNet Brain / Amber Substrate"
+   ----------------------------------------------------------------------------
+   The ENTIRE per-repo art direction. Load it AFTER design-system.css:
+
+     <link rel="stylesheet" href="design-system.css" />
+     <link rel="stylesheet" href="theme.css" />          (this file)
+
+   It overrides ONLY the expression knobs — never the skeleton. Every layout,
+   breakpoint, spacing rhythm, motion, and accessibility behaviour is inherited
+   unchanged. The metaphor: a deep graphite substrate lit by an AMBER mind
+   (the Brain's identity), with cyan signal and green "grounded" confirmations,
+   and a warm-to-cool spectrum that runs amber → gold → cyan → green.
+   ============================================================================ */
+
+/* Type personality: editorial serif display (Fraunces) + humanist body
+   (Hanken Grotesk) + technical mono (JetBrains Mono). Fonts are loaded in
+   <head>; the skeleton already references these var names. */
+
+:root {
+  color-scheme: dark;
+
+  /* --- Substrate: graphite, raised planes, hairline ridges --- */
+  --bg:        #0a0c10;
+  --bg-2:      #0e1116;
+  --surface:   #13171e;
+  --surface-2: #181d26;
+  --ridge:     #2a3140;
+
+  /* --- Ink: warm off-white fading to faint --- */
+  --ink:       #ece8dc;
+  --ink-2:     #c3c2b6;
+  --muted:     #8b8f9c;
+  --faint:     #5a5f6e;
+  --on-accent: #0a0c10;
+
+  /* --- Accents: amber mind · cyan signal · green grounded --- */
+  --accent:    #f0a830;   /* amber  — primary identity */
+  --accent-2:  #5ad6ff;   /* cyan   — links, signal    */
+  --accent-3:  #5fd38a;   /* green  — grounded / honest */
+
+  /* --- The signature gradient: warm mind → cool grounding --- */
+  --spectrum: linear-gradient(96deg,
+                #f0a830 0%, #ffce6a 22%, #5ad6ff 55%, #5fd38a 100%);
+
+  /* --- Semantic signal: the "drift / fails" red the spec calls for --- */
+  --bad:  #ff6b5e;
+
+  /* --- Type personality knobs (editorial serif, not industrial caps) --- */
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans:    "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --display-weight:   600;
+  --display-case:     none;
+  --display-tracking: -0.012em;
+}
+
+/* ----------------------------------------------------------------------------
+   The one permitted motif flourish (theme may ADD, never override skeleton):
+   a thin amber spectrum edge under the sticky header — the Brain's signature.
+   ---------------------------------------------------------------------------- */
+.site-head { border-bottom: 0; box-shadow: 0 1px 0 0 var(--line); }
+.site-head::after { content: ""; display: block; height: 2px; background: var(--spectrum); opacity: 0.9; }

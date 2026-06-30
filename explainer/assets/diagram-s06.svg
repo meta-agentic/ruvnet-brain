@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" width="1000" height="560" role="img" aria-labelledby="s06-title s06-desc">
+  <title id="s06-title">Coverage map: roughly eighteen of rUv's building blocks gathered into one Brain</title>
+  <desc id="s06-desc">A central Brain hub fans out to a grid of eighteen building blocks, each shown gathered and read: ruflo, RuVector, AgentDB, RuLake, RuView, agentic-flow, SPARC, QuDAG, SAFLA, ruv-fann, SynthLang, rupixel, agenticow, metaharness, daa, dspy.ts, FACT and cve-bench. Together they show the reassuring breadth of the ecosystem indexed in one place.</desc>
+  <defs>
+    <linearGradient id="s06-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1018"/>
+      <stop offset="100%" stop-color="#070a10"/>
+    </linearGradient>
+    <radialGradient id="s06-hub" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f0a830" stop-opacity=".4"/>
+      <stop offset="100%" stop-color="#f0a830" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="s06-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="11"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="560" rx="14" fill="url(#s06-bg)"/>
+  <text x="500" y="40" text-anchor="middle" fill="#ece8dc" font-family="Georgia,serif" font-size="22" font-weight="700">Everything gathered into one Brain</text>
+  <text x="500" y="64" text-anchor="middle" fill="#8b8f9c" font-family="system-ui,sans-serif" font-size="13">18 building blocks · 75,509 source chunks · all read, nothing for you to chase down</text>
+
+  <!-- constellation lines from hub to row 1 -->
+  <g stroke="rgba(90,214,255,.22)" stroke-width="1" fill="none">
+    <path d="M500 130 L113 218"/><path d="M500 130 L267 218"/><path d="M500 130 L421 218"/>
+    <path d="M500 130 L575 218"/><path d="M500 130 L729 218"/><path d="M500 130 L883 218"/>
+  </g>
+
+  <!-- hub -->
+  <circle cx="500" cy="124" r="58" fill="url(#s06-hub)"/>
+  <circle cx="500" cy="124" r="34" fill="#11161f" stroke="#f0a830" stroke-width="1.8"/>
+  <g stroke="#f0a830" stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".9">
+    <path d="M500 100v48"/><path d="M486 107c-9 5-9 16 0 21s9 16 0 21"/><path d="M514 107c9 5 9 16 0 21s-9 16 0 21"/>
+  </g>
+  <text x="500" y="196" text-anchor="middle" fill="#f0a830" font-family="ui-monospace,monospace" font-size="11" letter-spacing="1.5">THE RUVNET BRAIN</text>
+
+  <!-- grid of 18 chips -->
+  <!-- row 1 -->
+  <g font-family="ui-monospace,monospace">
+    <g><rect x="40" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="58" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="58" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="74" y="248" fill="#f0a830" font-size="13" font-weight="700">ruflo</text><text x="58" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">agent swarms</text></g>
+    <g><rect x="194" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="212" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="212" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="228" y="248" fill="#f0a830" font-size="13" font-weight="700">RuVector</text><text x="212" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">private search</text></g>
+    <g><rect x="348" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="366" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="366" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="382" y="248" fill="#f0a830" font-size="13" font-weight="700">AgentDB</text><text x="366" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">lasting memory</text></g>
+    <g><rect x="502" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="520" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="520" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="536" y="248" fill="#f0a830" font-size="13" font-weight="700">RuLake</text><text x="520" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">instant cache</text></g>
+    <g><rect x="656" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="674" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="674" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="690" y="248" fill="#f0a830" font-size="13" font-weight="700">RuView</text><text x="674" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">WiFi sensing</text></g>
+    <g><rect x="810" y="220" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="828" cy="244" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="828" y="248" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="844" y="248" fill="#f0a830" font-size="12" font-weight="700">agentic-flow</text><text x="828" y="278" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">cheap models</text></g>
+  </g>
+  <!-- row 2 -->
+  <g font-family="ui-monospace,monospace">
+    <g><rect x="40" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="58" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="58" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="74" y="348" fill="#f0a830" font-size="13" font-weight="700">SPARC</text><text x="58" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">disciplined builds</text></g>
+    <g><rect x="194" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="212" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="212" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="228" y="348" fill="#f0a830" font-size="13" font-weight="700">QuDAG</text><text x="212" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">secure messaging</text></g>
+    <g><rect x="348" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="366" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="366" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="382" y="348" fill="#f0a830" font-size="13" font-weight="700">SAFLA</text><text x="366" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">self-improving</text></g>
+    <g><rect x="502" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="520" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="520" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="536" y="348" fill="#f0a830" font-size="13" font-weight="700">ruv-fann</text><text x="520" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="10.5">browser neural nets</text></g>
+    <g><rect x="656" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="674" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="674" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="690" y="348" fill="#f0a830" font-size="12" font-weight="700">SynthLang</text><text x="674" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">prompt shrinking</text></g>
+    <g><rect x="810" y="320" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="828" cy="344" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="828" y="348" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="844" y="348" fill="#f0a830" font-size="13" font-weight="700">rupixel</text><text x="828" y="378" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">visual search</text></g>
+  </g>
+  <!-- row 3 -->
+  <g font-family="ui-monospace,monospace">
+    <g><rect x="40" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="58" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="58" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="74" y="448" fill="#f0a830" font-size="12" font-weight="700">agenticow</text><text x="58" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="10.5">memory branching</text></g>
+    <g><rect x="194" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="212" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="212" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="228" y="448" fill="#f0a830" font-size="12" font-weight="700">metaharness</text><text x="212" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">agent factory</text></g>
+    <g><rect x="348" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="366" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="366" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="382" y="448" fill="#f0a830" font-size="13" font-weight="700">daa</text><text x="366" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="10.5">autonomous agents</text></g>
+    <g><rect x="502" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="520" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="520" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="536" y="448" fill="#f0a830" font-size="13" font-weight="700">dspy.ts</text><text x="520" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">prompt programs</text></g>
+    <g><rect x="656" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="674" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="674" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="690" y="448" fill="#f0a830" font-size="13" font-weight="700">FACT</text><text x="674" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">grounded caching</text></g>
+    <g><rect x="810" y="420" width="146" height="84" rx="9" fill="#0f141c" stroke="rgba(95,211,138,.3)"/><circle cx="828" cy="444" r="8" fill="rgba(95,211,138,.14)" stroke="rgba(95,211,138,.55)"/><text x="828" y="448" text-anchor="middle" fill="#5fd38a" font-size="9" font-weight="700">✓</text><text x="844" y="448" fill="#f0a830" font-size="12" font-weight="700">cve-bench</text><text x="828" y="478" fill="#a39d8c" font-family="system-ui,sans-serif" font-size="11">security testing</text></g>
+  </g>
+
+  <text x="500" y="540" text-anchor="middle" fill="#5fd38a" font-family="Georgia,serif" font-size="14.5" font-style="italic">If rUv open-sourced it and it matters, it's in here. When he ships more, the Brain updates.</text>
+</svg>

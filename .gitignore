@@ -18,6 +18,9 @@ logs/
 *.tmp
 .DS_Store
 
+# empty AgentDB container — runtime artifact, never commit (avoids the write-but-read-nothing clutter)
+ruvector.db
+
 # Brain store binaries are NOT committed — they ship via the GitHub Release (the 421MB bundle) so the
 # repo stays light for fast clone / plugin install. Human-authored knowledge (primers, capability-cards,
 # l2/, SOURCE.json) + the forge tools ARE committed; regenerate stores via ingest-repo.mjs + build-concepts.

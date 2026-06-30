@@ -131,9 +131,14 @@ cpDir(path.join(ROOT, 'primer'), path.join(OUT, 'primer'));
 const hasConcepts = fs.existsSync(path.join(KB, 'concepts.big.rvf'));
 if (hasConcepts) for (const suf of ['concepts.big.rvf', 'concepts.big.rvf.idmap.json', 'concepts.big.rvf.embed.json', 'concepts.big.passages.jsonl', 'concepts.big.meta.json', 'concepts.passages.jsonl', 'concepts.meta.json']) cp(suf, OUT);
 
-// shared runtime tools
-const tools = ['forge-ask.mjs', 'forge-ask-all.mjs', 'forge-mcp.mjs', 'forge-mcp-all.mjs', 'forge-rerank.mjs', 'forge-guard.mjs', 'resolve-deps.mjs', 'package.json'];
+// shared runtime tools. forge-guard-injection.mjs is REQUIRED — forge-mcp-all.mjs imports it, so a
+// bundle without it crashes the brain on startup (MODULE_NOT_FOUND). forge-update.mjs is the consumer
+// self-updater (reads SOURCE.json, copied below).
+const tools = ['forge-ask.mjs', 'forge-ask-all.mjs', 'forge-mcp.mjs', 'forge-mcp-all.mjs', 'forge-rerank.mjs', 'forge-guard.mjs', 'forge-guard-injection.mjs', 'forge-update.mjs', 'resolve-deps.mjs', 'package.json'];
 for (const t of tools) cp(t, OUT, { required: true });
+// self-update provenance (where this bundle came from + the canonical manifest URL). Optional: a build
+// without it simply ships a brain whose `forge-update.mjs --check` reports "self-update not configured".
+cp('SOURCE.json', OUT);
 
 // ---- manifest ----------------------------------------------------------------------------------
 const builtLower = new Set(built.map((b) => b.toLowerCase()));

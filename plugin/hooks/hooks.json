@@ -1,5 +1,5 @@
 {
-  "_note": "UserPromptSubmit hook: injects a RuvNet grounding directive into context ONLY when the prompt is RuvNet-relevant (keyword-gated to keep noise low). stdout from a UserPromptSubmit hook is injected into the model's context by the harness every prompt — this is the enforcement primitive that makes grounding non-optional. The script always exits 0 and is guarded with `|| true` so it can never block or error a turn.",
+  "_note": "Two grounding hooks. UserPromptSubmit (ground-ruvnet.sh) intercepts at the INTENT level — injects a grounding directive when a prompt touches the rUv stack, reaches for a classical default (drift gate, fires even with no RuvNet mention), or is a build request. PreToolUse (hijack-ruvnet.sh) intercepts at the ACTION level — when Claude is about to Write/Edit/Bash a classical default (pinecone, pgvector, langchain, ...), it injects the rUv replacement via additionalContext WITHOUT blocking (permissionDecision:defer). stdout from these hooks is how the brain makes grounding non-optional. Every script exits 0 and is guarded with `|| true` so it can never block or error a turn.",
   "_platform": "posix",
   "hooks": {
     "UserPromptSubmit": [
@@ -9,6 +9,18 @@
           {
             "type": "command",
             "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/ground-ruvnet.sh\" || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hijack-ruvnet.sh\" || true",
             "timeout": 5
           }
         ]
