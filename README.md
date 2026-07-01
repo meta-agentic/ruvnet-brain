@@ -1,21 +1,44 @@
-# RuvNet Brain
+<div align="center">
 
-`v0.4.0-dev`
+![RuvNet Brain — the answer key for Ruv's code](assets/hero.png)
 
-**A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet building blocks — delivered as a Claude Code plugin that makes Claude *use* the stack instead of fighting it.**
+# 🧠 RuvNet Brain
 
-RuvNet Brain reads ~18 of rUv's building-block repos at build time, embeds every source file into on-disk vector stores, and ships a Claude Code plugin with **one MCP tool, one enforcement hook, and one skill**. Install it once at user scope, aim it at *any* repo, and every RuvNet decision Claude makes is grounded in real, cited source — not in stale training priors. It does not just *retrieve* the right docs; it *removes Claude's permission to make things up* about the stack.
+**A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
+
+[![version](https://img.shields.io/badge/version-v0.5.0--dev-e8a13a?style=flat-square)](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev)
+[![download](https://img.shields.io/badge/download-512MB%20brain-2e7d32?style=flat-square)](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev)
+[![explainer](https://img.shields.io/badge/▶%20see%20it%20live-ruvnet--brain.vercel.app-e8a13a?style=flat-square)](https://ruvnet-brain.vercel.app)
+[![license](https://img.shields.io/badge/license-MIT-8ecae6?style=flat-square)](LICENSE)
+[![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
+
+### [▶ See it in action — the interactive explainer](https://ruvnet-brain.vercel.app)
+
+<sub>Built by **[Stuart Kerr](https://isovision.ai)** at [Isovision.ai](https://isovision.ai) · free & fair use, to help everyone leverage the high end of agentic coding.</sub>
+
+</div>
+
+---
+
+## The one thing to understand first
+
+**Reuven Cohen (rUv) builds about nine months ahead of the state of the art.** His RuvNet building blocks — Ruflo, RuVector, AgentDB, agentic-flow, SPARC and ~20 more — are the working prototypes of what becomes mainstream AI tooling three quarters later. This is the actual front edge.
+
+But **Claude was trained on _classical_ software development.** Point it at rUv's stack and it doesn't recognize the work: it drifts, it _doubts real capabilities_ (“ruflo can't edit files,” “RuvNet has no vector DB — use Pinecone”), and it quietly falls back to the patterns it knows (pgvector, LangChain, a hand-rolled cosine loop). A newcomer gets the **worst of both worlds** — a revolutionary toolset with no instruction manual, _and_ an assistant that talks them out of using it.
+
+> **RuvNet Brain is the missing instruction manual.** It reads rUv's real source, hands Claude the _answer key_, and removes Claude's permission to make things up about the stack. Install it once, aim it at any repo, and a newcomer can build ~9 months ahead — without being rUv.
+
+The novelty is **enforcement, not retrieval.** Plain RAG only decides what to _add_ to context; it never stops a model from overriding good context with a stronger prior. This ships a `UserPromptSubmit` hook that injects a grounding directive on every RuvNet-relevant turn, consumed structurally by the harness — so grounding is **non-optional**. **RAG decides what to add; this decides what the model isn't allowed to make up.**
 
 ---
 
 ## The problem it solves
 
-You know the failure mode. You ask Claude to build something with Ruflo or RuVector, and instead of reading rUv's actual code it reaches for its training priors: *"let's just use pgvector,"* *"I'll hand-roll a cosine similarity,"* *"I don't think ruflo can edit files."* It skims, it guesses, and it quietly doubts tools that work perfectly well. The result is code that drifts **off** the very stack you chose.
+You know the failure mode. You ask Claude to build with Ruflo or RuVector, and instead of reading rUv's actual code it reaches for its training priors: _“let's just use pgvector,” “I'll hand-roll cosine similarity,” “I don't think ruflo can edit files.”_ It skims, it guesses, it doubts tools that work perfectly well — and the result drifts **off** the very stack you chose.
 
 ![The drift problem, before and after RuvNet Brain](assets/diagrams/drift-before-after.svg)
 
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
+<details><summary>ASCII version (for AI / accessibility)</summary>
 
 ```
 WITHOUT the brain — drift          |   WITH RuvNet Brain — grounded
@@ -23,7 +46,7 @@ WITHOUT the brain — drift          |   WITH RuvNet Brain — grounded
  You: build with Ruflo/RuVector    |    You: the same request
             |                      |              |
             v                      |              v
- Claude falls back to priors       |    Enforcement hook grounds turn
+ Claude falls back to priors       |    Enforcement hook grounds the turn
             |                      |              |
             v                      |              v
  "just use pgvector"               |    search_ruvnet -> cited rUv source
@@ -38,212 +61,103 @@ WITHOUT the brain — drift          |   WITH RuvNet Brain — grounded
 
 ---
 
-## Why we built it
-
-Claude is brilliant in the general case and unreliable on a *specific*, fast-moving stack it wasn't trained on. RuvNet moves faster than any model's cutoff, so Claude's confident answers about it are confidently stale — and worse, it *doubts* real capabilities ("ruflo can't actually write files," "RuvNet has no vector DB, use Pinecone"). Plain RAG helps a little, but RAG only decides what to **add** to context; it never stops the model from overriding good context with a stronger prior.
-
-The novelty here is **enforcement**, not retrieval. A `UserPromptSubmit` hook injects a grounding directive on every RuvNet-relevant turn, the model is told to answer *from* `search_ruvnet`'s cited source, and that instruction is consumed by the harness structurally — so grounding is non-optional. **RAG decides what to add; this decides what the model isn't allowed to make up.**
-
----
-
-## Who it's for
-
-Builders standing on rUv's stack who don't want their AI fighting it — anyone using Ruflo, RuVector, AgentDB, RuLake, RuView, agentic-flow, SPARC, or any of the other building blocks, who is tired of correcting Claude back onto the tools it should already trust. Install once, point at any project, and Claude starts treating the RuvNet stack as the default instead of the exception.
-
----
-
-## Install (one line)
+## Install — one line
 
 ```bash
 npx github:stuinfla/ruvnet-brain
 ```
 
-That one command does the whole setup, narrating *what it's doing and why* at each step: it downloads the brain (~421MB) from the [v0.4.0-dev Release](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.4.0-dev), unpacks it to `~/.cache/ruvnet-brain/kb`, installs its local reader (no cloud calls), and wires the Claude Code plugin — the `search_ruvnet` MCP tool + the `UserPromptSubmit` grounding hook — at user scope. It's safe to re-run, and if the `claude` CLI isn't on your machine it skips that last step and prints the exact commands to finish by hand.
+That single command runs the whole setup, narrating _what it's doing and why_ at each step: it downloads the brain (~512 MB) from the [v0.5.0-dev Release](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev), unpacks it to `~/.cache/ruvnet-brain/kb`, installs its local reader (no cloud calls, no API keys), and wires the Claude Code plugin — the `search_ruvnet` MCP tool + the `UserPromptSubmit` grounding hook — at user scope. It's safe to re-run, and it stays current: `node ~/.cache/ruvnet-brain/kb/forge-update.mjs --apply` pulls the latest Release. You install once; you don't keep re-downloading.
 
-> **Honest note:** it's **not on npm yet** — `npx github:stuinfla/ruvnet-brain` is the works-now path (it pulls the brain from the Release, which exists). Once published, the same install becomes `npx ruvnet-brain`.
+> **Honest note:** not on npm yet — `npx github:stuinfla/ruvnet-brain` is the works-now path (it pulls the brain from the Release, which exists). Once published, the same install becomes `npx ruvnet-brain`.
 
-### Manual install (the alternative)
-
-If you'd rather wire the plugin by hand — or you already have the brain on disk — register it directly (this is exactly what the one-liner automates):
+<details><summary>Manual install (what the one-liner automates)</summary>
 
 ```bash
-claude plugin marketplace add stuinfla/ruvnet-brain && claude plugin install ruvnet-brain@ruvnet-brain --scope user
+claude plugin marketplace add stuinfla/ruvnet-brain
+claude plugin install ruvnet-brain@ruvnet-brain --scope user
 ```
 
-That registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope, alongside Ruflo and RuVector. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (the one-liner above puts it there; or point `RUVNET_BRAIN_KB` at your own copy).
-
-> **From a local clone of this repo** (the most reliable plugin path today, since it points `claude` straight at the bundled marketplace manifest):
->
-> ```bash
-> claude plugin marketplace add /path/to/ruvnet-brain/plugin
-> claude plugin install ruvnet-brain@ruvnet-brain --scope user
-> ```
->
-> The first `claude plugin install` may show a one-time trust prompt for the hook.
-
-![Install and use, step by step](assets/diagrams/install-and-use.svg)
-
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
-
-```
-1. Install once — one line, user scope
-        |
-        v
-2. Plugin registers globally
-   (search_ruvnet MCP + enforcement hook + skill)
-        |
-        v
-3. Aim it at ANY repo (cd into your project)
-        |
-        v
-4. Ask Claude about the RuvNet stack
-        |
-        v
-5. Grounded, cited answer
-   works like Ruv: assess -> clean -> SPARC -> ADRs/DDDs -> QA -> score
-```
+Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
 </details>
 
-**Use it (after install):** just ask. *"How does Ruflo orchestrate agent swarms, and what implements it?"* The hook grounds the turn, the model calls `search_ruvnet`, and it answers from cited source.
+**Then just ask.** _“How does Ruflo orchestrate agent swarms, and what implements it?”_ The hook grounds the turn, Claude calls `search_ruvnet`, and it answers from cited source — down to the function body.
+
+![Install and use, step by step](assets/diagrams/install-and-use.svg)
+
+---
+
+## ✨ What's new in v0.5.0-dev — it now knows the stack _down to the code_
+
+Earlier versions knew the **docs and architecture**. v0.5.0-dev re-indexes the code-rich repos to **full function bodies**, against each repo's real source layout — so “how is this actually implemented?” returns the implementation, not a summary:
+
+| Repo | Full-body code passages | |
+|---|---:|---|
+| `agentic-flow` | 296 → **984** | model-routing, ReasoningBank |
+| `ruv-fann` | 52 → **779** | ruv-swarm, cuda-wasm, neuro-divergent |
+| `qudag` | → **531** | post-quantum crypto core, exchange, MCP |
+| `daa` | → **266** | orchestrator, economy, rules, swarm |
+| `safla` | 0 → **136** | the metacognitive / self-modification layer |
+
+Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level behavioral test harness**, a build-integrity fix (empty files no longer pollute the index), and the private-store fence that keeps unpublished repos out of the public bundle.
 
 ---
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files plus a symbol index), embedded into **two** vector variants (MiniLM-384 and bge-768) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers. That's **75,509 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale so the truly-relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **90,842 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
-
-```
-BUILD TIME (run once)
-  ~18 RuvNet building-block repos (by rUv)
-        |
-        v
-  Deep source walk — whole files + symbol index
-        |
-        v
-  Dual embeddings — MiniLM-384 + bge-768  (75,509 chunks)
-        |
-        v
-  RVF / HNSW — per-repo on-disk vector stores
-        |
-        v
-  Concepts + capability layer (per-repo primers, L2)
-        |
-        v
-QUERY TIME (every RuvNet-relevant prompt)
-  Search every store -> pool hits across all repos
-        |
-        v
-  ONE cross-encoder rerank -> common relevance scale
-        |
-        v
-  search_ruvnet (MCP) — top-k whole files, labeled repo + path
-        |
-        v
-  Plugin: UserPromptSubmit hook + grounding skill
-        |
-        v
-  Claude answers from cited rUv source
-```
-
-</details>
-
-- **Per-repo RVF stores** — each repo gets its own HNSW store; you can't cleanly concatenate ~18 navigable graphs, so the tool queries across them and normalizes.
-- **Dual embeddings + cross-encoder** — MiniLM-384 for speed, bge-768 for depth; a single cross-encoder rerank puts every candidate on one comparable scale.
-- **Concepts / capability layer** — per-repo primers and L2 synthesis let the model ground *capability* claims, not just file lookups.
+- **Per-repo RVF stores** — each repo gets its own HNSW graph; the tool queries across them and normalizes.
+- **Dual embeddings + cross-encoder** — MiniLM-384 for edge/portability, bge-768 for depth; a single cross-encoder rerank puts every candidate on one comparable scale. (The cross-encoder — a third model reading query+passage together — is the real quality lever, not a fusion of the two embedders.)
+- **Concepts / capability layer** — per-repo primers and capability cards let the model ground _capability_ claims and route a described need to the right repo, not just do file lookups.
 
 ---
 
-## How it changes Claude's behavior
+## How it changes Claude's behavior — it takes the wheel
 
-Grounding is **enforced, not suggested.** On a RuvNet-relevant prompt the `UserPromptSubmit` hook injects a grounding directive into context; the model calls `search_ruvnet`, gets back whole source files labeled by repo and path, and answers *from* them. Because the hook's stdout is consumed by the harness every turn, this is structural — Claude can't quietly skip it and fall back to a prior.
+Grounding is **enforced, not suggested.** On a RuvNet-relevant prompt the `UserPromptSubmit` hook injects a directive into context; Claude calls `search_ruvnet`, gets whole source files labeled by repo and path, and answers _from_ them. Because the hook's stdout is consumed by the harness every turn, it's structural — Claude can't quietly skip it.
 
 ![The grounding flow: prompt to cited answer](assets/diagrams/grounding-flow.svg)
 
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
+And on a **build request**, the brain doesn't wait to be told each step — it runs the process **the way Ruv would**:
 
-```
-Your prompt --> Enforcement hook --> search_ruvnet --> Whole source --> Claude answers
-(names a       (injects directive)  (all repos at    files (labeled    (from cited
- RuvNet repo)                        once)            repo + path)      source)
+> **Propose the architecture first** → one go/no-go → then execute end-to-end: **SPARC** (Spec → Pseudocode → Architecture → Refinement → Completion) · model the domain (**DDD**) and capture **ADRs** · spin up **parallel Ruflo swarms** · persist decisions to **AgentDB** · treat design as a build step (**frontend-design + AI image generation**, never “working but ugly”) · **test → score 1–100 → loop to ≥98** · and it asks for an **API key** when a step needs one instead of silently skipping it.
 
-hook stdout is consumed by the harness every turn — structural, can't drift
-```
-
-</details>
-
-The downstream effect: Claude **prefers RuvNet building blocks over generic defaults** (RVF/HNSW instead of pgvector/Pinecone, Ruflo swarms instead of hand-rolled orchestration), and it **works like Ruv** — assess → clean → SPARC → ADRs/DDDs → QA each step → score → revise.
-
----
-
-## Why it makes you smarter
-
-You inherit rUv's architecture as your **defaults**. Instead of arguing your AI back onto the stack, you get cited source instead of hallucinations, the right building block proposed before you ask, and a methodology (SPARC, ADRs, DDDs, score-and-revise) applied by default. The brain's job is to never wrongly doubt what a RuvNet repo can actually do — and to show you the file that proves it.
+The downstream effect: Claude **prefers RuvNet building blocks over generic defaults** (RVF/HNSW over pgvector/Pinecone, Ruflo swarms over hand-rolled orchestration) and drives the whole assess → build → verify → score loop rather than answering one question at a time.
 
 ---
 
 ## Capability-confidence routing
 
-The brain now answers both kinds of questions well. When you **name the repo or ask something specific**, it resolves to the right repo (**47 / 48, 98%**). When you describe a *need* without naming the repo — the way a newcomer would — it routes by capability profile and still lands the right repo (**27 / 28, 96%**). That newcomer path used to be the weak spot (**33% before the fix**); adding **capability cards** — a capability-phrased passage per building block — closed the gap to 96%.
+The brain answers **both** kinds of questions. **Name the repo or ask something specific** and it resolves to the right repo (**47/48, 98%**). **Describe a _need_ without naming the repo** — the way a newcomer would — and it still lands the right repo (**26/28, 93%**). That newcomer path used to be the weak spot (**33% before the fix**); adding **capability cards** — a capability-phrased passage per building block — closed the gap.
 
 ![Capability-confidence routing](assets/diagrams/capability-routing.svg)
-
-<details>
-<summary>ASCII Version (for AI/accessibility)</summary>
-
-```
-            A question about the RuvNet stack
-                          |
-                          v
-              < Does it name the repo / specific? >
-               /                               \
-         yes — named                      no — by description
-            |                                   |
-   Named / specific query              By description (no name)
-            |                                   |
-     Direct repo match                 Capability-card routing
-            |                                   |
-      47 / 48 — 98%                     27 / 28 — 96%
-   (right repo, named)                 (capability cards closed 33% -> 96%)
-```
-
-</details>
 
 ---
 
 ## What it covers
 
-~18 of rUv's **building-block** repos in the [ruvnet](https://github.com/ruvnet) org — the reusable pieces you'd actually compose into a system. Each is deep-walked, embedded in both the MiniLM-384 and bge-768 variants, and given a symbol index and a capability primer.
+~21 of rUv's **building-block** repos in the [ruvnet](https://github.com/ruvnet) org — the reusable pieces you'd actually compose into a system — each deep-walked, embedded in both variants, symbol-indexed, and given a capability card.
 
-| Repo | What it gives you |
-|---|---|
-| `ruflo` | Agent orchestration / swarms |
-| `ruvector` | RVF + on-disk HNSW vectors |
-| `agentdb` | Agent memory + graph / Cypher |
-| `rulake` | Vector cache layer |
-| `ruview` | Camera-free WiFi / CSI sensing (presence, pose, vitals) |
-| `agentic-flow` | Cheap model routing |
-| `sparc` | 5-phase build methodology |
-| `qudag` | Quantum-resistant DAG messaging |
-| `safla` | Self-aware feedback loop |
-| `ruv-fann` | Fast neural nets (Rust/WASM) |
-| `synthlang` | Prompt compression |
-| `rupixel` | Visual embeddings |
-| `agenticow` | Copy-on-write agent memory |
-| `cve-bench` | Security-fix benchmark |
-| `daa` | Decentralized autonomous agents |
-| `dspy.ts` | DSPy-style programming in TS |
-| `fact` | Fast-Access Cached Tools |
-| `agent-harness-generator` | Harness scaffolding / metaharness |
+![The RuvNet stack the brain covers](primer/assets/diagrams/ruvnet-stack.svg)
 
-> **Helix** (rUv's local-first personal-health app) is intentionally **not** in the brain — it's a finished product, not a building block.
+| Repo | What it gives you | Repo | What it gives you |
+|---|---|---|---|
+| [`ruflo`](https://github.com/ruvnet/ruflo) | Agent orchestration / swarms | [`ruvector`](https://github.com/ruvnet/ruvector) | RVF + on-disk HNSW vectors |
+| [`agentdb`](https://github.com/ruvnet/agentdb) | Agent memory + graph/Cypher | [`rulake`](https://github.com/ruvnet/rulake) | Vector cache layer |
+| [`ruview`](https://github.com/ruvnet/ruview) | Camera-free WiFi/CSI sensing (presence, pose, vitals) | [`agentic-flow`](https://github.com/ruvnet/agentic-flow) | Cheap multi-provider model routing |
+| [`agenticow`](https://github.com/ruvnet/agenticow) | Copy-on-write agent memory (branch 1M vectors in ~162 B) | [`sparc`](https://github.com/ruvnet/sparc) | 5-phase build methodology |
+| [`qudag`](https://github.com/ruvnet/qudag) | Quantum-resistant DAG messaging | [`safla`](https://github.com/ruvnet/safla) | Self-aware feedback loop |
+| [`ruv-fann`](https://github.com/ruvnet/ruv-FANN) | Fast neural nets (Rust/WASM) + ruv-swarm | [`daa`](https://github.com/ruvnet/daa) | Decentralized autonomous agents |
+| [`synthlang`](https://github.com/ruvnet/synthlang) | Prompt compression (~75% token cut) | [`rupixel`](https://github.com/ruvnet/rupixel) | On-device visual embeddings |
+| [`dspy.ts`](https://github.com/ruvnet/dspy.ts) | DSPy-style programmable LLM pipelines in TS | [`fact`](https://github.com/ruvnet/fact) | Fast-Access Cached Tools + circuit breaker |
+| [`cve-bench`](https://github.com/ruvnet/cve-bench) | Security-fix benchmark | [`agent-harness-generator`](https://github.com/ruvnet/agent-harness-generator) | Harness scaffolding / metaharness |
+| [`rvm`](https://github.com/ruvnet/rvm) | Proof-gated capability microhypervisor | [`rUv-dev`](https://github.com/ruvnet/rUv-dev) · [`open-claude-code`](https://github.com/ruvnet/open-claude-code) | Dev workflow + agent tooling |
+
+> **Not in the public brain:** rUv's private **Cognitum One** repos (seed, v0-appliance, platform-docs) are fenced out of the download by design — verified zero-leak in every build. **Helix** (rUv's local-first health app) is a finished product, not a building block, so it's out too.
 
 ---
 
@@ -252,32 +166,21 @@ The brain now answers both kinds of questions well. When you **name the repo or 
 Everything below is **re-runnable** — the proof is the output of a command, not a claim.
 
 ```bash
-node scripts/prove.mjs
+bash scripts/gate.sh                              # the pass/fail routing gate
+node scripts/behavioral-l1-l4.mjs                 # the 4-level behavioral harness
+node plugin/test/run-tests.mjs                    # full plugin QA over real JSON-RPC
 ```
 
-This runs the proof batteries through `searchAll()` — the exact engine `search_ruvnet` wraps — and writes [`PROOF.md`](PROOF.md) (named), [`DESCRIBED-PROOF.md`](DESCRIBED-PROOF.md) (by-description), and [`HELIX-DEMO-NOHELIX.md`](HELIX-DEMO-NOHELIX.md) (Helix-context demo). The honest headline: **the brain now routes correctly ~96–98% whether you NAME the tool or just DESCRIBE the need** — the capability-card fix closed the newcomer gap (33% → 96%).
-
-| Question type | Score | Meaning |
+| Test | Result | What it proves |
 |---|---|---|
-| **Named / specific** | **47 / 48 (98%)** | 48 questions, helix-free — when the repo is named or the query is specific, it resolves to the right repo. |
-| **Described need** | **27 / 28 (96%)** | 28 newcomer questions phrased with **no** repo names. This was **33% before** a fix and is now **96% after** adding *capability cards* (a capability-phrased passage per building block that lets a described need route to the right repo without naming it). |
-| **Helix-context demo** | **7 / 8 (88%)** | up from 1/8. |
+| **Named / specific routing** | **47 / 48 (98%)** | name the tool → right repo |
+| **Described-need routing** | **26 / 28 (93%)** | describe the need, no name → right repo (was 33% before capability cards) |
+| **Context-scenario routing** | **7 / 8 (88%)** | full-scenario prompts route correctly |
+| **L1–L4 behavioral harness** | **all pass** | route · deep-recall (returns _code_) · implement (cites the API) · orchestrate (the hook drives the full pipeline) |
+| **Plugin QA** | **26 / 26** | manifests, hook firing, MCP `initialize`/`tools/list`, capability battery |
+| **Clean-room install** | **3 / 3** | download the published 512 MB bundle fresh → unzip → query → grounded, cited answers |
 
-Two honest residuals (not hidden): one described question (*"route to cheaper models to cut cost"*) still routes to `ruflo` instead of `agentic-flow` (orchestration/cost overlap); one Helix question (an unnamed *"methodology"* ask) routes to `synthlang` instead of `sparc`.
-
-Re-run the whole thing yourself — `node scripts/prove.mjs` for the batteries, `bash scripts/gate.sh` for the pass/fail gate.
-
-**Fresh-download install test — 3/3 grounded.** The shipped bundle was acceptance-tested as a true consumer would experience it: download the **421 MB** zip → `unzip` → `npm i` → cold model fetch → query. Three queries, three grounded, cited answers, on a clean machine with nothing pre-cached.
-
-Re-run the capability batteries yourself:
-
-```bash
-node plugin/test/run-tests.mjs                                                 # tuned set
-CAP_QUESTIONS=plugin/test/capability-questions.heldout.json \
-  node plugin/test/run-tests.mjs                                               # held-out set
-```
-
-(Both need `KB_MODEL_CACHE` pointed at a models cache; see [`MORNING-REPORT.md`](MORNING-REPORT.md).) The held-out set was built *after* tuning, so a pass there is evidence the guarantee generalizes rather than overfits.
+Two honest residuals, not hidden: one described question (_“route to cheaper models to cut cost”_) still leans `ruflo` over `agentic-flow` (orchestration/cost overlap); one unnamed _“methodology”_ question routes to `synthlang` instead of `sparc`. Proof reports land in [`PROOF.md`](PROOF.md), [`DESCRIBED-PROOF.md`](DESCRIBED-PROOF.md), and [`HELIX-DEMO-NOHELIX.md`](HELIX-DEMO-NOHELIX.md).
 
 **Query it directly (CLI):**
 
@@ -293,16 +196,14 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 ## Honest status
 
-This is **`v0.4.0-dev`**. We do not claim "done," "complete," or "zero hallucinations." Here is exactly where it stands:
+This is **`v0.5.0-dev`** — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — ~18 building-block repos, 75,509 chunks, dual embeddings, cross-encoder rerank, plugin with MCP tool + enforcement hook + skill, all re-runnable.
-- ✅ **Named / specific questions: 47/48 (98%).** The never-wrongly-doubt guarantee holds and generalizes (held-out set passes).
-- ✅ **Described-need questions: 27/28 (96%) — the newcomer gap is closed.** Adding *capability cards* (a capability-phrased passage per building block) took described-need routing from **33% → 96%**.
-- ⚠️ **Two honest residuals.** One described question (*"route to cheaper models to cut cost"*) still routes to `ruflo` instead of `agentic-flow` (orchestration/cost overlap); one Helix-context question (an unnamed *"methodology"* ask) routes to `synthlang` instead of `sparc`.
-- ⏳ **Not yet a public one-line install.** The plugin needs to be published to GitHub and the 421 MB brain hosted as a Release; today's working path is the local-clone install above.
-- ⏳ **The autonomous engineering loop ([ADR-0008](docs/adr/)) is not built.** Making Claude run the full assess → SPARC → ADR/DDD → QA → score → revise loop autonomously is the next phase, not this release.
-
-The honest promise: **source-grounded and capability-confident whether you name the tool (47/48) or describe the need (27/28) across the covered building blocks — and never wrongly doubting what a RuvNet repo can actually do.**
+- ✅ **The grounding brain is real and proven** — ~21 building-block repos, 90,842 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
+- ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
+- ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
+- ⏳ **Not yet a public one-line npm install** — `npx github:stuinfla/ruvnet-brain` is the works-now path; `npx ruvnet-brain` comes with the npm publish.
+- ⏳ **The fully-autonomous engineering loop** ([ADR-0008](docs/adr/)) — the behavioral hook _drives_ the assess → SPARC → ADR/DDD → QA → score loop; a generalized always-loops-to-≥98 engine is the next phase.
 
 ---
 
@@ -310,9 +211,20 @@ The honest promise: **source-grounded and capability-confident whether you name 
 
 - `kb/` — the brain: per-repo `.rvf` + `.big.rvf` stores, full-passage sidecars, symbol indexes, per-repo primers, the concepts store, and the `forge-*` query tools (CLI + MCP `search_ruvnet`).
 - `plugin/` — the Claude Code plugin (MCP server, grounding skill, `UserPromptSubmit` enforcement hook, marketplace manifest, test suite).
-- `dist/ruvnet-brain.zip` — the packaged, SHA-stamped 421 MB bundle (real consumer flow: unzip → `npm i` → ask).
-- `scripts/prove.mjs` — the proof harness that writes `PROOF.md` (named), `DESCRIBED-PROOF.md` (by-description), and `HELIX-DEMO-NOHELIX.md` (Helix-context demo); `scripts/gate.sh` is the pass/fail gate.
-- `docs/` — `VISION.md` (the why + ultimate vision), `adr/` (locked decisions, incl. ADR-0008), `DDD.md`.
-- `SPEC.md` — the master specification. `PROGRESS.md` — the living, timestamped build log.
+- `scripts/` — `gate.sh` (routing gate), `behavioral-l1-l4.mjs` (behavioral harness), `prove.mjs`, `build-bundle.mjs`, `brain-stamp.mjs`.
+- `docs/` — [`VISION.md`](docs/VISION.md) (the why), [`adr/`](docs/adr/) (locked decisions incl. ADR-0008), [`DDD.md`](docs/DDD.md).
+- `explainer/` — the source of the [live explainer](https://ruvnet-brain.vercel.app).
+- `SPEC.md` · `PROGRESS.md` — the master spec and the living, timestamped build log.
 
-See [`PROOF.md`](PROOF.md) for the live proof run, [`MORNING-REPORT.md`](MORNING-REPORT.md) for the honest build report, and [`docs/VISION.md`](docs/VISION.md) for the why.
+The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev), not git — a fresh clone is lightweight; `npx` fetches the 512 MB bundle.
+
+---
+
+## Links
+
+- **▶ Live explainer:** https://ruvnet-brain.vercel.app
+- **Download / Release:** https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev
+- **rUv's RuvNet org:** https://github.com/ruvnet
+- **Built by:** [Stuart Kerr — Isovision.ai](https://isovision.ai)
+
+<div align="center"><sub>MIT licensed · free & fair use · grounded in rUv's real source, cited every time.</sub></div>

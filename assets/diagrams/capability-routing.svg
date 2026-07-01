@@ -64,7 +64,7 @@
   <line class="arrow" x1="540" y1="342" x2="540" y2="362" marker-end="url(#arrowhead)"/>
 
   <rect class="good" x="420" y="364" width="240" height="56" rx="4"/>
-  <text class="result" x="540" y="388" text-anchor="middle" fill="#2e7d32">27 / 28 &#8212; 96%</text>
+  <text class="result" x="540" y="388" text-anchor="middle" fill="#2e7d32">26 / 28 &#8212; 93%</text>
   <text class="sublabel" x="540" y="408" text-anchor="middle">after capability cards (was 33%)</text>
 
 </svg>
