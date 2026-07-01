@@ -12,9 +12,13 @@
 [![license](https://img.shields.io/badge/license-MIT-8ecae6?style=flat-square)](LICENSE)
 [![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
 
-### [▶ See it in action — the interactive explainer](https://ruvnet-brain.vercel.app)
-
 <sub>Built by **[Stuart Kerr](https://isovision.ai)** at [Isovision.ai](https://isovision.ai) · free & fair use, to help everyone leverage the high end of agentic coding.</sub>
+
+### [▶ Come see it visually explained](https://ruvnet-brain.vercel.app)
+
+<sub>An interactive, animated walkthrough of what you can actually build — **click the preview** to open it.</sub>
+
+[![The RuvNet Brain interactive explainer — click to open the visual walkthrough](assets/explainer-preview.png)](https://ruvnet-brain.vercel.app)
 
 </div>
 
