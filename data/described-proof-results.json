@@ -1,12 +1,12 @@
 {
-  "started": "2026-06-29T20:45:07.721Z",
-  "finished": "2026-06-29T20:48:44.555Z",
+  "started": "2026-06-30T23:35:26.399Z",
+  "finished": "2026-06-30T23:41:30.273Z",
   "k": 2,
-  "passed": 27,
+  "passed": 26,
   "total": 28,
   "bySet": {
     "described": {
-      "pass": 27,
+      "pass": 26,
       "total": 28
     }
   },
@@ -159,10 +159,10 @@
         "agentic-flow",
         "concepts"
       ],
-      "got": "ruflo",
-      "eff": "ruflo",
-      "score": -0.7009855508804321,
-      "citedPath": "ruflo/v3/implementation/adrs/ADR-047-fast-mode-integration.md",
+      "got": "open-claude-code",
+      "eff": "open-claude-code",
+      "score": 0.36715447902679443,
+      "citedPath": "open-claude-code/v2/src/optimize/router.mjs",
       "pass": false
     },
     {
@@ -173,11 +173,11 @@
         "agentic-flow",
         "concepts"
       ],
-      "got": "agentic-flow",
-      "eff": "agentic-flow",
-      "score": 0.2784355580806732,
-      "citedPath": "agentic-flow/agentic-flow/docs/guides/MULTI-MODEL-ROUTER.md",
-      "pass": true
+      "got": "open-claude-code",
+      "eff": "open-claude-code",
+      "score": 3.9398961067199707,
+      "citedPath": "open-claude-code/v2/src/optimize/router.mjs",
+      "pass": false
     },
     {
       "n": 13,

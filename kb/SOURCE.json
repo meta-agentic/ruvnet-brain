@@ -1,9 +1,9 @@
 {
   "builder": "rvf-kb-forge",
   "builtUtc": "2026-06-29T05:43:23.820Z",
-  "releaseTag": "v0.4.0-dev",
+  "releaseTag": "v0.5.0-dev",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-  "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/download/v0.4.0-dev/ruvnet-brain.zip",
+  "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/download/v0.5.0-dev/ruvnet-brain.zip",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
     "rvm": {
@@ -12,10 +12,10 @@
       "sourceCommit": "af97d18f29d5704f2fbbeecccce192d712bb9a80",
       "sourceDescribe": "af97d18",
       "builtUtc": "2026-06-29T05:43:23.820Z",
-      "releaseTag": "v0.4.0-dev",
+      "releaseTag": "v0.5.0-dev",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/download/v0.4.0-dev/ruvnet-brain.zip",
+      "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/download/v0.5.0-dev/ruvnet-brain.zip",
       "selfUpdate": "node forge-update.mjs rvm"
     }
   }

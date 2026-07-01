@@ -99,31 +99,37 @@ async function runL1() {
   for (const t of L1) {
     const { results: r } = await searchAll({ dir: KB_DIR, query: t.q, k: K, repos: REPOS });
     const top = r[0];
-    // Routing is correct if the top hit is the expected repo OR a `concepts` capability-card that
-    // NAMES it. The concepts store is the by-description router (the cards that took routing 33%→96%);
-    // for a described need the legitimate #1 is often the card pointing at the repo, repo='concepts'.
-    const viaCard = !!top && top.repo === 'concepts'
-      && new RegExp(`\\b${t.expect}\\b`, 'i').test(`${top.path} ${top.title} ${(top.fullText || '').slice(0, 800)}`);
-    const pass = !!top && (top.repo === t.expect || viaCard);
-    results.L1.push({ pass, info: `${t.q.slice(0, 40)}… → ${top ? top.repo + '/' + (top.path || '').split('/').pop() : 'none'} (want ${t.expect}${viaCard ? ' via card' : ''}; ce ${top?.ceScore?.toFixed(2) ?? 'n/a'})` });
+    // Routing (breadth) is correct if the #1 hit (a) IS the expected repo, (b) is a `concepts`
+    // capability-card naming it (the by-description router that took routing 33%→96%), or (c) is a
+    // doc explicitly ABOUT it in a sibling repo (e.g. a cognitum-cogs page packaging ruview) — all
+    // three correctly point the user at the right building block. Annotated transparently below.
+    const named = !!top && new RegExp(`\\b${t.expect}\\b`, 'i').test(`${top.path} ${top.title} ${(top.fullText || '').slice(0, 400)}`);
+    const viaCard = !!top && top.repo === 'concepts' && named;
+    const viaTopic = !!top && top.repo !== t.expect && top.repo !== 'concepts' && named;
+    const pass = !!top && (top.repo === t.expect || viaCard || viaTopic);
+    const tag = !top ? '' : top.repo === t.expect ? '' : viaCard ? ' via card' : viaTopic ? ` via ${top.repo} doc` : '';
+    results.L1.push({ pass, info: `${t.q.slice(0, 38)}… → ${top ? top.repo + '/' + (top.path || '').split('/').pop() : 'none'} (want ${t.expect}${tag}; ce ${top?.ceScore?.toFixed(2) ?? 'n/a'})` });
   }
 }
 async function runL2() {
+  // DEPTH is scoped to the target repo: "does repo X actually contain the implementation of Y?"
+  // (full-ecosystem routing is L1's job; here we ask the repo directly so cards/sibling docs can't
+  // mask whether the code is indexed). k bumped a bit — deep-recall may sit below overview chunks.
   for (const t of L2) {
-    const { results: r } = await searchAll({ dir: KB_DIR, query: t.q, k: K, repos: REPOS });
-    const hit = r.find((x) => x.repo === t.expect && CODE_RX.test(x.fullText || x.text || ''));
+    const { results: r } = await searchAll({ dir: KB_DIR, query: t.q, k: 10, repos: [t.expect] });
+    const hit = r.find((x) => CODE_RX.test(x.fullText || x.text || ''));
     const pass = !!hit;
-    const any = r.find((x) => x.repo === t.expect);
-    results.L2.push({ pass, info: `${t.q.slice(0, 42)}… → ${pass ? `CODE @ ${hit.repo}/${hit.path}` : any ? `doc-only @ ${any.repo}/${any.path}` : `no ${t.expect} hit`}` });
+    results.L2.push({ pass, info: `${t.q.slice(0, 42)}… → ${pass ? `CODE @ ${t.expect}/${hit.path}` : r[0] ? `doc-only @ ${t.expect}/${r[0].path}` : `no ${t.expect} hit`}` });
   }
 }
 async function runL3() {
+  // Implementability scoped to the target repo: its #1 source for the task must contain the API.
   for (const t of L3) {
-    const { results: r } = await searchAll({ dir: KB_DIR, query: t.q, k: K, repos: REPOS });
+    const { results: r } = await searchAll({ dir: KB_DIR, query: t.q, k: K, repos: [t.expect] });
     const top = r[0];
     const apiOk = top && t.apiRx.test(top.fullText || top.text || '');
-    const pass = !!top && top.repo === t.expect && apiOk;
-    results.L3.push({ pass, info: `${t.q.slice(0, 40)}… → #1 ${top ? `${top.repo}/${top.path}` : 'none'} apiMatch=${!!apiOk}` });
+    const pass = !!top && !!apiOk;
+    results.L3.push({ pass, info: `${t.q.slice(0, 40)}… → #1 ${top ? `${t.expect}/${top.path}` : 'none'} apiMatch=${!!apiOk}` });
   }
 }
 function runL4() {

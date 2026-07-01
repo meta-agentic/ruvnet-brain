@@ -1,6 +1,6 @@
 {
-  "started": "2026-06-29T20:57:32.078Z",
-  "finished": "2026-06-29T20:58:38.189Z",
+  "started": "2026-06-30T23:51:46.075Z",
+  "finished": "2026-06-30T23:53:28.424Z",
   "k": 2,
   "passed": 7,
   "total": 8,
@@ -67,10 +67,10 @@
         "concepts",
         "ruflo"
       ],
-      "got": "synthlang",
-      "eff": "synthlang",
-      "score": -3.9491915702819824,
-      "citedPath": "synthlang/cli/specialized_examples/data_science_pipeline.md",
+      "got": "cognitum-cogs",
+      "eff": "cognitum-cogs",
+      "score": -2.4058728218078613,
+      "citedPath": "cognitum-cogs/src/ruvector/page_index/builder.rs",
       "pass": false
     },
     {

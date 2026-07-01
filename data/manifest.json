@@ -1,12 +1,12 @@
 {
-  "brainVersion": "v0.3.0-dev",
-  "generated": "2026-06-30T10:15:18.090Z",
-  "generatedHuman": "Tue, 30 Jun 2026 10:15:18 GMT",
+  "brainVersion": "v0.5.0-dev",
+  "generated": "2026-07-01T02:31:18.973Z",
+  "generatedHuman": "Wed, 01 Jul 2026 02:31:18 GMT",
   "coverage": {
-    "built": 17,
+    "built": 19,
     "catalogued": 168,
     "orgTotalApprox": 248,
-    "pending": 151
+    "pending": 149
   },
   "builtRepos": [
     {
@@ -138,6 +138,22 @@
       "status": "built"
     },
     {
+      "name": "rUv-dev",
+      "tier": "T2",
+      "stars": 426,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "open-claude-code",
+      "tier": "T2",
+      "stars": 416,
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "rupixel",
       "tier": "T2",
       "stars": 14,
@@ -174,14 +190,6 @@
     {
       "name": "rvcsi",
       "tier": "T1"
-    },
-    {
-      "name": "rUv-dev",
-      "tier": "T2"
-    },
-    {
-      "name": "open-claude-code",
-      "tier": "T2"
     },
     {
       "name": "ruvnet",
