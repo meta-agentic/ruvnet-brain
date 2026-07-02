@@ -26,9 +26,9 @@ const RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const ASSET_NAME = 'ruvnet-brain.zip';
 // Known-good fallback used when we can't reach GitHub (offline / rate-limited / no releases).
 // Default behavior is "get the latest"; this is only the safety net.
-const RELEASE_VERSION = 'v0.4.0-dev';
+const RELEASE_VERSION = 'v0.5.0-dev';
 const fallbackUrl = (tag) => `https://github.com/${REPO}/releases/download/${tag}/${ASSET_NAME}`;
-const APPROX_SIZE = '~421MB';
+const APPROX_SIZE = '~512MB';
 
 const argv = process.argv.slice(2);
 const FLAG_LOCAL = argv.includes('--local');
