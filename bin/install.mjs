@@ -351,10 +351,13 @@ function wirePlugin() {
   const manualInstall = 'claude plugin install ruvnet-brain@ruvnet-brain --scope user';
 
   if (!have('claude')) {
-    warn(`the \`claude\` CLI isn't installed — skipping plugin wiring (the brain itself is fully installed).`);
-    info(`When you have Claude Code, finish wiring with these two commands:`);
+    warn(`I couldn't run the \`claude\` command from this shell.`);
+    info(`That's normal if you use Claude Code as the ${c.bold('VS Code extension')} or ${c.bold('desktop app')} — the`);
+    info(`command just isn't on your terminal's PATH. ${c.green('The brain itself is fully downloaded.')}`);
+    info(`Finish wiring in ~20s — paste these two into ${c.bold("Claude Code's integrated terminal")} (or any shell with \`claude\`):`);
     info(`  ${c.bold(manualMarketplace)}`);
     info(`  ${c.bold(manualInstall)}`);
+    info(`Then reopen Claude Code once. ${c.dim('Or simply open Claude Code and ask: “finish setting up the RuvNet Brain.”')}`);
     return { wired: false, manualMarketplace, manualInstall };
   }
 
@@ -678,6 +681,11 @@ function success({ cacheDir, isCustom, plugin, env }) {
   console.log(`    • On rUv-stack work (vectors, swarms, agent memory, SPARC) it grounds ${c.bold('every time')}.`);
   console.log(`    • On unrelated work, it stays quiet — Claude behaves normally. It only speaks up when it should.`);
   console.log(`    • Not sure it's on?  Run  ${c.bold('npx github:stuinfla/ruvnet-brain --doctor')}  any time for a health check.`);
+
+  console.log(`\n  ${c.bold('Set it up your way:')} this default is ${c.bold('global')} — live in every VS Code project automatically,`);
+  console.log(`    which is what most people want. Want it different (project-only, moved, with the build stack added,`);
+  console.log(`    auto-updating nightly)? ${c.bold('Just tell Claude')} once it's on — the brain is smart enough to reconfigure`);
+  console.log(`    itself. You never have to learn its internals.`);
 
   console.log(`\n  ${c.dim('You can\'t break anything — the plugin is disable-able and only acts on RuvNet-shaped work.')}`);
   console.log('');
