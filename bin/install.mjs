@@ -330,7 +330,11 @@ function installReader(cacheDir) {
   }
   info('installing the local reader…');
   try {
-    run('npm', ['i', '--no-audit', '--no-fund'], { cwd: cacheDir });
+    run('npm', ['i', '--no-audit', '--no-fund', '--loglevel=error'], {
+      cwd: cacheDir,
+      // silence npm's "new version available" update-notifier so the narration stays clean
+      env: { ...process.env, npm_config_update_notifier: 'false', npm_config_fund: 'false' },
+    });
   } catch (e) {
     die(`the reader install failed (${e.message}).`, `Re-run after checking your network / npm setup.`);
   }
@@ -550,7 +554,7 @@ async function offerStack(env) {
     });
 
   info('');
-  info(c.dim("The brain is FULLY working right now for grounded answers. These add the \"build it\" muscle:"));
+  info(c.dim("The brain is FULLY working right now for grounded answers — these two optional tools add the \"build it\" muscle:"));
 
   const printCmds = () =>
     missing.forEach((m) => {
@@ -637,8 +641,8 @@ function success({ cacheDir, isCustom, plugin, env }) {
     `    • the Claude Code plugin ${plugin.wired ? c.green('wired at user scope') : c.yellow('(finish the 2 commands above)')} — search_ruvnet + grounding hook`,
   );
   if (env) {
-    const t = (okv) => (okv ? c.green('✓') : c.yellow('—'));
-    console.log(`    • rUv build toolkit:  Ruflo ${t(env.ruflo)}   RuVector ${t(env.ruvector)}   ${c.dim('(answers work without them)')}`);
+    const t = (okv) => (okv ? c.green('✓ present') : c.yellow('not added (optional)'));
+    console.log(`    • rUv build toolkit — Ruflo: ${t(env.ruflo)} · RuVector: ${t(env.ruvector)}  ${c.dim('answers work without them')}`);
   }
   if (isCustom) {
     console.log(`\n  ${c.yellow('Heads up:')} you installed to a custom dir, so make this export permanent`);
