@@ -80,17 +80,22 @@ function die(msg, hint) {
 }
 
 // ── shell helpers ────────────────────────────────────────────────────────────────────────────────
+// On Windows, npm/claude/claude-flow/ruflo etc. are `.cmd` shims, not `.exe` binaries. Node's
+// spawnSync uses CreateProcess directly (no shell:true) which CANNOT launch .cmd/.bat files — it
+// fails with ENOENT even when the command works fine in any real terminal. shell:true routes the
+// call through cmd.exe, which resolves .cmd shims the same way an interactive shell would.
+const IS_WIN = process.platform === 'win32';
 function have(cmd) {
-  const probe = spawnSync(cmd, ['--version'], { stdio: 'ignore' });
-  return !probe.error;
+  const probe = spawnSync(cmd, ['--version'], { stdio: 'ignore', shell: IS_WIN });
+  return !probe.error && probe.status === 0;
 }
 function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
+  const r = spawnSync(cmd, args, { stdio: 'inherit', shell: IS_WIN, ...opts });
   if (r.error) throw r.error;
   if (r.status !== 0) throw new Error(`\`${cmd} ${args.join(' ')}\` exited with code ${r.status}`);
 }
 function tryRun(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
+  const r = spawnSync(cmd, args, { stdio: 'inherit', shell: IS_WIN, ...opts });
   return !r.error && r.status === 0;
 }
 
@@ -309,10 +314,12 @@ function unzipInto(zipPath, cacheDir) {
       run('unzip', ['-q', '-o', zipPath, '-d', cacheDir]);
     } else {
       // Windows: PowerShell's Expand-Archive handles .zip natively with -Force for overwrite.
+      // shell:false here (pwsh/powershell are real .exe files, not .cmd shims) — routing this
+      // through cmd.exe would re-tokenize the already-quoted -Command string and break it.
       run(psExe, [
         '-NoProfile', '-NonInteractive', '-Command',
         `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${cacheDir}" -Force`,
-      ]);
+      ], { shell: false });
     }
   } catch (e) {
     die(`extraction failed (${e.message}).`, `The archive may be incomplete — re-run to download a fresh copy.`);
