@@ -284,19 +284,38 @@ function unzipInto(zipPath, cacheDir) {
     'Unpacking the brain into place',
     'so the plugin finds forge-mcp-all.mjs and the vector stores right where it looks',
   );
-  if (!have('unzip')) {
+
+  const hasUnzip = have('unzip');
+  // Windows fallback: PowerShell's Expand-Archive is available on all modern Windows systems.
+  const psExe = !hasUnzip ? (['pwsh', 'powershell'].find(have) || null) : null;
+
+  if (!hasUnzip && !psExe) {
     die(
-      `the \`unzip\` command isn't available on this machine.`,
-      `Install it and re-run:\n  • macOS:  already built in (this is unusual — check your PATH)\n  • Debian/Ubuntu:  ${c.bold('sudo apt-get install -y unzip')}\n  • Fedora/RHEL:  ${c.bold('sudo dnf install -y unzip')}`,
+      `no zip extraction tool is available on this machine.`,
+      [
+        `Install one and re-run:`,
+        `  • macOS:  \`unzip\` is already built in — check your PATH`,
+        `  • Debian/Ubuntu:  ${c.bold('sudo apt-get install -y unzip')}`,
+        `  • Fedora/RHEL:  ${c.bold('sudo dnf install -y unzip')}`,
+        `  • Windows:  open a PowerShell window and re-run (Expand-Archive is built in)`,
+      ].join('\n'),
     );
   }
 
   // The zip extracts to a top-level `ruvnet-brain/` folder. Extract into the cache dir, then lift
   // its CONTENTS up one level so that cacheDir/forge-mcp-all.mjs exists (idempotent: -o overwrites).
   try {
-    run('unzip', ['-q', '-o', zipPath, '-d', cacheDir]);
+    if (hasUnzip) {
+      run('unzip', ['-q', '-o', zipPath, '-d', cacheDir]);
+    } else {
+      // Windows: PowerShell's Expand-Archive handles .zip natively with -Force for overwrite.
+      run(psExe, [
+        '-NoProfile', '-NonInteractive', '-Command',
+        `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${cacheDir}" -Force`,
+      ]);
+    }
   } catch (e) {
-    die(`unzip failed (${e.message}).`, `The archive may be incomplete — re-run to download a fresh copy.`);
+    die(`extraction failed (${e.message}).`, `The archive may be incomplete — re-run to download a fresh copy.`);
   }
 
   const nested = path.join(cacheDir, 'ruvnet-brain');
@@ -452,7 +471,9 @@ function doctor() {
   have('node') ? ok('node present') : warn('node missing');
   have('npm') ? ok('npm present') : warn('npm missing');
   have('claude') ? ok('claude CLI present') : warn('claude CLI missing (plugin wiring needs it)');
-  have('unzip') ? ok('unzip present') : warn('unzip missing (needed for re-install)');
+  have('unzip') || have('pwsh') || have('powershell')
+    ? ok('zip extraction available (unzip or PowerShell Expand-Archive)')
+    : warn('no zip tool found — unzip or PowerShell needed for re-install');
   const env = detectEnvironment();
   env.ruflo
     ? ok('Ruflo present — orchestration / swarms / SPARC available')
