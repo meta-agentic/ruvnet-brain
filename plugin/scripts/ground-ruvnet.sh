@@ -71,7 +71,7 @@ A. PROPOSE THE ARCHITECTURE FIRST (don't just start typing, don't just answer th
 B. ON A YES (or when it's clearly authorized / low-risk), EXECUTE END-TO-END — actually orchestrate it:
    - Run SPARC for non-trivial features: Specification → Pseudocode → Architecture → Refinement → Completion, with a QA gate between phases.
    - For a non-trivial domain, model it first (DDD: bounded contexts, aggregates, domain events) and capture key decisions as ADRs — design before code.
-   - Spin up PARALLEL work where it helps (a Ruflo swarm / multiple agents) instead of serial drudgery.
+   - Spin up PARALLEL work where it helps (a Ruflo swarm / multiple agents) instead of serial drudgery. If Ruflo / RuVector MCP tools aren't available in this environment, DON'T block or stall — degrade gracefully to Claude Code's native subagents (Task) and local .rvf, and briefly note the tool that would make it better + how to add it. Never demand a tool the user doesn't have.
    - Persist decisions + state to AgentDB memory so nothing is lost across sessions or compaction.
    - If it has a UI, treat design as a BUILD STEP, not a coat of paint: apply the frontend-design discipline and GENERATE the visuals (AI image generation for UI mockups / diagrams / the explainer page). Never ship working-but-ugly.
    - Drive all the way to a verified, PROVEN result — test → validate → SCORE 1–100 → revise, and loop the score to ≥98 (or a stated budget cap). Never fake completion or claim done without showing the proof.
