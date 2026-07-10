@@ -91,7 +91,7 @@ console.log(`→ this run will (re)build ${todo.length}: ${todo.map((p) => p.nam
 
 if (!APPLY) { console.log('\n(dry-run — pass --apply to (re)build; runs serially since embedding is CPU-bound)'); process.exit(0); }
 
-const NOTIFY = (t, m, p) => { try { require('node:child_process').execFileSync('sh', [`${ROOT}/scripts/notify.sh`, t, m, p || 'default']); } catch {} };
+const NOTIFY = (t, m, p) => { try { execFileSync('sh', [path.join(ROOT, 'scripts/notify.sh'), t, m, p || 'default']); } catch { /* alerting never breaks the pipeline */ } };
 const failures = []; // per-repo build failures collected here; ANY failure aborts before publish (see below)
 for (const p of todo) {
   const dir = clonePath(p.name);
@@ -134,6 +134,7 @@ for (const p of todo) {
 // and the publish block (gh release create / git push) with a non-zero exit, so the nightly log surfaces it
 // and nothing partial is released.
 if (failures.length) {
+  NOTIFY('🔴 Nightly brain publish ABORTED', `${failures.length} repo build(s) failed — nothing released. See logs/nightly.log`, 'urgent');
   console.error(`\n[FATAL] ${failures.length} repo build(s) failed this run — aborting before stamp/bundle/publish. NOTHING released (no re-stamp, no Release, no version bump, no push):`);
   for (const f of failures) console.error(`  - ${f.name}: ${f.error}`);
   console.error('Fix the failing repo(s) and re-run.');
@@ -218,6 +219,7 @@ if (has('--publish')) {
     execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'data/manifest.json', 'primer/ruvnet-primer.md'], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['push', 'origin', 'main'], { cwd: ROOT, stdio: 'inherit' });
+    NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest — rebuilt: ${todo.map((p) => p.name).join(', ')}`);
     console.log(`[publish] DONE — ${tag} live. Users' heartbeats will pick up plugin + brain automatically.`);
   }
 }
