@@ -71,7 +71,7 @@ function runSessionHook({ env = {} } = {}) {
 
 describe('ground-ruvnet.sh — every fire appends one honest ledger line', () => {
   it('a build+ruvnet prompt logs valid JSON with the required fields, class from the gates that fired, and bytes = the EXACT byte size of what was emitted', () => {
-    const out = runGroundHook('implement the retry policy for ruflo swarms');
+    const out = runGroundHook('implement the retry workflow for ruflo swarms');
     expect(out.status).toBe(0);
 
     const lines = readLedgerLines();
@@ -86,10 +86,18 @@ describe('ground-ruvnet.sh — every fire appends one honest ledger line', () =>
   });
 
   it('metering changes NOTHING about what the hook emits — the directives still reach stdout, exit 0', () => {
-    const out = runGroundHook('implement the retry policy for ruflo swarms');
+    const out = runGroundHook('implement the retry workflow for ruflo swarms');
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/APPLY THE PLAYBOOK/);
     expect(out.stdout).toMatch(/ground before you assert/);
+  });
+
+  it('a build VERB without project scale does NOT fire BUILD (PR #8 two-signal gate — small edits stay cheap)', () => {
+    const out = runGroundHook('add my email address to the contact page footer');
+    expect(out.status).toBe(0);
+    const entry = JSON.parse(readLedgerLines()[0]);
+    expect(entry.class).not.toMatch(/build/);
+    expect(out.stdout).not.toMatch(/APPLY THE PLAYBOOK/);
   });
 
   it('a prompt matching no gate logs class:"none" (the always-on Gate 0 bytes still count)', () => {
@@ -107,7 +115,7 @@ describe('ground-ruvnet.sh — every fire appends one honest ledger line', () =>
   });
 
   it('RUVNET_BRAIN_METER=0 suppresses the write entirely, while the directives still emit', () => {
-    const out = runGroundHook('implement the retry policy', { env: { RUVNET_BRAIN_METER: '0' } });
+    const out = runGroundHook('implement the retry workflow', { env: { RUVNET_BRAIN_METER: '0' } });
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/APPLY THE PLAYBOOK/);
     expect(fs.existsSync(path.join(tmp, '.ruvnet-brain'))).toBe(false);
@@ -115,7 +123,7 @@ describe('ground-ruvnet.sh — every fire appends one honest ledger line', () =>
 
   it('a read-only cwd cannot break the hook: still exit 0, directives still emitted, just no ledger', () => {
     fs.chmodSync(tmp, 0o555);
-    const out = runGroundHook('implement the retry policy');
+    const out = runGroundHook('implement the retry workflow');
     fs.chmodSync(tmp, 0o755);
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/APPLY THE PLAYBOOK/);
