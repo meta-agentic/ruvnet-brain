@@ -162,6 +162,53 @@ export function verifyCoverageBadge(
   return pass('README badge advertises 10% of ALL source and vitest.config.mjs has all: true');
 }
 
+// ── claim 6: "32 repos · N source chunks" — the advertised chunk count regenerates ──────────────
+// The public chunk total is re-derived from the per-store idmap sidecars (id count == passages rows
+// == vectors, enforced by corpus-qa S3), summed over PUBLIC stores only (kb/PRIVATE-STORES.json is
+// the fence). Every user-facing surface that quotes the number must quote THIS number — the count
+// sat at a stale 128,994 across 10+ surfaces after a rebuild moved it (2026-07-10 gremlin hunt).
+// The sidecars ship with the brain, which bare CI does not have — absent kb dir is a LOUD SKIP.
+export const CHUNK_SURFACES = ['README.md', 'explainer/index.html', 'explainer/llms.txt', 'explainer/llms-full.txt'];
+
+export function computePublicChunkTotal(kbDir = path.join(ROOT, 'kb')) {
+  const privFile = path.join(kbDir, 'PRIVATE-STORES.json');
+  const priv = new Set(fs.existsSync(privFile) ? JSON.parse(fs.readFileSync(privFile, 'utf8')).privateStores : []);
+  let total = 0, stores = 0;
+  for (const f of fs.readdirSync(kbDir)) {
+    const m = f.match(/^(.+)\.big\.rvf\.idmap\.json$/);
+    if (!m || priv.has(m[1])) continue;
+    total += Object.keys(JSON.parse(fs.readFileSync(path.join(kbDir, f), 'utf8')).idToLabel).length;
+    stores++;
+  }
+  return { total, stores };
+}
+
+export function verifyChunkCountSurfaces(kbDir = path.join(ROOT, 'kb'), surfaces = CHUNK_SURFACES, root = ROOT) {
+  if (!fs.existsSync(kbDir) || !fs.readdirSync(kbDir).some((f) => f.endsWith('.big.rvf.idmap.json'))) {
+    return skip('brain not installed — kb/*.big.rvf.idmap.json absent, cannot re-derive the chunk count (runs on machines with the brain)');
+  }
+  const { total, stores } = computePublicChunkTotal(kbDir);
+  const want = total.toLocaleString('en-US');
+
+  const problems = [];
+  for (const rel of surfaces) {
+    const p = path.join(root, rel);
+    if (!fs.existsSync(p)) { problems.push(`${rel}: file missing`); continue; }
+    const s = fs.readFileSync(p, 'utf8');
+    if (!s.includes(want)) problems.push(`${rel}: does not contain "${want}"`);
+    // any OTHER comma-grouped number quoted as a chunk count (…"128,994 source chunks"…) is stale
+    for (const m of s.matchAll(/(\d{1,3}(?:,\d{3})+)(?:[^0-9]{0,40}?)chunks/gis)) {
+      if (m[1] !== want) problems.push(`${rel}: stale chunk count "${m[1]}" (expected "${want}")`);
+    }
+    // the explainer's animated counter carries the raw (comma-free) value in a data-count attribute
+    for (const m of s.matchAll(/data-count="(\d{4,})"[^>]*>[^<]*<\/span>\s*chunks/gi)) {
+      if (Number(m[1]) !== total) problems.push(`${rel}: stale data-count="${m[1]}" (expected ${total})`);
+    }
+  }
+  if (problems.length) return fail(`chunk count drifted: ${problems.join('; ')} — re-run this ledger after updating every surface together`);
+  return pass(`${want} chunks re-derived from ${stores} public big-store idmaps; all ${surfaces.length} surfaces quote it`);
+}
+
 // ── claim 5: "version surfaces agree" ───────────────────────────────────────────────────────────
 // Delegated to the existing single-source-of-truth checker; we propagate its exit code.
 export function verifyVersionSurfaces(root = ROOT) {
@@ -200,6 +247,11 @@ export const ledger = [
     claim: 'version surfaces agree',
     source: 'scripts/sync-version.mjs --check',
     verify: verifyVersionSurfaces,
+  },
+  {
+    claim: 'advertised source-chunk count regenerates from the brain (all surfaces agree)',
+    source: 'kb/*.big.rvf.idmap.json + kb/PRIVATE-STORES.json',
+    verify: verifyChunkCountSurfaces,
   },
 ];
 

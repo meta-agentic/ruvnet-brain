@@ -34,6 +34,24 @@ const targets = [
     get: (s) => (JSON.parse(s).version),
     set: (s) => s.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${V}"`),
   },
+  { // the human primer's header stamp — shipped in the bundle, read by real users
+    // (drifted to v2.0.0 during the 2.0.1 release because no target covered it — 2026-07-10 gremlin hunt)
+    file: 'primer/ruvnet-primer.md',
+    get: (s) => { const m = s.match(/Brain version: v([^\s·`]+)/); return m ? m[1] : null; },
+    set: (s) => s.replace(/(Brain version: v)[^\s·`]+/, `$1${V}`),
+  },
+  { // the live explainer page carries the version twice (JSON-LD softwareVersion + the status badge).
+    // get() returns the value only when BOTH agree; a mismatch reports as drift too.
+    file: 'explainer/index.html',
+    get: (s) => {
+      const ld = s.match(/"softwareVersion"\s*:\s*"([^"]+)"/)?.[1] ?? null;
+      const badge = s.match(/&middot;\s*v([0-9][^\s<]*)</)?.[1] ?? null;
+      return ld === badge ? ld : `mixed(${ld}, ${badge})`;
+    },
+    set: (s) => s
+      .replace(/("softwareVersion"\s*:\s*)"[^"]+"/, `$1"${V}"`)
+      .replace(/(&middot;\s*v)[0-9][^\s<]*</, `$1${V}<`),
+  },
 ];
 
 for (const t of targets) {

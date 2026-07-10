@@ -41,6 +41,23 @@ let discovered = [];
 try { discovered = discoverRepos(KB_DIR); } catch { /* dir checked at call time */ }
 const repoList = (REPOS.length ? REPOS : discovered);
 
+// ── OPT-IN USAGE PINGS (counts only — the full privacy contract lives in telemetry-ping.mjs). ──
+// Sends NOTHING unless the user explicitly said yes at install time (consent file), and never
+// anything but { event, version, count } — no query text, no repo names, no paths, ever. Batched
+// to at most one send per machine per day. Loaded dynamically + fully guarded so a missing module
+// (older bundle) or any telemetry failure can never break, block, or delay a query.
+let telemetry = null;
+let telemetryVersion = 'unknown';
+import(new URL('./telemetry-ping.mjs', import.meta.url).href)
+  .then((m) => {
+    telemetry = m;
+    try {
+      telemetryVersion = m.bundleVersion(KB_DIR);
+      m.recordEvent('session', { version: telemetryVersion });
+    } catch { /* telemetry must never surface */ }
+  })
+  .catch(() => { /* module absent — telemetry silently off */ });
+
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = { name: 'ruvnet-brain', version: '1.0.0' };
 const TOOLS = [
@@ -108,6 +125,14 @@ async function handle(msg) {
         const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n\n`;
         const body = text ? header + text : '(no results)';
         meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: body.length });
+        // Local grounded-once stamp (never leaves the machine) + opt-in count ping. Guarded:
+        // telemetry can never break or delay the response being returned right below.
+        try {
+          if (telemetry) {
+            telemetry.stampGroundedOnce();
+            telemetry.recordEvent('search', { version: telemetryVersion });
+          }
+        } catch { /* never */ }
         return ok(id, { content: [{ type: 'text', text: body }], isError: false });
       } catch (e) {
         const body = `search_ruvnet error: ${e.message}`;

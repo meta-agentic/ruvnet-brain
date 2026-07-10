@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 2.0.1 — updated 2026-07-10 08:15 EDT](https://img.shields.io/badge/version_2.0.1-updated_2026--07--10_08:15_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 2.1.0 — updated 2026-07-10 08:15 EDT](https://img.shields.io/badge/version_2.1.0-updated_2026--07--10_08:15_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -48,7 +48,7 @@
 | **Retrieval eval** | 12 frozen questions | **120 frozen, hash-pinned questions** across 5 strata; promotion gated on Wilson lower bounds, fail-closed — it blocked a real release this morning, which is the feature working |
 | **Token cost** | 6,183 bytes injected per hook turn · zero self-measurement | **684 bytes (~90% cut)** with an eval-PASS proving zero quality loss · a live token meter measuring real bytes/tokens per prompt class · ~27% faster repeat queries via the KB cache |
 | **rUv's gists** | not indexed | **437 gists** indexed with per-chunk freshness/provenance banners, refreshed nightly with cost-disciplined skip |
-| **Reliability** | claims were prose | **claims ledger** (5 marketing claims mechanically re-verified in CI) · integration tests in CI incl. Linux · a Windows CI job · an honest coverage denominator (all source files) |
+| **Reliability** | claims were prose | **claims ledger** (6 marketing claims mechanically re-verified in CI) · integration tests in CI incl. Linux · a Windows CI job · an honest coverage denominator (all source files) |
 | **Autonomy** | hooks asked questions to an empty room — the #1 real-user complaint | **`/loop` contract** — checkpoint / resume / done-criteria; hooks detect autonomous mode and stop asking — 10 mutation-verified tests |
 | **Publishing** | manual npm token · a nightly release PATH bug | **self-renewing npm token** (launchd daemon, proven end-to-end) · PATH bug root-caused and cured |
 | **Memory layer** | silent SQLite corruption · searches returning 0 · invisible flywheel patterns | **3 root-caused fixes** (an ABI-mismatched binary falling back to WAL-blind whole-file overwrites; keys that were never scored; a split-store display bug) — plus **6 exact patches queued upstream to ruflo** |
@@ -126,6 +126,8 @@ That single command runs the whole setup, narrating _what it's doing and why_ at
 
 > Want the bleeding-edge installer, even ahead of the last npm publish? `npx github:stuinfla/ruvnet-brain` always runs straight off the latest GitHub commit.
 
+> **Anonymous usage counts — opt-in, counts only.** At the end of the install you're asked once: _"Share anonymous usage counts (installs/searches — never your queries or code)?"_ If you say yes, the only things ever transmitted are event counts (`install` / `search` / `session`) plus the bundle version — batched to at most one ping per machine per day. **Never** your queries, code, repo names, or paths; the entire client is one readable file (`kb/telemetry-ping.mjs`). Your answer is a plain-text file you can read or flip any time (`~/.cache/ruvnet-brain/.telemetry-consent`), and `npx ruvnet-brain --no-telemetry` declines without being asked. Found it useful? [Star the repo](https://github.com/stuinfla/ruvnet-brain) or [leave feedback in Discussions](https://github.com/stuinfla/ruvnet-brain/discussions).
+
 <details><summary>Manual install (what the one-liner automates)</summary>
 
 ```bash
@@ -149,7 +151,7 @@ You install once. After that, three mechanisms keep you on the current brain wit
 
 - **Consent-gated auto-update heartbeat** (the `SessionStart` hook, `plugin/scripts/session-start.sh`). The **first** time the plugin runs on a machine it asks you **once** whether it may keep itself updated in the background — a security-conscious opt-in, because self-update can change the model's own instructions. Your answer is remembered (`~/.cache/ruvnet-brain/.auto-update-pref`) and never asked again. On each session start it does a rate-limited (~15 min) 3s-capped check of the live GitHub `plugin.json`. If a newer plugin version exists **and** you opted in, it downloads it in the background through Claude Code's own trusted marketplace path — but the new version is **staged, not active**: Claude Code only loads plugins at process start, so **this session keeps running the version it started with** until you restart (`claude --continue` brings your conversation right back on the new version). If you declined, it just tells you the command to run. The 512 MB knowledge bundle is handled more conservatively — **detect + notify only**, never auto-applied, because the bundle isn't cryptographically signed yet and applying it would overwrite executable tool files (SEC-0010 #6).
 
-- **Stack watchdog status footer** (the `UserPromptSubmit` hook's always-on Gate 0, `plugin/scripts/ground-ruvnet.sh`). Every response ends with one dim status line — e.g. `🧠 RuvNet Brain v2.0.0 · Ruflo: yes · AgentDB memory: on` — read from **filesystem ground truth**, not impressions. The version shown is always the one **actually loaded in memory** for this session; if a newer version is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether project memory is wired.
+- **Stack watchdog status footer** (the `UserPromptSubmit` hook's always-on Gate 0, `plugin/scripts/ground-ruvnet.sh`). Every response ends with one dim status line — e.g. `🧠 RuvNet Brain v2.0.1 · Ruflo: yes · AgentDB memory: on` — read from **filesystem ground truth**, not impressions. The version shown is always the one **actually loaded in memory** for this session; if a newer version is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether project memory is wired.
 
 - **Nightly publish → `releases/latest` chain** (`scripts/self-update.mjs --publish`, run by the `deploy/com.ruvnet.brain-nightly.plist` LaunchAgent at 03:15). The nightly rebuilds only the repos whose upstream changed, and **if anything was rebuilt** it bumps the product version, cuts a GitHub Release, and advances [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest). Plugin and knowledge bundle move under **one** version number, so the heartbeat above picks up both automatically. (The LaunchAgent is not auto-installed — enabling a system scheduler needs explicit owner approval.)
 
@@ -173,7 +175,7 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **128,994 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **129,012 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
@@ -283,7 +285,7 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 32 repos, 128,994 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 32 repos, 129,012 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.

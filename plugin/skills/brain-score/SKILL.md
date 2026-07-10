@@ -10,6 +10,9 @@ before scores that can be believed.** A score is only real if the evidence behin
 by running real commands against the actual repo — never from memory, never from vibes, never from
 what the README promises.
 
+These same rules are the phase-gate grader inside `/brain-build` (the autonomous build contract:
+loop each phase to ≥95 under brain-score rules, max 5 iterations — see the `brain-build` skill).
+
 ## Non-negotiable scoring rules
 
 1. **Every deduction cites evidence.** Each point lost names the file/line, the command you ran and

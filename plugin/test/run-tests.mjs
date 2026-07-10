@@ -46,7 +46,7 @@ const mcp = readJson('.mcp.json');
 check('.mcp.json registers the ruvnet-brain MCP server', !!mcp?.mcpServers?.['ruvnet-brain']);
 const hooks = readJson('hooks/hooks.json');
 check('hooks.json declares a UserPromptSubmit hook', Array.isArray(hooks?.hooks?.UserPromptSubmit));
-for (const f of ['skills/ruvnet-brain/SKILL.md', 'skills/brain-score/SKILL.md', 'mcp/server.mjs', 'scripts/ground-ruvnet.sh', 'README.md', 'test/capability-questions.json']) {
+for (const f of ['skills/ruvnet-brain/SKILL.md', 'skills/brain-score/SKILL.md', 'skills/brain-build/SKILL.md', 'skills/brain-prompt/SKILL.md', 'mcp/server.mjs', 'scripts/ground-ruvnet.sh', 'README.md', 'test/capability-questions.json']) {
   check(`exists: ${f}`, fs.existsSync(path.join(ROOT, f)));
 }
 
@@ -80,6 +80,35 @@ check('brain-score demands cited evidence for every deduction', /every deduction
 check('brain-score carries the qe_qx_analyze remote-URL hallucination warning', skillRaw.includes('qe_qx_analyze') && /hallucinat/i.test(skillRaw));
 check('brain-score is honest about the key gate (evolve needs OPENROUTER_API_KEY; score/oia free)', skillRaw.includes('OPENROUTER_API_KEY') && skillRaw.includes('metaharness_evolve') && skillRaw.includes('metaharness_score'));
 
+// 2c. brain-build + brain-prompt skills (the PR #8 standing-prompt contract, productized)
+section('2c. brain-build + brain-prompt skills');
+const readSkill = (name) => { try { return fs.readFileSync(path.join(ROOT, `skills/${name}/SKILL.md`), 'utf8'); } catch { return ''; } };
+for (const name of ['brain-build', 'brain-prompt']) {
+  const raw = readSkill(name);
+  const sfm = raw.match(/^---\n([\s\S]*?)\n---\n/);
+  check(`${name} frontmatter parses (name: ${name} + description)`, !!sfm && new RegExp(`(^|\\n)name:\\s*${name}\\s*(\\n|$)`).test(sfm[1]) && /(^|\n)description:\s*\S/.test(sfm[1]));
+  check(`${name} credits the community standing-prompt pattern (PR #8)`, /PR #8/.test(raw));
+}
+const bb = readSkill('brain-build');
+check('brain-build carries the ≥95 loop rule (below 95 → fix and regrade)', /below 95/i.test(bb) && /≥\s*95/.test(bb) && /regrade/i.test(bb));
+check('brain-build caps the loop at a maximum of 5 iterations', /maximum of 5 iterations/i.test(bb) && /max 5 iterations/i.test(bb));
+check('brain-build carries the cost ladder (route-cheap receipt + frontier-only gate + >$1/20-call stop)',
+  bb.includes('route-cheap.mjs') && /frontier ONLY for the authoritative gate run/i.test(bb) && bb.includes('>$1') && /20 paid calls/.test(bb));
+check('brain-build batches questions into ONE list with recommended defaults', /ONE list/.test(bb) && /recommended default/i.test(bb));
+check('brain-build cites rUv SPARC sources for its phase structure',
+  bb.includes('concepts/sparc/CARD/sparc-card') && bb.includes('sparc/specification/README.md') && bb.includes('ruflo/plugins/ruflo-sparc/commands/ruflo-sparc.md'));
+check('brain-build wires the crash-resumable checkpoint (done = exit code, not opinion)',
+  bb.includes('loop-checkpoint.mjs') && /exit code, not (an )?opinion/i.test(bb));
+check('brain-build applies brain-score gate rules (evidence-cited deductions, ≤70 cap, "not tested" section)',
+  /deduction cites evidence/i.test(bb) && bb.includes('≤70') && /what I did NOT test/i.test(bb));
+const bp = readSkill('brain-prompt');
+check('brain-prompt teaches verifiable gates (done = exit code, not opinion)', /done = exit code, not opinion/i.test(bp));
+check('brain-prompt ends by offering execution with /brain-build semantics', /Run this now with \/brain-build semantics\?/.test(bp) && /On yes, execute/i.test(bp));
+check('brain-prompt infers defaults and batches only genuine questions into ONE list', /infer defaults/i.test(bp) && /ONE list/.test(bp) && /recommended default/i.test(bp));
+check('brain-prompt grounds tool choices via search_ruvnet with citations', bp.includes('search_ruvnet') && /cite/i.test(bp));
+check('brain-prompt cites rUv metaprompt prior art', bp.includes('ruv-gists/874e2138/metaprompt.txt'));
+check('brain-score cross-references /brain-build as its gate consumer', /\/brain-build/.test(skillRaw));
+
 const ssPath = path.join(ROOT, 'scripts/session-start.sh');
 const ssRaw = fs.readFileSync(ssPath, 'utf8');
 const MARKER = '[RuvNet Brain — token intelligence + QE, mention once]';
@@ -109,7 +138,7 @@ check('announcement fires when ruflo is detectable, exactly once', withRuflo.sta
 const block = withRuflo.stdout.match(/\[RuvNet Brain — token intelligence \+ QE, mention once\][\s\S]*?OPENROUTER_API_KEY\."\n/);
 const blockBytes = block ? Buffer.byteLength(block[0], 'utf8') : -1;
 check(`announcement under the 512-byte budget (actual: ${blockBytes})`, blockBytes > 0 && blockBytes <= 512);
-check('announcement names the triggers + the key gate', !!block && ["do this cheaper", "score my harness", "score this repo", 'OPENROUTER_API_KEY'].every((s) => block[0].includes(s)));
+check('announcement names the triggers + the key gate', !!block && ["do this cheaper", "score my harness", "score this repo", '/brain-build', '/brain-prompt', 'OPENROUTER_API_KEY'].every((s) => block[0].includes(s)));
 
 const noDir = mkTmp('rb-ss-noruflo-');
 // no project markers, ruflo stripped off PATH, fresh HOME with no ~/.claude.json

@@ -70,6 +70,7 @@ const FLAG_UPDATE = argv.includes('--update'); // one-shot: pull the latest Rele
 const FLAG_ENABLE_NIGHTLY = argv.includes('--enable-nightly'); // schedule that update nightly (macOS LaunchAgent)
 const FLAG_DISABLE_NIGHTLY = argv.includes('--disable-nightly'); // remove the nightly schedule
 const FLAG_NO_NIGHTLY_PROMPT = argv.includes('--no-nightly-prompt'); // don't offer nightly auto-updates at the end of an install
+const FLAG_NO_TELEMETRY = argv.includes('--no-telemetry'); // decline anonymous usage counts without being asked
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
@@ -992,6 +993,96 @@ export async function offerNightly() {
   return 'enabled';
 }
 
+// ── step: offer OPT-IN anonymous usage counts (asked once ever; explicit yes required) ────────────
+// The whole contract, honestly: counts ONLY (installs / searches / sessions + version) — NEVER the
+// user's queries, code, repo names, or paths. Consent is a plain yes/no file the user can read and
+// flip (~/.cache/ruvnet-brain/.telemetry-consent); nothing is ever sent without the literal "yes".
+// Fail-private everywhere: no TTY → not asked → not enabled; TEST mode → suppressed entirely.
+const telemetryStateDir = () => path.join(os.homedir(), '.cache', 'ruvnet-brain');
+const telemetryConsentPath = () => path.join(telemetryStateDir(), '.telemetry-consent');
+
+// Same default-yes contract as parseNightlyAnswer, exported under its own name so the telemetry
+// tests read as telemetry tests: ENTER/y/yes accept; ONLY an explicit n/no declines.
+export const parseTelemetryAnswer = parseNightlyAnswer;
+
+// Fire-and-forget install ping — 3s cap, all failures swallowed, payload is { event, v } and
+// nothing else. Exported (with injectable fetch) so tests can assert the payload without a network.
+export async function sendInstallPing({
+  version = 'unknown',
+  fetchFn = globalThis.fetch,
+  pingUrl = process.env.RUVNET_BRAIN_PING_URL || 'https://ruvnet-brain.vercel.app/api/ping',
+} = {}) {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 3000);
+    await fetchFn(pingUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'install', v: version }),
+      signal: ctl.signal,
+    }).catch(() => {});
+    clearTimeout(timer);
+  } catch { /* a lost count is nothing; a broken install step would be everything */ }
+}
+
+// Exported decision matrix (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerNightly).
+// Returns a status string; never throws — a finished install must never be broken by an offer.
+export async function offerTelemetry(cacheDir) {
+  if (TEST_MODE) return 'suppressed'; // tests: never prompt, never write, NEVER send
+  const consentPath = telemetryConsentPath();
+  if (fs.existsSync(consentPath)) return 'already-set'; // asked once ever — respect the answer
+  if (FLAG_NO_TELEMETRY) {
+    try { fs.mkdirSync(telemetryStateDir(), { recursive: true }); fs.writeFileSync(consentPath, 'no\n'); } catch { /* best-effort */ }
+    return 'declined-flag';
+  }
+
+  step(
+    'Optional: anonymous usage counts',
+    'a simple count of installs/searches tells Stuart the brain is actually helping people — nothing about WHAT you ask',
+  );
+  info(`Counts only — installs, searches, sessions, version. ${c.bold('Never your queries, code, repo names, or paths.')}`);
+  info(c.dim(`Your answer is a plain-text file you can read or flip any time: ${consentPath}`));
+
+  if (!process.stdin.isTTY && !FLAG_YES) {
+    // No terminal to ask on → fail PRIVATE: no consent recorded, so nothing will ever be sent.
+    info(`No interactive terminal here, so I won't assume — usage counts stay ${c.bold('OFF')}.`);
+    info(`Opt in any time:  echo yes > ${consentPath}`);
+    return 'not-asked';
+  }
+
+  let yes = true; // --yes accepts every optional offer, this one included
+  if (!FLAG_YES) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise((resolve) =>
+      rl.question(`    ${c.cyan('?')} Share anonymous usage counts (installs/searches — never your queries or code)? ${c.dim('[Y/n]')} `, resolve),
+    );
+    rl.close();
+    yes = parseTelemetryAnswer(answer);
+  }
+
+  try {
+    fs.mkdirSync(telemetryStateDir(), { recursive: true });
+    fs.writeFileSync(consentPath, yes ? 'yes\n' : 'no\n');
+  } catch (e) {
+    warn(`couldn't record the answer (${e.message}) — defaulting to OFF (nothing will be sent)`);
+    return 'error';
+  }
+  if (!yes) {
+    ok('usage counts are OFF — nothing will ever be sent');
+    return 'declined';
+  }
+  ok('thanks — anonymous counters only, batched to at most one ping a day');
+  // Count this install (the one event the brain itself can't see). Version = the bundle we
+  // just put on disk, read live from its own SOURCE.json — never guessed.
+  let v = 'unknown';
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(cacheDir, 'SOURCE.json'), 'utf8'));
+    if (typeof j.releaseTag === 'string' && /^[A-Za-z0-9._-]{1,32}$/.test(j.releaseTag)) v = j.releaseTag;
+  } catch { /* unknown is honest */ }
+  await sendInstallPing({ version: v });
+  return 'enabled';
+}
+
 // ── tiny interactive yes/no — SAFE in non-TTY (returns the default; never blocks a piped install) ──
 function ask(question, def = false) {
   if (FLAG_YES) return Promise.resolve(true);
@@ -1232,6 +1323,11 @@ function success({ cacheDir, isCustom, plugin, env, nightly }) {
     console.log(`    ${c.dim('Either way, your copy only advances when a new Release is actually published.')}`);
   }
 
+  // One tasteful ask, at the moment the value was just delivered — never repeated by the plugin
+  // more than once ever (see session-start.sh's stamped one-liner).
+  console.log(`\n  ${c.bold('If it earns it:')} a GitHub star helps other people find the brain —`);
+  console.log(`    ${c.bold('https://github.com/stuinfla/ruvnet-brain')}   ${c.dim('· feedback/ideas: https://github.com/stuinfla/ruvnet-brain/discussions')}`);
+
   console.log(`\n  ${c.dim('You can\'t break anything — the plugin is disable-able and only acts on RuvNet-shaped work.')}`);
   console.log('');
 }
@@ -1255,6 +1351,10 @@ Usage:
   npx ruvnet-brain --disable-nightly   Remove the nightly schedule (safe to run any time)
                               (a default install RECOMMENDS nightly and asks, defaulting to yes)
   node bin/install.mjs --no-nightly-prompt Don't offer nightly auto-updates at the end of the install
+  node bin/install.mjs --no-telemetry      Decline anonymous usage counts without being asked
+                              (counts of installs/searches ONLY — never queries, code, or paths;
+                              opt-in prompt appears once at install; answer lives in a plain file:
+                              ~/.cache/ruvnet-brain/.telemetry-consent)
   node bin/install.mjs --version <tag>     Install a specific Release tag (e.g. --version v0.5.0-dev)
   node bin/install.mjs --pin               Skip the latest-check; use the bundled known-good version
   node bin/install.mjs --local             Install from a repo clone's dist/ruvnet-brain.zip
@@ -1362,6 +1462,9 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // and asking, DEFAULTING TO YES (TTY + macOS + not already on). Non-fatal like every other offer.
   let nightly = 'skipped';
   try { nightly = await offerNightly(); } catch { /* never let the offer break a finished install */ }
+  // Anonymous usage counts — OPT-IN, asked once ever, right after the nightly offer. Same rule:
+  // an optional offer can never break a finished install.
+  try { await offerTelemetry(cacheDir); } catch { /* fail-private: unanswered = OFF */ }
 
   success({ cacheDir, isCustom, plugin, env, nightly });
 })().catch((e) => {

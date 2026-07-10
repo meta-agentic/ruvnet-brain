@@ -17,6 +17,9 @@ import {
   verifyCheaperFactor,
   verifyCoverageBadge,
   verifyVersionSurfaces,
+  verifyChunkCountSurfaces,
+  computePublicChunkTotal,
+  CHUNK_SURFACES,
   EXPECTED_STRATA,
   BADGE_NEEDLE,
 } from '../../scripts/claims-verify.mjs';
@@ -32,8 +35,8 @@ const writeTmp = (name, content) => {
 };
 
 describe('ledger shape', () => {
-  it('has five claims, each with claim/source/verify', () => {
-    expect(ledger.length).toBe(5);
+  it('has six claims, each with claim/source/verify', () => {
+    expect(ledger.length).toBe(6);
     for (const entry of ledger) {
       expect(typeof entry.claim).toBe('string');
       expect(typeof entry.source).toBe('string');
@@ -161,6 +164,86 @@ describe('verifyCoverageBadge — README and vitest.config must drift together o
     const res = verifyCoverageBadge(path.join(ROOT, 'README.md'), vitestCfg);
     expect(res.status).toBe('FAIL');
     expect(res.evidence).toContain('all: true');
+  });
+});
+
+describe('verifyChunkCountSurfaces — the advertised chunk count regenerates, or skips LOUDLY', () => {
+  // Build a miniature brain in tmp: two public stores + one private, with idmap sidecars.
+  const idmap = (n) => {
+    const idToLabel = {};
+    for (let i = 0; i < n; i++) idToLabel[i] = `chunk-${i}`;
+    return { idToLabel, labelToId: {}, nextLabel: n };
+  };
+  const mkBrain = (dirName) => {
+    const kb = path.join(TMP, dirName);
+    fs.mkdirSync(kb, { recursive: true });
+    fs.writeFileSync(path.join(kb, 'PRIVATE-STORES.json'), JSON.stringify({ privateStores: ['secret'] }));
+    fs.writeFileSync(path.join(kb, 'alpha.big.rvf.idmap.json'), JSON.stringify(idmap(1200)));
+    fs.writeFileSync(path.join(kb, 'beta.big.rvf.idmap.json'), JSON.stringify(idmap(34)));
+    fs.writeFileSync(path.join(kb, 'secret.big.rvf.idmap.json'), JSON.stringify(idmap(999)));
+    return kb;
+  };
+
+  it('SKIPs (never silently passes) when the brain is not installed', () => {
+    const empty = path.join(TMP, 'no-kb');
+    fs.mkdirSync(empty, { recursive: true });
+    const res = verifyChunkCountSurfaces(empty);
+    expect(res.status).toBe('SKIP');
+    expect(res.evidence).toContain('brain not installed');
+  });
+
+  it('computePublicChunkTotal sums public stores only — the private fence holds', () => {
+    const kb = mkBrain('kb-fence');
+    expect(computePublicChunkTotal(kb)).toEqual({ total: 1234, stores: 2 });
+  });
+
+  it('passes when every surface quotes the regenerated count', () => {
+    const kb = mkBrain('kb-good');
+    const root = path.join(TMP, 'root-good');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'S.md'), 'That is **1,234 source chunks** in the brain.\n');
+    const res = verifyChunkCountSurfaces(kb, ['S.md'], root);
+    expect(res.status).toBe('PASS');
+    expect(res.evidence).toContain('1,234');
+  });
+
+  it('fails when a surface still quotes a STALE count, even alongside the fresh one', () => {
+    const kb = mkBrain('kb-stale');
+    const root = path.join(TMP, 'root-stale');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'S.md'), '1,234 chunks here, but elsewhere 128,994 source chunks.\n');
+    const res = verifyChunkCountSurfaces(kb, ['S.md'], root);
+    expect(res.status).toBe('FAIL');
+    expect(res.evidence).toContain('128,994');
+  });
+
+  it('fails when a surface simply does not quote the number', () => {
+    const kb = mkBrain('kb-missing');
+    const root = path.join(TMP, 'root-missing');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'S.md'), 'A brain of unspecified size.\n');
+    const res = verifyChunkCountSurfaces(kb, ['S.md'], root);
+    expect(res.status).toBe('FAIL');
+    expect(res.evidence).toContain('does not contain');
+  });
+
+  it('fails when the explainer animated counter data-count attribute is stale', () => {
+    const kb = mkBrain('kb-counter');
+    const root = path.join(TMP, 'root-counter');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'S.html'),
+      '1,234 source chunks. <span data-count="9999">1,234</span> chunks\n',
+    );
+    const res = verifyChunkCountSurfaces(kb, ['S.html'], root);
+    expect(res.status).toBe('FAIL');
+    expect(res.evidence).toContain('data-count="9999"');
+  });
+
+  it('passes on the real repo artifacts when the brain is present (else skips)', () => {
+    const res = verifyChunkCountSurfaces();
+    expect(['PASS', 'SKIP']).toContain(res.status);
+    if (res.status === 'PASS') expect(res.evidence).toContain(`${CHUNK_SURFACES.length} surfaces`);
   });
 });
 
