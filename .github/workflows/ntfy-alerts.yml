@@ -1,0 +1,43 @@
+name: ntfy-alerts
+# Pushes significant repo events to Stuart's phone via ntfy.sh (topic = Actions secret NTFY_TOPIC).
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened]
+  watch:
+    types: [started]
+  workflow_run:
+    workflows: ["ci", "integration-linux"]
+    types: [completed]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: send
+        env:
+          TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          [ -z "$TOPIC" ] && exit 0
+          EVENT="${{ github.event_name }}"
+          case "$EVENT" in
+            issues)
+              TITLE="🐛 New issue #${{ github.event.issue.number }}"
+              BODY="${{ github.event.issue.title }} — by ${{ github.event.issue.user.login }}"
+              PRIO="high"; TAGS="warning" ;;
+            pull_request_target)
+              TITLE="🔀 New PR #${{ github.event.pull_request.number }}"
+              BODY="${{ github.event.pull_request.title }} — by ${{ github.event.pull_request.user.login }}"
+              PRIO="high"; TAGS="git" ;;
+            watch)
+              TITLE="⭐ New star"
+              BODY="${{ github.event.sender.login }} starred ruvnet-brain"
+              PRIO="default"; TAGS="star" ;;
+            workflow_run)
+              CONC="${{ github.event.workflow_run.conclusion }}"
+              [ "$CONC" = "success" ] && exit 0
+              TITLE="🔴 CI ${CONC}: ${{ github.event.workflow_run.name }}"
+              BODY="branch ${{ github.event.workflow_run.head_branch }} — ${{ github.event.workflow_run.html_url }}"
+              PRIO="urgent"; TAGS="rotating_light" ;;
+          esac
+          curl -sS -H "Title: $TITLE" -H "Priority: $PRIO" -H "Tags: $TAGS" -d "$BODY" "https://ntfy.sh/$TOPIC" || true

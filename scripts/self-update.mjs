@@ -91,6 +91,7 @@ console.log(`→ this run will (re)build ${todo.length}: ${todo.map((p) => p.nam
 
 if (!APPLY) { console.log('\n(dry-run — pass --apply to (re)build; runs serially since embedding is CPU-bound)'); process.exit(0); }
 
+const NOTIFY = (t, m, p) => { try { require('node:child_process').execFileSync('sh', [`${ROOT}/scripts/notify.sh`, t, m, p || 'default']); } catch {} };
 const failures = []; // per-repo build failures collected here; ANY failure aborts before publish (see below)
 for (const p of todo) {
   const dir = clonePath(p.name);
