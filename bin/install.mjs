@@ -65,6 +65,7 @@ const FLAG_DOCTOR = argv.includes('--doctor');
 const FLAG_NO_VERIFY = argv.includes('--no-verify');
 const FLAG_PIN = argv.includes('--pin'); // skip the latest-check, use the bundled default
 const FLAG_DEMO = argv.includes('--demo'); // guided, real (non-fabricated) walkthrough of the brain in action
+const FLAG_FEEDBACK = argv.includes('--feedback'); // prefill a GitHub Discussion (version + health, nothing private) and open it
 // ── freshness flags — invoke/schedule the SELF-UPDATER the bundle already ships (kb/forge-update.mjs) ──
 const FLAG_UPDATE = argv.includes('--update'); // one-shot: pull the latest Release bundle into the installed brain now
 const FLAG_ENABLE_NIGHTLY = argv.includes('--enable-nightly'); // schedule that update nightly (macOS LaunchAgent)
@@ -491,11 +492,9 @@ function wirePlugin() {
 }
 
 // ── step: verify the install is REAL (counts — never take "installed" on faith) ──────────────────
-function verifyInstall(cacheDir) {
-  step(
-    'Verifying the brain is real and reachable',
-    "you should never have to trust the word \"installed\" — here's the proof on disk",
-  );
+// Shared state-gatherer behind verifyInstall / --doctor / --feedback: what is REALLY on disk.
+// Pure read, never prints — callers decide how to narrate (or, for --feedback, how to report) it.
+function gatherInstallState(cacheDir) {
   let repos = 0;
   try {
     repos = fs
@@ -504,14 +503,25 @@ function verifyInstall(cacheDir) {
   } catch {
     /* ignore */
   }
+  return {
+    repos,
+    reader: fs.existsSync(path.join(cacheDir, 'node_modules')),
+    mcp: fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs')),
+  };
+}
+
+function verifyInstall(cacheDir) {
+  step(
+    'Verifying the brain is real and reachable',
+    "you should never have to trust the word \"installed\" — here's the proof on disk",
+  );
+  const { repos, reader, mcp } = gatherInstallState(cacheDir);
   if (repos > 0) ok(`${repos} RuvNet repos indexed (vector stores present on disk)`);
   else warn(`no .rvf stores found in ${cacheDir} — the brain may be incomplete (re-run with --force)`);
 
-  const reader = fs.existsSync(path.join(cacheDir, 'node_modules'));
   if (reader) ok('local reader installed (vector reads happen offline — no cloud, no API key)');
   else warn('reader deps missing — re-run the installer');
 
-  const mcp = fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs'));
   if (mcp) ok('search_ruvnet server present (this is what Claude calls to ground answers)');
   else warn('forge-mcp-all.mjs missing — the brain unpacked incompletely');
 
@@ -757,6 +767,99 @@ async function doctor() {
   console.log(
     c.dim('\n  Heads-up: a window that was ALREADY open when you installed needs a restart to pick it up;\n  newly-opened windows are fine.\n'),
   );
+}
+
+// ── `--feedback`: the easiest possible way to tell us how it went ────────────────────────────────
+// Composes a prefilled GitHub Discussion — brain version, platform, install age, and a 3-line
+// --doctor-style health summary — SHOWS the user exactly what's in it (that's all there is), prints
+// the URL, and opens the browser. Deliberately boring on privacy: no queries, no code, no paths,
+// no env — every field is generic. The user still writes and posts the actual feedback themselves.
+const DISCUSSIONS_URL = `https://github.com/${REPO}/discussions`;
+
+function installedBrainVersion(cacheDir) {
+  // Same read the telemetry ping uses: the bundle stamps its Release tag into SOURCE.json.
+  // "unknown" is honest for a locally-built or pre-stamping bundle — never guess a tag.
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(cacheDir, 'SOURCE.json'), 'utf8'));
+    const v = String(j.releaseTag || '');
+    if (/^[A-Za-z0-9._-]{1,32}$/.test(v)) return v;
+  } catch { /* fall through */ }
+  return 'unknown';
+}
+
+function installAgeLine(cacheDir) {
+  // SOURCE.json's mtime is when the bundle last landed here (install or self-update) — say which.
+  for (const f of ['SOURCE.json', 'forge-mcp-all.mjs']) {
+    try {
+      const days = Math.floor((Date.now() - fs.statSync(path.join(cacheDir, f)).mtimeMs) / 86400000);
+      return days === 0 ? 'installed/updated today' : `installed/updated ${days} day${days === 1 ? '' : 's'} ago`;
+    } catch { /* try the next anchor file */ }
+  }
+  return 'not installed here';
+}
+
+// The last-3-lines-of---doctor health summary, from the SAME state --doctor reads (gatherInstallState
+// + detectEnvironment) — counts and presence only, never a path.
+function feedbackHealthLines(cacheDir) {
+  const s = gatherInstallState(cacheDir);
+  const env = detectEnvironment();
+  const allGreen = s.repos > 0 && s.reader && s.mcp;
+  return [
+    `${s.repos} repo stores on disk · reader ${s.reader ? 'ok' : 'MISSING'} · search_ruvnet ${s.mcp ? 'ok' : 'MISSING'}`,
+    `toolkit: Ruflo ${env.ruflo ? 'present' : 'not found'} · RuVector ${env.ruvector ? 'present' : 'not found'} · claude CLI ${env.claude ? 'present' : 'not found'}`,
+    allGreen ? 'verdict: Healthy — installed and reachable' : 'verdict: Needs attention — re-run npx ruvnet-brain',
+  ];
+}
+
+function openInBrowser(url) {
+  if (TEST_MODE) return false; // tests: print the URL, never open anything
+  try {
+    // rundll32 on Windows (not `cmd /c start`): the URL's & would need cmd-metachar escaping there.
+    const [cmd, args] = process.platform === 'darwin' ? ['open', [url]]
+      : IS_WIN ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
+        : ['xdg-open', [url]];
+    const r = spawnSync(cmd, args, { stdio: 'ignore', shell: false });
+    return !r.error && r.status === 0;
+  } catch { return false; }
+}
+
+function runFeedback() {
+  printBanner('feedback');
+  const cacheDir = resolvedKbDir();
+  const brainV = installedBrainVersion(cacheDir);
+  let installerV = 'unknown';
+  try { installerV = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')).version || 'unknown'; } catch { /* honest */ }
+  const health = feedbackHealthLines(cacheDir);
+
+  const title = `Feedback: RuvNet Brain ${brainV} on ${process.platform}`;
+  const body = [
+    `**Brain version:** ${brainV} · installer ${installerV}`,
+    `**Platform:** ${process.platform}/${process.arch} · node ${process.version}`,
+    `**Install age:** ${installAgeLine(cacheDir)}`,
+    `**Health (--doctor, last 3 lines):**`,
+    '```',
+    ...health,
+    '```',
+    '',
+    '**What happened / what you\'d like:**',
+    '_(your words here — what you asked, what you got, what you wish it did)_',
+    '',
+  ].join('\n');
+
+  console.log(c.dim('\nThis prefills a public GitHub Discussion with the block below — and NOTHING else.'));
+  console.log(c.dim('No queries, no code, no paths. You review it on GitHub and post it yourself.\n'));
+  console.log(body.split('\n').map((l) => `    ${c.dim('│')} ${l}`).join('\n'));
+
+  const url = `${DISCUSSIONS_URL}/new?category=general&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  console.log(`\n  ${c.bold('Prefilled Discussion URL')} ${c.dim('(open it anywhere if no browser pops up):')}`);
+  console.log(`  ${url}\n`);
+
+  if (TEST_MODE) {
+    warn('RUVNET_BRAIN_TEST=1 — not opening a browser (URL printed above)');
+    return;
+  }
+  if (openInBrowser(url)) ok('opened in your browser — say anything, even one line helps');
+  else info(`couldn't open a browser here — copy the URL above into any browser to post`);
 }
 
 // ── `--update` / `--enable-nightly` / `--disable-nightly`: end-user freshness controls ────────────
@@ -1326,7 +1429,7 @@ function success({ cacheDir, isCustom, plugin, env, nightly }) {
   // One tasteful ask, at the moment the value was just delivered — never repeated by the plugin
   // more than once ever (see session-start.sh's stamped one-liner).
   console.log(`\n  ${c.bold('If it earns it:')} a GitHub star helps other people find the brain —`);
-  console.log(`    ${c.bold('https://github.com/stuinfla/ruvnet-brain')}   ${c.dim('· feedback/ideas: https://github.com/stuinfla/ruvnet-brain/discussions')}`);
+  console.log(`    ${c.bold('https://github.com/stuinfla/ruvnet-brain')}   ${c.dim('· feedback in one command: npx ruvnet-brain --feedback')}`);
 
   console.log(`\n  ${c.dim('You can\'t break anything — the plugin is disable-able and only acts on RuvNet-shaped work.')}`);
   console.log('');
@@ -1344,6 +1447,9 @@ Usage:
   npx github:stuinfla/ruvnet-brain         Same, but from the bleeding-edge GitHub commit
   npx ruvnet-brain --doctor   Health-check an existing install (green/red per part)
   npx ruvnet-brain --demo     Guided walkthrough — 2 real questions, real cited answers
+  npx ruvnet-brain --feedback Tell us how it went — prefills a GitHub Discussion with your brain
+                              version, platform, and a 3-line health summary (you see exactly
+                              what's in it; never your queries, code, or paths), then opens it
   npx ruvnet-brain --update   One-shot: pull the latest Release bundle into your installed brain
                               (runs the bundle's own forge-update.mjs --apply: backup + re-verify)
   npx ruvnet-brain --enable-nightly    Schedule that update nightly at 03:47 — macOS LaunchAgent;
@@ -1379,6 +1485,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   if (FLAG_HELP) return showHelp();
   if (FLAG_DOCTOR) return await doctor();
   if (FLAG_DEMO) return runDemo();
+  if (FLAG_FEEDBACK) return runFeedback();
   if (FLAG_UPDATE) return runUpdate();
   if (FLAG_ENABLE_NIGHTLY) return enableNightly();
   if (FLAG_DISABLE_NIGHTLY) return disableNightly();

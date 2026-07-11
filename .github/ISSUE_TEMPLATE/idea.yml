@@ -1,0 +1,27 @@
+name: Idea / improvement
+description: Something the brain should do, know, or do better — we genuinely want these.
+title: "[idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The best parts of this project came from field reports — the `/brain-build` contract
+        started as one user's hand-written standing prompt (see CONTRIBUTORS.md). Rough is
+        fine; one sentence is fine. If it's more of an open question, [Discussions](https://github.com/stuinfla/ruvnet-brain/discussions)
+        works too — either way it gets read fast.
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What should it do, and in what situation would you use it?
+      placeholder: "When I …, I wish the brain would …"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What you're building (optional)
+      description: A sentence of context helps us judge how common the need is.
+    validations:
+      required: false

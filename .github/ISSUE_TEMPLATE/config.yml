@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions, feedback, and show-and-tell
+    url: https://github.com/stuinfla/ruvnet-brain/discussions
+    about: >-
+      Not sure it's a bug? Want to share what you built, or just tell us how it went?
+      Start a Discussion — or run `npx ruvnet-brain --feedback` to open one prefilled
+      with your version + health (nothing private).

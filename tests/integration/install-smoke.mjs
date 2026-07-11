@@ -388,6 +388,58 @@ test(
   },
 );
 
+// ── `--feedback`: the prefilled-Discussion composer ──────────────────────────────────────────────
+// Contract under RUVNET_BRAIN_TEST=1: prints the full prefilled URL, NEVER opens a browser (the
+// guard must announce itself), the URL carries the installed brain version, and — the point of
+// showing the user everything — the URL contains no secrets: no home dir, no KB path, no temp path.
+test('`--feedback` prints a prefilled Discussions URL with the version, opens nothing, leaks no paths', () => {
+  const kbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-feedback-'));
+  try {
+    // Minimal installed-brain fixture: a stamped SOURCE.json (the version source) + the MCP stub.
+    fs.writeFileSync(path.join(kbDir, 'SOURCE.json'), JSON.stringify({ releaseTag: 'v9.9.9-test' }));
+    fs.writeFileSync(path.join(kbDir, 'forge-mcp-all.mjs'), '// stub for install-smoke — never executed\n');
+    const before = fs.readdirSync(kbDir).sort();
+
+    const r = runInstaller(['--feedback'], { RUVNET_BRAIN_KB: kbDir, RUVNET_BRAIN_TEST: '1' });
+    assertClean(r, '--feedback');
+    const out = r.stdout || '';
+
+    // The guard fired: no browser was opened, and the installer SAID so.
+    assert.match(out, /RUVNET_BRAIN_TEST=1/, 'test-mode guard must announce that the browser open was skipped');
+    assert.match(out, /not opening a browser/i, 'must say plainly that nothing was opened');
+
+    // The URL: present, well-formed, aimed at the General category of THIS repo's Discussions.
+    const m = /https:\/\/github\.com\/stuinfla\/ruvnet-brain\/discussions\/new\?\S+/.exec(out);
+    assert.ok(m, `stdout must contain the prefilled discussions/new URL; got:\n${out}`);
+    const url = new URL(m[0]);
+    assert.equal(url.searchParams.get('category'), 'general', 'must target the general Discussions category');
+
+    // The version travels in BOTH prefilled params — that's the whole value of the prefill.
+    assert.match(url.searchParams.get('title') || '', /v9\.9\.9-test/, 'title must carry the brain version');
+    assert.match(url.searchParams.get('body') || '', /v9\.9\.9-test/, 'body must carry the brain version');
+    // …and the body carries the 3-line --doctor-style health summary.
+    assert.match(url.searchParams.get('body') || '', /search_ruvnet/, 'body must carry the health summary');
+
+    // No secrets, PROVEN on the decoded URL: no home dir, no KB dir, no temp dir, no username-bearing path.
+    const decoded = decodeURIComponent(m[0]);
+    for (const secret of [os.homedir(), kbDir, os.tmpdir()]) {
+      assert.ok(!decoded.includes(secret), `prefilled URL must not contain ${secret}`);
+    }
+    assert.doesNotMatch(decoded, /(\/Users\/|\/home\/|C:\\Users\\)/, 'prefilled URL must not contain any user path');
+
+    // Read-only: composing feedback must not write into the brain dir.
+    assert.deepEqual(fs.readdirSync(kbDir).sort(), before, '--feedback must not mutate the KB dir');
+  } finally {
+    fs.rmSync(kbDir, { recursive: true, force: true });
+  }
+});
+
+test('`--help` lists --feedback', () => {
+  const r = runInstaller(['--help']);
+  assertClean(r, '--help (--feedback)');
+  assert.ok((r.stdout || '').includes('--feedback'), 'help must list the --feedback flag');
+});
+
 test('installer parses and still inlines the Ed25519 signing pubkey + verifyBundle', () => {
   // Syntax gate: a broken installer would ENOENT for every stranger on first contact.
   const check = spawnSync(process.execPath, ['--check', INSTALLER], { encoding: 'utf8', timeout: 30000 });

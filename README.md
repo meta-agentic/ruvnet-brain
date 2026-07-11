@@ -175,7 +175,7 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **129,012 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **129,011 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
@@ -285,7 +285,7 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 32 repos, 129,012 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 32 repos, 129,011 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
@@ -304,6 +304,14 @@ This project versions in the open (see the live badge up top for the exact plugi
 - `SPEC.md` · `PROGRESS.md` — the master spec and the living, timestamped build log.
 
 The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev), not git — a fresh clone is lightweight; `npx` fetches the 512 MB bundle.
+
+---
+
+## Community
+
+- **Tell us how it went — one command:** `npx ruvnet-brain --feedback` prefills a [Discussion](https://github.com/stuinfla/ruvnet-brain/discussions) with your version + a 3-line health summary (you see exactly what's in it; never your queries, code, or paths) and opens it in your browser.
+- **Questions, ideas, show-and-tell:** [Discussions](https://github.com/stuinfla/ruvnet-brain/discussions) · bugs go to [issues](https://github.com/stuinfla/ruvnet-brain/issues) — new issues and PRs page the maintainer's phone in real time, so first response is typically within 1 business day.
+- **Contributors get credited:** merged PRs land in [`CONTRIBUTORS.md`](CONTRIBUTORS.md) — the two-signal hook gate and the `/brain-build` contract both started as user field reports. House rules: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md); build/test map: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 

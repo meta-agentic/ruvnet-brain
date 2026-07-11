@@ -5,15 +5,15 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_437 gists · refreshed 2026-07-10_
+_437 gists · refreshed 2026-07-11_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-10 | [claude-flow-firsts-executive-brief.md](https://gist.github.com/ruvnet/a8df1bae4686ebf3914dd61c8afe6d69) | Claude-Flow / Ruflo: Year One Executive Brief — 31 verified first-mover positions, harness-not-model thesis, top 20 inno |
 | 2026-07-09 | [ruflo-3.24.0-flywheel.md](https://gist.github.com/ruvnet/f8e2851fd307df5d5de7b5c70c37fa0c) | ruflo 3.24.0 — Self-Learning Flywheel: what it is, how it works, usage & upgrade notes |
 | 2026-07-09 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
 | 2026-07-08 | [*specification.md](https://gist.github.com/ruvnet/6217ea3bd75cc0c27522965965e7383b) | TikTok-like recommender Algorithm |
 | 2026-07-08 | [ruflo-v3.25.5-release.md](https://gist.github.com/ruvnet/ed276119404d4d3fffdadfc0797705f8) | ruflo v3.25.5 npm release: wrapper publish + CI-red fixes |
-| 2026-07-08 | [claude-flow-firsts-executive-brief.md](https://gist.github.com/ruvnet/a8df1bae4686ebf3914dd61c8afe6d69) | Claude-Flow / Ruflo: Year One Executive Brief — 31 verified first-mover positions, harness-not-model thesis, top 20 inno |
 | 2026-07-08 | [memory.md](https://gist.github.com/ruvnet/4a55971e8971a3c430a009c7f5b49d12) | Claude Memory Template |
 | 2026-07-08 | [anv-gist.md](https://gist.github.com/ruvnet/0d858ad440a4439b4a2281a40c39b1a0) | Agent-Native Versioning (ANV) — the BC→AD versioning scheme for ruflo (ADR-184) |
 | 2026-07-08 | [Ruvnet-first-to-market.md](https://gist.github.com/ruvnet/0aaad8499c8f7dfac1279bd0afa4e898) | The list of firsts |
