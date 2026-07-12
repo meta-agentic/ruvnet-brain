@@ -19,6 +19,36 @@ if [ "${RUVNET_BRAIN_METER:-1}" != "0" ]; then
   [ -n "$METER_TMP" ] && exec 1>"$METER_TMP"
 fi
 
+# ── nightly failure escalation (Stuart, 2026-07-12): "you need to jump in and fix it" — checked in
+# EVERY session, any project, via an absolute path (this hook fires everywhere, the marker lives in
+# one place). scripts/nightly-wrapper.sh writes this ONLY after a real failure survives its own
+# self-heal retry; a clean run or legitimate no-op removes it. Presence here = unprompted, first
+# thing surfaced, no waiting for the phone alert to be seen.
+NIGHTLY_MARKER="/Users/stuartkerr/Code/ruvnet-brain/.ruvnet-brain/nightly-failure.json"
+# ── canonical project-state auto-recall (Stuart, 2026-07-12): "never misses a beat" — AgentDB had
+# ZERO automatic retrieval at session start (agentdb-ensure.sh only fires when memory is ABSENT,
+# silent forever once enabled — the real gap). Fixed here: when a project-state-current key exists
+# in the LOCAL .swarm/memory.db, surface it unprompted, every session, so a fresh session or a
+# post-compact session knows exactly where things stand without me having to think to search for it.
+# Read-only, bounded (ruflo's own timeout), fails silent if ruflo/db/key absent — never blocks.
+if [ -f "$PWD/.swarm/memory.db" ] && command -v ruflo >/dev/null 2>&1; then
+  STATE=$(timeout 8 ruflo memory retrieve -k "project-state-current" -n "$(basename "$PWD")" --value-only --path "$PWD/.swarm/memory.db" 2>/dev/null)
+  if [ -n "$STATE" ]; then
+    printf '[RuvNet Brain — canonical project state, auto-recalled (never miss a beat)]\n%s\n' "$STATE"
+  fi
+fi
+
+if [ -f "$NIGHTLY_MARKER" ]; then
+  cat <<EOF
+[RuvNet Brain — NIGHTLY FAILED, self-heal retry also failed, this is now yours to fix]
+Before anything else this session: the ruvnet-brain nightly publish failed twice last run (immediate
+attempt + a 3-minute retry) and could not self-heal. Read $NIGHTLY_MARKER for the exact tag/error,
+then logs/nightly.log in that repo for full context. Diagnose and fix it now — do not wait to be
+asked, this is a standing directive. Once genuinely fixed and verified (a real release tag advances),
+delete the marker file.
+EOF
+fi
+
 # ── heartbeat: rate-limited (~once/20h) check against the live GitHub plugin.json ──
 # Detects a version gap, then APPLIES it automatically in the background — no manual command for the
 # user to remember. `claude plugin marketplace update` + `claude plugin update` only refresh an

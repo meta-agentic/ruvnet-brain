@@ -17,12 +17,30 @@ import { FULL_HINTS, KEEP_DIRS } from './full-hints.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// launchd delivers a minimal PATH, and the plist-level export has now failed across a reload
-// (2026-07-10: the 3:15 nightly died at `gh release create` with ENOENT, pid 0, while the loaded
-// plist showed the export). The script guarantees its own environment instead: prepend the
-// homebrew/local bins and resolve gh to an absolute path.
-process.env.PATH = ['/opt/homebrew/bin', '/usr/local/bin', process.env.PATH || ''].join(':');
-const GH = ['/opt/homebrew/bin/gh', '/usr/local/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
+// launchd delivers a minimal PATH, and the plist-level export has now failed across TWO separate
+// reloads for TWO separate reasons: (2026-07-10) `gh release create` ENOENT, pid 0, while the
+// loaded plist showed the export; (2026-07-12) launchd's WorkingDirectory was unset entirely so
+// the job never even reached this file. Both are now fixed at the plist level too, but the script
+// guarantees its own environment regardless: /usr/local/bin FIRST (that's the node every build
+// tonight was tested and gated against — 22.13.1; homebrew independently upgraded to 25.9.0,
+// which cannot load kb/'s native @ruvector/rvf module) and every spawned tool resolved to an
+// absolute path, never bare-name PATH lookup — a bare `node`/`gh` silently picks up whichever
+// version macOS or homebrew put first, and that has now broken this pipeline twice.
+process.env.PATH = ['/usr/local/bin', '/opt/homebrew/bin', process.env.PATH || ''].join(':');
+const GH = ['/usr/local/bin/gh', '/opt/homebrew/bin/gh'].find((p) => fs.existsSync(p)) || 'gh';
+const NODE = ['/usr/local/bin/node', '/opt/homebrew/bin/node'].find((p) => fs.existsSync(p)) || process.execPath;
+// Fourth instance of the same disease: kb/resolve-deps.mjs's loadRvf()/loadTransformers() fall
+// back to NODE_PATH / bare require() resolution, which only works when the invoking shell's rc
+// files happened to export it — true for an interactive login shell, silently false for launchd's
+// bash -lc (non-interactive, so any `[[ $- != *i* ]] && return`-style guard in .bash_profile skips
+// the rest of the file). Never depend on ambient shell state for a scheduled job again: pin both
+// deps to their real, verified absolute locations via resolve-deps.mjs's own explicit overrides.
+if (!process.env.RVF_MODULE_PATH && fs.existsSync('/Users/stuartkerr/.npm-global/lib/node_modules/@ruvector/rvf')) {
+  process.env.RVF_MODULE_PATH = '/Users/stuartkerr/.npm-global/lib/node_modules';
+}
+if (!process.env.XENOVA_PATH && fs.existsSync('/Users/stuartkerr/.npm-global/node_modules/@xenova/transformers')) {
+  process.env.XENOVA_PATH = '/Users/stuartkerr/.npm-global/node_modules/@xenova/transformers';
+}
 const has = (f) => process.argv.includes(f);
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const APPLY = has('--apply');
@@ -113,18 +131,18 @@ for (const p of todo) {
     if (full) buildArgs.push('--full', full);
     if (keep) buildArgs.push('--keep', keep);
     console.log(`[build] ${kb}`);
-    execFileSync('node', buildArgs, { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
+    execFileSync(NODE, buildArgs, { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
     console.log(`[sharp] ${kb}`);
-    execFileSync('node', ['forge-big.mjs', 'both', '--dir', '.', '--name', kb], { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
+    execFileSync(NODE, ['forge-big.mjs', 'both', '--dir', '.', '--name', kb], { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
     console.log(`[symbols] ${kb}`);
-    execFileSync('node', ['scripts/build-symbols.mjs', '--name', kb], { cwd: ROOT, env, stdio: 'inherit' });
+    execFileSync(NODE, ['scripts/build-symbols.mjs', '--name', kb], { cwd: ROOT, env, stdio: 'inherit' });
     // Corpus QA gate (scripts/corpus-qa.mjs): structural (passages>0, full-bodies>0 where
     // FULL_HINTS demands them, vectors==passages, embed.json present) + deterministic
     // self-retrieval round trip on both variants. Non-zero exit throws -> failures[] ->
     // the run aborts before stamp/bundle/publish. This is the machine version of the
     // 2026-07-10 hand-verification: a store that embeds wrong or reads wrong cannot ship.
     console.log(`[qa] ${kb}`);
-    execFileSync('node', ['scripts/corpus-qa.mjs', '--store', kb], { cwd: ROOT, env, stdio: 'inherit' });
+    execFileSync(NODE, ['scripts/corpus-qa.mjs', '--store', kb], { cwd: ROOT, env, stdio: 'inherit' });
   } catch (e) { console.error(`[FAIL] ${p.name}: ${e.message}`); failures.push({ name: p.name, error: e.message }); }
 }
 
@@ -142,10 +160,10 @@ if (failures.length) {
 }
 
 console.log('\n[stamp] re-stamping bundle');
-execFileSync('node', ['scripts/brain-stamp.mjs'], { cwd: ROOT, stdio: 'inherit' });
+execFileSync(NODE, ['scripts/brain-stamp.mjs'], { cwd: ROOT, stdio: 'inherit' });
 // refresh the shipped bundle so the rebuilt deep-source ships (concepts/primers/L2 are supervised — not regenerated here)
 console.log('[bundle] re-assembling dist/ruvnet-brain');
-execFileSync('node', ['scripts/build-bundle.mjs'], { cwd: ROOT, env: { ...process.env, KB_MODEL_CACHE: MODEL_CACHE }, stdio: 'inherit' });
+execFileSync(NODE, ['scripts/build-bundle.mjs'], { cwd: ROOT, env: { ...process.env, KB_MODEL_CACHE: MODEL_CACHE }, stdio: 'inherit' });
 console.log('self-update done. (Deep-source refreshed + bundle re-assembled. Primer/L2/concepts + grading are supervised steps — re-run them when a repo materially changes.)');
 
 // ── PUBLISH (the last mile): local rebuild → users, automatically. ─────────────────────────────
@@ -202,7 +220,7 @@ if (has('--publish')) {
     // install.mjs's SIGNING_REQUIRED can flip to true. sign-bundle emits <zip>.sig + <zip>.sha256.
     const sigAssets = [];
     try {
-      execFileSync('node', ['scripts/sign-bundle.mjs', '--bundle', zipPath], { cwd: ROOT, stdio: 'inherit' });
+      execFileSync(NODE, ['scripts/sign-bundle.mjs', '--bundle', zipPath], { cwd: ROOT, stdio: 'inherit' });
       for (const a of [`${zipPath}.sig`, `${zipPath}.sha256`]) if (fs.existsSync(a)) sigAssets.push(a);
       console.log(`[publish] signed bundle (${sigAssets.length} signature asset(s) will be uploaded)`);
     } catch (e) {

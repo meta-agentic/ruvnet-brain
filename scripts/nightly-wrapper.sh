@@ -1,0 +1,82 @@
+#!/bin/bash
+# nightly-wrapper.sh — the ONLY thing launchd invokes for the nightly. Per Stuart's standing order
+# (2026-07-12): no noise for success or no-op — only ACTIVE alerts for real failure, and the system
+# must attempt to self-heal before escalating, then make failure impossible to miss next session.
+#
+# Flow: run once -> if it fails, wait and retry ONCE (catches transient network/API blips, the only
+# class a blind retry can fix) -> if it fails AGAIN, loud phone alert + a durable marker file that
+# ground-ruvnet.sh surfaces at the top of the very next session, unprompted. Success or a legitimate
+# "nothing was due tonight" no-op: log only, phone stays silent.
+set -u
+# kb/models-cache (the fallback) starts cold every time -> every nightly re-downloads the ONNX
+# embedder from HuggingFace. Point at the already-warm cache instead (verified present).
+export KB_MODEL_CACHE="/Users/stuartkerr/Code/PowerPlatePulse/scripts/models-cache"
+cd /Users/stuartkerr/Code/ruvnet-brain 2>/dev/null || {
+  curl -sS --max-time 10 -H "Title: 🔴 Nightly CRASHED before it could even start" \
+    -H "Priority: urgent" -H "Tags: rotating_light" \
+    -d "cd into the repo failed — filesystem or mount problem. Investigate the machine directly." \
+    "https://ntfy.sh/$(grep -m1 '^NTFY_TOPIC=' /Users/stuartkerr/Code/ruvnet-brain/.env 2>/dev/null | cut -d= -f2)" >/dev/null 2>&1
+  exit 1
+}
+mkdir -p logs
+LOG=logs/nightly.log
+MARKER=.ruvnet-brain/nightly-failure.json
+
+run_once() {
+  local before after rc tail
+  before=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "unknown")
+  { echo "===== nightly-wrapper attempt $1 — $(date -u +%FT%TZ) — before: $before ====="
+    /usr/local/bin/node scripts/self-update.mjs --apply --publish
+  } >> "$LOG" 2>&1
+  rc=$?
+  after=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "unknown")
+  if [ "$after" != "$before" ] && [ -n "$after" ] && [ "$after" != "unknown" ]; then
+    echo "===== attempt $1: VERIFIED SUCCESS $before -> $after =====" >> "$LOG"
+    rm -f "$MARKER"
+    return 0
+  elif [ "$rc" -eq 0 ]; then
+    echo "===== attempt $1: CLEAN NO-OP, tag unchanged at $after =====" >> "$LOG"
+    rm -f "$MARKER"
+    return 0
+  else
+    echo "===== attempt $1: FAILED exit $rc, tag stuck at $after =====" >> "$LOG"
+    return 1
+  fi
+}
+
+# Memory distillation (ADR-174) had gone stale 3 days — same silent-death pattern as everything
+# else tonight. Independent of publish success/failure: mine raw memory_entries into structured
+# episodes/reasoning_patterns on every nightly run. Best-effort, never blocks the real job.
+~/.npm-global/bin/ruflo memory distill run --path .swarm/memory.db >> "$LOG" 2>&1 || true
+# Durability: was a one-off manual snapshot before tonight. Now recurring — WAL-safe, rotates
+# automatically (keeps last 14), zero risk to the live DB (reads only).
+~/.npm-global/bin/ruflo memory backup --db .swarm/memory.db --keep 14 >> "$LOG" 2>&1 || true
+
+if run_once 1; then
+  exit 0
+fi
+
+echo "===== first attempt failed — waiting 3 min, retrying once (self-heal for transient issues) =====" >> "$LOG"
+sleep 180
+
+if run_once 2; then
+  echo "===== SELF-HEALED on retry — no escalation needed =====" >> "$LOG"
+  exit 0
+fi
+
+# Both attempts genuinely failed. Escalate loudly AND leave a marker the next session cannot miss.
+AFTER=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "unknown")
+TAIL=$(tail -8 "$LOG" | tr '\n' ' ' | cut -c1-600)
+mkdir -p .ruvnet-brain
+python3 -c "
+import json, datetime
+json.dump({
+  'at': datetime.datetime.utcnow().isoformat() + 'Z',
+  'tag_stuck_at': '$AFTER',
+  'tail': '''$TAIL''',
+  'note': 'Nightly failed twice (immediate + 3min retry). Needs a live session to diagnose — see logs/nightly.log.'
+}, open('$MARKER', 'w'), indent=2)
+"
+sh scripts/notify.sh "🔴 Nightly FAILED twice — needs you" "tag stuck at $AFTER after retry. Last: $TAIL" urgent "rotating_light"
+echo "===== ESCALATED: marker written at $MARKER =====" >> "$LOG"
+exit 1
