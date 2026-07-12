@@ -162,6 +162,29 @@ if (count >= BURST_AGENTS) {
   );
 }
 
+// ─── Detector 3: silently-failing scheduled jobs (no key needed) ─────────────
+// A launchd job that exits non-zero leaves no trace unless it configured a log —
+// most don't. This surfaces the exact class that hid the All-In pipeline outage
+// AND that leaves 5 of this machine's jobs quietly broken. Intelligence added,
+// nothing taken away: your automation keeps running; it just can't fail in silence.
+try {
+  const out = execFileSync('launchctl', ['list'], { encoding: 'utf8' });
+  const mine = /^(com\.ruvnet|ai\.askruvnet|com\.stuartkerr|com\.isovision)\./;
+  const failing = out.split('\n').slice(1)
+    .map((l) => l.split('\t'))
+    .filter((c) => c.length >= 3 && mine.test(c[2]) && c[1] !== '0' && c[1] !== '-')
+    .map((c) => `${c[2]} (exit ${c[1]})`);
+  console.log(`[watchdog] failing scheduled jobs: ${failing.length}`);
+  if (failing.length > 0) {
+    await alert(
+      `${failing.length} scheduled job(s) failing silently`,
+      `These launchd jobs last exited non-zero and most log nothing: ${failing.slice(0, 6).join('; ')}. Check them before they cost you.`
+    );
+  }
+} catch {
+  /* launchctl unavailable — skip */
+}
+
 const adminKey = process.env.ANTHROPIC_ADMIN_KEY;
 if (adminKey) {
   const s = await todaySpendUsd(adminKey);

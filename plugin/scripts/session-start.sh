@@ -47,7 +47,7 @@ LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
 if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
-    2.2.0*|2.2.1*) WHATS_NEW="now ships a spend watchdog that alerts you the instant a background tool starts running up API costs — so you never get a surprise bill. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
+    2.2.0*|2.2.1*|2.2.2*) WHATS_NEW="now ships a safety watchdog that alerts you the instant a background tool starts running up API costs OR a scheduled job starts failing silently — so nothing spends or breaks behind your back. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
   esac
   if [ -n "$WHATS_NEW" ]; then
     echo "[RuvNet Brain — new in v$RUNNING_V]"
