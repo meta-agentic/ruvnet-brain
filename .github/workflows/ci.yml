@@ -16,6 +16,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: No-fossil guard (history slimmed 2026-07-12 — repo must stay lean)
+        # kb/*.rvf & sidecars are gitignored, but one force-add or new large artifact would re-bloat
+        # every clone for every user. Fails on any tracked blob >5MB at HEAD (largest legit file
+        # today: 2.45MB explainer PNG). The brain ships via Release assets, never via git.
+        run: |
+          big=$(git ls-tree -r -l HEAD | awk '$4 > 5242880 {print $4/1048576 "MB", $5}')
+          if [ -n "$big" ]; then echo "Tracked file(s) exceed 5MB — ship via Release assets instead:"; echo "$big"; exit 1; fi
       - name: Version single-source-of-truth (fails on any drift / stray literal)
         run: npm run version:check
       - name: Claims ledger (every advertised number must regenerate)
