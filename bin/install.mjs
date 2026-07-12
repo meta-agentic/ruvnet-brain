@@ -505,7 +505,11 @@ function gatherInstallState(cacheDir) {
   }
   return {
     repos,
-    reader: fs.existsSync(path.join(cacheDir, 'node_modules')),
+    // A bare node_modules dir is not enough — on 2026-07-12 the dir test passed conceptually while
+    // the embedder was gone and every search failed. Check the two load-bearing packages directly.
+    reader:
+      fs.existsSync(path.join(cacheDir, 'node_modules', '@xenova', 'transformers', 'package.json'))
+      && fs.existsSync(path.join(cacheDir, 'node_modules', '@ruvector')),
     mcp: fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs')),
   };
 }
@@ -520,7 +524,7 @@ function verifyInstall(cacheDir) {
   else warn(`no .rvf stores found in ${cacheDir} — the brain may be incomplete (re-run with --force)`);
 
   if (reader) ok('local reader installed (vector reads happen offline — no cloud, no API key)');
-  else warn('reader deps missing — re-run the installer');
+  else warn(`reader deps missing — every search WILL fail until fixed: cd ${cacheDir} && npm i`);
 
   if (mcp) ok('search_ruvnet server present (this is what Claude calls to ground answers)');
   else warn('forge-mcp-all.mjs missing — the brain unpacked incompletely');

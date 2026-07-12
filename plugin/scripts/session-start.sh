@@ -49,6 +49,36 @@ delete the marker file.
 EOF
 fi
 
+# ── GONG LAYER 2: brain-health alarm, checked EVERY session (Stuart, 2026-07-12: "big gonging
+# things flashing all over the place — that can NEVER happen silently"). On 2026-07-12 the brain's
+# node_modules vanished and every search failed for days, invisibly. These are pure-filesystem
+# checks (<5ms, no node, no network) so they run unconditionally — no rate limiting on an alarm.
+# health.json is written by kb/brain-alarm.mjs the moment a real search fails; the structural
+# checks below catch the broken state even before any search has run.
+GONG_KB="$HOME/.cache/ruvnet-brain/kb"
+GONG_HEALTH="$HOME/.cache/ruvnet-brain/health.json"
+BRAIN_PROBLEM=""
+if [ ! -d "$GONG_KB" ]; then
+  BRAIN_PROBLEM="the brain cache directory is MISSING ($GONG_KB) — reinstall: npx github:stuinfla/ruvnet-brain"
+elif ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; then
+  BRAIN_PROBLEM="NO vector stores (.rvf) found in $GONG_KB — the brain is empty; reinstall: npx github:stuinfla/ruvnet-brain --force"
+elif [ ! -f "$GONG_KB/node_modules/@xenova/transformers/package.json" ]; then
+  BRAIN_PROBLEM="reader dependencies are MISSING (node_modules gone) — every search WILL fail. Fix: cd $GONG_KB && npm i"
+elif grep -q '"status": *"down"' "$GONG_HEALTH" 2>/dev/null; then
+  BRAIN_PROBLEM="the last real search FAILED across all repos ($(grep -o '"error": *"[^"]*"' "$GONG_HEALTH" 2>/dev/null | head -1 | cut -c1-180)). Fix: cd $GONG_KB && npm i, then run one search to clear the alarm"
+fi
+if [ -n "$BRAIN_PROBLEM" ]; then
+  cat <<EOF
+🚨🚨🚨 [RuvNet Brain — HEALTH ALARM: THE BRAIN IS DOWN — SURFACE THIS FIRST] 🚨🚨🚨
+Health check failed: $BRAIN_PROBLEM
+MANDATE (non-negotiable, Stuart 2026-07-12): open your VERY FIRST response line with a loud, plain
+alert — e.g. "🚨 Heads up: the RuvNet Brain is BROKEN right now (<reason>) — grounding is offline
+until it's fixed. The fix is: <fix>. Want me to run it?" — BEFORE anything else. Do NOT answer
+RuvNet/rUv-stack questions from memory while the brain is down, and NEVER quietly proceed as if
+retrieval were working. Verify after fixing: npx github:stuinfla/ruvnet-brain --doctor
+EOF
+fi
+
 # ── heartbeat: rate-limited (~once/20h) check against the live GitHub plugin.json ──
 # Detects a version gap, then APPLIES it automatically in the background — no manual command for the
 # user to remember. `claude plugin marketplace update` + `claude plugin update` only refresh an
@@ -77,6 +107,7 @@ LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
 if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
+    2.3.*) WHATS_NEW="can no longer break silently: if the brain's search ever fails, you get an urgent phone push within seconds, a red alert at the top of every new Claude session, and a nightly canary check — three independent alarms, all tested by deliberately breaking the brain and watching them ring. Searches that fail now say WHY (and how to fix it) instead of pretending nothing matched." ;;
     2.2.0*|2.2.1*|2.2.2*) WHATS_NEW="now ships a safety watchdog that alerts you the instant a background tool starts running up API costs OR a scheduled job starts failing silently — so nothing spends or breaks behind your back. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
   esac
   if [ -n "$WHATS_NEW" ]; then

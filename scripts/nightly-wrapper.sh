@@ -52,6 +52,23 @@ run_once() {
 # automatically (keeps last 14), zero risk to the live DB (reads only).
 ~/.npm-global/bin/ruflo memory backup --db .swarm/memory.db --keep 14 >> "$LOG" 2>&1 || true
 
+# ── GONG LAYER 3: brain-health canary (Stuart, 2026-07-12 — the brain must NEVER be dark silently).
+# One real query against the LIVE cache brain every night. forge-ask-all.mjs exits non-zero on a
+# total retrieval failure (all repos erroring) and rings kb/brain-alarm.mjs itself; this adds the
+# guaranteed-nightly cadence plus its own urgent push, independent of the publish job's outcome.
+BRAIN_KB="$HOME/.cache/ruvnet-brain/kb"
+if [ -f "$BRAIN_KB/forge-ask-all.mjs" ]; then
+  echo "===== brain-health canary — $(date -u +%FT%TZ) =====" >> "$LOG"
+  if (cd "$BRAIN_KB" && /usr/local/bin/node forge-ask-all.mjs --dir . --q "HNSW vector index" --k 1) >> "$LOG" 2>&1; then
+    echo "===== brain-health canary: OK =====" >> "$LOG"
+  else
+    echo "===== brain-health canary: DOWN — escalating =====" >> "$LOG"
+    sh scripts/notify.sh "🚨 RuvNet Brain DOWN (nightly canary)" \
+      "The live brain at $BRAIN_KB failed a real query — retrieval is broken for every session on this machine. Fix: cd $BRAIN_KB && npm i, then npx github:stuinfla/ruvnet-brain --doctor. See logs/nightly.log." \
+      urgent "rotating_light" || true
+  fi
+fi
+
 if run_once 1; then
   exit 0
 fi

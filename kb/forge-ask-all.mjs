@@ -106,6 +106,30 @@ async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
   const { repos: used, perRepo, results, pooled } = await searchAll({ dir, query, k, pool, repos });
+  // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
+  // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
+  // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
+  const failed = Object.entries(perRepo).filter(([, v]) => typeof v === 'string' && v.startsWith('ERR:'));
+  if (used.length > 0 && failed.length === used.length) {
+    console.error('\n🚨🚨🚨  RUVNET BRAIN IS DOWN — ALL ' + used.length + ' repos failed to search.  🚨🚨🚨');
+    console.error('This is NOT an empty result; retrieval itself is broken.');
+    console.error('First error: ' + failed[0][1]);
+    console.error('Fix:    cd ~/.cache/ruvnet-brain/kb && npm i');
+    console.error('Verify: npx github:stuinfla/ruvnet-brain --doctor\n');
+    try {
+      const alarm = await import(new URL('./brain-alarm.mjs', import.meta.url).href);
+      await alarm.reportBrainDown({ error: failed[0][1], source: 'cli:forge-ask-all' });
+    } catch { /* alarm module absent — the banner + exit code above still gong */ }
+    process.exit(1);
+  }
+  if (failed.length > 0) {
+    console.error(`⚠ DEGRADED: ${failed.length}/${used.length} repos failed (${failed.map(([n]) => n).join(', ')}) — results cover only the healthy repos.`);
+  } else {
+    // All repos healthy: clear any standing DOWN state (transition-only write inside).
+    import(new URL('./brain-alarm.mjs', import.meta.url).href)
+      .then((m) => m.reportBrainUp({ source: 'cli:forge-ask-all' }))
+      .catch(() => {});
+  }
   console.log(`\n=== RuvNet Brain (cross-repo) — "${query}" ===`);
   console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}\n`);
   results.forEach((r, i) => {

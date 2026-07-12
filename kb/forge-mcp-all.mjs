@@ -20,6 +20,14 @@ import path from 'node:path';
 import { searchAll, discoverRepos } from './forge-ask-all.mjs';
 import { guardPassages } from './forge-guard-injection.mjs';
 
+// ── THE GONG (brain-alarm.mjs): a total retrieval failure must NEVER read as "(no results)". ──
+// Loaded dynamically + guarded (same pattern as telemetry) so an older bundle without the module
+// still serves queries — but when present, all-repos-failing rings health.json + a phone push.
+let alarm = null;
+import(new URL('./brain-alarm.mjs', import.meta.url).href)
+  .then((m) => { alarm = m; })
+  .catch(() => { /* module absent (pre-2026-07-12 bundle) — loud in-band error below still fires */ });
+
 // ── TOKEN METER (ADR-0011 token_cost_efficiency): one JSON line per search_ruvnet call recording
 // the REAL size (chars) of the response text handed back to the model — appended to the SAME
 // per-project ledger the plugin hooks write (.ruvnet-brain/token-ledger.jsonl in this process's
@@ -107,7 +115,27 @@ async function handle(msg) {
         const query = String(args.query || '').trim();
         const k = Math.max(1, parseInt(args.k ?? 6, 10) || 6);
         if (!query) return err(id, -32602, 'query is required');
-        const { results: rawResults, repos } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const { results: rawResults, repos, perRepo } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
+        // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
+        // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
+        const failedRepos = Object.entries(perRepo || {}).filter(([, v]) => typeof v === 'string' && v.startsWith('ERR:'));
+        if (repos.length > 0 && failedRepos.length === repos.length) {
+          const firstErr = failedRepos[0][1];
+          if (alarm) alarm.reportBrainDown({ error: firstErr, source: 'mcp:search_ruvnet' }).catch(() => {});
+          const body =
+            `🚨🚨🚨 RUVNET BRAIN IS DOWN — ALL ${repos.length} repos failed to search. 🚨🚨🚨\n\n`
+            + `This is NOT an empty result. Retrieval itself is broken; no RuvNet grounding is possible right now.\n`
+            + `First error: ${firstErr}\n\n`
+            + `Most likely fix:  cd ~/.cache/ruvnet-brain/kb && npm i\n`
+            + `Then verify:      npx github:stuinfla/ruvnet-brain --doctor\n\n`
+            + `➡ INSTRUCTION TO THE MODEL: tell the user PLAINLY and PROMINENTLY, before anything else, `
+            + `that the RuvNet Brain is broken and needs the fix above. Do NOT answer RuvNet questions `
+            + `from memory, and do NOT proceed as if this were a normal empty search.`;
+          meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: body.length });
+          return ok(id, { content: [{ type: 'text', text: body }], isError: true });
+        }
+        if (alarm && failedRepos.length === 0) alarm.reportBrainUp({ source: 'mcp:search_ruvnet' }).catch(() => {});
         // SECURITY FLOOR: scan each retrieved passage for prompt-injection right before it leaves
         // the MCP boundary (the highest-value, lowest-risk choke point). A flagged passage is WRAPPED
         // as inert reference data so an autonomous Claude won't execute an instruction injected into
@@ -122,8 +150,15 @@ async function handle(msg) {
           + `----- full document (${(r.fullText || '').length} chars, ${r.chunksJoined} chunk(s)${r.truncated ? ', truncated' : ''}) -----\n`
           + `${r.fullText || r.text || ''}\n`
         ).join('\n========================================================\n\n');
+        // Partial failure is DEGRADED, not fine: name the dead repos in-band so a hit that "should
+        // be there" missing is explainable, and the model can tell the user coverage was reduced.
+        const degraded = failedRepos.length
+          ? `⚠ DEGRADED SEARCH: ${failedRepos.length}/${repos.length} repos failed (${failedRepos.map(([n]) => n).join(', ')}) — first error: ${failedRepos[0][1].slice(0, 200)}\nResults below cover only the healthy repos. Mention this degradation to the user.\n\n`
+          : '';
         const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n\n`;
-        const body = text ? header + text : '(no results)';
+        const body = text
+          ? degraded + header + text
+          : degraded + header + '(no results — the search ran; nothing in the corpus matched this query)';
         meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: body.length });
         // Local grounded-once stamp (never leaves the machine) + opt-in count ping. Guarded:
         // telemetry can never break or delay the response being returned right below.

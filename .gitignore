@@ -73,3 +73,6 @@ kb/.ruv-gists.cache.json
 
 # unattended-loop checkpoints (per-project runtime state)
 .ruvnet-brain/
+
+# RVF store advisory locks (transient, created by any query)
+*.rvf.lock
