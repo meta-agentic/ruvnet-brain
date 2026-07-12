@@ -82,8 +82,76 @@ function codexTiers() {
     const cache = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.codex', 'models_cache.json'), 'utf8'));
     const models = cache.models || cache.data || [];
     const names = models.map((m) => m.id || m.slug || m.name).filter(Boolean);
-    return { fetchedAt: cache.fetched_at || cache.fetchedAt || 'unknown', models: names.slice(0, 20) };
+    // `models` (below) is truncated to 20 for the brief's display list; `allModels` is the FULL set,
+    // kept separately so the gpt-5.6 reinstate check (reinstateGpt56, below) can never miss a real
+    // slug just because it landed past position #20 in the cache.
+    return { fetchedAt: cache.fetched_at || cache.fetchedAt || 'unknown', models: names.slice(0, 20), allModels: names };
   } catch { return null; }
+}
+
+// GPT-5.6 auto-reinstate (Stuart's mandate, 2026-07-12): gpt-5.6-sol/terra/luna were demoted to
+// landscape-only THAT SAME DAY because their "verified live" stamps were false — two independent
+// reads of models_cache.json showed only gpt-5.5/5.4/5.4-mini/codex-auto-review. The demotion note
+// on each entry says: reinstate ONLY when a fresh read of models_cache.json actually shows the slug.
+// This is that fresh read, automated, every week Goldie runs — no more relying on a human to notice.
+//
+// Inverse direction (any 'codex' harness entry whose gpt-* id vanishes from this week's cache) is
+// FLAG-ONLY, never auto-demote: a cache miss could be rollout timing or a transient cache staleness,
+// not proof the model is gone — the same false-confidence mistake in reverse. Demotion stays a
+// judgment call for a human/Goldie's judgment pass, same as the 2026-07-12 demotion itself was.
+function reinstateGpt56(catalog, codex) {
+  const result = { reinstated: [], warnings: [] };
+  if (!codex) return result; // no live cache this run (codexTiers() returned null) — skip both checks silently
+  const live = new Set(codex.allModels);
+  for (const c of catalog.candidates) {
+    if (c.id.startsWith('gpt-5.6') && Array.isArray(c.harness) && c.harness.length === 0 && live.has(c.id)) {
+      c.harness = ['codex'];
+      c.subscription = ['codex'];
+      c.verified = `${TODAY} ~/.codex/models_cache.json live (goldie auto-reinstate)`;
+      c.note = `auto-reinstated by goldie on ${TODAY}; was demoted for false verification 2026-07-12`;
+      result.reinstated.push(c.id);
+    }
+    if (c.id.startsWith('gpt-') && Array.isArray(c.harness) && c.harness.includes('codex') && !live.has(c.id)) {
+      result.warnings.push(c.id);
+    }
+  }
+  return result;
+}
+
+// models.env cross-check (pure informational drift-detection between the two model registries —
+// ~/.claude/models.env auto-refreshes provider pins independently of the router's own catalog.json,
+// so the two can silently drift apart; this just surfaces that, it never edits either file).
+function parseModelsEnv() {
+  try {
+    const lines = fs.readFileSync(path.join(os.homedir(), '.claude', 'models.env'), 'utf8').split('\n');
+    const pins = [];
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const eq = t.indexOf('=');
+      if (eq === -1) continue;
+      pins.push({ key: t.slice(0, eq).trim(), value: t.slice(eq + 1).trim() });
+    }
+    return pins;
+  } catch { return null; }
+}
+
+// Loose match: models.env pins bare model names (e.g. 'deepseek-v4-flash') while the catalog often
+// prefixes openrouter candidates with a provider ('deepseek/deepseek-v4-flash') — compare both the
+// raw id and the segment after the last '/' in either direction.
+function pinMatchesCatalog(pinValue, candidates) {
+  const norm = pinValue.toLowerCase();
+  return candidates.some((c) => {
+    const cid = c.id.toLowerCase();
+    const short = cid.split('/').pop();
+    return cid === norm || short === norm;
+  });
+}
+
+function modelsEnvCrossCheck(catalog) {
+  const pins = parseModelsEnv();
+  if (!pins) return null;
+  return pins.map((p) => ({ ...p, known: pinMatchesCatalog(p.value, catalog.candidates) }));
 }
 
 function decisionStats() {
@@ -101,6 +169,9 @@ async function main() {
   const changes = refreshCatalogPrices(catalog, orModels);
   const watch = radar(catalog, orModels);
   const codex = codexTiers();
+  const gpt56 = reinstateGpt56(catalog, codex);
+  for (const id of gpt56.reinstated) changes.push({ id, note: `AUTO-REINSTATED: harness/subscription set to ['codex'] — slug now confirmed live in models_cache.json (goldie auto-reinstate)` });
+  const envCross = modelsEnvCrossCheck(catalog);
   const stats = decisionStats();
 
   fs.writeFileSync(CATALOG, JSON.stringify(catalog, null, 2) + '\n');
@@ -120,6 +191,15 @@ async function main() {
     '## Codex tiers on this machine (live cache)',
     codex ? `- fetched_at: ${codex.fetchedAt}` : '- no ~/.codex/models_cache.json found',
     ...(codex ? codex.models.map((m) => `- ${m}`) : []),
+    '',
+    `## GPT-5.6 auto-reinstate check (${gpt56.reinstated.length} reinstated this run)`,
+    ...(!codex ? ['- skipped: no live ~/.codex/models_cache.json this run'] :
+      gpt56.reinstated.length ? gpt56.reinstated.map((id) => `- ${id}: REINSTATED — harness/subscription set to ['codex'], now confirmed live`) :
+      ['- none reinstated: no gpt-5.6-* landscape entry appeared in this week\'s live cache']),
+    ...(gpt56.warnings.length ? gpt56.warnings.map((id) => `- WARNING: ${id} has harness:['codex'] but is NOT in this week's live models_cache.json — verify manually before trusting it (flag only, not auto-demoted)`) : []),
+    '',
+    '## models.env cross-check (informational drift-detection between the two model registries; never edits either file)',
+    ...(!envCross ? ['- ~/.claude/models.env not found'] : envCross.map((p) => `- ${p.key}=${p.value}${p.known ? '' : ' — NOT recognized in catalog.json (provider the router doesn\'t track, or the two registries have drifted — worth a look)'}`)),
     '',
     `## Router decision log so far (${stats.total} decisions)`,
     ...Object.entries(stats.byModel).map(([m, n]) => `- ${m}: ${n}`),
