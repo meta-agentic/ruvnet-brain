@@ -35,6 +35,8 @@ export const PRICING = {
   'deepseek/deepseek-chat': { in: 0.20, out: 0.80 },
   'z-ai/glm-4.6': { in: 0.43, out: 1.74 },
   'z-ai/glm-5': { in: 0.60, out: 1.92 },
+  'deepseek/deepseek-v4-flash': { in: 0.077, out: 0.154 }, // verified 2026-07-12 OpenRouter /models live; successor to deepseek-chat (which resolves to legacy V3)
+  'x-ai/grok-4.5': { in: 2.0, out: 6.0 }, // verified 2026-07-12 OpenRouter /models live; mid-priced frontier-adjacent
 };
 export const FRONTIER = { name: 'claude-opus-4.8', in: 5.0, out: 25.0 };
 
