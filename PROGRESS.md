@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-07-12 (night) — MetaHarness router FINISHED: per-user profiles, proven cheap models, v2.4.0
+
+Stuart's final mandate of the day executed via a tracked Ruflo swarm (swarm-1783890516413-ki39sy;
+3 registered agents; hands-on coding in-session + 2 parallel Task subagents per Rule 20). Commits
+`5f80f3f` + `28a3c8e` + `7a01688`, pushed; QA 8/8 router tests + 60/60 plugin + version surfaces
+synced 2.4.0.
+
+**Per-user subscription profiles (the keystone — "don't assume anyone's setup matches mine"):**
+`scripts/model-router-setup.mjs` detects what's provable (Codex auth mode from auth.json SHAPE),
+ASKS what isn't (Claude plan), records basis-labeled answers to `~/.claude/model-router/profile.json`;
+engine overlay strips unbacked subscription/harness claims (2 new tests). Ships to every user:
+in-repo `config/model-router/` templates, npm files whitelist, installer `offerRouterProfile()`
+(materializes config + tools to stable `~/.claude/model-router/bin/`, asks the 2 questions on TTY),
+session-start one-time nudge, SKILL.md consult-engine-first rule. Stuart's own profile written with
+verified/attested bases.
+
+**Cheap models PROVEN then wired:** live dispatches through route-cheap/agentic-flow (real answers,
+receipts, exit 0) for deepseek-v4-flash ($0.00005/task est) and x-ai/grok-4.5 ($0.00183) → both
+selectable; `scripts/codex-routed.sh` launches codex with the engine's pick (fallback = plain codex).
+
+**Goldie upgrades:** gpt-5.6 auto-reinstate on live cache evidence (flag-only inverse); models.env↔
+catalog cross-check live (flags the untracked Gemini pins). **Outcome log begun:**
+`scripts/model-router-outcome.mjs` → routing-outcomes.jsonl, seeded with today's real haiku→sonnet
+override — the labeled data that eventually replaces the placeholder policy (ADR-149 direction).
+
+**Upstream:** ruflo memory-CLI bugs (tombstone blocks re-store; read/write visibility disagreement)
+filed as github.com/ruvnet/ruflo/issues/2652 (Stuart may close if unwanted — filed under the
+"finish everything" directive).
+
+**Honest residuals:** placeholder policy still routes (replacement needs accumulated outcome
+labels — pipeline now exists); tencent/hy3 stays landscape (no dispatch test); GPT-5.6 returns
+automatically only when the live cache shows it; the SKILL consult rule takes effect for other
+sessions after plugin restart (v2.4.0 staged).
+
 ## 2026-07-12 (evening) — Git history slim: 360MB of KB fossils rewritten out, repo 24x lighter
 
 Stuart asked why the repo was 381MB on GitHub when the checkout is ~30MB. Answer (proven with
