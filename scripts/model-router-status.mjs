@@ -36,6 +36,20 @@ function sampleDecision(harness, prompt) {
   }
 }
 
+// HOW Codex is paid for, read from ~/.codex/auth.json's SHAPE (never its secrets): OAuth tokens =
+// "Sign in with ChatGPT" — usage bills the ChatGPT plan (Plus/Pro/Business all include Codex), so
+// marginal cost is $0 and the catalog's subscription:["codex"] entries are correct. An OPENAI_API_KEY
+// instead = metered per-token billing — flip those subscription fields to [] or the $0-floor lies.
+// Verified live on this machine 2026-07-12: tokens present, no API key -> chatgpt-subscription.
+function codexAuthMode() {
+  try {
+    const a = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.codex', 'auth.json'), 'utf8'));
+    if (a.tokens) return 'chatgpt-subscription';
+    if (a.OPENAI_API_KEY) return 'api-key-metered';
+  } catch { /* absent or unreadable — not authed */ }
+  return null;
+}
+
 function detectInventory() {
   const has = (cmd) => {
     try { execFileSync('which', [cmd], { stdio: 'ignore' }); return true; } catch { return false; }
@@ -45,6 +59,7 @@ function detectInventory() {
     claudeCli: has('claude'),
     codexCli: has('codex'),
     codexAuthed: fs.existsSync(path.join(os.homedir(), '.codex', 'auth.json')),
+    codexAuthMode: codexAuthMode(),
     keys: {
       ANTHROPIC_API_KEY: keyPresent('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: keyPresent('OPENAI_API_KEY'),
@@ -93,7 +108,10 @@ async function main() {
   console.log(`Active policy: ${result.activePolicy}`);
   console.log('');
   console.log('Detected on this machine:');
-  console.log(`  claude CLI: ${inventory.claudeCli ? 'present' : 'not found'}   codex CLI: ${inventory.codexCli ? (inventory.codexAuthed ? 'present, authed' : 'present, not authed') : 'not found'}`);
+  const codexPay = inventory.codexAuthMode === 'chatgpt-subscription' ? 'authed via ChatGPT subscription ($0 marginal)'
+    : inventory.codexAuthMode === 'api-key-metered' ? 'authed via API key (METERED — subscription fields in catalog.json should be [])'
+    : inventory.codexAuthed ? 'authed (mode unknown)' : 'not authed';
+  console.log(`  claude CLI: ${inventory.claudeCli ? 'present' : 'not found'}   codex CLI: ${inventory.codexCli ? `present, ${codexPay}` : 'not found'}`);
   const keyList = Object.entries(inventory.keys).filter(([, v]) => v).map(([k]) => k.replace('_API_KEY', ''));
   console.log(`  API keys present: ${keyList.length ? keyList.join(', ') : 'none'}`);
   console.log('');
