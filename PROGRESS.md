@@ -1,8 +1,73 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-09 EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-12 EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
 
 ---
+
+## 2026-07-12 (later) — AgentDB recall fixed at the GLOBAL layer, not just this project
+
+Stuart's real question after the nightly-infra + GONG work: "why did I have to tell you to fix
+this — isn't recall just part of Ruflo?" Checked live rather than assumed: `ruflo agentdb
+session-start` doesn't exist, `hooks session-start` is deprecated and only restores agents/tasks,
+`memory --help` has no recall/session-start subcommand. Confirmed: nothing in the ecosystem
+auto-recalls memory at session start. The fix built earlier this session (the
+`project-state-current` auto-recall block) only lived in this repo's own plugin hook — it never
+helped any other project. Moved it to the GLOBAL `~/.claude/hooks/agentdb-ensure.sh` so every
+AgentDB-enabled project gets it, removed the now-redundant local copy here, and codified the
+`project-state-current` convention in global CLAUDE.md Rule 19 (bumped v6.6.0→v6.7.0).
+
+**Bonus find while re-writing this repo's own key:** `ruflo memory retrieve` / `delete` /
+`store --upsert` all fail against a row that provably exists (byte-identical key/namespace via
+raw sqlite3, absolute path tested, no metadata differences) — a real, reproduced, live CLI bug,
+not a ruvnet-brain bug. Not chasing it into claude-flow's source tonight; instead the global
+hook's recall now reads `memory_entries` directly via read-only `sqlite3` (same table
+`agentdb-autocapture.mjs` already writes to) so the one thing this hook exists for doesn't
+depend on a component that just proved unreliable. Worth a GitHub issue upstream at some point.
+
+Verified live for all three cases: existing key (ruvnet-brain) → real content printed; memory.db
+present but no key yet (PowerPlatePulse) → correctly silent, no false-positive WARN-as-content;
+no `.swarm` at all → falls through to the unaffected new-project offer flow.
+
+---
+
+## 2026-07-12 — BRAIN OUTAGE fixed + THE GONG SYSTEM (v2.3.0) + MetaHarness router committed
+
+**The outage:** the brain was completely dark — every `search_ruvnet` (MCP + CLI) failed with
+`Cannot resolve '@xenova/transformers'` across all 37 repos, and the MCP tool reported it as an
+innocent "(no results)". Root cause: retrieval had been resolving the embedder from `~/.npm-global`
+(XENOVA_PATH fallback); a node upgrade broke that and `kb/` had no node_modules of its own
+(`~/.cache/ruvnet-brain/kb` is a SYMLINK to the repo's `kb/`). **Fix:** `npm i` in `kb/` (deps now
+pinned via committed package-lock.json, no global-dir dependency). Proven recovered: 37/37 repos
+answering, 312 pooled candidates on the canary query.
+
+**THE GONG SYSTEM (Stuart's non-negotiable: "that can NEVER happen silently") — c9db076, v2.3.0.**
+Three independent, individually TESTED alarm layers (proven by deliberately breaking the brain —
+`mv kb/node_modules` away — and watching each ring, then restoring and watching recovery clear):
+1. Real-time: `kb/brain-alarm.mjs` + total-failure detection in `forge-mcp-all.mjs`/`forge-ask-all.mjs`
+   — all-repos-failing returns a screaming isError response (never "(no results)"), CLI exits 1,
+   writes `~/.cache/ruvnet-brain/health.json`, urgent ntfy push (throttled 1/hr; topic from env or
+   `~/.cache/ruvnet-brain/ntfy-topic`). Partial failures labeled DEGRADED with dead repos named.
+2. Per-session: `plugin/scripts/session-start.sh` pure-fs structural checks flash a red MANDATE
+   banner in every new session while broken.
+3. Nightly: canary query in `scripts/nightly-wrapper.sh`, own urgent push on failure.
+Plugin QA 60/60 green. Test push delivered to phone.
+
+**MetaHarness model router committed (23d085f)** — the harness-neutral prompt→model decision engine
+built earlier today (partly from Stuart's accidental all-in-window session, reconciled + tested
+5/5): `scripts/model-router-engine.mjs` (pluggable policy, subscription-$0 floor, verified-pricing
+catalog at `~/.claude/model-router/catalog.json`), status tool, contract tests. Repo reconciled:
+pulled v2.2.0→v2.2.2 + nightly-infra commits from the other session, set upstream tracking, pushed.
+
+**Grounded design directions for the router policy (brain citations):** agentic-flow's Multi-Model
+Router (`agentic-flow/docs/router/README.md` — `--router-mode cost-optimized`, budget alerts) and
+ruflo **ADR-149** (PROPOSED — per-model cost-optimal routing via `@metaharness/router`'s
+`Router.fromExamples` qualityBar selection, measured 76–97% savings forecasts). Codex subscription
+detection verified live: `~/.codex/auth.json` has OAuth tokens (ChatGPT Business login), NO API key
+— Codex on this machine is subscription-covered, marginal-$0.
+
+**OPEN (next):** Goldie weekly model-landscape research job (buckets + best-per-bucket → catalog/
+policy proposals); researched policy.mjs to replace the documented placeholder; wire router consult
+points (subagent dispatch, Codex wrapper, route-cheap); AgentDB omniscience consolidation pass.
 
 ## 2026-07-06 — SECURITY HARDENING (SEC-0010): Dragan Spiridonov's QE review, all 12 addressed
 

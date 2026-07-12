@@ -25,18 +25,9 @@ fi
 # self-heal retry; a clean run or legitimate no-op removes it. Presence here = unprompted, first
 # thing surfaced, no waiting for the phone alert to be seen.
 NIGHTLY_MARKER="/Users/stuartkerr/Code/ruvnet-brain/.ruvnet-brain/nightly-failure.json"
-# ── canonical project-state auto-recall (Stuart, 2026-07-12): "never misses a beat" — AgentDB had
-# ZERO automatic retrieval at session start (agentdb-ensure.sh only fires when memory is ABSENT,
-# silent forever once enabled — the real gap). Fixed here: when a project-state-current key exists
-# in the LOCAL .swarm/memory.db, surface it unprompted, every session, so a fresh session or a
-# post-compact session knows exactly where things stand without me having to think to search for it.
-# Read-only, bounded (ruflo's own timeout), fails silent if ruflo/db/key absent — never blocks.
-if [ -f "$PWD/.swarm/memory.db" ] && command -v ruflo >/dev/null 2>&1; then
-  STATE=$(timeout 8 ruflo memory retrieve -k "project-state-current" -n "$(basename "$PWD")" --value-only --path "$PWD/.swarm/memory.db" 2>/dev/null)
-  if [ -n "$STATE" ]; then
-    printf '[RuvNet Brain — canonical project state, auto-recalled (never miss a beat)]\n%s\n' "$STATE"
-  fi
-fi
+# canonical project-state-current auto-recall moved to the GLOBAL hook
+# (~/.claude/hooks/agentdb-ensure.sh, 2026-07-12) so every project with AgentDB gets it, not just
+# this one — kept here it would double-print in this repo since both hooks fire in the same session.
 
 if [ -f "$NIGHTLY_MARKER" ]; then
   cat <<EOF
