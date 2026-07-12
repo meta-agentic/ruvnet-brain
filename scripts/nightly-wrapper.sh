@@ -69,6 +69,16 @@ if [ -f "$BRAIN_KB/forge-ask-all.mjs" ]; then
   fi
 fi
 
+# ── Key-health canary (Stuart, 2026-07-12: two provider keys found dead by accident, months late).
+# Runs through `zsh -lc` ON PURPOSE: a login shell sources ~/.zshrc -> env.global + the openclaw
+# SOPS secrets, so this probes the EXACT env every real shell inherits — the real door, not a copy.
+# The canary itself handles urgent pushes on alive->DEAD transitions (and recovery notices), so a
+# known-dead key doesn't re-alarm every night; here we only log.
+echo "===== key-health canary — $(date -u +%FT%TZ) =====" >> "$LOG"
+zsh -lc 'cd /Users/stuartkerr/Code/ruvnet-brain && /usr/local/bin/node scripts/key-canary.mjs --notify' >> "$LOG" 2>&1 \
+  && echo "===== key-health canary: all present keys alive =====" >> "$LOG" \
+  || echo "===== key-health canary: at least one key DEAD (push sent on new deaths) =====" >> "$LOG"
+
 if run_once 1; then
   exit 0
 fi

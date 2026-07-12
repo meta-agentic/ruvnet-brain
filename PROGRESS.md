@@ -83,6 +83,19 @@ OpenRouter, old "needs bespoke xAI adapter" note obsolete). Goldie's full source
 ~/.claude/model-router/goldie/2026-07-12.md. SIDE FINDING for Stuart: the ANTHROPIC_API_KEY in
 ~/.zshrc + launchctl env is DEAD (HTTP 401 live) — anything relying on it silently fails.
 
+**SECRETS: ONE VAULT + KEY-HEALTH CANARY (same day, Stuart-approved).** Root cause of the
+"stale keys project to project" pain mapped live: SOPS+age vault in openclaw-stack decrypted to
+secrets.env (sourced machine-wide by .zshrc) — but the chain had no enforced direction, so copies
+drifted (decrypted hand-edited Apr 2 without re-sealing; launchctl copies never synced — the
+launchctl OPENAI_API_KEY was DEAD (401) while the shell copy was alive). Built + proven:
+`openclaw-stack/secrets-sync.sh` (`seal`/`sync`, round-trip verified before vault replacement,
+REFUSES to destroy un-sealed edits — refusal proven live; sync healed the dead launchctl copy
+401→200) and `scripts/key-canary.mjs` (live list-models probe per provider through the REAL
+`zsh -lc` env chain; DEAD detection proven with a bogus key; transition-only urgent pushes; wired
+into nightly-wrapper). New Anthropic key installed via the full chain (vault re-encrypted,
+round-trip proven, fresh-shell HTTP 200). All 6 provider keys verified alive. openclaw-stack
+commit f3c5a86 (private repo). Full map: auto-memory `global-secrets-architecture.md`.
+
 **OPEN (next):** wire router consult points (subagent dispatch via hooks_model-route + engine,
 Codex launch wrapper, route-cheap PRICING entries + tested dispatch for v4-flash/grok-4.5 after
 measured quality checks); ship policy/catalog templates in-repo (they live only in ~/.claude now);
