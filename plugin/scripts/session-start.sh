@@ -34,6 +34,30 @@ STAMP="$STATE_DIR/.last-update-check"
 PREF_FILE="$STATE_DIR/.auto-update-pref"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
+# ── what's-new: the FIRST session after a version change surfaces ONE positive line about what the
+# new version ADDS — users should learn what improved, not just that something updated. Fires once per
+# new version (tracked in .last-announced-version), EVERY session (not rate-limited like the heartbeat
+# below, so it lands the moment a user restarts onto a new version), non-blocking. To announce a
+# release, add a line to the case. Keep it upbeat and benefit-first — this is the good-news channel.
+RUNNING_V=""
+[ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
+  RUNNING_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+ANNOUNCED_FILE="$STATE_DIR/.last-announced-version"
+LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
+if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
+  WHATS_NEW=""
+  case "$RUNNING_V" in
+    2.2.0*|2.2.1*) WHATS_NEW="now ships a spend watchdog that alerts you the instant a background tool starts running up API costs — so you never get a surprise bill. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
+  esac
+  if [ -n "$WHATS_NEW" ]; then
+    echo "[RuvNet Brain — new in v$RUNNING_V]"
+    echo "Near the top of your first response, share ONE upbeat line so the user knows what this update gives them (adapt naturally, keep it to a sentence or two):"
+    echo "  \"🧠 RuvNet Brain just updated to v$RUNNING_V — it $WHATS_NEW\""
+    echo "Say it once; don't repeat later this session."
+  fi
+  echo "$RUNNING_V" > "$ANNOUNCED_FILE" 2>/dev/null
+fi
+
 # One-time consent question (asked at most once ever, per machine) — security-conscious default:
 # self-update is powerful (it can change the model's own instructions), so it's opt-in via an explicit
 # yes, not silently on. Once answered, never asked again; the answer is a plain yes/no file, not a flag
