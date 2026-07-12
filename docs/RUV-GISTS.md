@@ -5,10 +5,11 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_437 gists · refreshed 2026-07-11_
+_437 gists · refreshed 2026-07-12_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-11 | [.roomodes.json](https://gist.github.com/ruvnet/a206de8d484e710499398e4c39fa6299) | This guide introduces Roo Code and the innovative Boomerang task concept, now integrated into SPARC Orchestration. By fo |
 | 2026-07-10 | [claude-flow-firsts-executive-brief.md](https://gist.github.com/ruvnet/a8df1bae4686ebf3914dd61c8afe6d69) | Claude-Flow / Ruflo: Year One Executive Brief — 31 verified first-mover positions, harness-not-model thesis, top 20 inno |
 | 2026-07-09 | [ruflo-3.24.0-flywheel.md](https://gist.github.com/ruvnet/f8e2851fd307df5d5de7b5c70c37fa0c) | ruflo 3.24.0 — Self-Learning Flywheel: what it is, how it works, usage & upgrade notes |
 | 2026-07-09 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
@@ -26,7 +27,6 @@ _437 gists · refreshed 2026-07-11_
 | 2026-07-04 | [*claude.md](https://gist.github.com/ruvnet/e8bb444c6149e6e060a785d1a693a194) | The Claude-SPARC Automated Development System is a comprehensive, agentic workflow for automated software development us |
 | 2026-07-03 | [soul-signature-gist.md](https://gist.github.com/ruvnet/f7418e475e3c3fe7279f3dd88d4865c3) | RuView Soul Signature — passive WiFi biometric identity from hardware (no camera, no wearable). Repo: https://github.com |
 | 2026-07-02 | [fable.md](https://gist.github.com/ruvnet/dbe163c3fc9accfe62198f70a667b339) | Fable 5 — Performance, Capabilities & Cost |
-| 2026-07-02 | [.roomodes.json](https://gist.github.com/ruvnet/a206de8d484e710499398e4c39fa6299) | This guide introduces Roo Code and the innovative Boomerang task concept, now integrated into SPARC Orchestration. By fo |
 | 2026-06-30 | [AgentBBS.md](https://gist.github.com/ruvnet/e54f62d30bcb90377817702ea79ed016) | AgentBBS — the first BBS for agents and humans: anonymous, signed, federated boards with a web UI, MCP/SSH for agents, a |
 | 2026-06-29 | [ADR-164-agentbbs-business-autopilot.md](https://gist.github.com/ruvnet/82fcbb5b93d465878526ac76acadcac0) | ADR-164 AgentBBS Federated Business-Management Autopilot — v3.16.0 ruflo release |
 | 2026-06-29 | [findings.md](https://gist.github.com/ruvnet/2d6c1c9944f8da5b3f9e69ef1c5a0b3a) | agenticow@0.2.3 measured vs published perf — bench harness verifies 162-byte branches but ~10ms not 0.5ms |
