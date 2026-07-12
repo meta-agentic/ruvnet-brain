@@ -67,6 +67,31 @@ export function extractFeatures(prompt, harness) {
   };
 }
 
+// ── PER-USER SUBSCRIPTION PROFILE (2026-07-12) ─────────────────────────────────────────────────
+// The catalog states facts about MODELS; the profile states facts about THIS USER (which harnesses
+// they have, which are subscription-covered — detected/asked/verified by model-router-setup.mjs).
+// The overlay strips any subscription or harness claim the profile doesn't back, so the $0 floor
+// can never assume a plan the user doesn't have (silently billing them) or miss one they do
+// (silently wasting it). No profile file = catalog taken as-is (pre-profile installs keep working).
+export const PROFILE_PATH =
+  process.env.MODEL_ROUTER_PROFILE || path.join(CONFIG_DIR, 'profile.json');
+
+export function loadProfile() {
+  try { return JSON.parse(fs.readFileSync(PROFILE_PATH, 'utf8')); } catch { return null; }
+}
+
+export function applyProfile(candidates, profile) {
+  const h = profile?.harnesses;
+  if (!h) return candidates;
+  return candidates.map((c) => ({
+    ...c,
+    // A harness the user doesn't have can never launch anything — remove it from the pool filter.
+    harness: (c.harness || []).filter((x) => h[x] === undefined || h[x].available !== false),
+    // A subscription claim only survives if THIS user's profile confirms that harness is covered.
+    subscription: (c.subscription || []).filter((x) => h[x]?.subscription === true),
+  }));
+}
+
 export function loadCatalog() {
   try {
     const j = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
@@ -139,7 +164,8 @@ async function main() {
     process.exit(2);
   }
 
-  const candidates = loadCatalog();
+  const profile = loadProfile();
+  const candidates = applyProfile(loadCatalog(), profile);
   const policy = await loadPolicy(args.policy);
   const features = extractFeatures(prompt, harness);
 
@@ -163,6 +189,7 @@ async function main() {
     reason: decision.reason,
     confidence: decision.confidence,
     policy_source: policy ? policy.source.replace(os.homedir(), '~') : 'none',
+    profile: profile ? PROFILE_PATH.replace(os.homedir(), '~') : 'none (catalog taken as-is — run model-router-setup.mjs)',
     price_verified: chosen ? chosen.verified : null,
     est_input_cost_usd: estInputCost(chosen, features.estTokens), // null if price unknown — never invented
     features: { estTokens: features.estTokens, hasCode: features.hasCode, codeFences: features.codeFences, fileTypes: features.fileTypes, questionCount: features.questionCount },

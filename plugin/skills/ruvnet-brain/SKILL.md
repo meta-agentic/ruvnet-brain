@@ -95,6 +95,20 @@ When asked to build, implement, add, refactor, enhance, or fix anything, do NOT 
 
 Two separate questions, don't conflate them: (1) which Claude tier for a subagent you're about to dispatch, (2) whether a task can skip Claude entirely and go to a cheap third-party model. Both verified live, end-to-end, on 2026-07-07 — by reading the actual source across `ruflo`, `agentic-flow`, and `agent-harness-generator` (not their ADRs, which drift from the code in both directions), then running real commands. Apply both by default whenever you dispatch a subagent — this is the standard way the brain works, not an opt-in per project.
 
+**0. The MetaHarness router engine — consult it FIRST, on every dispatch (added 2026-07-12).** If `~/.claude/model-router/` exists on this machine, it holds a harness-neutral decision engine, a verified-pricing catalog, and THIS USER's subscription profile (which harnesses they have and which are $0-covered — detected/asked/verified by `model-router-setup.mjs`; never assume one user's subscriptions match another's). Before spawning any subagent or Task:
+
+```bash
+node ~/.claude/model-router/bin/model-router-engine.mjs --harness claude-code --prompt "<the task>" --json
+```
+
+Use `.model` (map Claude ids to the Task `model` param: haiku/sonnet/opus tiers) and print its one dim `--line` receipt so routing is visible. If your judgment says the pick is wrong (the default policy is a documented placeholder that under-escalates multi-step agentic work), override it — but RECORD the override, it's exactly the labeled data the future learned policy trains on:
+
+```bash
+node ~/.claude/model-router/bin/model-router-outcome.mjs --model "<picked-or-overridden id>" --success true|false --note "why"
+```
+
+If `profile.json` is missing, ask the user the two subscription questions (Claude Pro/Max? Codex via ChatGPT login?) and run `model-router-setup.mjs` — routing without a profile silently assumes subscriptions the user may not have. For launching Codex with the engine's pick: `~/.claude/model-router/bin/codex-routed.sh "<task>"`.
+
 **1. Claude-tier routing.** Before spawning any non-trivial subagent, call `mcp__ruflo__hooks_model-route` with the task description and use its recommendation instead of defaulting to Sonnet by habit — it's a real, live Thompson-bandit + complexity heuristic (verified: "fix a typo" → haiku, 0.04x cost, 85% confidence; "design PCI security architecture" → sonnet, 0.2x cost). Call `hooks_model-outcome` after with the real result — every project starts this bandit at zero decisions and it stays there unless something closes the loop.
 
 Don't expect this specific tool to ever reach GLM/DeepSeek/anything non-Anthropic: its handler never computes an embedding, the one thing that unlocks Ruflo's separate neural router (`neural-router.ts`) — that router is real, well-built code (verified by installing its native FastGRNN backend and watching real training run), with real 2026-06-15 measured benchmark data, but its candidate pool is Ling-2.6-Flash / Gemini-2.5-Flash-Lite / GPT-4.1 / Llama-3.3-70B (not GLM/DeepSeek), it's reachable only via `agent_spawn`, gated behind an off-by-default env var, and has a live NaN bug on sparse per-candidate scoring. Don't wire around those gates — the payoff on rUv's own dataset is thin (n=20, near-tied margins), and a separate rUv benchmark (`ROUTER-PILOT.md`, 2026-06-28) found this whole class of embedding-based difficulty routing scores at chance (ROC-AUC 0.38) on real data. Not the lever to reach for.

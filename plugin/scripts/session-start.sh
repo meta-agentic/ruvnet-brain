@@ -70,6 +70,22 @@ retrieval were working. Verify after fixing: npx github:stuinfla/ruvnet-brain --
 EOF
 fi
 
+# ── MetaHarness router: one-time nudge when routing has no per-user subscription profile ──
+# (Stuart, 2026-07-12: subscription-awareness must be PER-USER — detect, ask, verify, record.)
+# Without profile.json the engine takes the catalog as-is, which may assume subscriptions this
+# user doesn't have. Asked at most once ever per machine; answering happens in-chat + one command.
+ROUTER_DIR="$HOME/.claude/model-router"
+ROUTER_NUDGE="$HOME/.cache/ruvnet-brain/.router-profile-nudged"
+if [ -d "$ROUTER_DIR" ] && [ ! -f "$ROUTER_DIR/profile.json" ] && [ ! -f "$ROUTER_NUDGE" ]; then
+  touch "$ROUTER_NUDGE" 2>/dev/null
+  echo "[RuvNet Brain — model-router has NO subscription profile for this user]"
+  echo "Near the top of your first response, ask the user ONCE (plainly, not a wall of questions):"
+  echo "  \"🧭 Quick setup so I always route work to models you've already paid for: do you have a Claude subscription (Pro/Max)? And do you use OpenAI's Codex CLI signed in with a ChatGPT plan?\""
+  echo "Then write their answers by running: node $ROUTER_DIR/bin/model-router-setup.mjs --detect-only  (and edit"
+  echo "the resulting profile.json subscription fields per their answers, citing 'user-attested <date>' as basis)."
+  echo "If they don't answer this turn, don't nag — the detect-only defaults are safe."
+fi
+
 # ── heartbeat: rate-limited (~once/20h) check against the live GitHub plugin.json ──
 # Detects a version gap, then APPLIES it automatically in the background — no manual command for the
 # user to remember. `claude plugin marketplace update` + `claude plugin update` only refresh an
@@ -98,6 +114,7 @@ LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
 if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
+    2.4.*) WHATS_NEW="now routes every task to the cheapest model that can do the job — aware of YOUR subscriptions specifically (it detects what it can prove, asks what it can't, and records the answers instead of assuming), with two newly live-proven low-cost models wired in (DeepSeek V4 Flash, Grok 4.5), a Codex launch wrapper, and an outcome log that teaches the router from every override." ;;
     2.3.*) WHATS_NEW="can no longer break silently: if the brain's search ever fails, you get an urgent phone push within seconds, a red alert at the top of every new Claude session, and a nightly canary check — three independent alarms, all tested by deliberately breaking the brain and watching them ring. Searches that fail now say WHY (and how to fix it) instead of pretending nothing matched." ;;
     2.2.0*|2.2.1*|2.2.2*) WHATS_NEW="now ships a safety watchdog that alerts you the instant a background tool starts running up API costs OR a scheduled job starts failing silently — so nothing spends or breaks behind your back. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
   esac

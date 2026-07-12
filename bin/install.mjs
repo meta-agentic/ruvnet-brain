@@ -1127,6 +1127,92 @@ export function parseNightlyAnswer(answer) {
 // suppression flags) is testable in-process under RUVNET_BRAIN_IMPORT_ONLY=1 without a real install.
 // Returns a status string; never throws (the caller also guards — a finished install must never
 // be broken by an optional offer).
+// ── MetaHarness router: config materialization + THIS user's subscription profile (2026-07-12) ──
+// Stuart's mandate: subscription-awareness must be per-user. Detect what the machine can PROVE
+// (Codex auth mode from ~/.codex/auth.json's SHAPE — never its secrets), ASK what it can't (Claude
+// plan tiers aren't probeable from disk), and RECORD both with their basis, so the router's
+// $0-floor never assumes a plan this user doesn't have (billing them) or misses one they do
+// (wasting it). Config templates ship in the npm package's config/; router tools are copied to
+// ~/.claude/model-router/bin/ because the npx run dir vanishes after install. Never overwrites
+// user-edited files. Non-fatal like every offer.
+export async function offerRouterProfile() {
+  if (TEST_MODE) return 'suppressed';
+  const routerDir = path.join(os.homedir(), '.claude', 'model-router');
+  const pkgRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  step(
+    'MetaHarness model router — the right model for each task, cheapest first',
+    "your subscription models are $0 marginal; the router just needs to know which ones YOU have",
+  );
+
+  fs.mkdirSync(path.join(routerDir, 'bin'), { recursive: true });
+  for (const [src, dst] of [['catalog.template.json', 'catalog.json'], ['policy.default.mjs', 'policy.default.mjs']]) {
+    const s = path.join(pkgRoot, 'config', 'model-router', src);
+    const d = path.join(routerDir, dst);
+    if (fs.existsSync(s) && !fs.existsSync(d)) { fs.copyFileSync(s, d); ok(`installed ${dst} (edit freely — goldie keeps prices fresh where scheduled)`); }
+  }
+  let copied = 0;
+  for (const t of ['model-router-engine.mjs', 'model-router-setup.mjs', 'model-router-status.mjs', 'model-router-outcome.mjs', 'route-cheap.mjs', 'codex-routed.sh']) {
+    const s = path.join(pkgRoot, 'scripts', t);
+    if (fs.existsSync(s)) { fs.copyFileSync(s, path.join(routerDir, 'bin', t)); copied++; }
+  }
+  if (copied) {
+    try { fs.chmodSync(path.join(routerDir, 'bin', 'codex-routed.sh'), 0o755); } catch { /* not fatal */ }
+    ok(`${copied} router tools at ~/.claude/model-router/bin/ (stable path — the npx dir vanishes)`);
+  }
+
+  const profilePath = path.join(routerDir, 'profile.json');
+  if (fs.existsSync(profilePath)) { ok('subscription profile already exists — routing already uses it'); return 'already'; }
+
+  // Codex is the one subscription we can PROVE: OAuth tokens in auth.json = signed in with ChatGPT
+  // (Plus/Pro/Business all include Codex). An API key instead = metered per-token.
+  let codexAuth = null;
+  try {
+    const a = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.codex', 'auth.json'), 'utf8'));
+    codexAuth = a.tokens ? 'chatgpt' : a.OPENAI_API_KEY ? 'api-key' : null;
+  } catch { /* codex absent or not authed */ }
+
+  const today = new Date().toISOString().slice(0, 10);
+  // This installer's audience is Claude Code users — claude-code is available by definition.
+  let claudeSub = true;
+  let claudeBasis = `assumed: installing the Claude Code brain (${today}); confirm with model-router-setup.mjs --show`;
+  let codexSub = codexAuth === 'chatgpt';
+  let codexBasis =
+    codexAuth === 'chatgpt' ? `verified: ~/.codex/auth.json ChatGPT OAuth tokens (${today})`
+    : codexAuth === 'api-key' ? `verified: ~/.codex/auth.json API key — METERED, not subscription (${today})`
+    : `detected: codex not authed on this machine (${today})`;
+
+  if (process.stdin.isTTY && !FLAG_YES) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const q = (text) => new Promise((resolve) => rl.question(text, resolve));
+    const a1 = await q(`    ${c.cyan('?')} Do you have a Claude subscription (Pro or Max) covering your Claude Code use? ${c.dim('[Y/n]')} `);
+    claudeSub = !/^n/i.test((a1 || '').trim());
+    claudeBasis = `user-attested ${today}`;
+    if (codexAuth === 'chatgpt') {
+      info(`Codex: verified signed in with ChatGPT — your ChatGPT plan covers it ($0). Nothing to ask.`);
+    } else {
+      const a2 = await q(`    ${c.cyan('?')} Do you also use OpenAI's Codex CLI signed in with a ChatGPT subscription? ${c.dim('[y/N]')} `);
+      codexSub = /^y/i.test((a2 || '').trim());
+      codexBasis = `user-attested ${today}${codexSub && codexAuth !== 'chatgpt' ? ' (auth.json does not show ChatGPT login yet — run `codex login`)' : ''}`;
+    }
+    rl.close();
+  } else {
+    info('No interactive terminal — recording detections with labeled assumptions. Refine any time:');
+    info(`  ${c.bold('node ~/.claude/model-router/bin/model-router-setup.mjs')}`);
+  }
+
+  const profile = {
+    updated: today,
+    harnesses: {
+      'claude-code': { available: true, subscription: claudeSub, plan: claudeSub ? 'pro-or-max' : 'api-billed', basis: claudeBasis },
+      codex: { available: codexAuth !== null, subscription: codexSub, plan: codexAuth, basis: codexBasis },
+    },
+    keys: Object.fromEntries(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'XAI_API_KEY'].map((k) => [k, !!process.env[k]])),
+  };
+  fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2) + '\n');
+  ok(`subscription profile saved — Claude Code: ${claudeSub ? 'subscription ($0)' : 'API-billed'}; Codex: ${codexSub ? 'subscription ($0)' : codexAuth === 'api-key' ? 'METERED' : 'not in use'}`);
+  return 'created';
+}
+
 export async function offerNightly() {
   // Suppressed outright: --no-nightly-prompt (the user said don't ask) and RUVNET_BRAIN_TEST=1
   // (tests must stay non-interactive and must never schedule anything).
@@ -1659,6 +1745,9 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // background (a real 2026-07-09 incident burned ~$1,600 silently). This alarm makes that loud.
   // Non-fatal like every other offer — a safety net can never break a finished install.
   try { await offerSpendGuard(); } catch { /* a safety offer must never break a finished install */ }
+  // Per-user subscription profile + router config (Stuart's mandate 2026-07-12: detect, ASK,
+  // verify, record — never assume this user's subscriptions match anyone else's).
+  try { await offerRouterProfile(); } catch { /* router setup must never break a finished install */ }
   // Anonymous usage counts — OPT-IN, asked once ever, right after the nightly offer. Same rule:
   // an optional offer can never break a finished install.
   try { await offerTelemetry(cacheDir); } catch { /* fail-private: unanswered = OFF */ }

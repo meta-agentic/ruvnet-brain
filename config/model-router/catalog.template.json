@@ -1,0 +1,220 @@
+{
+  "_comment": "Model candidate catalog for model-router-engine.mjs. EDIT ME freely. Pricing is $/Mtok. 'verified' names the source+date a price was confirmed live; null pricing means UNKNOWN \u2014 the engine will NOT invent a cost for it (same honesty rule as route-cheap.mjs). 'harness' = which agent(s) can launch each model \u2014 EMPTY [] means landscape-only: known to exist, but no wired execution path yet, so the engine will never select it (see model-router-engine.mjs pool filter). Do not add a real execution path (an entry to route-cheap.mjs PRICING or a harness value) until dispatch is actually implemented and tested \u2014 an engine that 'chooses' a model it can't run is worse than one that doesn't know the model exists. 'subscription' = harness(es) under which this model is covered by a flat subscription (Claude Max, Codex/ChatGPT), so its marginal cost to the user is ~$0 \u2014 the default policy treats those as free and will NOT prefer a billed model over them (never spend where the subscription is free).",
+  "updated": "2026-07-12 (template)",
+  "candidates": [
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "provider": "anthropic",
+      "harness": [
+        "claude-code"
+      ],
+      "subscription": [
+        "claude-code"
+      ],
+      "tier": "cheap",
+      "costPerMTok": null,
+      "verified": null,
+      "note": "covered by Claude Max under Claude Code (marginal $0); API price unverified"
+    },
+    {
+      "id": "claude-sonnet-5",
+      "provider": "anthropic",
+      "harness": [
+        "claude-code"
+      ],
+      "subscription": [
+        "claude-code"
+      ],
+      "tier": "mid",
+      "costPerMTok": null,
+      "verified": null
+    },
+    {
+      "id": "claude-opus-4-8",
+      "provider": "anthropic",
+      "harness": [
+        "claude-code"
+      ],
+      "subscription": [
+        "claude-code"
+      ],
+      "tier": "frontier",
+      "costPerMTok": {
+        "in": 5,
+        "out": 25
+      },
+      "verified": "2026-07-07 route-cheap.mjs FRONTIER (API price; $0 under Max)"
+    },
+    {
+      "id": "claude-fable-5",
+      "provider": "anthropic",
+      "harness": [
+        "claude-code"
+      ],
+      "subscription": [
+        "claude-code"
+      ],
+      "tier": "frontier",
+      "costPerMTok": null,
+      "verified": "2026-07-12 Artificial Analysis leaderboard (WebSearch) \u2014 listed as top-intelligence tier alongside GPT-5.6 Sol",
+      "note": "covered by Claude Max under Claude Code (marginal $0); API price unverified. Use sparingly per Stuart's directive \u2014 Opus 4.8 measures ~96% of comparable quality at far lower cost; Fable 5 is for tasks that specifically need its top-tier profile, not a default."
+    },
+    {
+      "id": "deepseek/deepseek-chat",
+      "provider": "openrouter",
+      "harness": [
+        "claude-code",
+        "codex"
+      ],
+      "subscription": [],
+      "tier": "cheap",
+      "costPerMTok": {
+        "in": 0.2002,
+        "out": 0.8001
+      },
+      "verified": "2026-07-12 OpenRouter API (goldie)",
+      "note": "Resolves to LEGACY DeepSeek V3 per OpenRouter model card (Goldie 2026-07-12) \u2014 superseded by deepseek/deepseek-v4-flash (landscape entry, cheaper+newer). Keep until v4-flash passes a measured quality check, then switch."
+    },
+    {
+      "id": "z-ai/glm-4.6",
+      "provider": "openrouter",
+      "harness": [
+        "claude-code",
+        "codex"
+      ],
+      "subscription": [],
+      "tier": "mid",
+      "costPerMTok": {
+        "in": 0.43,
+        "out": 1.75
+      },
+      "verified": "2026-07-12 OpenRouter API (goldie)"
+    },
+    {
+      "id": "z-ai/glm-5",
+      "provider": "openrouter",
+      "harness": [
+        "claude-code",
+        "codex"
+      ],
+      "subscription": [],
+      "tier": "mid",
+      "costPerMTok": {
+        "in": 0.6,
+        "out": 1.92
+      },
+      "verified": "2026-07-12 OpenRouter API (goldie)"
+    },
+    {
+      "id": "gpt-5.5",
+      "provider": "openai",
+      "harness": [
+        "codex"
+      ],
+      "subscription": [
+        "codex"
+      ],
+      "tier": "frontier",
+      "costPerMTok": null,
+      "verified": null,
+      "note": "Codex-harness model; whether YOUR install can launch it and whether a subscription covers it comes from profile.json (model-router-setup.mjs) and your live ~/.codex/models_cache.json"
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "provider": "openai",
+      "harness": [],
+      "subscription": [],
+      "tier": "frontier",
+      "costPerMTok": null,
+      "verified": null,
+      "note": "Codex-harness model; whether YOUR install can launch it and whether a subscription covers it comes from profile.json (model-router-setup.mjs) and your live ~/.codex/models_cache.json"
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "provider": "openai",
+      "harness": [],
+      "subscription": [],
+      "tier": "mid",
+      "costPerMTok": null,
+      "verified": null,
+      "note": "Codex-harness model; whether YOUR install can launch it and whether a subscription covers it comes from profile.json (model-router-setup.mjs) and your live ~/.codex/models_cache.json"
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "provider": "openai",
+      "harness": [],
+      "subscription": [],
+      "tier": "cheap",
+      "costPerMTok": null,
+      "verified": null,
+      "note": "Codex-harness model; whether YOUR install can launch it and whether a subscription covers it comes from profile.json (model-router-setup.mjs) and your live ~/.codex/models_cache.json"
+    },
+    {
+      "id": "gpt-5-mini",
+      "provider": "openai",
+      "harness": [
+        "codex",
+        "claude-code"
+      ],
+      "subscription": [],
+      "tier": "mid",
+      "costPerMTok": null,
+      "verified": null
+    },
+    {
+      "id": "x-ai/grok-4.5",
+      "provider": "openrouter",
+      "harness": [
+        "claude-code",
+        "codex"
+      ],
+      "subscription": [],
+      "tier": "frontier",
+      "costPerMTok": {
+        "in": 2.0,
+        "out": 6.0
+      },
+      "verified": "2026-07-12 OpenRouter /models live (goldie judgment + direct API check)",
+      "note": "LANDSCAPE-ONLY, one step from wireable: live on OpenRouter (tools=true, ctx 500K) \u2014 the old 'needs a bespoke xAI adapter' note is obsolete. To wire: add to route-cheap.mjs PRICING + one tested dispatch + a measured quality check. Secondary-source numbers promising (SWE-bench Pro 64.7% between GLM-5.2 and Opus 4.8; ~4.2x fewer output tokens than Opus at max reasoning) \u2014 'mid priced, frontier-adjacent'. See goldie/2026-07-12.md Q3."
+    },
+    {
+      "id": "muse-spark-1.1",
+      "provider": "meta",
+      "harness": [],
+      "subscription": [],
+      "tier": null,
+      "costPerMTok": null,
+      "verified": "2026-07-12 Meta/Fortune announcement 2026-07-09 (WebSearch)",
+      "note": "LANDSCAPE-ONLY, not selectable: general-capability model (coding/captioning/reasoning per Meta's announcement) but developer/API accessibility, pricing, and tier are UNCONFIRMED \u2014 the announcement centers on Meta AI app / WhatsApp / Instagram integration, not a clear developer API. Do not assume this is reachable until that's verified."
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "provider": "openrouter",
+      "harness": [
+        "claude-code",
+        "codex"
+      ],
+      "subscription": [],
+      "tier": "cheap",
+      "costPerMTok": {
+        "in": 0.077,
+        "out": 0.154
+      },
+      "verified": "2026-07-12 OpenRouter /models live (direct API check)",
+      "note": "LANDSCAPE-ONLY: proposed successor to deepseek/deepseek-chat (which OpenRouter resolves to LEGACY DeepSeek V3 per its own model card \u2014 Goldie 2026-07-12). Full generation newer, ~5x cheaper output, tools=true, ctx 1M. Wire via route-cheap PRICING + tested dispatch + measured quality check before giving it a harness path."
+    },
+    {
+      "id": "tencent/hy3",
+      "provider": "openrouter",
+      "harness": [],
+      "subscription": [],
+      "tier": "cheap",
+      "costPerMTok": {
+        "in": 0.14,
+        "out": 0.58
+      },
+      "verified": "2026-07-12 OpenRouter /models live (direct API check)",
+      "note": "LANDSCAPE-ONLY: 295B MoE Apache-2.0, strong generalist, second-tier coder (SWE-bench V 78.0 vs GLM-5.2 84.2, vendor numbers). IMPORTANT: this is the PAID slug on purpose \u2014 the tencent/hy3:free promo window closes ~2026-07-20 and would silently die/bill; never wire the :free slug. See goldie/2026-07-12.md Q3."
+    }
+  ]
+}

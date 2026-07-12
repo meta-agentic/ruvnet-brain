@@ -11,11 +11,11 @@ import os from 'node:os';
 
 const ENGINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../scripts/model-router-engine.mjs');
 const LOG = path.join(os.tmpdir(), `router-decisions-test-${process.pid}.jsonl`);
-const run = (args) =>
+const run = (args, extraEnv = {}) =>
   JSON.parse(
     execFileSync('node', [ENGINE, ...args, '--json'], {
       encoding: 'utf8',
-      env: { ...process.env, MODEL_ROUTER_DECISIONS: LOG },
+      env: { ...process.env, MODEL_ROUTER_DECISIONS: LOG, ...extraEnv },
     })
   );
 
@@ -62,6 +62,37 @@ test('pluggable policy.mjs overrides selection (the core requirement)', () => {
     fs.rmSync(tmp, { force: true });
     fs.rmSync(LOG, { force: true });
   }
+});
+
+test('per-user profile: a user WITHOUT a codex subscription gets billed candidates, never a phantom $0', () => {
+  // Stuart's mandate 2026-07-12: subscription awareness must be per-user — the catalog's
+  // subscription claims only hold for users whose profile confirms them.
+  const tmp = path.join(os.tmpdir(), `router-profile-test-${process.pid}.json`);
+  fs.writeFileSync(tmp, JSON.stringify({
+    harnesses: {
+      'claude-code': { available: true, subscription: true, basis: 'test' },
+      codex: { available: true, subscription: false, basis: 'test: metered API key user' },
+    },
+  }));
+  try {
+    const d = run(['--harness', 'codex', '--prompt', 'summarize this article'], { MODEL_ROUTER_PROFILE: tmp });
+    // With no subscription-covered codex model, the $0 floor must NOT fire — a billed pick with a
+    // real cost is the honest answer for this user.
+    assert.ok(d.model, 'a model is still chosen');
+    assert.notEqual(d.provider, 'openai', `codex-subscription model chosen for a user whose profile denies it (got ${d.model})`);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});
+
+test('per-user profile: an unavailable harness disappears from the candidate pool', () => {
+  const tmp = path.join(os.tmpdir(), `router-profile-avail-test-${process.pid}.json`);
+  fs.writeFileSync(tmp, JSON.stringify({
+    harnesses: { 'claude-code': { available: true, subscription: true }, codex: { available: false, subscription: false } },
+  }));
+  try {
+    const d = run(['--harness', 'codex', '--prompt', 'hello'], { MODEL_ROUTER_PROFILE: tmp });
+    // codex-only models are gone; whatever remains must be a model that also runs elsewhere.
+    assert.ok(!/^gpt-/.test(d.model || ''), `codex-only model ${d.model} chosen despite codex being unavailable for this user`);
+  } finally { fs.rmSync(tmp, { force: true }); }
 });
 
 test('cross-tier $0 floor: codex never pays a billed model while a subscription model can do the job', () => {
