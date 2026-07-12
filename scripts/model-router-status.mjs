@@ -13,7 +13,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadCatalog, loadPolicy, CONFIG_DIR } from './model-router-engine.mjs';
+import { loadCatalog, loadPolicy, loadProfile, applyProfile, CONFIG_DIR } from './model-router-engine.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENGINE = path.join(__dirname, 'model-router-engine.mjs');
@@ -72,7 +72,8 @@ function detectInventory() {
 
 async function main() {
   const jsonMode = process.argv.includes('--json');
-  const candidates = loadCatalog();
+  // Profile-aware, same as the engine: what this tool displays must be what routing actually does.
+  const candidates = applyProfile(loadCatalog(), loadProfile());
   const policy = await loadPolicy();
   const catalogRaw = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, 'catalog.json'), 'utf8'));
   const inventory = detectInventory();
@@ -103,6 +104,32 @@ async function main() {
     return;
   }
 
+  // ── The plain-language answer first (Stuart, 2026-07-12: "show them what the current
+  // recommended path is — the zero-cost options, and what it uses when it must go out for API
+  // calls"). Everything below it is the detailed evidence; this block is the one a person reads.
+  console.log('Recommended path (zero-cost first, always):');
+  console.log('  $0 — covered by YOUR subscriptions:');
+  for (const harness of ['claude-code', 'codex']) {
+    const p = plan[harness];
+    const zero = ['cheap', 'mid', 'frontier']
+      .map((t) => ({ t, m: p[t].model, free: p[t].cost == null && p[t].model }))
+      .filter((x) => x.free);
+    if (zero.length) {
+      const parts = zero.map((x) => `${x.t}→${x.m}`);
+      console.log(`    ${harness.padEnd(12)} ${parts.join(' · ')}`);
+    } else {
+      console.log(`    ${harness.padEnd(12)} (no subscription-covered models for this user — see profile)`);
+    }
+  }
+  const billed = selectable
+    .filter((c) => c.costPerMTok && typeof c.costPerMTok.out === 'number' && !(c.subscription || []).length)
+    .sort((a, b) => a.costPerMTok.out - b.costPerMTok.out)
+    .slice(0, 3);
+  console.log('  Paid API — only when work must leave the subscriptions (parallel fleets, background batch):');
+  for (const c of billed) {
+    console.log(`    ${c.id.padEnd(28)} $${c.costPerMTok.in}/M in · $${c.costPerMTok.out}/M out  (${c.tier}, verified ${String(c.verified || '').slice(0, 10)})`);
+  }
+  console.log('');
   console.log(`MetaHarness Router — current plan`);
   console.log(`Catalog last updated: ${result.catalogUpdated}`);
   console.log(`Active policy: ${result.activePolicy}`);

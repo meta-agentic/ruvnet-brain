@@ -70,20 +70,30 @@ retrieval were working. Verify after fixing: npx github:stuinfla/ruvnet-brain --
 EOF
 fi
 
-# ── MetaHarness router: one-time nudge when routing has no per-user subscription profile ──
-# (Stuart, 2026-07-12: subscription-awareness must be PER-USER — detect, ask, verify, record.)
-# Without profile.json the engine takes the catalog as-is, which may assume subscriptions this
-# user doesn't have. Asked at most once ever per machine; answering happens in-chat + one command.
+# ── MetaHarness router: the ONE-LINER OFFER (Stuart's exact UX, 2026-07-12): offer yes/no → on
+# yes, ask two questions → then SHOW the user their recommended path (zero-cost options + what the
+# router uses when work must go out to a paid API). Offered at most once ever per machine; without
+# a profile the engine takes the catalog as-is, which may assume subscriptions this user lacks.
 ROUTER_DIR="$HOME/.claude/model-router"
 ROUTER_NUDGE="$HOME/.cache/ruvnet-brain/.router-profile-nudged"
-if [ -d "$ROUTER_DIR" ] && [ ! -f "$ROUTER_DIR/profile.json" ] && [ ! -f "$ROUTER_NUDGE" ]; then
+if [ ! -f "$ROUTER_DIR/profile.json" ] && [ ! -f "$ROUTER_NUDGE" ]; then
   touch "$ROUTER_NUDGE" 2>/dev/null
-  echo "[RuvNet Brain — model-router has NO subscription profile for this user]"
-  echo "Near the top of your first response, ask the user ONCE (plainly, not a wall of questions):"
-  echo "  \"🧭 Quick setup so I always route work to models you've already paid for: do you have a Claude subscription (Pro/Max)? And do you use OpenAI's Codex CLI signed in with a ChatGPT plan?\""
-  echo "Then write their answers by running: node $ROUTER_DIR/bin/model-router-setup.mjs --detect-only  (and edit"
-  echo "the resulting profile.json subscription fields per their answers, citing 'user-attested <date>' as basis)."
-  echo "If they don't answer this turn, don't nag — the detect-only defaults are safe."
+  echo "[RuvNet Brain — MetaHarness routing is available but not set up for THIS user yet]"
+  echo "Near the top of your first response, offer ONCE, in one line (then respect the answer):"
+  echo "  \"🧭 There's now an option to enable MetaHarness cost-optimal model routing — it reviews each task and sends it to the cheapest model that can do the job, using YOUR subscriptions first (\$0) before anything billed. Would you like me to set it up? (yes/no)\""
+  echo "If YES, get exactly two things from them: (1) \"Do you have a Claude subscription — Pro or Max?\""
+  echo "(2) \"Do you use OpenAI's Codex CLI signed in with a ChatGPT plan?\" Then:"
+  if [ -f "$ROUTER_DIR/bin/model-router-setup.mjs" ]; then
+    echo "  - run: node $ROUTER_DIR/bin/model-router-setup.mjs --detect-only"
+    echo "  - edit profile.json's subscription fields to match their answers (basis: 'user-attested <date>')"
+    echo "  - run: node $ROUTER_DIR/bin/model-router-status.mjs   and RELAY its 'Recommended path' block"
+    echo "    plainly — the user must SEE their zero-cost options and what gets used when work must go"
+    echo "    out to a paid API. That display is the deliverable of saying yes."
+  else
+    echo "  - the router tools aren't installed on this machine yet — run: npx github:stuinfla/ruvnet-brain"
+    echo "    (the installer sets up the router, asks these questions itself, and shows the path)"
+  fi
+  echo "If NO or no answer: drop it — never re-offer (this notice is once-per-machine)."
 fi
 
 # ── heartbeat: rate-limited (~once/20h) check against the live GitHub plugin.json ──
