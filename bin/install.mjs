@@ -1025,6 +1025,88 @@ function disableNightly() {
   info(`re-enable any time:  ${c.bold('npx ruvnet-brain --enable-nightly')}`);
 }
 
+// ── spend guard: the alarm that catches a runaway agentic fleet BEFORE it drains a card ───────────
+// WHY THIS SHIPS: on 2026-07-09 an automated QE fleet spawned 374+ headless agents, each billing the
+// Anthropic API on Sonnet, and burned ~$1,600 SILENTLY while a paid Max plan sat unused — nothing
+// alerted. That is the exact failure this guard makes impossible: a tiny hourly watchdog that trips
+// the moment automated agents flood a project (burst detector, no key needed) or — with
+// ANTHROPIC_ADMIN_KEY — daily API spend crosses a threshold. Alert-only; it NEVER spends. Same
+// non-fatal, TEST_MODE-aware, default-yes contract as the nightly updater above.
+const SPEND_GUARD_LABEL = 'com.ruvnet.spend-watchdog';
+const spendGuardScriptPath = () => path.join(os.homedir(), '.claude', 'scripts', 'api-spend-watchdog.mjs');
+const spendGuardPlistPath = () => path.join(os.homedir(), 'Library', 'LaunchAgents', `${SPEND_GUARD_LABEL}.plist`);
+
+function enableSpendGuard() {
+  // The npx checkout is ephemeral, so copy the bundled watchdog to a persistent home the launchd
+  // job can point at for good.
+  const src = path.join(__dirname, 'api-spend-watchdog.mjs');
+  const dst = spendGuardScriptPath();
+  if (!fs.existsSync(src)) { warn('spend-watchdog source missing from this bundle — skipping (non-fatal)'); return 'no-source'; }
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.copyFileSync(src, dst);
+  ok(`installed the spend watchdog → ${c.bold(dst)}`);
+
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${SPEND_GUARD_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${process.execPath}</string>
+    <string>${dst}</string>
+  </array>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SPEND_ALERT_USD</key><string>50</string>
+    <key>SPEND_BURST_AGENTS</key><string>20</string>
+  </dict>
+</dict>
+</plist>
+`;
+  const plistPath = spendGuardPlistPath();
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  fs.writeFileSync(plistPath, plist);
+  ok(`wrote ${c.bold(plistPath)} — runs hourly, alert-only`);
+
+  if (TEST_MODE) { warn('RUVNET_BRAIN_TEST=1 — skipping launchctl (plist written only)'); return 'test'; }
+  const uid = process.getuid();
+  spawnSync('launchctl', ['bootout', `gui/${uid}/${SPEND_GUARD_LABEL}`], { stdio: 'ignore' });
+  const boot = spawnSync('launchctl', ['bootstrap', `gui/${uid}`, plistPath], { encoding: 'utf8' });
+  if (boot.status === 0) ok('spend watchdog is live — it warns you the moment a fleet runs away');
+  else { warn(`launchctl bootstrap failed (${(boot.stderr || '').trim() || `exit ${boot.status}`}) — the plist is in place;`); info(`load it:  ${c.bold(`launchctl bootstrap gui/${uid} ${plistPath}`)}`); }
+  return 'enabled';
+}
+
+// Exported (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerNightly). Never throws — the caller
+// also guards, because a finished install must never be broken by an optional safety offer.
+export async function offerSpendGuard() {
+  if (FLAG_NO_NIGHTLY_PROMPT || TEST_MODE) return 'suppressed';
+  if (process.platform !== 'darwin') return 'unsupported';
+  if (fs.existsSync(spendGuardPlistPath())) { ok('spend watchdog already installed — runaway API spend will alert you'); return 'already-on'; }
+
+  step(
+    'One more safety net — a spend watchdog',
+    'agentic tools can bill the paid API in the background; this alarm catches a runaway before it drains your card',
+  );
+  info(`${c.bold('Strongly recommended:')} an hourly check that alerts you the moment an automated agent`);
+  info('fleet floods a project — the pattern that has quietly burned real money. Alert-only, never spends.');
+
+  if (!process.stdin.isTTY && !FLAG_YES) { info(`No terminal to prompt on — install it any time by re-running  ${c.bold('npx ruvnet-brain')}`); return 'recommended'; }
+  let yes = true;
+  if (!FLAG_YES) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise((resolve) => rl.question(`    ${c.cyan('?')} Install the spend watchdog? ${c.dim('[Y/n]')} `, resolve));
+    rl.close();
+    yes = parseNightlyAnswer(answer);
+  }
+  if (!yes) { info(`No problem — install it any time by re-running  ${c.bold('npx ruvnet-brain')}`); return 'declined'; }
+  try { enableSpendGuard(); } catch (e) { warn(`spend guard install skipped: ${e.message}`); return 'error'; }
+  return 'enabled';
+}
+
 // ── step: offer nightly auto-updates at the end of a successful install (recommended, default YES) ──
 // Requirement: a default `npx ruvnet-brain` run must never leave the user unaware of nightly
 // auto-updates — it VERY CLEARLY recommends them, asks, and DEFAULTS TO YES. Before this, the
@@ -1569,6 +1651,10 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // and asking, DEFAULTING TO YES (TTY + macOS + not already on). Non-fatal like every other offer.
   let nightly = 'skipped';
   try { nightly = await offerNightly(); } catch { /* never let the offer break a finished install */ }
+  // A spend watchdog, offered right after the updater: agentic tools can bill the paid API in the
+  // background (a real 2026-07-09 incident burned ~$1,600 silently). This alarm makes that loud.
+  // Non-fatal like every other offer — a safety net can never break a finished install.
+  try { await offerSpendGuard(); } catch { /* a safety offer must never break a finished install */ }
   // Anonymous usage counts — OPT-IN, asked once ever, right after the nightly offer. Same rule:
   // an optional offer can never break a finished install.
   try { await offerTelemetry(cacheDir); } catch { /* fail-private: unanswered = OFF */ }
