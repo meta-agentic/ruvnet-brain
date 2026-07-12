@@ -63,3 +63,12 @@ test('pluggable policy.mjs overrides selection (the core requirement)', () => {
     fs.rmSync(LOG, { force: true });
   }
 });
+
+test('cross-tier $0 floor: codex never pays a billed model while a subscription model can do the job', () => {
+  // Found live 2026-07-12: demoting the unreachable gpt-5.6 tiers left codex cheap prompts routing
+  // to billed DeepSeek while subscription-covered gpt-5.5 sat unused one tier up. The floor must
+  // hold ACROSS tiers, not just within one.
+  const d = run(['--harness', 'codex', '--prompt', 'summarize this article in one line']);
+  const paysWhileSubscriptionExists = d.provider === 'openrouter' && d.est_input_cost_usd > 0;
+  assert.ok(!paysWhileSubscriptionExists, `codex routed to billed ${d.model} despite a subscription-covered candidate existing`);
+});

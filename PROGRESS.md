@@ -65,9 +65,30 @@ ruflo **ADR-149** (PROPOSED — per-model cost-optimal routing via `@metaharness
 detection verified live: `~/.codex/auth.json` has OAuth tokens (ChatGPT Business login), NO API key
 — Codex on this machine is subscription-covered, marginal-$0.
 
-**OPEN (next):** Goldie weekly model-landscape research job (buckets + best-per-bucket → catalog/
-policy proposals); researched policy.mjs to replace the documented placeholder; wire router consult
-points (subagent dispatch, Codex wrapper, route-cheap); AgentDB omniscience consolidation pass.
+**GOLDIE SHIPPED + FIRST RUN PROVEN (7f588a5 + follow-up, same day).** Weekly launchd job
+(com.ruvnet.goldie-weekly, Mondays 07:30, loaded + verified in launchctl): layer 1 deterministic
+(goldie-research.mjs — live OpenRouter pricing → catalog refresh + >20% drift flags + radar +
+dated brief in ~/.claude/model-router/goldie/), layer 2 judgment (headless `claude -p` on the Max
+subscription, `env -u ANTHROPIC_API_KEY` guarded after a stale env key — live-tested 401 — broke
+run #1). **First full run's judgment layer immediately caught a real catalog error:** the
+gpt-5.6-sol/terra/luna entries claimed "verified live 17:27 UTC" but two independent reads of
+~/.codex/models_cache.json show only gpt-5.5/5.4/5.4-mini — 5.6 is announced but NOT reachable by
+this Codex install. Fixed: demoted to landscape-only; that exposed a policy gap (codex cheap/mid
+fell to BILLED DeepSeek while subscription gpt-5.5 sat unused) → cross-tier $1,600 floor added to
+policy.default.mjs, locked by a 6th test (6/6 green); codex plan now gpt-5.5 across all tiers.
+Also live-verified on OpenRouter and added as landscape entries: deepseek/deepseek-v4-flash
+($0.077/$0.154, 1M ctx — proposed successor to deepseek-chat, which resolves to LEGACY V3),
+tencent/hy3 (paid slug only — :free promo dies ~07-20), x-ai/grok-4.5 ($2/$6 — wireable via
+OpenRouter, old "needs bespoke xAI adapter" note obsolete). Goldie's full sourced analysis:
+~/.claude/model-router/goldie/2026-07-12.md. SIDE FINDING for Stuart: the ANTHROPIC_API_KEY in
+~/.zshrc + launchctl env is DEAD (HTTP 401 live) — anything relying on it silently fails.
+
+**OPEN (next):** wire router consult points (subagent dispatch via hooks_model-route + engine,
+Codex launch wrapper, route-cheap PRICING entries + tested dispatch for v4-flash/grok-4.5 after
+measured quality checks); ship policy/catalog templates in-repo (they live only in ~/.claude now);
+learned policy over routing-decisions.jsonl once outcome labels accumulate (Goldie's Q1 verdict:
+keep 3 buckets, fix the routing FUNCTION — ADR-040/DRACO consistent); AgentDB omniscience
+consolidation pass.
 
 ## 2026-07-06 — SECURITY HARDENING (SEC-0010): Dragan Spiridonov's QE review, all 12 addressed
 
