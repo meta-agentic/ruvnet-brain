@@ -18,9 +18,25 @@ cd /Users/stuartkerr/Code/ruvnet-brain 2>/dev/null || {
     "https://ntfy.sh/$(grep -m1 '^NTFY_TOPIC=' /Users/stuartkerr/Code/ruvnet-brain/.env 2>/dev/null | cut -d= -f2)" >/dev/null 2>&1
   exit 1
 }
-mkdir -p logs
+mkdir -p logs .ruvnet-brain
 LOG=logs/nightly.log
 MARKER=.ruvnet-brain/nightly-failure.json
+LOCK=.ruvnet-brain/nightly.lock
+
+# Single-instance guard (2026-07-12): the plist has no built-in one, and a full corpus rebuild can run
+# for HOURS (verified live: 2h29m and still embedding one repo at ~1.5/s) — long enough to still be
+# running when the NEXT scheduled 3:15am fire happens, which would start a second instance on top of
+# it with no protection. A stale lock from a crashed run (PID no longer alive) is treated as no lock.
+if [ -f "$LOCK" ]; then
+  OLD_PID=$(cat "$LOCK" 2>/dev/null)
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "===== $(date -u +%FT%TZ) — SKIPPED: previous run (pid $OLD_PID) still in progress =====" >> "$LOG"
+    exit 0
+  fi
+  echo "===== $(date -u +%FT%TZ) — stale lock from pid $OLD_PID (not running) — clearing =====" >> "$LOG"
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
 
 run_once() {
   local before after rc tail
