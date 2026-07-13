@@ -1,7 +1,7 @@
 {
   "brainVersion": "2.4.1",
-  "generated": "2026-07-10T17:11:39.053Z",
-  "generatedHuman": "Fri, 10 Jul 2026 17:11:39 GMT",
+  "generated": "2026-07-13T01:03:58.799Z",
+  "generatedHuman": "Mon, 13 Jul 2026 01:03:58 GMT",
   "coverage": {
     "built": 32,
     "catalogued": 173,
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "a444930d88d753e04793f55bd38861e82d9cb062",
+      "builtFromSha": "7ef4d4e655d81c0451f6f40f35729cce6c9928e7",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -29,7 +29,7 @@
       "name": "RuVector",
       "tier": "T0",
       "stars": 4296,
-      "builtFromSha": "c87541c9507084b9eb61b20bb1e460fa79545343",
+      "builtFromSha": "f3de1724fa5d8ff871ac24a528575f115b2a9df7",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -189,7 +189,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "177387bad7ddcfa1dd9080d0fe9ff94d7a59497d",
+      "builtFromSha": "bdefce700d941aa91d03931a25872c68b2d5dc62",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -229,7 +229,7 @@
       "name": "agenticow",
       "tier": "T2",
       "stars": 40,
-      "builtFromSha": "3d93dc348b88cdc7e5cb251e89219a05b11dd784",
+      "builtFromSha": "dd4f437b92d2dbbc1f40dfa00023eed6e9c3bd84",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -245,7 +245,7 @@
       "name": "cognitum-cogs",
       "tier": "T2",
       "stars": 14,
-      "builtFromSha": "16c32f240f2458d193a247e0954e0cc0b2930fbb",
+      "builtFromSha": "d48161eb2b676753a5b0e6d107805a2217dbaf9b",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -253,7 +253,7 @@
       "name": "cognitum-support",
       "tier": "T2",
       "stars": 19,
-      "builtFromSha": "11edf5d29e232e6092ea8b03f2518afb19a5887b",
+      "builtFromSha": "26a92df8c17341fe73c0e455168c3f849130fafd",
       "latestRemoteSha": null,
       "status": "built"
     },
