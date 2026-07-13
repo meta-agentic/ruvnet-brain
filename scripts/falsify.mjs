@@ -90,6 +90,64 @@ export const CHECKS = [
     },
   },
   {
+    id: 'does-the-package-ship-what-it-promises',
+    asked: '"Are users actually GETTING the thing you told them shipped?"',
+    why: 'v2.5.1 headline was "it uses rUv\'s real router" — and scripts/metaharness-router.mjs was NOT in the npm tarball. The dependency shipped; the code that calls it did not. Every gate was green and this adversary itself missed it, because it only ever checked whether the REPO was honest — never whether the ARTIFACT USERS RECEIVE contains what the README promises.',
+    run: () => {
+      // The npm `files` whitelist is opt-IN, so a NEW file is invisible to users unless someone
+      // remembers to list it. A shipped script that relative-imports an UNSHIPPED one is broken for
+      // every user while working perfectly in the repo — green CI, green tests, broken product.
+      //
+      // My FIRST version of this check derived the file list from bin/install.mjs and therefore did
+      // NOT catch metaharness-router.mjs — the very bug it was written for. It reported ✅ on the
+      // broken state. A check that passes on the bug it was written for is worse than no check, so:
+      // follow the ACTUAL relative imports of every shipped file, transitively.
+      const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+      const shipped = new Set(pkg.files || []);
+      const covered = (f) => shipped.has(f) || [...shipped].some((s) => s.endsWith('/') && f.startsWith(s));
+
+      const seeds = [...shipped].filter((f) => f.endsWith('.mjs') && fs.existsSync(path.join(ROOT, f)));
+      const missing = new Set();
+      const seen = new Set();
+      const walkImports = (rel) => {
+        if (seen.has(rel)) return;
+        seen.add(rel);
+        let src;
+        try { src = fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch { return; }
+        for (const m of src.matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/g)) {
+          const dep = path.posix.normalize(path.posix.join(path.posix.dirname(rel), m[1]));
+          if (!fs.existsSync(path.join(ROOT, dep))) continue; // not a real file (or an npm pkg) — skip
+          if (!covered(dep)) missing.add(`${dep} (imported by ${rel})`);
+          walkImports(dep);
+        }
+      };
+      seeds.forEach(walkImports);
+
+      return {
+        ok: missing.size === 0,
+        detail: missing.size
+          ? `${missing.size} file(s) are IMPORTED BY SHIPPED CODE but are NOT in the npm package — the feature is broken for every user: ${[...missing].join('; ')}`
+          : `every file imported by shipped code is itself shipped (${seen.size} files reachable from ${shipped.size} whitelist entries)`,
+      };
+    },
+  },
+  {
+    id: 'does-the-engine-really-use-ruvs-router',
+    asked: '"Is the router users actually RUN really rUv\'s, or still your hand-roll?"',
+    why: 'v2.5 shipped with the wrapper written, tested, and CI-gated — while model-router-engine.mjs, the file that actually executes, never imported it. An honest artifact sitting next to a lying claim is still a lie.',
+    run: () => {
+      const engine = fs.readFileSync(path.join(ROOT, 'scripts/model-router-engine.mjs'), 'utf8');
+      const wired = /metaharness-router\.mjs/.test(engine);
+      const declares = /routedBy/.test(engine); // and it must SAY who decided, every time
+      return {
+        ok: wired && declares,
+        detail: wired && declares
+          ? 'the engine consults @metaharness/router first and reports routedBy on every decision'
+          : `the ENGINE USERS RUN does not ${!wired ? 'import rUv\'s router' : 'declare who decided'} — the README\'s claim is false`,
+      };
+    },
+  },
+  {
     id: 'is-ci-actually-green',
     asked: '"Why am I getting failure notifications from GitHub?"',
     why: 'I declared green from LOCAL gates while CI had never passed — 25 straight failures.',

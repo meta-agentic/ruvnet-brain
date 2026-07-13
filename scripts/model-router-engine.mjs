@@ -171,14 +171,44 @@ async function main() {
   const policy = await loadPolicy(args.policy);
   const features = extractFeatures(prompt, harness);
 
+  // ── rUv's REAL router gets FIRST REFUSAL. ────────────────────────────────────────────────────────
+  // 2026-07-13: this is the fix for a lie I shipped. v2.5's headline was "it uses @metaharness/router",
+  // I wrote the wrapper, tested it, gated CI against faking — and NEVER WIRED IT INTO THIS FILE. The
+  // engine users actually run stayed 100% hand-rolled while the README said otherwise. An honest
+  // artifact sitting next to a lying claim is still a lie. The decision now comes from rUv's code
+  // whenever it CAN decide, and the local heuristic is a fallback that must ANNOUNCE ITSELF.
   let decision;
-  if (!policy) {
-    // No policy at all: pick cheapest priced candidate for the harness as a safe floor, and SAY SO.
-    const pool = candidates.filter((m) => (m.harness || []).includes(harness));
-    const pick = pool.slice().sort((x, y) => (x.costPerMTok?.out ?? Infinity) - (y.costPerMTok?.out ?? Infinity))[0] || candidates[0];
-    decision = { model: pick?.id ?? null, provider: pick?.provider ?? null, tier: pick?.tier ?? null, reason: 'NO POLICY FOUND — fell back to cheapest priced candidate for the harness', confidence: 0 };
-  } else {
-    decision = policy.choose({ features, candidates, harness });
+  let routedBy;
+  const pool = candidates.filter((m) => (m.harness || []).includes(harness));
+  try {
+    const mh = await import('./metaharness-router.mjs');
+    const r = await mh.route(prompt, pool.length ? pool : candidates, profile);
+    if (r.routedBy === '@metaharness/router') {
+      const pick = candidates.find((m) => m.id === r.model);
+      decision = {
+        model: r.model,
+        provider: pick?.provider ?? null,
+        tier: pick?.tier ?? null,
+        reason: `@metaharness/router (rUv's learned cost-optimal router): predicted quality ${r.predictedQuality?.toFixed(2)}, ${r.metBar ? 'clears' : 'BELOW'} the bar, ${r.subscriptionCovered ? '$0 (your subscription)' : `$${r.costPerMTok}/Mtok`}, from ${r.labels} labelled example(s)`,
+        confidence: r.predictedQuality ?? 0,
+      };
+      routedBy = '@metaharness/router';
+    } else {
+      // COLD-START or the package is absent. Say which, out loud — never pass the fallback off as the
+      // learned router. That substitution is the entire sin this wiring exists to end.
+      routedBy = `local-heuristic (${r.routedBy}: ${r.reason})`;
+    }
+  } catch (e) {
+    routedBy = `local-heuristic (@metaharness/router unavailable: ${e.message})`;
+  }
+
+  if (!decision) {
+    if (!policy) {
+      const pick = pool.slice().sort((x, y) => (x.costPerMTok?.out ?? Infinity) - (y.costPerMTok?.out ?? Infinity))[0] || candidates[0];
+      decision = { model: pick?.id ?? null, provider: pick?.provider ?? null, tier: pick?.tier ?? null, reason: 'NO POLICY FOUND — fell back to cheapest priced candidate for the harness', confidence: 0 };
+    } else {
+      decision = policy.choose({ features, candidates, harness });
+    }
   }
 
   const chosen = candidates.find((m) => m.id === decision.model) || null;
@@ -190,6 +220,8 @@ async function main() {
     tier: decision.tier,
     reason: decision.reason,
     confidence: decision.confidence,
+    // WHO decided. Never let a caller assume the learned router made a call the heuristic made.
+    routedBy,
     policy_source: policy ? policy.source.replace(os.homedir(), '~') : 'none',
     profile: profile ? PROFILE_PATH.replace(os.homedir(), '~') : 'none (catalog taken as-is — run model-router-setup.mjs)',
     price_verified: chosen ? chosen.verified : null,
