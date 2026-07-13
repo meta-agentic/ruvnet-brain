@@ -121,7 +121,14 @@ Then print its one dim line. Baseline = the **inherited** model (the honest coun
 
 **Self-audit, out loud.** If you do mechanical work inline because dispatching felt like more trouble, that is a DEFECT and you say so in the response ("I did X inline that should have been routed — that cost ~N× what it needed to"). The receipts file is the scoreboard: `node scripts/metaharness-receipts.mjs`. If it isn't growing while real work ships, the rule is being ignored and the user should be told, not reassured.
 
-**Engine + profile (unchanged mechanics).** `~/.claude/model-router/` holds the decision engine, the verified-pricing catalog, and THIS USER's subscription profile (never assume one user's subscriptions match another's):
+**⚠️ NAMING CORRECTION (2026-07-13) — read this before you trust the engine below.** `scripts/model-router-engine.mjs` is a **hand-rolled heuristic written for this repo**, NOT rUv's router. It was called "the MetaHarness router engine" here, which was a silent substitution of exactly the kind this skill's own playbook forbids. The REAL thing is **`@metaharness/router@0.3.2`** (`agent-harness-generator/packages/router`, ADR-040/043, status **Accepted/implemented**): the productized DRACO Phase-2 finding — a learned cost-optimal router (k-NN + regularised kernel-ridge `TrainedRouter`, `Router.fromExamples(rows, prices, { qualityBar })`, optional native FastGRNN backend). It is now installed globally.
+
+Which to use, honestly:
+- **`@metaharness/router`** predicts per-model QUALITY from labelled examples and picks the cheapest candidate clearing a `qualityBar`. It needs labelled rows (`query embedding → per-model quality`); with too few it degrades to best-predicted. `routing-outcomes.jsonl` is the label store — it is still nearly empty, so this cannot beat a heuristic *yet*.
+- **The local engine** contributes the one thing the real router has no concept of: **THIS USER's subscriptions** — the cross-tier `$0` floor that knows Claude Max / Codex are already paid for. Cost-optimal-vs-quality and $0-for-this-user compose; they do not compete.
+- Do not describe the local engine as MetaHarness. When enough labels accumulate, the quality prediction should come from `@metaharness/router` and the local engine should shrink to the subscription overlay.
+
+**Engine + profile (unchanged mechanics).** `~/.claude/model-router/` holds the local decision engine, the verified-pricing catalog, and THIS USER's subscription profile (never assume one user's subscriptions match another's):
 
 ```bash
 node ~/.claude/model-router/bin/model-router-engine.mjs --harness claude-code --prompt "<the task>" --json
