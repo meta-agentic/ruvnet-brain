@@ -1,105 +1,134 @@
 // tests/unit/model-router-engine.test.mjs — locks the model-router-engine's contract.
-// End-to-end: invokes the real CLI (catalog + policy loading included), asserts on the JSON.
-// Redirects the decision log to a temp file so tests never pollute the real ledger.
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+// End-to-end through the REAL CLI, but fully HERMETIC: a fixture catalog (MODEL_ROUTER_CATALOG),
+// the repo's own shipped default policy (--policy config/model-router/policy.default.mjs), a
+// fixture profile (MODEL_ROUTER_PROFILE), and a temp decision log. The first version of this file
+// silently depended on ~/.claude/model-router existing on the dev machine — CI runners have no
+// such directory, so the engine fell back to no-policy/cheapest and three assertions failed on
+// every runner from the moment the file landed (2026-07-12). Never again: everything the engine
+// reads is pinned to fixtures here. Vitest, like the rest of tests/unit — node:test files make
+// vitest error "No test suite found in file".
+import { test, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 
-const ENGINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../scripts/model-router-engine.mjs');
-const LOG = path.join(os.tmpdir(), `router-decisions-test-${process.pid}.jsonl`);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ENGINE = path.join(ROOT, 'scripts', 'model-router-engine.mjs');
+const POLICY = path.join(ROOT, 'config', 'model-router', 'policy.default.mjs'); // the SHIPPED policy
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'router-test-'));
+const CATALOG = path.join(TMP, 'catalog.json');
+const PROFILE = path.join(TMP, 'profile.json');
+const LOG = path.join(TMP, 'decisions.jsonl');
+
+// Fixture catalog: the shapes the contract cares about — subscription-covered models on both
+// harnesses, billed OpenRouter models, tier spread. Prices are fixture values, not claims.
+const FIXTURE = {
+  updated: 'fixture',
+  candidates: [
+    { id: 'claude-haiku-fixture', provider: 'anthropic', harness: ['claude-code'], subscription: ['claude-code'], tier: 'cheap', costPerMTok: null, verified: null },
+    { id: 'claude-sonnet-fixture', provider: 'anthropic', harness: ['claude-code'], subscription: ['claude-code'], tier: 'mid', costPerMTok: null, verified: null },
+    { id: 'claude-opus-fixture', provider: 'anthropic', harness: ['claude-code'], subscription: ['claude-code'], tier: 'frontier', costPerMTok: { in: 5, out: 25 }, verified: 'fixture' },
+    { id: 'gpt-frontier-fixture', provider: 'openai', harness: ['codex'], subscription: ['codex'], tier: 'frontier', costPerMTok: null, verified: null },
+    { id: 'or/cheap-fixture', provider: 'openrouter', harness: ['claude-code', 'codex'], subscription: [], tier: 'cheap', costPerMTok: { in: 0.1, out: 0.2 }, verified: 'fixture' },
+    { id: 'or/mid-fixture', provider: 'openrouter', harness: ['claude-code', 'codex'], subscription: [], tier: 'mid', costPerMTok: { in: 0.5, out: 1.5 }, verified: 'fixture' },
+  ],
+};
+
+beforeAll(() => {
+  fs.writeFileSync(CATALOG, JSON.stringify(FIXTURE));
+  fs.writeFileSync(PROFILE, JSON.stringify({
+    harnesses: {
+      'claude-code': { available: true, subscription: true, basis: 'fixture' },
+      codex: { available: true, subscription: true, basis: 'fixture' },
+    },
+  }));
+});
+afterAll(() => { fs.rmSync(TMP, { recursive: true, force: true }); });
+
 const run = (args, extraEnv = {}) =>
   JSON.parse(
-    execFileSync('node', [ENGINE, ...args, '--json'], {
+    execFileSync(process.execPath, [ENGINE, ...args, '--policy', POLICY, '--json'], {
       encoding: 'utf8',
-      env: { ...process.env, MODEL_ROUTER_DECISIONS: LOG, ...extraEnv },
+      env: {
+        ...process.env,
+        MODEL_ROUTER_CATALOG: CATALOG,
+        MODEL_ROUTER_PROFILE: PROFILE,
+        MODEL_ROUTER_DECISIONS: LOG,
+        ...extraEnv,
+      },
     })
   );
 
-test('claude-code short research -> cheap tier, a model is chosen', () => {
+test('claude-code short research -> cheap tier, a subscription model is chosen', () => {
   const d = run(['--harness', 'claude-code', '--prompt', 'In one sentence, what is HNSW?']);
-  assert.equal(d.harness, 'claude-code');
-  assert.equal(d.tier, 'cheap');
-  assert.ok(d.model, 'a model was chosen');
+  expect(d.harness).toBe('claude-code');
+  expect(d.tier).toBe('cheap');
+  expect(d.model).toBe('claude-haiku-fixture');
 });
 
 test('codex gets a codex-capable model (never a claude-only model)', () => {
   const d = run(['--harness', 'codex', '--prompt', 'summarize this article']);
-  assert.equal(d.harness, 'codex');
-  assert.ok(!/^claude-/.test(d.model), `codex must not get a claude-only model, got ${d.model}`);
+  expect(d.harness).toBe('codex');
+  expect(d.model).not.toMatch(/^claude-/);
 });
 
 test('security + code escalates above the cheap tier', () => {
   const d = run([
-    '--harness',
-    'codex',
-    '--prompt',
+    '--harness', 'codex', '--prompt',
     'Refactor and fix the SQL injection security vulnerability in this auth module; prove correctness. ```js\nq="SELECT..."+id\n```',
   ]);
-  assert.notEqual(d.tier, 'cheap', `security/refactor should escalate, got ${d.tier}`);
+  expect(d.tier).not.toBe('cheap');
 });
 
 test('$1,600 floor: claude-code prefers the $0 subscription model over a billed one in-tier', () => {
   const d = run(['--harness', 'claude-code', '--prompt', 'hi']); // trivial -> cheap tier
-  assert.equal(d.provider, 'anthropic', `expected a subscription model, got ${d.model} (${d.provider})`);
-  assert.equal(d.est_input_cost_usd, null, 'a subscription model must carry no billed cost');
-});
-
-test('pluggable policy.mjs overrides selection (the core requirement)', () => {
-  const tmp = path.join(os.tmpdir(), `router-policy-test-${process.pid}.mjs`);
-  fs.writeFileSync(
-    tmp,
-    "export function choose(){ return { model:'deepseek/deepseek-chat', provider:'openrouter', tier:'cheap', reason:'forced by test policy', confidence:1 }; }"
-  );
-  try {
-    const d = run(['--harness', 'codex', '--policy', tmp, '--prompt', 'anything at all']);
-    assert.equal(d.model, 'deepseek/deepseek-chat');
-    assert.match(d.reason, /forced by test policy/);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-    fs.rmSync(LOG, { force: true });
-  }
-});
-
-test('per-user profile: a user WITHOUT a codex subscription gets billed candidates, never a phantom $0', () => {
-  // Stuart's mandate 2026-07-12: subscription awareness must be per-user — the catalog's
-  // subscription claims only hold for users whose profile confirms them.
-  const tmp = path.join(os.tmpdir(), `router-profile-test-${process.pid}.json`);
-  fs.writeFileSync(tmp, JSON.stringify({
-    harnesses: {
-      'claude-code': { available: true, subscription: true, basis: 'test' },
-      codex: { available: true, subscription: false, basis: 'test: metered API key user' },
-    },
-  }));
-  try {
-    const d = run(['--harness', 'codex', '--prompt', 'summarize this article'], { MODEL_ROUTER_PROFILE: tmp });
-    // With no subscription-covered codex model, the $0 floor must NOT fire — a billed pick with a
-    // real cost is the honest answer for this user.
-    assert.ok(d.model, 'a model is still chosen');
-    assert.notEqual(d.provider, 'openai', `codex-subscription model chosen for a user whose profile denies it (got ${d.model})`);
-  } finally { fs.rmSync(tmp, { force: true }); }
-});
-
-test('per-user profile: an unavailable harness disappears from the candidate pool', () => {
-  const tmp = path.join(os.tmpdir(), `router-profile-avail-test-${process.pid}.json`);
-  fs.writeFileSync(tmp, JSON.stringify({
-    harnesses: { 'claude-code': { available: true, subscription: true }, codex: { available: false, subscription: false } },
-  }));
-  try {
-    const d = run(['--harness', 'codex', '--prompt', 'hello'], { MODEL_ROUTER_PROFILE: tmp });
-    // codex-only models are gone; whatever remains must be a model that also runs elsewhere.
-    assert.ok(!/^gpt-/.test(d.model || ''), `codex-only model ${d.model} chosen despite codex being unavailable for this user`);
-  } finally { fs.rmSync(tmp, { force: true }); }
+  expect(d.provider).toBe('anthropic');
+  expect(d.est_input_cost_usd).toBeNull();
 });
 
 test('cross-tier $0 floor: codex never pays a billed model while a subscription model can do the job', () => {
-  // Found live 2026-07-12: demoting the unreachable gpt-5.6 tiers left codex cheap prompts routing
-  // to billed DeepSeek while subscription-covered gpt-5.5 sat unused one tier up. The floor must
-  // hold ACROSS tiers, not just within one.
   const d = run(['--harness', 'codex', '--prompt', 'summarize this article in one line']);
   const paysWhileSubscriptionExists = d.provider === 'openrouter' && d.est_input_cost_usd > 0;
-  assert.ok(!paysWhileSubscriptionExists, `codex routed to billed ${d.model} despite a subscription-covered candidate existing`);
+  expect(paysWhileSubscriptionExists).toBe(false);
+});
+
+test('per-user profile: a user WITHOUT a codex subscription gets billed candidates, never a phantom $0', () => {
+  const noCodexSub = path.join(TMP, 'profile-nocodex.json');
+  fs.writeFileSync(noCodexSub, JSON.stringify({
+    harnesses: {
+      'claude-code': { available: true, subscription: true },
+      codex: { available: true, subscription: false },
+    },
+  }));
+  const d = run(['--harness', 'codex', '--prompt', 'summarize this article'], { MODEL_ROUTER_PROFILE: noCodexSub });
+  expect(d.model).toBeTruthy();
+  expect(d.provider).not.toBe('openai'); // the codex-subscription model must NOT be treated as $0
+});
+
+test('per-user profile: an unavailable harness disappears from the candidate pool', () => {
+  const noCodex = path.join(TMP, 'profile-unavail.json');
+  fs.writeFileSync(noCodex, JSON.stringify({
+    harnesses: {
+      'claude-code': { available: true, subscription: true },
+      codex: { available: false, subscription: false },
+    },
+  }));
+  const d = run(['--harness', 'codex', '--prompt', 'hello'], { MODEL_ROUTER_PROFILE: noCodex });
+  expect(d.model || '').not.toMatch(/^gpt-/);
+});
+
+test('pluggable policy overrides selection (the core requirement)', () => {
+  const forced = path.join(TMP, 'forced-policy.mjs');
+  fs.writeFileSync(forced,
+    "export function choose(){ return { model:'or/cheap-fixture', provider:'openrouter', tier:'cheap', reason:'forced by test policy', confidence:1 }; }");
+  const out = JSON.parse(
+    execFileSync(process.execPath, [ENGINE, '--harness', 'codex', '--policy', forced, '--prompt', 'anything', '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, MODEL_ROUTER_CATALOG: CATALOG, MODEL_ROUTER_PROFILE: PROFILE, MODEL_ROUTER_DECISIONS: LOG },
+    })
+  );
+  expect(out.model).toBe('or/cheap-fixture');
+  expect(out.reason).toMatch(/forced by test policy/);
 });

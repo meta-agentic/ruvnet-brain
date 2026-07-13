@@ -39,7 +39,9 @@ import { estTokens } from './route-cheap.mjs'; // reuse the verified char/4 esti
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const CONFIG_DIR = path.join(os.homedir(), '.claude', 'model-router');
-const CATALOG_PATH = path.join(CONFIG_DIR, 'catalog.json');
+// Overridable for hermetic tests + CI (runners have no ~/.claude): the 2026-07-12 CI redness was
+// exactly this — tests that silently depended on one developer's machine state.
+const CATALOG_PATH = process.env.MODEL_ROUTER_CATALOG || path.join(CONFIG_DIR, 'catalog.json');
 const POLICY_USER = path.join(CONFIG_DIR, 'policy.mjs');
 const POLICY_DEFAULT = path.join(CONFIG_DIR, 'policy.default.mjs');
 const DECISIONS_LOG =
