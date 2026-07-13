@@ -69,10 +69,14 @@ async function listGists(owner) {
   }
 }
 
+// Hermetic-test seam (same pattern as the router's MODEL_ROUTER_CATALOG): integration tests point
+// this at an unreachable port to exercise the fallback's failure path without touching the live API.
+const API_BASE = process.env.RUVNET_GISTS_API || 'https://api.github.com';
+
 async function listGistsPublic(owner) {
   const all = [];
   for (let page = 1; page <= 10; page++) {
-    const res = await fetch(`https://api.github.com/users/${owner}/gists?per_page=100&page=${page}`, {
+    const res = await fetch(`${API_BASE}/users/${owner}/gists?per_page=100&page=${page}`, {
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'ruvnet-brain-gists-index' },
     });
     if (res.status === 403 || res.status === 429) {

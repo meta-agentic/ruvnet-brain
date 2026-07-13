@@ -71,7 +71,7 @@ function writeFixture(name, obj) {
   fs.writeFileSync(path.join(fixtures, name), JSON.stringify(obj));
 }
 
-function runGists(args, { forceFail = false } = {}) {
+function runGists(args, { forceFail = false, env: extraEnv = {} } = {}) {
   const r = spawnSync(process.execPath, ['scripts/ingest-gists.mjs', ...args], {
     cwd: tmp,
     env: {
@@ -80,6 +80,7 @@ function runGists(args, { forceFail = false } = {}) {
       LOGFILE: logFile,
       FIXTURES: fixtures,
       GH_FAIL: forceFail ? '1' : '',
+      ...extraEnv,
     },
     encoding: 'utf8',
   });
@@ -198,12 +199,18 @@ describe('ingest-gists.mjs — LIVE BUG: truncated content is silently dropped, 
   });
 });
 
-describe('ingest-gists.mjs — gh failure propagates as a real, non-zero-exit error', () => {
-  it('exits non-zero with the gh() error message when the list call fails', () => {
+describe('ingest-gists.mjs — gh failure falls back to the public API; only a dead fallback is fatal', () => {
+  // Contract changed 2026-07-13 (gists-nightly was born broken: GITHUB_TOKEN is an App token and the
+  // gists API is closed to those, so in Actions gh can NEVER list gists): a gh failure now falls back
+  // to the unauthenticated public API. RUVNET_GISTS_API points the fallback at a dead local port so
+  // this stays hermetic — no live API call — and the DOUBLE failure is what must exit non-zero.
+  it('exits non-zero with both error trails when gh fails AND the public API is unreachable', () => {
     writeFixture('list.json', ONE_GIST); // unused — GH_FAIL short-circuits before the case statement
-    const r = runGists(['--dry-run'], { forceFail: true });
+    const r = runGists(['--dry-run'], { forceFail: true, env: { RUVNET_GISTS_API: 'http://127.0.0.1:9' } });
     expect(r.code).not.toBe(0);
-    expect(r.stderr).toMatch(/gh api users\/ruvnet\/gists.*failed: stub-forced-failure/);
+    expect(r.stderr).toMatch(/gh api users\/ruvnet\/gists.*failed: stub-forced-failure/); // trail 1: gh
+    expect(r.stderr).toMatch(/falling back to unauthenticated API/); // the fallback engaged
+    expect(r.stderr).toMatch(/fetch failed|ECONNREFUSED/); // trail 2: the fallback died too
   });
 });
 

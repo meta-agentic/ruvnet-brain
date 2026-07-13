@@ -19,10 +19,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const INSTALLER = path.join(ROOT, 'bin', 'install.mjs');
 
-const savedEnv = { HOME: process.env.HOME, TEST: process.env.RUVNET_BRAIN_TEST };
+const savedEnv = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, TEST: process.env.RUVNET_BRAIN_TEST };
 const savedArgv = process.argv;
 afterEach(() => {
   process.env.HOME = savedEnv.HOME;
+  if (savedEnv.USERPROFILE === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = savedEnv.USERPROFILE;
   if (savedEnv.TEST === undefined) delete process.env.RUVNET_BRAIN_TEST; else process.env.RUVNET_BRAIN_TEST = savedEnv.TEST;
   delete process.env.RUVNET_BRAIN_IMPORT_ONLY;
   process.argv = savedArgv;
@@ -39,7 +40,10 @@ async function freshInstaller({ testMode = false, argv = [] } = {}) {
 
 const tempHome = () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rb-install-home-'));
+  // os.homedir() reads HOME on POSIX but USERPROFILE on Windows — set both, or every test on a
+  // Windows runner shares the runner's REAL profile dir and consent state bleeds between tests.
   process.env.HOME = home;
+  process.env.USERPROFILE = home;
   return home;
 };
 const consentPath = (home) => path.join(home, '.cache', 'ruvnet-brain', '.telemetry-consent');
