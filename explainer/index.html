@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "2.7.0",
+    "softwareVersion": "2.7.1",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-10",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 32 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v2.7.0</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v2.7.1</p>
     </div>
   </div>
 
@@ -272,9 +272,33 @@
     <section class="hero">
       <div class="wrap">
         <div class="hero-grid">
+          <!-- ORDER IS DELIBERATE: eyebrow → headline → THE FILM → the copy → the buttons.
+               The film IS the explanation, so it comes before the paragraph that explains it. When the
+               film sat beside the headline in a 2-col grid it rendered 406px wide (illegible data
+               cards) and when it sat below a 90-word lede it fell entirely under the fold on a
+               MacBook — measured, both times. Headline first (the thesis), film second (the proof),
+               prose third (for whoever wants it), CTA last (once you've been convinced). -->
           <div class="hero-copy">
             <p class="eyebrow">ruvnet brain &middot; a downloadable brain for Claude Code</p>
             <h1>Build <span class="grad">9 months ahead</span>.<br />Without being <span class="grad">Ruv</span>.</h1>
+          </div>
+          <figure class="hero-art">
+            <!-- The 85-second film. poster = the moment the Brain connects, so the still frame sells
+                 the story before a single byte of video plays. preload="none" keeps the page fast:
+                 the 4.4MB file is only fetched if someone actually presses play. -->
+            <video class="hero-video" controls playsinline preload="none"
+                   poster="assets/video/explainer-poster.jpg"
+                   width="1400" height="788">
+              <source src="assets/video/ruvnet-brain-explainer.mp4" type="video/mp4" />
+              <picture>
+                <source srcset="assets/img/hero.webp" type="image/webp" />
+                <img src="assets/img/hero.png" width="1400" height="934" decoding="async"
+                     alt="A brain made of glowing amber and cyan filaments, wired into rUv's ecosystem — the whole RuvNet toolkit gathered into one intelligence." />
+              </picture>
+            </video>
+            <figcaption>&#9654;&nbsp; Watch the 85-second film &mdash; what the Brain does, and why it matters.</figcaption>
+          </figure>
+          <div class="hero-copy hero-copy-after">
             <p class="lede">
               Reuven Cohen builds AI tools about <strong>nine months ahead</strong> of everyone else &mdash; the
               stuff that shows up in Claude Code next year. The catch: Claude doesn&rsquo;t recognize work that&rsquo;s
@@ -293,22 +317,6 @@
               <a class="cta ghost" href="#s09">Install in one line &rarr;</a>
             </div>
           </div>
-          <figure class="hero-art">
-            <!-- The 72-second film. poster = the moment the Brain connects, so the still frame sells
-                 the story before a single byte of video plays. preload="none" keeps the page fast:
-                 the 3.2MB file is only fetched if someone actually presses play. -->
-            <video class="hero-video" controls playsinline preload="none"
-                   poster="assets/video/explainer-poster.jpg"
-                   width="1400" height="788">
-              <source src="assets/video/ruvnet-brain-explainer.mp4" type="video/mp4" />
-              <picture>
-                <source srcset="assets/img/hero.webp" type="image/webp" />
-                <img src="assets/img/hero.png" width="1400" height="934" decoding="async"
-                     alt="A brain made of glowing amber and cyan filaments, wired into rUv's ecosystem — the whole RuvNet toolkit gathered into one intelligence." />
-              </picture>
-            </video>
-            <figcaption>&#9654;&nbsp; Watch the 72-second film &mdash; what the Brain does, and why it matters.</figcaption>
-          </figure>
         </div>
 
         <div class="plainband">

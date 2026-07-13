@@ -789,15 +789,24 @@ footer .fine { margin-top: var(--space-l); padding-top: var(--space-m); border-t
 @media (min-width: 48em) {
   .nav-links { display: flex; }
   .hero { padding-top: var(--space-3xl); }
-  .hero-grid { grid-template-columns: 1.05fr 0.95fr; gap: var(--space-2xl); }
+  /* The hero STAYS ONE COLUMN — copy on top, film full width beneath.
+     It used to be a 2-col grid (copy 1.12fr / art 0.88fr), which was right when the art was a still
+     IMAGE: a decorative panel beside the headline. It is wrong now that the art is an 85s FILM whose
+     entire argument is facts you can READ on screen — at 406px wide the "46,189,000 downloads" card
+     is illegible, and an unreadable fact is worse than no fact. Full width takes it to ~1100px. */
   .dual { grid-template-columns: 1fr 1fr; }
   .steps { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (min-width: 64em) {
-  .hero-grid { grid-template-columns: 1.12fr 0.88fr; }
   .gallery .grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* THE FILM sits directly under the headline. Tight above (it must break the fold on a 900px laptop),
+   generous below (it needs to clear the prose that follows). Capped at 1100px so it never swallows a
+   large monitor. */
+.hero-art { margin: var(--space-l) auto 0; max-width: 1100px; }
+.hero-copy-after { margin-top: var(--space-xl); max-width: 70ch; }
 
 /* ============================================================================
    18 · ACCESSIBILITY — reduced motion + forced-colors
