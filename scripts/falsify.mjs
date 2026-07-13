@@ -148,6 +148,49 @@ export const CHECKS = [
     },
   },
   {
+    id: 'does-memory-actually-recall',
+    asked: '"Is AgentDB actually storing AND recalling, or is it just small bits?"',
+    why: 'I reported AgentDB as broken THREE times. It was never broken. I called `memory search` positionally when the CLI wants -q, then broke my own canary test with a bad grep, and reported MY test defects as PRODUCT defects. This check does the round trip so I can never again mistake my own sloppiness for a broken tool.',
+    run: () => {
+      // MEMORY_DB override exists so this check can be TESTED AGAINST A BROKEN STATE. A check nobody
+      // has watched fail is not a check. (My first two attempts to test it were themselves broken —
+      // which is the entire reason this check exists.)
+      const db = process.env.MEMORY_DB || path.join(ROOT, '.swarm', 'memory.db');
+      if (!fs.existsSync(db)) return { ok: false, detail: 'no memory.db — memory is not initialised' };
+
+      // 1. Is it COLLECTING? (rows, embedded, current)
+      const q = (sql) => (spawnSync('sqlite3', [db, sql], { encoding: 'utf8' }).stdout || '').trim();
+      const total = Number(q('SELECT COUNT(*) FROM memory_entries;'));
+      const embedded = Number(q("SELECT SUM(embedding IS NOT NULL AND LENGTH(embedding)>50) FROM memory_entries;"));
+      const ageH = (Date.now() - Number(q('SELECT MAX(created_at) FROM memory_entries;'))) / 3600_000;
+
+      // 2. Does it SURVIVE compaction / session end? (the whole point)
+      const pre = Number(q("SELECT COUNT(*) FROM memory_entries WHERE key LIKE 'session-precompact%';"));
+      const end = Number(q("SELECT COUNT(*) FROM memory_entries WHERE key LIKE 'session-sessionend%';"));
+
+      // 3. Does it RECALL? A real semantic round-trip through the REAL CLI — not a DB peek.
+      const r = spawnSync('npx', ['ruflo@latest', 'memory', 'search', '-q', 'nightly job supervision heartbeat receipts'], {
+        cwd: ROOT, encoding: 'utf8', timeout: 120_000,
+      });
+      const recalled = /Found\s+\d+\s+results/.test(r.stdout || '') && !/Found\s+0\s+results/.test(r.stdout || '');
+
+      const problems = [];
+      if (total < 10) problems.push(`only ${total} entries stored`);
+      if (embedded / Math.max(total, 1) < 0.9) problems.push(`only ${embedded}/${total} entries are embedded — semantic recall will be partial`);
+      if (ageH > 48) problems.push(`newest entry is ${ageH.toFixed(0)}h old — capture may have stopped`);
+      if (pre === 0) problems.push('ZERO PreCompact snapshots — context will NOT survive a compaction');
+      if (end === 0) problems.push('ZERO SessionEnd snapshots — context will NOT survive a session restart');
+      if (!recalled) problems.push('semantic search returned NOTHING — recall is dead');
+
+      return {
+        ok: problems.length === 0,
+        detail: problems.length
+          ? problems.join('; ')
+          : `${total} entries (${embedded} embedded), ${pre} PreCompact + ${end} SessionEnd snapshots, semantic recall returns results`,
+      };
+    },
+  },
+  {
     id: 'is-ci-actually-green',
     asked: '"Why am I getting failure notifications from GitHub?"',
     why: 'I declared green from LOCAL gates while CI had never passed — 25 straight failures.',

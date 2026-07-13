@@ -101,10 +101,16 @@ describe('forge-mcp.mjs — JSON-RPC protocol surface (subprocess)', () => {
       cwd: tmp, env: { ...process.env, KB_NAME: 'testkb', KB_DIR: tmp }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let out = '';
-    child.stdout.on('data', (d) => { out += d.toString(); });
+    // Wait for the ping RESPONSE, not a fixed interval — under full-suite CPU load a 300ms
+    // sleep loses the race to subprocess startup and parses an empty buffer (flaked 2026-07-13,
+    // passed in isolation). If the malformed line wrongly produced a response too, out would
+    // hold TWO lines and the single JSON.parse below still fails — the regression stays caught.
+    const gotLine = new Promise((resolve) => {
+      child.stdout.on('data', (d) => { out += d.toString(); if (out.includes('\n')) resolve(); });
+    });
     child.stdin.write('{ this is not json\n');
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }) + '\n');
-    await new Promise((r) => setTimeout(r, 300));
+    await Promise.race([gotLine, new Promise((r) => setTimeout(r, 5000))]);
     child.kill();
     expect(JSON.parse(out.trim())).toEqual({ jsonrpc: '2.0', id: 9, result: {} });
   });

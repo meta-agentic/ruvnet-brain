@@ -67,19 +67,34 @@ export function formatTable(rows) {
   const totalFrontier = rows.reduce((s, r) => s + (r.est_frontier_cost || 0), 0);
   const totalSaved = rows.reduce((s, r) => s + r.saved, 0);
   const ratio = totalCost > 0 ? (totalFrontier / totalCost).toFixed(1) : '?';
+  // Lead with the PERCENTAGE — "$1.83" reads as pocket change; "68% cheaper" is the actual
+  // message (Stuart, 2026-07-13). Dollars stay for auditability; percent carries the story.
+  const pct = totalFrontier > 0 ? Math.round((totalSaved / totalFrontier) * 100) : 0;
 
   // Baselines now vary per row; name them all rather than picking one and implying it covers everything.
   const baselines = [...new Set(rows.map((r) => r.frontier_ref || 'claude-opus-4.8'))].join(', ');
   const subagents = rows.filter((r) => r.source === 'claude-subagent').length;
 
+  // The card leads with the PERCENTAGE and a spent-vs-unrouted bar — "$1.83" reads as pocket
+  // change; "68% cheaper", drawn, is the message (Stuart, 2026-07-13). The dollar table stays
+  // below for auditability; every number still traces to a receipt row.
+  const BAR = 30;
+  const withBar = totalFrontier > 0 ? Math.min(BAR, Math.max(1, Math.round(BAR * (totalCost / totalFrontier)))) : BAR;
+  const drawBar = (n) => '█'.repeat(n) + '░'.repeat(BAR - n);
+  const rule = '─'.repeat(70);
   return [
+    rule,
+    `  💰 SAVED ~${pct}%  ·  ~${ratio}× cheaper  ·  ${rows.length} routed task(s) (${subagents} subagent, ${rows.length - subagents} openrouter)`,
+    '',
+    `  without routing    ${drawBar(BAR)}  ${fmt$(totalFrontier)}`,
+    `  with MetaHarness   ${drawBar(withBar)}  ${fmt$(totalCost)}   → ~${fmt$(totalSaved)} kept`,
+    rule,
     line(header),
     line(widths.map((w) => '-'.repeat(w))),
     ...body.map(line),
     '',
-    `${rows.length} routed task(s) (${subagents} subagent, ${rows.length - subagents} openrouter) · est. spent ${fmt$(totalCost)} vs ${fmt$(totalFrontier)} unrouted (${baselines}) · saved ~${fmt$(totalSaved)} (~${ratio}x cheaper)`,
+    `Baselines: ${baselines} — the model each task would have run on if it had not been routed.`,
     'Pricing is live-verified. Token counts are measured OR estimated per row (each row records which, in token_source).',
-    'Baseline = the model the task would have run on if it had not been routed.',
   ].join('\n');
 }
 

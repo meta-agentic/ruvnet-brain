@@ -82,7 +82,9 @@ const fmt$ = (n) => `$${n < 0.01 ? n.toFixed(5) : n.toFixed(4)}`;
 
 export function receiptLine(model, costs) {
   const ref = costs.ref && costs.ref !== FRONTIER.name ? costs.ref : 'frontier';
-  return `\x1b[2m⚡ MetaHarness: routed to ${model} (est. ${fmt$(costs.cost)} vs ${fmt$(costs.frontier)} ${ref} — saved ~${fmt$(costs.saved)})\x1b[0m`;
+  // Percentage leads — "saved ~$0.005" reads as noise, "~97% cheaper" is the message (Stuart, 2026-07-13).
+  const pct = costs.frontier > 0 ? Math.round((costs.saved / costs.frontier) * 100) : 0;
+  return `\x1b[2m⚡ MetaHarness: routed to ${model} — ~${pct}% cheaper (est. ${fmt$(costs.cost)} vs ${fmt$(costs.frontier)} ${ref}, saved ~${fmt$(costs.saved)})\x1b[0m`;
 }
 
 // Load OPENROUTER_API_KEY from ruvnet-brain/.env if not already in env. Value never printed/logged.
