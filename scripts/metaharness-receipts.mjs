@@ -58,7 +58,7 @@ export function formatTable(rows) {
   const header = ['date', 'channel', 'task class', 'model used', 'instead of', 'est. cost', 'est. baseline', 'saved', 'time'];
   const body = rows.map((r) => [
     (r.ts || '').replace('T', ' ').slice(0, 16),
-    r.source === 'claude-subagent' ? 'subagent' : 'openrouter',
+    r.source === 'claude-subagent' ? 'subagent' : r.source === 'calibration' ? 'calibrate' : 'openrouter',
     r.task_class || '?',
     r.model,
     r.frontier_ref || 'claude-opus-4.8',
@@ -82,6 +82,20 @@ export function formatTable(rows) {
   const baselines = [...new Set(rows.map((r) => r.frontier_ref || 'claude-opus-4.8'))].join(', ');
   const timedTotal = rows.reduce((s, r) => s + (typeof r.duration_ms === 'number' && r.duration_ms > 0 ? r.duration_ms : 0), 0);
   const timedRows = rows.filter((r) => typeof r.duration_ms === 'number' && r.duration_ms > 0).length;
+  // TIME as a percentage, like cost — "20 seconds" is trivia; "~40% faster" is the message
+  // (Stuart, 2026-07-13: cheaper AND faster = fundamentally more efficient). Only rows carrying a
+  // MEASURED baseline_duration_ms (written by the calibration harness) enter this comparison.
+  const paired = rows.filter((r) => r.duration_ms > 0 && r.baseline_duration_ms > 0);
+  const pairedRouted = paired.reduce((s, r) => s + r.duration_ms, 0);
+  const pairedBase = paired.reduce((s, r) => s + r.baseline_duration_ms, 0);
+  const fasterPct = pairedBase > 0 ? Math.round((1 - pairedRouted / pairedBase) * 100) : null;
+  // Say what the measurement actually says — FASTER, SLOWER, or parity. The 2026-07-13
+  // calibration measured cheap tiers at speed PARITY on micro-tasks (startup dominates);
+  // a card that only knows how to say "faster" would have lied.
+  const speedBadge = fasterPct === null ? ''
+    : fasterPct >= 5 ? `  ·  ⚡ ~${fasterPct}% FASTER (measured, n=${paired.length})`
+    : fasterPct <= -5 ? `  ·  ⏱ ~${-fasterPct}% slower on routed tier (measured, n=${paired.length})`
+    : `  ·  ⚡ speed parity (measured, n=${paired.length})`;
   const subagents = rows.filter((r) => r.source === 'claude-subagent').length;
 
   // The card leads with the PERCENTAGE and a spent-vs-unrouted bar — "$1.83" reads as pocket
@@ -93,7 +107,7 @@ export function formatTable(rows) {
   const rule = '─'.repeat(70);
   return [
     rule,
-    `  💰 SAVED ~${pct}%  ·  ~${ratio}× cheaper  ·  ${rows.length} routed task(s) (${subagents} subagent, ${rows.length - subagents} openrouter)`,
+    `  💰 SAVED ~${pct}%${speedBadge}  ·  ~${ratio}× cheaper  ·  ${rows.length} routed task(s) (${subagents} subagent, ${rows.length - subagents} openrouter/calibration)`,
     '',
     `  without routing    ${drawBar(BAR)}  ${fmt$(totalFrontier)}`,
     `  with MetaHarness   ${drawBar(withBar)}  ${fmt$(totalCost)}   → ~${fmt$(totalSaved)} kept`,
@@ -107,9 +121,11 @@ export function formatTable(rows) {
     // Time honesty: durations are MEASURED wall-clock of the routed run. A "time saved vs baseline"
     // number requires a measured per-tier speed baseline (the calibration batch) — until that exists
     // we state the gap instead of inventing the comparison.
-    timedTotal > 0
-      ? `Measured time on routed models: ${fmtT(timedTotal)} across ${timedRows} timed task(s). Time-SAVED vs baseline: not yet measured — appears after the per-tier calibration run.`
-      : 'No measured durations in these receipts yet. Time-saved reporting activates after the per-tier calibration run.',
+    fasterPct !== null
+      ? `Time, measured: routed ${fmtT(pairedRouted)} vs baseline ${fmtT(pairedBase)} on ${paired.length} calibrated task(s) → ${fasterPct >= 5 ? `~${fasterPct}% faster` : fasterPct <= -5 ? `~${-fasterPct}% slower (startup-dominated micro-tasks — speed wins come from parallel fan-out and long generations, measured from real dispatches)` : 'speed parity'}. Uncalibrated rows show routed time only.`
+      : timedTotal > 0
+        ? `Measured time on routed models: ${fmtT(timedTotal)} across ${timedRows} timed task(s). Time-SAVED vs baseline: not yet measured — appears after the per-tier calibration run.`
+        : 'No measured durations in these receipts yet. Time-saved reporting activates after the per-tier calibration run.',
   ].join('\n');
 }
 
