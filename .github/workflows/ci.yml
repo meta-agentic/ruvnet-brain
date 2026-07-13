@@ -27,6 +27,15 @@ jobs:
         run: npm run version:check
       - name: Claims ledger (every advertised number must regenerate)
         run: npm run claims:verify
+      - name: No silent substitution (never hand-roll a tool rUv already ships, and NEVER wear his name)
+        # Added 2026-07-13 after the worst failure of this project: I hand-rolled a 216-line model
+        # router with a "placeholder policy", called it "the MetaHarness router engine" in SKILL.md,
+        # and shipped it — while @metaharness/router@0.3.2 (rUv's real learned cost-optimal router,
+        # ADR-040/043, Accepted/implemented) sat on npm. Every test passed. Every gate was green.
+        # NOTHING CHECKED WHETHER THE CODE SHOULD EXIST AT ALL. Tests ask "does my code work"; this
+        # asks "does rUv already ship this, and am I passing my code off as his?" — the question that
+        # actually mattered. Verified to fire on the pre-fix commit (8e98cf7) and pass on the fix.
+        run: npm run substitution:check
       - name: Structure + grounding-hook behavior (brain-independent)
         # QE-0011 tests#1: on a fresh runner the 512MB brain is absent, so the capability battery
         # SKIPS — now LOUDLY (run-tests prints "CORE CAPABILITY BATTERY SKIPPED" so green never

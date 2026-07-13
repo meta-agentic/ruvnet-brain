@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 2.4.3 — updated 2026-07-12 21:11 EDT](https://img.shields.io/badge/version_2.4.3-updated_2026--07--12_21:11_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 2.5.0 — updated 2026-07-12 21:11 EDT](https://img.shields.io/badge/version_2.5.0-updated_2026--07--12_21:11_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -36,17 +36,27 @@
 
 ---
 
-## What's new in 2.4 — it routes your money, and it can never break silently
+## What's new in 2.5 — it uses rUv's real tools, and every job proves it ran
 
-**Shipped 2026-07-12, every piece proven live before it was written down:**
+**Shipped 2026-07-13. Two hard lessons, both fixed at the root.**
 
-- **MetaHarness model router** — reviews each task and sends it to the cheapest model that can do the job, **your subscriptions first ($0)**: a harness-neutral decision engine (Claude Code *and* Codex), a verified-pricing catalog, and a cross-tier floor that never pays a metered API while a subscription model can do the work.
-- **Per-user subscription profiles** — setup detects what it can *prove* (Codex's ChatGPT login, from the auth file's shape, never its secrets), **asks** what it can't ("Claude Pro or Max?"), and records every answer with its evidence basis (`verified` / `user-attested` / `assumed`). Your $0 is never assumed from someone else's machine.
-- **The offer + the path** — one line ("want me to set up cost-optimal routing? yes/no"), two questions, then a live-derived display of your zero-cost options per harness and the cheapest verified paid-API fallbacks (DeepSeek V4 Flash at $0.077/MTok in — dispatch-proven, not just priced).
-- **Goldie** — a weekly scheduled research job: refreshes verified OpenRouter pricing, flags >20% drift, cross-checks the model registries, auto-reinstates models the moment live evidence appears, and runs a headless research pass on the standing questions (how many buckets, best model per bucket). Its **first run caught a false "verified" stamp in its own catalog**.
-- **The gong system** — a dark brain can never read as "(no results)" again: real-time screaming errors + an urgent phone push, a red banner in every new session, and a nightly canary — each layer proven by deliberately breaking the brain and watching it ring, then watching recovery clear it.
-- **Key + spend canaries** — every provider API key live-probed nightly through the real shell chain (a dead key pages you within a day; it found and healed one on day one), alongside the API-spend watchdog.
-- **An outcome log** — every routing decision and every human override is recorded as labeled data; the current documented-placeholder policy gets replaced by a learned one (per rUv's ADR-040/DRACO and ruflo ADR-149 evidence) once the labels accumulate.
+### 1. It stopped faking rUv's tools — and now a CI gate makes faking impossible
+
+The 2.4 router was **hand-rolled**: our own heuristic with a placeholder policy, presented as "the MetaHarness router." rUv had already shipped the real thing. 2.5 replaces it with **[`@metaharness/router`](https://www.npmjs.com/package/@metaharness/router)** — his actual learned cost-optimal router (k-NN over labelled embeddings, the productized DRACO Phase-2 finding, ADR-040/043).
+
+Our code now does **one honest job**: a price transform. A model your subscription already covers becomes `costPerMTok = 0`, and rUv's router does the rest natively — a $0 model that clears the quality bar simply *is* the cheapest sufficient candidate. Cost-optimal routing and "already paid for" compose; they never competed.
+
+> **`npm run substitution:check`** — a new CI gate that fails the build if any code implements a capability rUv already ships *and* wears his name without either using the real package or openly disclosing the hand-roll. **Verified to fire on the exact commit where we got this wrong.** You may hand-roll. You may never hand-roll *silently*.
+
+### 2. Every scheduled job must PROVE it ran — silence is no longer health
+
+`launchctl` reports **exit 0 for a job that has never run** — byte-identical to success. So "check the exit code" cannot tell triumph from total absence, and a nightly job sat unfired for its entire life while every surface read green.
+
+- **A registry** (`config/scheduled-jobs.json`) of what *must* run — so unloaded, deleted, or never-fired is a **violation**, not a silence.
+- **A wrapper** every job runs through — start receipt, end receipt, real exit code, urgent phone push on failure. Break-tested through all four death modes (including SIGKILL, which no trap can catch — the watchdog catches that one).
+- **A watchdog** that treats *absence of evidence as failure*, and which is **in its own registry** — because a supervisor nobody supervises just moves the blind spot up one level.
+
+Result: **11 jobs supervised, every one producing a fresh successful receipt.** One had been *totally blind* — writing zero bytes on a healthy day, so "ran fine" and "never ran" were indistinguishable. Cured without changing a line of its logic.
 
 ![MetaHarness routing — your subscriptions first, always](assets/diagrams/router-path.svg)
 
