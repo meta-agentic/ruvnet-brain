@@ -52,6 +52,37 @@
       "_note": "It has been pushing '4 scheduled jobs failing silently' every hour, correctly — but off launchctl's exit-code field, which CANNOT see a job that never ran. It alerts; it just can't see the hole. Now it is itself watched: nothing supervised the supervisor."
     },
     {
+      "label": "com.stuartkerr.ruflo-autoupdate",
+      "what": "Keeps the whole RuvNet/Ruflo npm stack current (npm i -g ~26 packages on @latest/@alpha)",
+      "schedule": "daily 03:30",
+      "maxAgeHours": 26,
+      "required": true,
+      "_note": "This is THE job that keeps rUv's stack fresh on this machine. It was unwatched until 2026-07-13 — the single most important update job here had no supervision at all."
+    },
+    {
+      "label": "io.ruv.auto-subscribe",
+      "what": "Hourly: installs RuvNet package updates the moment they publish",
+      "schedule": "hourly",
+      "maxAgeHours": 3,
+      "required": true
+    },
+    {
+      "label": "com.cognitum.ruvector-autoupdate",
+      "what": "Every 6h: git pull of ~/RuVector_Clean (the RuVector source the Rust crates build from)",
+      "schedule": "every 6h",
+      "maxAgeHours": 8,
+      "required": true,
+      "_note": "Its git stash pop has silently failed once (orphaned stash@{0} from 2026-06-28 — it swallowed local edits and nothing said so). The heartbeat now catches a non-zero exit; the orphaned stash still needs a human decision."
+    },
+    {
+      "label": "com.stuartkerr.clear-claude-tmp",
+      "what": "Every 3h: purges Claude Code task-output temp files older than 2 days (the dir hits ~800MB)",
+      "schedule": "every 3h",
+      "maxAgeHours": 5,
+      "required": true,
+      "_was_lying": "Its log line had the date BAKED IN at plist-write time — all 43 entries since 2026-04-06 were byte-identical. It worked; its log was a lie. Now a real script with a real $(date) and a real delete count."
+    },
+    {
       "label": "com.ruvnet.nightly-watchdog",
       "what": "Watches all of the above. Listed here so that IT is watched too — a watchdog nobody watches is the same blind spot one level up",
       "schedule": "daily 09:00",
