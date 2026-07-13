@@ -2,6 +2,13 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs'],
+    // Windows runners spawn processes MUCH slower than macOS/Linux (Git Bash startup dominates), and
+    // a large slice of this suite deliberately exercises real shell hooks as subprocesses rather than
+    // mocking them. vitest's 5s default is marginal there — hook-battery and token-meter timed out on
+    // 2026-07-13 with no logic change, pure spawn latency. The assertions are about BEHAVIOUR, not
+    // speed, so the honest fix is a timeout that fits the platform, not a weaker test.
+    testTimeout: process.platform === 'win32' ? 30_000 : 10_000,
+    hookTimeout: process.platform === 'win32' ? 30_000 : 10_000,
     coverage: {
       provider: 'v8',
       // ADR-0011 Phase 0: measure ALL shipped source, not a flattering 8-file subset. `all: true`
