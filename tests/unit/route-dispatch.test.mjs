@@ -22,8 +22,19 @@ const REPO = path.resolve(import.meta.dirname, '../..');
 const GATE = path.join(REPO, 'plugin/scripts/route-dispatch.sh');
 const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
 
-function dispatch(toolInput, toolName = 'Task', env = {}) {
+/**
+ * @param optedIn — does this user have a model-router profile? THE CONSENT GATE.
+ *   My first version of this hook blocked EVERY user of the plugin, including strangers who never
+ *   asked for cost routing. Shipping a hard block on someone else's Task tool to save Stuart money is
+ *   hostile. It now enforces ONLY for users who opted in (they answered the two subscription
+ *   questions, so profile.json exists). Everyone else is untouched — not even warned.
+ */
+function dispatch(toolInput, toolName = 'Task', env = {}, optedIn = true) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rd-'));
+  if (optedIn) {
+    fs.mkdirSync(path.join(home, '.claude/model-router'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), '{"harnesses":{}}');
+  }
   const r = spawnSync('bash', [GATE], {
     input: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
     env: { ...process.env, HOME: home, ...env },
@@ -33,6 +44,14 @@ function dispatch(toolInput, toolName = 'Task', env = {}) {
 }
 
 describe.skipIf(!hasBash || process.platform === 'win32')('route-dispatch.sh — a subagent cannot inherit the session model by omission', () => {
+  it('NEVER touches a user who did not opt in — consent is the default', () => {
+    // The defect I shipped and caught minutes later: this hook goes to EVERY plugin user. Hard-blocking
+    // the Task tool for people who never asked for routing would break strangers' workflows.
+    const r = dispatch({ description: 'x', subagent_type: 'general-purpose' }, 'Task', {}, /* optedIn */ false);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+
   it('BLOCKS a dispatch with no model — the leak becomes a hard error, not a habit', () => {
     const r = dispatch({ description: 'sweep tests', subagent_type: 'general-purpose' });
     expect(r.status).toBe(2); // exit 2 = block, and stderr is fed back to the model as the reason
@@ -67,6 +86,27 @@ describe.skipIf(!hasBash || process.platform === 'win32')('route-dispatch.sh —
   it('has a deliberate escape hatch — but it must be USED ON PURPOSE, never reached by omission', () => {
     const r = dispatch({ description: 'x', subagent_type: 'general-purpose' }, 'Task', { RUVNET_ALLOW_INHERITED_MODEL: '1' });
     expect(r.status).toBe(0);
+  });
+
+  it('FAILS OPEN on unparseable input — a blocking hook must never brick a session', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rd-'));
+    fs.mkdirSync(path.join(home, '.claude/model-router'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), '{}');
+    const r = spawnSync('bash', [GATE], { input: 'not json at all', env: { ...process.env, HOME: home }, encoding: 'utf8' });
+    expect(r.status).toBe(0); // a gate that breaks your tools is worse than the leak it prevents
+  });
+
+  it('parses with BASH BUILTINS ONLY — no cat, no grep, no sed, no jq, no python3', () => {
+    // Break-testing on a bare PATH found TWO holes in my own first version: a `grep|head|sed` pipeline
+    // that returned empty (so the gate silently allowed everything), and `INPUT=$(cat)`. A hook that
+    // can BLOCK must depend on nothing it cannot guarantee — so the parse is `[[ =~ ]]` and the stdin
+    // read is a `while read` loop. Both are builtins: they cannot be missing or shadowed by PATH.
+    const src = fs.readFileSync(GATE, 'utf8')
+      .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n'); // strip comments; they NAME these tools
+    for (const bin of ['python3', 'jq', '$(cat', '| grep', '| sed', '| head']) {
+      expect(src, `route-dispatch.sh must not depend on ${bin}`).not.toContain(bin);
+    }
+    expect(src).toMatch(/BASH_REMATCH/); // the builtin-regex parse
   });
 });
 
