@@ -62,15 +62,12 @@ jobs:
     # string fixture. So nothing is excluded from tests/unit here. What Windows still does NOT
     # cover is printed loudly by the last step instead of being hidden.
     runs-on: windows-latest
-    # NON-BLOCKING as of 2026-07-12 (visible, dated, deliberate — not a silent downgrade): this
-    # job has NEVER been green since it was added (all 25 recorded ci runs are failures), so it
-    # failed the whole pipeline by default while providing no gate value — a permanently red
-    # required job trains everyone to ignore CI. Known Windows-only breakage to fix before
-    # flipping this back: (1) install-telemetry-consent.test.mjs imports install.mjs via a
-    # file:// URL that doubles the drive letter (file:///D:/D:/...), (2) the claims-verify
-    # verifyVersionSurfaces spawn fails on the runner. Tracked in PROGRESS.md 2026-07-12.
-    # Remove this line the day windows-unit is actually green, so it becomes a real gate.
-    continue-on-error: true
+    # BLOCKING as of 2026-07-13: first-ever green run (29219328821) after fixing all six Windows
+    # failure clusters at root cause (URL.pathname vs fileURLToPath, /bin/bash vs PATH bash,
+    # backslash paths vs a forward-slash EXEMPT set in sync-version.mjs, HOME vs USERPROFILE in
+    # os.homedir(), no sqlite3 CLI on the runner, chmod-read-only being a no-op on win32).
+    # History: non-blocking 2026-07-12→13 because it had never been green (25/25 failures) and a
+    # permanently red required job trains everyone to ignore CI. That era is over — keep it a gate.
     steps:
       - name: Keep checkout byte-exact (tests read repo files and compare contents; CRLF would lie)
         run: git config --global core.autocrlf false

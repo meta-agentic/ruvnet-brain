@@ -8,36 +8,54 @@ on:
   watch:
     types: [started]
   workflow_run:
-    workflows: ["ci", "integration-linux"]
+    # EVERY scheduled/CI workflow belongs here — gists-nightly failed 3 nights in a row (07-10..12)
+    # in silence because it was missing from this list. Silent redness is the one banned failure mode.
+    workflows: ["ci", "integration-linux", "gists-nightly"]
     types: [completed]
+# The notify job needs nothing from the repo — strip the token to read-nothing so an injected
+# payload (were one ever to slip through again) has no credential to steal.
+permissions: {}
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - name: send
+        # SECURITY: issue/PR titles and user logins are ATTACKER-CONTROLLED on a public repo, and
+        # this fires on pull_request_target. They must reach the shell only via env (quoted "$VAR"
+        # expansion, never ${{ }} interpolation inside run:) or a crafted title executes here.
         env:
           TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+          SENDER: ${{ github.event.sender.login }}
+          WR_CONC: ${{ github.event.workflow_run.conclusion }}
+          WR_NAME: ${{ github.event.workflow_run.name }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           [ -z "$TOPIC" ] && exit 0
           EVENT="${{ github.event_name }}"
           case "$EVENT" in
             issues)
-              TITLE="🐛 New issue #${{ github.event.issue.number }}"
-              BODY="${{ github.event.issue.title }} — by ${{ github.event.issue.user.login }}"
+              TITLE="🐛 New issue #${ISSUE_NUM}"
+              BODY="${ISSUE_TITLE} — by ${ISSUE_USER}"
               PRIO="high"; TAGS="warning" ;;
             pull_request_target)
-              TITLE="🔀 New PR #${{ github.event.pull_request.number }}"
-              BODY="${{ github.event.pull_request.title }} — by ${{ github.event.pull_request.user.login }}"
+              TITLE="🔀 New PR #${PR_NUM}"
+              BODY="${PR_TITLE} — by ${PR_USER}"
               PRIO="high"; TAGS="git" ;;
             watch)
               TITLE="⭐ New star"
-              BODY="${{ github.event.sender.login }} starred ruvnet-brain"
+              BODY="${SENDER} starred ruvnet-brain"
               PRIO="default"; TAGS="star" ;;
             workflow_run)
-              CONC="${{ github.event.workflow_run.conclusion }}"
-              [ "$CONC" = "success" ] && exit 0
-              TITLE="🔴 CI ${CONC}: ${{ github.event.workflow_run.name }}"
-              BODY="branch ${{ github.event.workflow_run.head_branch }} — ${{ github.event.workflow_run.html_url }}"
+              [ "$WR_CONC" = "success" ] && exit 0
+              TITLE="🔴 CI ${WR_CONC}: ${WR_NAME}"
+              BODY="branch ${WR_BRANCH} — ${WR_URL}"
               PRIO="urgent"; TAGS="rotating_light" ;;
           esac
           curl -sS -H "Title: $TITLE" -H "Priority: $PRIO" -H "Tags: $TAGS" -d "$BODY" "https://ntfy.sh/$TOPIC" || true
