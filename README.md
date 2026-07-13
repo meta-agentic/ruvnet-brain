@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 2.4.1 — updated 2026-07-10 08:15 EDT](https://img.shields.io/badge/version_2.4.1-updated_2026--07--10_08:15_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 2.4.1 — updated 2026-07-12 20:50 EDT](https://img.shields.io/badge/version_2.4.1-updated_2026--07--12_20:50_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -35,6 +35,18 @@
 </div>
 
 ---
+
+## What's new in 2.3–2.4 — it routes your money, and it can never break silently
+
+**Shipped 2026-07-12, every piece proven live before it was written down:**
+
+- **MetaHarness model router** — reviews each task and sends it to the cheapest model that can do the job, **your subscriptions first ($0)**: a harness-neutral decision engine (Claude Code *and* Codex), a verified-pricing catalog, and a cross-tier floor that never pays a metered API while a subscription model can do the work.
+- **Per-user subscription profiles** — setup detects what it can *prove* (Codex's ChatGPT login, from the auth file's shape, never its secrets), **asks** what it can't ("Claude Pro or Max?"), and records every answer with its evidence basis (`verified` / `user-attested` / `assumed`). Your $0 is never assumed from someone else's machine.
+- **The offer + the path** — one line ("want me to set up cost-optimal routing? yes/no"), two questions, then a live-derived display of your zero-cost options per harness and the cheapest verified paid-API fallbacks (DeepSeek V4 Flash at $0.077/MTok in — dispatch-proven, not just priced).
+- **Goldie** — a weekly scheduled research job: refreshes verified OpenRouter pricing, flags >20% drift, cross-checks the model registries, auto-reinstates models the moment live evidence appears, and runs a headless research pass on the standing questions (how many buckets, best model per bucket). Its **first run caught a false "verified" stamp in its own catalog**.
+- **The gong system (2.3)** — a dark brain can never read as "(no results)" again: real-time screaming errors + an urgent phone push, a red banner in every new session, and a nightly canary — each layer proven by deliberately breaking the brain and watching it ring, then watching recovery clear it.
+- **Key + spend canaries** — every provider API key live-probed nightly through the real shell chain (a dead key pages you within a day; it found and healed one on day one), alongside 2.2's API-spend watchdog.
+- **An outcome log** — every routing decision and every human override is recorded as labeled data; the current documented-placeholder policy gets replaced by a learned one (per rUv's ADR-040/DRACO and ruflo ADR-149 evidence) once the labels accumulate.
 
 ## What's new in 2.0
 
