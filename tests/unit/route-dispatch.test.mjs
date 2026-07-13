@@ -1,0 +1,97 @@
+// tests/unit/route-dispatch.test.mjs — the wall that ends model-inheritance, and the adversary that
+// asks Stuart's questions before he has to.
+//
+// THE LEAK (2026-07-13). Stuart: "What happens when I'm right here in Opus 4.8 and it has 10 things to
+// run? Is it going to just run them as Opus 4.8?" — YES. A subagent INHERITS the main-loop model unless
+// `model` is passed. Ten agents on a Fable session = ten agents at $10/$50 per Mtok, ~10x Haiku for
+// identical mechanical work. The router existed; the rule to use it existed; the router's ENTIRE
+// LIFETIME OUTPUT was 3 test pings and $0.018 saved. Advisory rules get ignored. So: a wall.
+//
+// THE DEEPER DEFECT (falsify.mjs). Stuart: "Why do you still keep needing me to call you on these
+// things? Ru would not miss stuff like this." Correct, and it is mechanical: I verify WHAT I BUILT,
+// never WHETHER IT SHOULD EXIST. Tests I wrote passing is circular evidence. falsify.mjs turns each
+// question he had to ask into a check that fails on an UNPROVEN CLAIM (not merely on broken code).
+import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { runAll, CHECKS } from '../../scripts/falsify.mjs';
+
+const REPO = path.resolve(import.meta.dirname, '../..');
+const GATE = path.join(REPO, 'plugin/scripts/route-dispatch.sh');
+const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
+
+function dispatch(toolInput, toolName = 'Task', env = {}) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rd-'));
+  const r = spawnSync('bash', [GATE], {
+    input: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
+    env: { ...process.env, HOME: home, ...env },
+    encoding: 'utf8',
+  });
+  return { status: r.status, stderr: r.stderr || '', home };
+}
+
+describe.skipIf(!hasBash || process.platform === 'win32')('route-dispatch.sh — a subagent cannot inherit the session model by omission', () => {
+  it('BLOCKS a dispatch with no model — the leak becomes a hard error, not a habit', () => {
+    const r = dispatch({ description: 'sweep tests', subagent_type: 'general-purpose' });
+    expect(r.status).toBe(2); // exit 2 = block, and stderr is fed back to the model as the reason
+    expect(r.stderr).toMatch(/SUBAGENT DISPATCH BLOCKED/);
+    expect(r.stderr).toMatch(/INHERITS this session's model/);
+  });
+
+  it('the block TEACHES rather than merely punishing — it names the tier for each kind of work', () => {
+    const { stderr } = dispatch({ description: 'x', subagent_type: 'general-purpose' });
+    expect(stderr).toMatch(/haiku.*mechanical/is);
+    expect(stderr).toMatch(/sonnet.*analytical/is);
+    expect(stderr).toMatch(/opus.*judgment/is);
+    expect(stderr).toMatch(/model-router-engine/); // and points at the real router for the hard calls
+  });
+
+  it('ALLOWS a dispatch that declares its model, and LOGS it so routing is auditable', () => {
+    const r = dispatch({ description: 'sweep tests', subagent_type: 'general-purpose', model: 'haiku' });
+    expect(r.status).toBe(0);
+    // The log is the scoreboard. Claiming "I route" is worth nothing; a growing ledger is worth something.
+    const log = fs.readFileSync(path.join(r.home, '.claude/metaharness/dispatch-log.jsonl'), 'utf8');
+    expect(JSON.parse(log.trim())).toMatchObject({ event: 'dispatch', model: 'haiku' });
+  });
+
+  it('lets a FORK through — a fork inherits the parent model BY DESIGN; blocking it would be wrong', () => {
+    expect(dispatch({ description: 'x', subagent_type: 'fork' }).status).toBe(0);
+  });
+
+  it('ignores tools that are not subagent dispatches', () => {
+    expect(dispatch({ command: 'ls' }, 'Bash').status).toBe(0);
+  });
+
+  it('has a deliberate escape hatch — but it must be USED ON PURPOSE, never reached by omission', () => {
+    const r = dispatch({ description: 'x', subagent_type: 'general-purpose' }, 'Task', { RUVNET_ALLOW_INHERITED_MODEL: '1' });
+    expect(r.status).toBe(0);
+  });
+});
+
+describe('falsify.mjs — the adversary: a linter for CLAIMS, not for code', () => {
+  it('fails on an UNPROVEN claim, and says which question it answers', () => {
+    const out = runAll([
+      { id: 'a', asked: 'is it real?', why: 'because I once faked it', run: () => ({ ok: false, detail: 'unproven' }) },
+    ]);
+    expect(out[0].ok).toBe(false);
+    expect(out[0].asked).toBe('is it real?'); // every check is a question Stuart had to ask me
+    expect(out[0].why).toBeTruthy();          // and carries the incident that earned it
+  });
+
+  it('covers the exact failures of 2026-07-13 — impersonation, dead jobs, an unused router, red CI', () => {
+    const ids = CHECKS.map((c) => c.id);
+    expect(ids).toContain('am-i-impersonating-ruv');      // I called my heuristic "the MetaHarness router"
+    expect(ids).toContain('did-the-jobs-actually-run');   // launchd reports exit 0 for a job that never ran
+    expect(ids).toContain('is-the-router-actually-routing'); // $0.018 saved in the router's whole life
+    expect(ids).toContain('is-ci-actually-green');        // 25 straight CI failures while I said "green"
+  });
+
+  it('every check carries the incident that earned it — a rule without a scar gets deleted', () => {
+    for (const c of CHECKS) {
+      expect(c.asked, `${c.id} must record the question`).toBeTruthy();
+      expect(c.why, `${c.id} must record WHY it exists`).toBeTruthy();
+    }
+  });
+});

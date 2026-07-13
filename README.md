@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 2.5.0 — updated 2026-07-12 21:11 EDT](https://img.shields.io/badge/version_2.5.0-updated_2026--07--12_21:11_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 2.5.1 — updated 2026-07-12 21:11 EDT](https://img.shields.io/badge/version_2.5.1-updated_2026--07--12_21:11_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -57,6 +57,14 @@ Our code now does **one honest job**: a price transform. A model your subscripti
 - **A watchdog** that treats *absence of evidence as failure*, and which is **in its own registry** — because a supervisor nobody supervises just moves the blind spot up one level.
 
 Result: **11 jobs supervised, every one producing a fresh successful receipt.** One had been *totally blind* — writing zero bytes on a healthy day, so "ran fine" and "never ran" were indistinguishable. Cured without changing a line of its logic.
+
+### 3. A subagent can no longer inherit your expensive model by accident
+
+**A subagent inherits your session's model unless something says otherwise.** Ten agents on an Opus session are ten Opus agents; on a Fable session that's `$10/$50` per Mtok — up to **10× what the same mechanical work costs on Haiku**. That single default was the biggest cost leak in the harness, and an advisory rule did not fix it (the router's entire first life saved **$0.018**).
+
+So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any subagent dispatch that doesn't declare a `model`**, tells you which tier the task actually needs, and logs every allowed dispatch so routing is *auditable* rather than merely claimed. Forks still inherit — that's what a fork is.
+
+> **`npm run falsify`** — the adversary. Every question that had to be asked of this project ("is the nightly *actually* running?", "is that really rUv's code?", "why is my quota still burning?", "is CI *actually* green?") is now a check that fails on an **unproven claim**, not merely on broken code. Because tests you wrote yourself passing is circular evidence.
 
 ![MetaHarness routing — your subscriptions first, always](assets/diagrams/router-path.svg)
 
@@ -204,7 +212,7 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **129,034 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **129,037 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
@@ -314,7 +322,7 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 32 repos, 129,034 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 32 repos, 129,037 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.

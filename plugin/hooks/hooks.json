@@ -1,5 +1,5 @@
 {
-  "_note": "Three hooks. SessionStart (session-start.sh) is the CONFIDENCE SIGNAL — on a new/resumed session it tells the model to surface a brief 'brain active, user-level, here's how to use it' confirmation so the user KNOWS it's on. UserPromptSubmit (ground-ruvnet.sh) intercepts at the INTENT level — grounding directive on rUv-stack prompts, a drift gate on classical defaults (fires even with no RuvNet mention), and a TAKE-THE-WHEEL directive on build requests (propose the architecture + why → one go/no-go → orchestrate end-to-end with SPARC/Ruflo/parallel agents/AgentDB). PreToolUse (hijack-ruvnet.sh) intercepts at the ACTION level — when Claude is about to Write/Edit/Bash a classical default it injects the rUv replacement via additionalContext WITHOUT blocking. stdout from these hooks is how the brain makes grounding + orchestration non-optional. Every script exits 0 and is guarded with `|| true` so it can never block or error a turn.",
+  "_note": "Three hooks. SessionStart (session-start.sh) is the CONFIDENCE SIGNAL \u2014 on a new/resumed session it tells the model to surface a brief 'brain active, user-level, here's how to use it' confirmation so the user KNOWS it's on. UserPromptSubmit (ground-ruvnet.sh) intercepts at the INTENT level \u2014 grounding directive on rUv-stack prompts, a drift gate on classical defaults (fires even with no RuvNet mention), and a TAKE-THE-WHEEL directive on build requests (propose the architecture + why \u2192 one go/no-go \u2192 orchestrate end-to-end with SPARC/Ruflo/parallel agents/AgentDB). PreToolUse (hijack-ruvnet.sh) intercepts at the ACTION level \u2014 when Claude is about to Write/Edit/Bash a classical default it injects the rUv replacement via additionalContext WITHOUT blocking. stdout from these hooks is how the brain makes grounding + orchestration non-optional. The first three scripts exit 0 and are guarded with `|| true` so they can never block a turn. route-dispatch.sh (PreToolUse on Task) is the DELIBERATE EXCEPTION: it exits 2 to BLOCK a subagent dispatch that declares no `model`, because such an agent silently INHERITS the session model (10 agents on a Fable session = 10 agents at $10/$50 per Mtok). Inheritance-by-omission was the biggest cost leak in the harness; an advisory rule did not fix it, so this is a wall, not advice. It is NOT guarded with `|| true` \u2014 swallowing its exit code would restore the bug.",
   "_platform": "posix",
   "hooks": {
     "SessionStart": [
@@ -43,6 +43,16 @@
           {
             "type": "command",
             "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hijack-ruvnet.sh\" || true",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/route-dispatch.sh\"",
             "timeout": 5
           }
         ]

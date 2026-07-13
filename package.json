@@ -1,6 +1,6 @@
 {
   "name": "ruvnet-brain",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "One-command installer for RuvNet Brain \u2014 a portable, source-grounded brain over rUv's RuvNet building blocks, delivered as a Claude Code plugin so Claude uses the stack instead of fighting it.",
   "type": "module",
   "bin": {
@@ -27,7 +27,8 @@
     "gists:index": "node scripts/ingest-gists.mjs --index-only",
     "gists:sync": "node scripts/ingest-gists.mjs && node kb/forge-big.mjs both --dir kb --name ruv-gists",
     "test:integration": "vitest run tests/integration",
-    "substitution:check": "node scripts/no-silent-substitution.mjs"
+    "substitution:check": "node scripts/no-silent-substitution.mjs",
+    "falsify": "node scripts/falsify.mjs"
   },
   "files": [
     "bin/install.mjs",
