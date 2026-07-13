@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 720 470"
+     width="720"
+     height="470"
+     role="img"
+     aria-label="MetaHarness routing: a task goes to the router engine, which checks the user's subscription profile; subscription-covered models run at zero dollars, and only work that must leave the subscriptions goes to the cheapest verified paid API model. Every decision lands in a receipts and outcome log that trains the future learned policy.">
+
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555555"/>
+    </marker>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333333; stroke-width: 1.5px; }
+      .accent { fill: #eaf2fb; stroke: #4a90d9; stroke-width: 1.5px; }
+      .good { fill: #eaf6ec; stroke: #2e7d32; stroke-width: 1.5px; }
+      .warn { fill: #fdf3e3; stroke: #d98c00; stroke-width: 1.5px; }
+      .decision { fill: #f8f9fa; stroke: #4a90d9; stroke-width: 1.5px; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 700; fill: #1a1a1a; }
+      .label { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #1a1a1a; }
+      .result { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; font-weight: 700; fill: #1a1a1a; }
+      .sublabel { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #555555; }
+      .arrow { stroke: #555555; stroke-width: 1.5px; fill: none; }
+    </style>
+  </defs>
+
+  <text class="title" x="360" y="22" text-anchor="middle">MetaHarness routing &#8212; your subscriptions first, always</text>
+
+  <!-- the task -->
+  <rect class="box" x="235" y="36" width="250" height="40" rx="4"/>
+  <text class="label" x="360" y="61" text-anchor="middle">A task to run</text>
+
+  <line class="arrow" x1="360" y1="76" x2="360" y2="94" marker-end="url(#arrowhead)"/>
+
+  <!-- the engine -->
+  <rect class="accent" x="160" y="96" width="400" height="58" rx="4"/>
+  <text class="label" x="360" y="119" text-anchor="middle">Router engine &#183; prompt features + policy</text>
+  <text class="sublabel" x="360" y="140" text-anchor="middle">+ YOUR subscription profile &#8212; detected &#183; asked &#183; verified &#183; recorded</text>
+
+  <line class="arrow" x1="360" y1="154" x2="360" y2="172" marker-end="url(#arrowhead)"/>
+
+  <!-- decision -->
+  <polygon class="decision" points="360,174 505,228 360,282 215,228"/>
+  <text class="label" x="360" y="222" text-anchor="middle">Can a model you already</text>
+  <text class="label" x="360" y="240" text-anchor="middle">pay for do the job?</text>
+
+  <!-- yes branch -->
+  <line class="arrow" x1="252" y1="248" x2="172" y2="300" marker-end="url(#arrowhead)"/>
+  <text class="sublabel" x="192" y="268" text-anchor="middle" fill="#2e7d32">yes &#8212; almost always</text>
+
+  <rect class="good" x="34" y="302" width="290" height="92" rx="4"/>
+  <text class="result" x="179" y="326" text-anchor="middle">$0 &#8212; subscription-covered</text>
+  <text class="label" x="179" y="348" text-anchor="middle">Claude Code: Haiku &#8594; Sonnet &#8594; Opus/Fable</text>
+  <text class="label" x="179" y="366" text-anchor="middle">Codex: the tier your install can launch</text>
+  <text class="sublabel" x="179" y="384" text-anchor="middle">Claude Pro/Max &#183; ChatGPT plan &#8212; billed never wins</text>
+
+  <!-- no branch -->
+  <line class="arrow" x1="468" y1="248" x2="548" y2="300" marker-end="url(#arrowhead)"/>
+  <text class="sublabel" x="532" y="268" text-anchor="middle" fill="#d98c00">only when it must leave</text>
+
+  <rect class="warn" x="396" y="302" width="290" height="92" rx="4"/>
+  <text class="result" x="541" y="326" text-anchor="middle">Paid API &#8212; cheapest verified</text>
+  <text class="label" x="541" y="348" text-anchor="middle">DeepSeek V4 Flash &#183; $0.077/M &#183; proven live</text>
+  <text class="label" x="541" y="366" text-anchor="middle">Grok 4.5 &#183; $2/M in &#183; frontier-adjacent</text>
+  <text class="sublabel" x="541" y="384" text-anchor="middle">OpenRouter &#183; prices re-verified weekly by Goldie</text>
+
+  <!-- receipts / learning -->
+  <line class="arrow" x1="179" y1="394" x2="300" y2="428" marker-end="url(#arrowhead)"/>
+  <line class="arrow" x1="541" y1="394" x2="420" y2="428" marker-end="url(#arrowhead)"/>
+  <rect class="box" x="150" y="430" width="420" height="34" rx="4"/>
+  <text class="sublabel" x="360" y="451" text-anchor="middle">every pick + override &#8594; receipts &amp; outcome log &#8594; the learned policy</text>
+</svg>

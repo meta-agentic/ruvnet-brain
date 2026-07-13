@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 2.4.2 — updated 2026-07-12 21:04 EDT](https://img.shields.io/badge/version_2.4.2-updated_2026--07--12_21:04_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 2.4.3 — updated 2026-07-12 21:11 EDT](https://img.shields.io/badge/version_2.4.3-updated_2026--07--12_21:11_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -19,7 +19,7 @@
 > **Three independent things version separately here — by design, not drift. Every number below is live (read straight from its real source, never hand-typed), so none of them can go stale:**
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
 > - **`installer (npm)`** (badge above) — the `npx ruvnet-brain` setup script. Read live from the [npm registry](https://www.npmjs.com/package/ruvnet-brain). Only moves when the installer script itself changes — rare.
-> - **Brain Release** (the downloadable 512MB knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest), currently `v0.5.0-dev`. Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
+> - **Brain Release** (the downloadable 512MB knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
 > - **Update an installed brain once:** `npx ruvnet-brain --update` — runs the bundle's own self-updater (backs up first, re-verifies, fails loud instead of half-applying).
 > - **Nightly auto-update is OFF by default:** `npx ruvnet-brain --enable-nightly` schedules it (macOS LaunchAgent, 03:47); `npx ruvnet-brain --disable-nightly` removes it; Linux/Windows get the cron line documented in the bundle's `forge-update.mjs`.
 > - **Either way, your copy only advances when a new Release is published** — the updater pulls `releases/latest`, so running it between releases is a safe no-op.
@@ -36,7 +36,7 @@
 
 ---
 
-## What's new in 2.3–2.4 — it routes your money, and it can never break silently
+## What's new in 2.4 — it routes your money, and it can never break silently
 
 **Shipped 2026-07-12, every piece proven live before it was written down:**
 
@@ -44,11 +44,16 @@
 - **Per-user subscription profiles** — setup detects what it can *prove* (Codex's ChatGPT login, from the auth file's shape, never its secrets), **asks** what it can't ("Claude Pro or Max?"), and records every answer with its evidence basis (`verified` / `user-attested` / `assumed`). Your $0 is never assumed from someone else's machine.
 - **The offer + the path** — one line ("want me to set up cost-optimal routing? yes/no"), two questions, then a live-derived display of your zero-cost options per harness and the cheapest verified paid-API fallbacks (DeepSeek V4 Flash at $0.077/MTok in — dispatch-proven, not just priced).
 - **Goldie** — a weekly scheduled research job: refreshes verified OpenRouter pricing, flags >20% drift, cross-checks the model registries, auto-reinstates models the moment live evidence appears, and runs a headless research pass on the standing questions (how many buckets, best model per bucket). Its **first run caught a false "verified" stamp in its own catalog**.
-- **The gong system (2.3)** — a dark brain can never read as "(no results)" again: real-time screaming errors + an urgent phone push, a red banner in every new session, and a nightly canary — each layer proven by deliberately breaking the brain and watching it ring, then watching recovery clear it.
-- **Key + spend canaries** — every provider API key live-probed nightly through the real shell chain (a dead key pages you within a day; it found and healed one on day one), alongside 2.2's API-spend watchdog.
+- **The gong system** — a dark brain can never read as "(no results)" again: real-time screaming errors + an urgent phone push, a red banner in every new session, and a nightly canary — each layer proven by deliberately breaking the brain and watching it ring, then watching recovery clear it.
+- **Key + spend canaries** — every provider API key live-probed nightly through the real shell chain (a dead key pages you within a day; it found and healed one on day one), alongside the API-spend watchdog.
 - **An outcome log** — every routing decision and every human override is recorded as labeled data; the current documented-placeholder policy gets replaced by a learned one (per rUv's ADR-040/DRACO and ruflo ADR-149 evidence) once the labels accumulate.
 
-## What's new in 2.0
+![MetaHarness routing — your subscriptions first, always](assets/diagrams/router-path.svg)
+
+<details>
+<summary><b>Earlier &#8212; what 2.0 proved</b> &#183; the release where the brain stopped taking its own word for anything: 32 verified repos, a 120-question fail-closed eval gate, ~90% cheaper per-turn injection, and an 8-dimension evidence-backed scorecard (55 &#8594; 83 in two days). <i>Expand for the receipts.</i></summary>
+
+### What's new in 2.0
 
 **2.0 is the release where the brain got bigger — and, more importantly, stopped taking its own word for anything.** Every number below regenerates from an artifact on disk; the claims ledger (`node scripts/claims-verify.mjs`) re-checks the advertised ones in CI:
 
@@ -69,7 +74,7 @@ The depth jump wasn't tuning — it was two pipeline root-causes fixed for good:
 
 ### The scorecard — 8 dimensions, self-scored /100, every deduction evidenced — 2026-07-10 (evening re-score)
 
-| Dimension | v1 (2026-07-09) | v2.0 (current) | Δ | What moved it |
+| Dimension | v1 (2026-07-09) | v2.0 (2026-07-10) | Δ | What moved it |
 |---|---:|---:|---:|---|
 | End-user experience | 54 | 83 | +29 | One-command install now offers nightly self-updates (default yes); the page lives on isovision.ai; publishing renews itself |
 | Knowledge corpus | 71 | 88 | +17 | 24→32 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored — flagship went 0→2,996 source bodies |
@@ -82,6 +87,8 @@ The depth jump wasn't tuning — it was two pipeline root-causes fixed for good:
 | **Overall** | **55** | **83** | **+28** | — |
 
 These are self-scores under a hard rule: **every deduction requires specific evidence, and a known architectural flaw caps a dimension at ≤70 until the flaw is fixed** — *acting like rUv* spent the morning capped for its memory-layer flaw; the flaw was root-caused and fixed with proofs, the cap lifted, and it re-scored 72. Overall **55 → 83 in two days**, each number regenerating from a stored receipt — and the same scoring that produced these blocked a release mid-day. **That's why they're credible: scores you can trust beat scores that flatter.**
+
+</details>
 
 **The honest small print, kept visible:** warm query is ~21 s on the large corpus (it grew with depth; candidate dedup/pruning is the next optimization) · the 8 newest repos are findable by name but don't yet have primers/capability cards for described-need routing (coming) · the Windows CI job is new and unproven until its first green run.
 
@@ -171,7 +178,7 @@ You install once. After that, three mechanisms keep you on the current brain wit
 
 ## ✨ What the knowledge bundle knows — the stack _down to the code_
 
-Earlier bundles knew only the **docs and architecture**. v0.5 began re-indexing the code-rich repos to **full function bodies**, against each repo's real source layout — so “how is this actually implemented?” returns the implementation, not a summary. The table below is that v0.5 depth jump, kept as the before/after receipt; **2.0 went further still** — flagship `ruvector` alone now carries 28,018 passages and 2,996 full bodies (see [What's new in 2.0](#whats-new-in-20)):
+Earlier bundles knew only the **docs and architecture**. v0.5 began re-indexing the code-rich repos to **full function bodies**, against each repo's real source layout — so “how is this actually implemented?” returns the implementation, not a summary. The table below is that v0.5 depth jump, kept as the before/after receipt; **2.0 went further still** — flagship `ruvector` alone now carries 28,018 passages and 2,996 full bodies (see the "what 2.0 proved" foldout near the top):
 
 | Repo | Full-body code passages (v0.5) | |
 |---|---:|---|
@@ -315,7 +322,7 @@ This project versions in the open (see the live badge up top for the exact plugi
 - `explainer/` — the source of the [live explainer](https://isovision.ai/ruvnet-brain/).
 - `SPEC.md` · `PROGRESS.md` — the master spec and the living, timestamped build log.
 
-The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev), not git — a fresh clone is lightweight; `npx` fetches the 512 MB bundle.
+The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/latest), not git — a fresh clone is lightweight; `npx` fetches the 512 MB bundle.
 
 ---
 
@@ -330,7 +337,7 @@ The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-bra
 ## Links
 
 - **▶ Live explainer:** https://isovision.ai/ruvnet-brain/
-- **Download / Release:** https://github.com/stuinfla/ruvnet-brain/releases/tag/v0.5.0-dev
+- **Download / Release:** https://github.com/stuinfla/ruvnet-brain/releases/latest
 - **rUv's RuvNet org:** https://github.com/ruvnet
 - **Built by:** [Stuart Kerr — Isovision.ai](https://isovision.ai)
 
