@@ -54,11 +54,38 @@ function gh(endpointArgs) {
   return r.stdout;
 }
 
-function listGists(owner) {
-  const raw = gh(['api', `users/${owner}/gists?per_page=100`, '--paginate', '--slurp']);
-  const pages = JSON.parse(raw);
-  // --slurp yields an array of pages OR a flat array depending on gh version; flatten defensively.
-  return pages.flat().filter((g) => g && g.id);
+async function listGists(owner) {
+  try {
+    const raw = gh(['api', `users/${owner}/gists?per_page=100`, '--paginate', '--slurp']);
+    const pages = JSON.parse(raw);
+    // --slurp yields an array of pages OR a flat array depending on gh version; flatten defensively.
+    return pages.flat().filter((g) => g && g.id);
+  } catch (err) {
+    // In Actions, gh can NEVER list gists: GITHUB_TOKEN is a GitHub App token and the gists API is
+    // closed to those ("Resource not accessible by integration", HTTP 403 — every nightly run since
+    // birth). Public gists need no auth at all, so fall back to the plain API (60 req/hr per IP).
+    console.error(`  gh failed (${String(err.message).slice(0, 100)}) — falling back to unauthenticated API`);
+    return listGistsPublic(owner);
+  }
+}
+
+async function listGistsPublic(owner) {
+  const all = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await fetch(`https://api.github.com/users/${owner}/gists?per_page=100&page=${page}`, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'ruvnet-brain-gists-index' },
+    });
+    if (res.status === 403 || res.status === 429) {
+      const err = new Error(`unauthenticated gists list rate-limited (HTTP ${res.status})`);
+      err.rateLimited = true; // runner IPs share the anonymous quota — a known, transient condition
+      throw err;
+    }
+    if (!res.ok) throw new Error(`unauthenticated gists list failed: HTTP ${res.status}`);
+    const items = await res.json();
+    all.push(...items.filter((g) => g && g.id));
+    if (items.length < 100) break;
+  }
+  return all;
 }
 
 /** Raw file bodies. The list endpoint truncates `content`, so fetch each gist individually. */
@@ -112,12 +139,23 @@ function writeIndex(gists) {
   console.log(`  wrote ${path.relative(ROOT, INDEX_PATH)} (${rows.length} rows)`);
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(KB)) { console.error(`ingest-gists: no kb dir at ${KB}`); process.exit(2); }
 
   const cache = !FULL && fs.existsSync(CACHE) ? JSON.parse(fs.readFileSync(CACHE, 'utf8')) : {};
   console.log(`ingest-gists: listing public gists for @${OWNER}…`);
-  const gists = listGists(OWNER);
+  let gists;
+  try {
+    gists = await listGists(OWNER);
+  } catch (err) {
+    if (INDEX_ONLY && err.rateLimited) {
+      // The index is a freshness feed; one skipped night self-heals on the next run. Exit 0 so a
+      // transient shared-IP rate limit doesn't page anyone — real script errors still exit 1.
+      console.error(`ingest-gists: SKIP — ${err.message}; the index catches up on the next nightly.`);
+      process.exit(0);
+    }
+    throw err;
+  }
   console.log(`  ${gists.length} gists found`);
 
   if (INDEX_ONLY) { writeIndex(gists); return; }
@@ -185,4 +223,4 @@ function main() {
   console.log(`  next: node kb/forge-big.mjs both --dir kb --name ${NAME}   (embed → ${NAME}.big.rvf)`);
 }
 
-main();
+await main();
