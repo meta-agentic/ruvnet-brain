@@ -38,13 +38,34 @@ fi
 echo $$ > "$LOCK"
 trap 'rm -f "$LOCK"' EXIT
 
+# NIGHTLY_SMOKE=1 — prove this whole chain (launchd -> heartbeat wrapper -> here -> node -> the repo
+# scan -> the log) WITHOUT a multi-hour rebuild or a real Release publish. self-update.mjs is dry-run
+# by default, so dropping --apply --publish exercises every link except the build itself.
+# WHY IT EXISTS (2026-07-13): the 03:15 fire on 07-12 died before it could even write its own log
+# ("/bin/bash: logs/nightly.log: No such file or directory" — relative path, no working directory) and
+# NOBODY KNEW, because the only way to test this chain was to wait until 03:15 and hope. A scheduled job
+# you can only test by waiting for it is a job you are not testing. Now: `NIGHTLY_SMOKE=1 <the exact
+# plist command>` proves it on demand, any time, in seconds.
+SMOKE="${NIGHTLY_SMOKE:-0}"
+
 run_once() {
   local before after rc tail
   before=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "unknown")
   { echo "===== nightly-wrapper attempt $1 — $(date -u +%FT%TZ) — before: $before ====="
-    /usr/local/bin/node scripts/self-update.mjs --apply --publish
+    if [ "$SMOKE" = "1" ]; then
+      echo "[SMOKE] dry-run: exercising the full chain, NOT building or publishing"
+      /usr/local/bin/node scripts/self-update.mjs
+    else
+      /usr/local/bin/node scripts/self-update.mjs --apply --publish
+    fi
   } >> "$LOG" 2>&1
   rc=$?
+  if [ "$SMOKE" = "1" ]; then
+    # A smoke run must never claim a real outcome, touch the failure marker, or alter the tag story.
+    if [ "$rc" -eq 0 ]; then echo "===== attempt $1: SMOKE OK — chain intact (no build, no publish) =====" >> "$LOG"; return 0; fi
+    echo "===== attempt $1: SMOKE FAILED exit $rc — the chain is BROKEN, fix before 03:15 =====" >> "$LOG"
+    return 1
+  fi
   after=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "unknown")
   if [ "$after" != "$before" ] && [ -n "$after" ] && [ "$after" != "unknown" ]; then
     echo "===== attempt $1: VERIFIED SUCCESS $before -> $after =====" >> "$LOG"
