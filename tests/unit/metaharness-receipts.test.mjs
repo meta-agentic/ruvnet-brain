@@ -53,14 +53,31 @@ describe('loadReceipts (fixture JSONL)', () => {
 describe('formatTable', () => {
   it('renders the plain-language columns Stuart asked for, plus honest totals', () => {
     const out = formatTable([RECEIPT, { ...RECEIPT, task_class: 'classify' }]);
-    for (const col of ['date', 'task class', 'model used', 'est. cost', 'est. frontier cost', 'saved']) {
+    // 'est. baseline' (was 'est. frontier cost') since 2026-07-13: subagent rows carry a PER-ROW
+    // baseline — the model that agent would have inherited — so a global "frontier" column would lie.
+    for (const col of ['date', 'channel', 'task class', 'model used', 'instead of', 'est. cost', 'est. baseline', 'saved']) {
       expect(out).toContain(col);
     }
     expect(out).toContain('2026-07-10 12:00');
     expect(out).toContain('deepseek/deepseek-chat');
     expect(out).toContain('2 routed task(s)');
-    expect(out).toContain('claude-opus-4.8');       // frontier baseline named, not implied
-    expect(out).toContain('estimates');             // figures labeled est., never presented as measured
+    expect(out).toContain('claude-opus-4.8');       // baseline named, not implied
+    // provenance is stated, and stated ACCURATELY: rows may be measured or estimated, so the footer
+    // must not blanket-claim either one (it used to say "all figures are estimates" even for measured rows)
+    expect(out).toContain('token_source');
+    expect(out).toContain('Pricing is live-verified');
+  });
+
+  it('names EVERY baseline when they differ, instead of picking the first row and implying it covers all', () => {
+    const out = formatTable([
+      RECEIPT, // openrouter row, baseline claude-opus-4.8
+      { ...RECEIPT, source: 'claude-subagent', model: 'claude-haiku-4.5', frontier_ref: 'claude-fable-5', task_class: 'mechanical' },
+    ]);
+    expect(out).toContain('subagent');   // the channel is visible, not collapsed into the openrouter rows
+    expect(out).toContain('openrouter');
+    expect(out).toContain('1 subagent, 1 openrouter');
+    expect(out).toContain('claude-fable-5');  // both baselines named…
+    expect(out).toContain('claude-opus-4.8'); // …not just whichever row happened to be first
   });
 
   it('says plainly there is no data instead of showing a zero/fake table', () => {

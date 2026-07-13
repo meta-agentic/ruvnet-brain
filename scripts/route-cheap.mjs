@@ -40,6 +40,22 @@ export const PRICING = {
 };
 export const FRONTIER = { name: 'claude-opus-4.8', in: 5.0, out: 25.0 };
 
+// Claude tiers — $/Mtok, verified live from the OpenRouter /models API 2026-07-13.
+// These are NOT routed through here (Claude Code's own Agent/Task tool spawns them). They are priced
+// so a SUBAGENT dispatch can get a real receipt: until 2026-07-13 the single biggest routing lever —
+// every subagent inherits the main-loop model unless told otherwise — wrote no receipt at all, so the
+// whole router looked unused. It WAS unused; it was also unmeasurable. Both had to be fixed.
+// The spread is the whole argument: fable-5 costs 10x haiku-4.5 for identical mechanical work.
+export const CLAUDE_TIERS = {
+  'claude-haiku-4.5': { in: 1.0, out: 5.0 },
+  'claude-sonnet-5': { in: 2.0, out: 10.0 },
+  'claude-opus-4.8': { in: 5.0, out: 25.0 },
+  'claude-fable-5': { in: 10.0, out: 50.0 },
+};
+
+/** Price lookup across both tables. Unknown model → null (never invent a savings number). */
+export const priceOf = (model) => PRICING[model] || CLAUDE_TIERS[model] || null;
+
 export function receiptsPath() {
   return (
     process.env.METAHARNESS_RECEIPTS ||
@@ -50,18 +66,23 @@ export function receiptsPath() {
 // Honest token estimate: ~4 chars/token. Labeled "est." everywhere — never presented as measured.
 export const estTokens = (text) => Math.max(1, Math.ceil((text || '').length / 4));
 
-export function estimateCosts(model, inTokens, outTokens) {
-  const p = PRICING[model];
-  if (!p) return null; // unknown model → no receipt rather than an invented number
+// `ref` = what this task WOULD have run on. For a cheap OpenRouter call that's the frontier default;
+// for a subagent it's the model the agent would have INHERITED (i.e. the main-loop model), which is
+// the only honest baseline — an un-overridden subagent really does run on whatever the session is on.
+export function estimateCosts(model, inTokens, outTokens, ref = FRONTIER.name) {
+  const p = priceOf(model);
+  const r = priceOf(ref);
+  if (!p || !r) return null; // unknown model → no receipt rather than an invented number
   const cost = (inTokens * p.in + outTokens * p.out) / 1e6;
-  const frontier = (inTokens * FRONTIER.in + outTokens * FRONTIER.out) / 1e6;
-  return { cost, frontier, saved: frontier - cost };
+  const frontier = (inTokens * r.in + outTokens * r.out) / 1e6;
+  return { cost, frontier, saved: frontier - cost, ref };
 }
 
 const fmt$ = (n) => `$${n < 0.01 ? n.toFixed(5) : n.toFixed(4)}`;
 
 export function receiptLine(model, costs) {
-  return `\x1b[2m⚡ MetaHarness: routed to ${model} (est. ${fmt$(costs.cost)} vs ${fmt$(costs.frontier)} frontier — saved ~${fmt$(costs.saved)})\x1b[0m`;
+  const ref = costs.ref && costs.ref !== FRONTIER.name ? costs.ref : 'frontier';
+  return `\x1b[2m⚡ MetaHarness: routed to ${model} (est. ${fmt$(costs.cost)} vs ${fmt$(costs.frontier)} ${ref} — saved ~${fmt$(costs.saved)})\x1b[0m`;
 }
 
 // Load OPENROUTER_API_KEY from ruvnet-brain/.env if not already in env. Value never printed/logged.

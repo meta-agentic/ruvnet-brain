@@ -79,7 +79,11 @@ function runIngest(args, extraEnv = {}) {
   };
 }
 
-describe('ingest-repo.mjs — CLI argument guard', () => {
+// Windows cannot run these: POSIX shell-script stubs made executable with chmod (a no-op on Windows)
+// and spawned by bare name off PATH. CI runs integration on ubuntu only; a Windows dev box skips cleanly.
+const onPosix = describe.skipIf(process.platform === 'win32');
+
+onPosix('ingest-repo.mjs — CLI argument guard', () => {
   it('exits 2 with a usage message when --name is missing', () => {
     const r = runIngest([]);
     expect(r.code).toBe(2);
@@ -88,7 +92,7 @@ describe('ingest-repo.mjs — CLI argument guard', () => {
   });
 });
 
-describe('ingest-repo.mjs — clone vs. update branch selection', () => {
+onPosix('ingest-repo.mjs — clone vs. update branch selection', () => {
   it('clones (--depth 1) from github.com/<org>/<name> when clones/<name>/.git does not exist yet, defaulting org to "ruvnet"', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
     expect(r.calls[0]).toBe(`git clone --depth 1 https://github.com/ruvnet/zzz-fixture ${path.join(tmp, 'clones/zzz-fixture')}`);
@@ -111,7 +115,7 @@ describe('ingest-repo.mjs — clone vs. update branch selection', () => {
   });
 });
 
-describe('ingest-repo.mjs — embed pipeline invocation order + cwd', () => {
+onPosix('ingest-repo.mjs — embed pipeline invocation order + cwd', () => {
   it('runs forge-build.mjs (MiniLM-384) before forge-big.mjs (bge-768 sharp), both from the kb/ cwd', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
     const nodeCalls = r.calls.filter((c) => c.startsWith('node '));
@@ -121,7 +125,7 @@ describe('ingest-repo.mjs — embed pipeline invocation order + cwd', () => {
   });
 });
 
-describe('ingest-repo.mjs — depth config (--full/--keep) forwarding into forge-build.mjs', () => {
+onPosix('ingest-repo.mjs — depth config (--full/--keep) forwarding into forge-build.mjs', () => {
   // Before this (2026-07-10), ingest-repo.mjs never passed --full at all: any repo rebuilt through
   // this entrypoint silently lost its full-body source indexing. 'ruview' is a real FULL_HINTS AND
   // KEEP_DIRS entry in the shared scripts/full-hints.mjs map, so one name exercises both lookups.
@@ -146,7 +150,7 @@ describe('ingest-repo.mjs — depth config (--full/--keep) forwarding into forge
   });
 });
 
-describe('ingest-repo.mjs — RUVNET_BIG_SHARDS parallel embed', () => {
+onPosix('ingest-repo.mjs — RUVNET_BIG_SHARDS parallel embed', () => {
   it('defaults to a single "forge-big.mjs both" call when RUVNET_BIG_SHARDS is unset', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
     const bigCalls = r.calls.filter((c) => c.includes('forge-big.mjs'));
@@ -177,7 +181,7 @@ describe('ingest-repo.mjs — RUVNET_BIG_SHARDS parallel embed', () => {
   });
 });
 
-describe('ingest-repo.mjs — build-symbols.mjs failure is swallowed, not fatal', () => {
+onPosix('ingest-repo.mjs — build-symbols.mjs failure is swallowed, not fatal', () => {
   it('logs "(symbols skipped — sparse repo)" and still reaches the final store check when build-symbols.mjs exits non-zero', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
     expect(r.stdout).toMatch(/\(symbols skipped — sparse repo\)/);
@@ -186,7 +190,7 @@ describe('ingest-repo.mjs — build-symbols.mjs failure is swallowed, not fatal'
   });
 });
 
-describe('ingest-repo.mjs — final store-existence check', () => {
+onPosix('ingest-repo.mjs — final store-existence check', () => {
   it('exits 1 and reports FAIL when the stub pipeline never actually produced the .rvf files', () => {
     // node is stubbed to a no-op, so <name>.rvf / <name>.big.rvf never actually get written —
     // this exercises the "trust but verify your own pipeline's output" check on line 56.

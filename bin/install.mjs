@@ -1151,7 +1151,11 @@ export async function offerRouterProfile() {
     if (fs.existsSync(s) && !fs.existsSync(d)) { fs.copyFileSync(s, d); ok(`installed ${dst} (edit freely — goldie keeps prices fresh where scheduled)`); }
   }
   let copied = 0;
-  for (const t of ['model-router-engine.mjs', 'model-router-setup.mjs', 'model-router-status.mjs', 'model-router-outcome.mjs', 'route-cheap.mjs', 'codex-routed.sh']) {
+  // dispatch-receipt + metaharness-receipts added 2026-07-13: without the LOGGER, subagent routing is
+  // invisible; without the VIEWER, the user has no scoreboard to hold it to. Shipping one without the
+  // other is how a router ends up "working" with three test pings in its log and nobody the wiser.
+  // (dispatch-receipt.mjs relative-imports route-cheap.mjs — they land in the same bin/ dir, so it resolves.)
+  for (const t of ['model-router-engine.mjs', 'model-router-setup.mjs', 'model-router-status.mjs', 'model-router-outcome.mjs', 'route-cheap.mjs', 'dispatch-receipt.mjs', 'metaharness-receipts.mjs', 'codex-routed.sh']) {
     const s = path.join(pkgRoot, 'scripts', t);
     if (fs.existsSync(s)) { fs.copyFileSync(s, path.join(routerDir, 'bin', t)); copied++; }
   }

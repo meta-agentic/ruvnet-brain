@@ -47,11 +47,15 @@ const fmt$ = (n) => `$${n < 0.01 ? n.toFixed(5) : n.toFixed(4)}`;
 export function formatTable(rows) {
   if (!rows.length) return 'No routing receipts yet.\nRoute something cheap first:  node scripts/route-cheap.mjs --task "<text>"';
 
-  const header = ['date', 'task class', 'model used', 'est. cost', 'est. frontier cost', 'saved'];
+  // `channel` + `instead of` (2026-07-13): subagent receipts arrived with a per-row baseline — the
+  // model that agent WOULD have inherited — so a single global "frontier" column would misreport them.
+  const header = ['date', 'channel', 'task class', 'model used', 'instead of', 'est. cost', 'est. baseline', 'saved'];
   const body = rows.map((r) => [
     (r.ts || '').replace('T', ' ').slice(0, 16),
+    r.source === 'claude-subagent' ? 'subagent' : 'openrouter',
     r.task_class || '?',
     r.model,
+    r.frontier_ref || 'claude-opus-4.8',
     fmt$(r.est_cost ?? 0),
     fmt$(r.est_frontier_cost ?? 0),
     fmt$(r.saved),
@@ -64,13 +68,18 @@ export function formatTable(rows) {
   const totalSaved = rows.reduce((s, r) => s + r.saved, 0);
   const ratio = totalCost > 0 ? (totalFrontier / totalCost).toFixed(1) : '?';
 
+  // Baselines now vary per row; name them all rather than picking one and implying it covers everything.
+  const baselines = [...new Set(rows.map((r) => r.frontier_ref || 'claude-opus-4.8'))].join(', ');
+  const subagents = rows.filter((r) => r.source === 'claude-subagent').length;
+
   return [
     line(header),
     line(widths.map((w) => '-'.repeat(w))),
     ...body.map(line),
     '',
-    `${rows.length} routed task(s) · est. spent ${fmt$(totalCost)} vs ${fmt$(totalFrontier)} frontier (${rows[0]?.frontier_ref || 'claude-opus-4.8'}) · saved ~${fmt$(totalSaved)} (~${ratio}x cheaper)`,
-    'All figures are estimates: verified OpenRouter pricing x chars/4 token estimates.',
+    `${rows.length} routed task(s) (${subagents} subagent, ${rows.length - subagents} openrouter) · est. spent ${fmt$(totalCost)} vs ${fmt$(totalFrontier)} unrouted (${baselines}) · saved ~${fmt$(totalSaved)} (~${ratio}x cheaper)`,
+    'Pricing is live-verified. Token counts are measured OR estimated per row (each row records which, in token_source).',
+    'Baseline = the model the task would have run on if it had not been routed.',
   ].join('\n');
 }
 

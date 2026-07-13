@@ -95,19 +95,45 @@ When asked to build, implement, add, refactor, enhance, or fix anything, do NOT 
 
 Two separate questions, don't conflate them: (1) which Claude tier for a subagent you're about to dispatch, (2) whether a task can skip Claude entirely and go to a cheap third-party model. Both verified live, end-to-end, on 2026-07-07 — by reading the actual source across `ruflo`, `agentic-flow`, and `agent-harness-generator` (not their ADRs, which drift from the code in both directions), then running real commands. Apply both by default whenever you dispatch a subagent — this is the standard way the brain works, not an opt-in per project.
 
-**0. The MetaHarness router engine — consult it FIRST, on every dispatch (added 2026-07-12).** If `~/.claude/model-router/` exists on this machine, it holds a harness-neutral decision engine, a verified-pricing catalog, and THIS USER's subscription profile (which harnesses they have and which are $0-covered — detected/asked/verified by `model-router-setup.mjs`; never assume one user's subscriptions match another's). Before spawning any subagent or Task:
+**0. HARD RULE — mechanical work does not run in the main loop (2026-07-13, replaces the advisory version).**
+
+The first version of this rule said "consult the engine before dispatching." Advisory rules get ignored: after two days, the receipts log held **3 entries, all of them test pings, $0.018 saved total** — while real work (log triage, multi-file greps, mechanical test fixes) was done inline in the most expensive model on the menu. The rule is now a floor, not a suggestion.
+
+**Why it matters more than it looks: a subagent INHERITS the main-loop model unless you override it.** A five-agent fan-out on a Fable session is five Fable agents. Live pricing (OpenRouter /models, 2026-07-13): fable-5 `$10/$50` per Mtok · opus-4.8 `$5/$25` · sonnet-5 `$2/$10` · haiku-4.5 `$1/$5`. Mechanical work on Fable costs **10x** the same work on Haiku, at identical quality. The `model` param on the Agent tool is the single biggest cost lever you have.
+
+**The taxonomy — decide before you touch the work, not after:**
+
+| Class | Examples | Where it runs |
+|---|---|---|
+| Mechanical | grep/glob sweeps, reading CI logs, mechanical edits (rename, path fix, import swap), test-fixture rewrites, file inventories | Subagent, `model: haiku` |
+| Analytical | tracing a bug across files, summarizing a subsystem, drafting tests from a spec | Subagent, `model: sonnet` |
+| Judgment | architecture, root-cause reasoning, security/correctness calls, anything user-facing | Main loop (whatever the user chose) |
+| Pure text, no repo access | research, summarize, classify, transform | `scripts/route-cheap.mjs` → OpenRouter |
+
+**Every dispatch leaves a receipt — no exceptions, or this is decorative again.** Subagent dispatches were invisible until `dispatch-receipt.mjs` existed (route-cheap only logged OpenRouter calls), which is why the log looked dead even when routing happened. After the Agent returns, with the REAL sizes:
+
+```bash
+node scripts/dispatch-receipt.mjs --model claude-haiku-4.5 --inherited <the session's model> \
+     --task "<what it did>" --in-chars <prompt len> --out-chars <result len>
+```
+
+Then print its one dim line. Baseline = the **inherited** model (the honest counterfactual), not a generic "frontier".
+
+**Self-audit, out loud.** If you do mechanical work inline because dispatching felt like more trouble, that is a DEFECT and you say so in the response ("I did X inline that should have been routed — that cost ~N× what it needed to"). The receipts file is the scoreboard: `node scripts/metaharness-receipts.mjs`. If it isn't growing while real work ships, the rule is being ignored and the user should be told, not reassured.
+
+**Engine + profile (unchanged mechanics).** `~/.claude/model-router/` holds the decision engine, the verified-pricing catalog, and THIS USER's subscription profile (never assume one user's subscriptions match another's):
 
 ```bash
 node ~/.claude/model-router/bin/model-router-engine.mjs --harness claude-code --prompt "<the task>" --json
 ```
 
-Use `.model` (map Claude ids to the Task `model` param: haiku/sonnet/opus tiers) and print its one dim `--line` receipt so routing is visible. If your judgment says the pick is wrong (the default policy is a documented placeholder that under-escalates multi-step agentic work), override it — but RECORD the override, it's exactly the labeled data the future learned policy trains on:
+Use `.model`; override when the pick is wrong (the default policy is a documented placeholder that under-escalates multi-step agentic work) and RECORD the override — it's the labeled data the learned policy trains on:
 
 ```bash
 node ~/.claude/model-router/bin/model-router-outcome.mjs --model "<picked-or-overridden id>" --success true|false --note "why"
 ```
 
-If `profile.json` is missing, ask the user the two subscription questions (Claude Pro/Max? Codex via ChatGPT login?) and run `model-router-setup.mjs` — routing without a profile silently assumes subscriptions the user may not have. For launching Codex with the engine's pick: `~/.claude/model-router/bin/codex-routed.sh "<task>"`.
+If `profile.json` is missing, ask the two subscription questions (Claude Pro/Max? Codex via ChatGPT login?) and run `model-router-setup.mjs`. Codex with the engine's pick: `~/.claude/model-router/bin/codex-routed.sh "<task>"`.
 
 **1. Claude-tier routing.** Before spawning any non-trivial subagent, call `mcp__ruflo__hooks_model-route` with the task description and use its recommendation instead of defaulting to Sonnet by habit — it's a real, live Thompson-bandit + complexity heuristic (verified: "fix a typo" → haiku, 0.04x cost, 85% confidence; "design PCI security architecture" → sonnet, 0.2x cost). Call `hooks_model-outcome` after with the real result — every project starts this bandit at zero decisions and it stays there unless something closes the loop.
 

@@ -128,7 +128,11 @@ function run(env = {}) {
   };
 }
 
-describe('nightly-gists.sh — FATAL guards (verified against a patched-PATH copy, real file never touched)', () => {
+// Windows cannot run these: POSIX shell-script stubs made executable with chmod (a no-op on Windows)
+// and spawned by bare name off PATH. CI runs integration on ubuntu only; a Windows dev box skips cleanly.
+const onPosix = describe.skipIf(process.platform === 'win32');
+
+onPosix('nightly-gists.sh — FATAL guards (verified against a patched-PATH copy, real file never touched)', () => {
   it('exits 1 and logs FATAL when gh is not reachable on PATH at all (no stub-bin)', () => {
     const out = run({ TEST_STUB_BIN: '' }); // omit the stub dir entirely -> gh genuinely not found
     expect(out.status).toBe(1);

@@ -16,6 +16,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm test",
     "metaharness:receipts": "node scripts/metaharness-receipts.mjs",
     "route:cheap": "node scripts/route-cheap.mjs",
+    "route:receipt": "node scripts/dispatch-receipt.mjs",
     "metaharness:fix": "node scripts/fix-metaharness-memretrieve.mjs --apply",
     "metaharness:check": "node scripts/fix-metaharness-memretrieve.mjs --check",
     "eval": "node scripts/eval-brain.mjs",
@@ -37,6 +38,8 @@
     "scripts/model-router-status.mjs",
     "scripts/model-router-outcome.mjs",
     "scripts/route-cheap.mjs",
+    "scripts/dispatch-receipt.mjs",
+    "scripts/metaharness-receipts.mjs",
     "scripts/codex-routed.sh"
   ],
   "engines": {

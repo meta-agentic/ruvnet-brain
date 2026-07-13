@@ -67,6 +67,12 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+// Windows physically cannot run this technique: the `gh` stub is a POSIX shell script made executable
+// with chmod (a no-op on Windows) and spawned by bare name off PATH (an extensionless script is not
+// executable there). CI runs integration on ubuntu only, so this never fired — but a Windows
+// contributor running `npm run test:integration` would get a wall of confusing failures. Skip, loudly.
+const onPosix = describe.skipIf(process.platform === 'win32');
+
 function writeFixture(name, obj) {
   fs.writeFileSync(path.join(fixtures, name), JSON.stringify(obj));
 }
@@ -101,7 +107,7 @@ const ONE_GIST_FULL = {
   files: { 'flywheel.md': { content: 'Some flywheel content here.', truncated: false } },
 };
 
-describe('ingest-gists.mjs — --index-only (the actual nightly-CI invocation)', () => {
+onPosix('ingest-gists.mjs — --index-only (the actual nightly-CI invocation)', () => {
   it('writes docs/RUV-GISTS.md and returns BEFORE any per-gist fetch or KB write', () => {
     writeFixture('list.json', ONE_GIST);
     const r = runGists(['--index-only']);
@@ -116,7 +122,7 @@ describe('ingest-gists.mjs — --index-only (the actual nightly-CI invocation)',
   });
 });
 
-describe('ingest-gists.mjs — --dry-run', () => {
+onPosix('ingest-gists.mjs — --dry-run', () => {
   it('reports what would change and writes NOTHING to disk', () => {
     writeFixture('list.json', ONE_GIST);
     const r = runGists(['--dry-run']);
@@ -128,7 +134,7 @@ describe('ingest-gists.mjs — --dry-run', () => {
   });
 });
 
-describe('ingest-gists.mjs — real ingest, banner + chunking', () => {
+onPosix('ingest-gists.mjs — real ingest, banner + chunking', () => {
   it('writes passages.jsonl with the provenance banner prepended to every passage, plus meta.json and the cache', () => {
     writeFixture('list.json', ONE_GIST);
     writeFixture('gists/abc12345.json', ONE_GIST_FULL);
@@ -160,7 +166,7 @@ describe('ingest-gists.mjs — real ingest, banner + chunking', () => {
   });
 });
 
-describe('ingest-gists.mjs — code files are silently excluded by design (TEXT_EXT), counted as neither indexed nor skipped', () => {
+onPosix('ingest-gists.mjs — code files are silently excluded by design (TEXT_EXT), counted as neither indexed nor skipped', () => {
   it('indexes only the .md file in a gist that also contains a .mjs file', () => {
     writeFixture('list.json', [{ id: 'def67890', updated_at: '2026-07-02T00:00:00Z', description: 'Mixed gist', files: { 'run.mjs': {}, 'notes.md': {} } }]);
     writeFixture('gists/def67890.json', {
@@ -179,7 +185,7 @@ describe('ingest-gists.mjs — code files are silently excluded by design (TEXT_
   });
 });
 
-describe('ingest-gists.mjs — LIVE BUG: truncated content is silently dropped, never fetched from raw_url', () => {
+onPosix('ingest-gists.mjs — LIVE BUG: truncated content is silently dropped, never fetched from raw_url', () => {
   it('a truncated file with a raw_url present still produces ZERO passages for that file', () => {
     writeFixture('list.json', [{ id: 'trunc001', updated_at: '2026-07-03T00:00:00Z', description: 'Huge gist', files: { 'big-log.md': {} } }]);
     writeFixture('gists/trunc001.json', {
@@ -199,7 +205,7 @@ describe('ingest-gists.mjs — LIVE BUG: truncated content is silently dropped, 
   });
 });
 
-describe('ingest-gists.mjs — gh failure falls back to the public API; only a dead fallback is fatal', () => {
+onPosix('ingest-gists.mjs — gh failure falls back to the public API; only a dead fallback is fatal', () => {
   // Contract changed 2026-07-13 (gists-nightly was born broken: GITHUB_TOKEN is an App token and the
   // gists API is closed to those, so in Actions gh can NEVER list gists): a gh failure now falls back
   // to the unauthenticated public API. RUVNET_GISTS_API points the fallback at a dead local port so
