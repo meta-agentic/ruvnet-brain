@@ -1,0 +1,39 @@
+{
+  "_why": "THE REGISTRY OF WHAT MUST BE RUNNING. Created 2026-07-13 after a failure that must never repeat: com.ruvnet.brain-nightly's launchd trigger had NEVER fired, and nothing noticed, because 'is it running?' was only ever answered by looking at a job's own exit code — and launchd reports exit 0 for a job that has never run, which is indistinguishable from success. Silence was being read as health.",
+  "_how_it_works": "scripts/job-heartbeat.sh wraps every job and writes start/end/exit receipts that a dying job cannot forge or skip (trap-protected). scripts/nightly-watchdog.mjs compares THIS registry against reality: a job listed here that is not loaded, or loaded but has no fresh receipt, or has a receipt with a non-zero exit, is a VIOLATION and gongs the phone. Absence of evidence is failure, never 'probably fine'.",
+  "_adding_a_job": "Add it here FIRST, then wrap its plist command in job-heartbeat.sh. A job not in this registry is unwatched by definition — that is the whole point of a registry rather than per-job good intentions.",
+  "heartbeatDir": "~/.cache/ruvnet-brain/heartbeats",
+  "jobs": [
+    {
+      "label": "com.ruvnet.brain-nightly",
+      "what": "Refreshes every RuvNet repo, rebuilds the brain, publishes the GitHub Release",
+      "schedule": "daily 03:15",
+      "maxAgeHours": 26,
+      "required": true,
+      "legacyLog": "logs/nightly.log"
+    },
+    {
+      "label": "com.ruvnet.brain-gists",
+      "what": "Pulls rUv's new gists into the brain and re-embeds when they change",
+      "schedule": "daily 21:47",
+      "maxAgeHours": 26,
+      "required": true,
+      "legacyLog": "logs/gists-nightly.log"
+    },
+    {
+      "label": "com.ruvnet.goldie-weekly",
+      "what": "Re-researches the cheapest/best models and refreshes the router catalog",
+      "schedule": "Mondays 07:30",
+      "maxAgeHours": 192,
+      "required": true,
+      "legacyLog": "logs/goldie.log"
+    },
+    {
+      "label": "com.ruvnet.nightly-watchdog",
+      "what": "Watches all of the above. Listed here so that IT is watched too — a watchdog nobody watches is the same blind spot one level up",
+      "schedule": "daily 09:00",
+      "maxAgeHours": 26,
+      "required": true
+    }
+  ]
+}
