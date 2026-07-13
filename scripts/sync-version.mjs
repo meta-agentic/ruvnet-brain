@@ -120,7 +120,9 @@ if (CHECK) {
 
   const strays = [];
   for (const abs of walk(ROOT)) {
-    const rel = path.relative(ROOT, abs);
+    // EXEMPT keys are forward-slash; path.relative() yields backslashes on Windows, which made the
+    // guard flag its own exempt fixtures there — the same gate-nobody-can-pass failure as above.
+    const rel = path.relative(ROOT, abs).split(path.sep).join('/');
     if (EXEMPT.has(rel)) continue;
     fs.readFileSync(abs, 'utf8').split('\n').forEach((ln, i) => {
       if (ln.includes('sync-version-ignore')) return;

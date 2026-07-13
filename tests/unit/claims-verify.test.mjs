@@ -250,7 +250,8 @@ describe('verifyChunkCountSurfaces — the advertised chunk count regenerates, o
 describe('verifyVersionSurfaces — delegates to the existing single-source-of-truth check', () => {
   it('passes on the real repo (sync-version --check exits 0)', () => {
     const res = verifyVersionSurfaces();
-    expect(res.status).toBe('PASS');
+    // evidence in the message: on a FAIL, the runner names the drifted surface instead of just 'FAIL'
+    expect(res.status, res.evidence).toBe('PASS');
     expect(res.evidence).toContain('agree');
   });
 });

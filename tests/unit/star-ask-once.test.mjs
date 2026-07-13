@@ -14,8 +14,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SCRIPT = path.join(ROOT, 'plugin', 'scripts', 'session-start.sh');
 const STAR_LINE = 'Finding this useful? Star github.com/stuinfla/ruvnet-brain';
 
@@ -31,7 +32,9 @@ beforeEach(() => {
 });
 
 function run() {
-  const r = spawnSync('/bin/bash', [SCRIPT], {
+  // 'bash' via PATH, not /bin/bash: Windows runners resolve this to Git Bash — the same shell
+  // Claude Code uses for hooks on real Windows machines, so the test matches production there.
+  const r = spawnSync('bash', [SCRIPT], {
     env: { ...process.env, HOME: home, CLAUDE_PLUGIN_ROOT: path.join(ROOT, 'plugin'), RUVNET_BRAIN_METER: '0' },
     encoding: 'utf8',
     timeout: 15000,

@@ -14,9 +14,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const INSTALLER = path.join(ROOT, 'bin', 'install.mjs');
 
 const savedEnv = { HOME: process.env.HOME, TEST: process.env.RUVNET_BRAIN_TEST };

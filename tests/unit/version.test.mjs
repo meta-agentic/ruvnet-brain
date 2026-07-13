@@ -12,7 +12,8 @@ const realVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugin/.claude-p
 
 describe('version.mjs — the single source of truth', () => {
   it('PLUGIN_JSON points at the real manifest that exists', () => {
-    expect(PLUGIN_JSON).toMatch(/plugin\/\.claude-plugin\/plugin\.json$/);
+    // normalize separators: PLUGIN_JSON is path.join()ed, so it carries backslashes on Windows
+    expect(PLUGIN_JSON.split(path.sep).join('/')).toMatch(/plugin\/\.claude-plugin\/plugin\.json$/);
     expect(fs.existsSync(PLUGIN_JSON)).toBe(true);
   });
   it('getVersion() returns the exact version from plugin.json', () => {

@@ -29,7 +29,12 @@ function sqlite(dbPath, sql) {
   spawnSync('sqlite3', [dbPath, sql], { encoding: 'utf8' });
 }
 
-describe('memdb-health.sh', () => {
+// Every fixture here is created BY the sqlite3 CLI, and GitHub's Windows runners don't ship it —
+// without it the db files never exist and the script correctly reports SKIP for all of them.
+// Gate on the CLI itself (not the OS) so the tests run anywhere sqlite3 is actually present.
+const hasSqlite3 = spawnSync('sqlite3', ['--version'], { encoding: 'utf8' }).status === 0;
+
+describe.skipIf(!hasSqlite3)('memdb-health.sh', () => {
   it('exits 0 (SKIP) when the db file does not exist — absence is not unhealthy', () => {
     const r = run(path.join(tmp, 'nope.db'));
     expect(r.status).toBe(0);

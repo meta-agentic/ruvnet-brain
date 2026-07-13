@@ -121,7 +121,9 @@ describe('ground-ruvnet.sh — every fire appends one honest ledger line', () =>
     expect(fs.existsSync(path.join(tmp, '.ruvnet-brain'))).toBe(false);
   });
 
-  it('a read-only cwd cannot break the hook: still exit 0, directives still emitted, just no ledger', () => {
+  // win32: chmod cannot revoke write permission on a Windows directory, so the read-only-cwd
+  // scenario is unconstructible there — the ledger write succeeds and the test asserts a fiction.
+  it.skipIf(process.platform === 'win32')('a read-only cwd cannot break the hook: still exit 0, directives still emitted, just no ledger', () => {
     fs.chmodSync(tmp, 0o555);
     const out = runGroundHook('implement the retry workflow');
     fs.chmodSync(tmp, 0o755);
