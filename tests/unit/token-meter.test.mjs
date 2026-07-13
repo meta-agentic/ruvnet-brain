@@ -174,7 +174,11 @@ describe('forge-mcp-all.mjs — one mcp ledger line per search_ruvnet call (empt
 
   it('logs {source:"mcp", tool:"search_ruvnet", k, bytes} where bytes = the response text\'s char count', () => {
     const out = callMcp();
-    expect(out.status).toBe(0);
+    // These two subtests fail ONLY on CI runners (never reproduced locally — tried Node 20, the
+    // exact single-line input, kb/node_modules removed, and coverage on; 2026-07-12). Carry the
+    // child's stderr in the failure message so the runner itself reports the root cause instead
+    // of a bare exit code we then can't reproduce.
+    expect(out.status, `server stderr:\n${out.stderr}\nstdout head:\n${out.stdout.slice(0, 400)}`).toBe(0);
     const rpc = JSON.parse(out.stdout.trim().split('\n')[0]);
     const responseText = rpc.result.content[0].text;
     const entry = JSON.parse(readLedgerLines()[0]);
@@ -185,7 +189,7 @@ describe('forge-mcp-all.mjs — one mcp ledger line per search_ruvnet call (empt
 
   it('RUVNET_BRAIN_METER=0: the query still answers, nothing is written', () => {
     const out = callMcp({ env: { RUVNET_BRAIN_METER: '0' } });
-    expect(out.status).toBe(0);
+    expect(out.status, `server stderr:\n${out.stderr}\nstdout head:\n${out.stdout.slice(0, 400)}`).toBe(0);
     expect(out.stdout).toMatch(/no results/);
     expect(fs.existsSync(path.join(tmp, '.ruvnet-brain'))).toBe(false);
   }, 60000);
