@@ -1,8 +1,48 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-12 EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-12 EDT (late night)` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
 
 ---
+
+## 2026-07-12 (late night) — EVERY workflow green: Windows becomes a real gate; gists-nightly resurrected; injection hole closed
+
+Stuart's QA mandate ("figure out why everything you call perfect keeps crashing at GitHub") answered
+with a full audit of ALL workflows to per-job conclusion — which immediately found reds the ci-only
+view had missed. Commits `4a8e0db` → `6a2db75` → `51eb434` → `f1b1339`, each verified on the remote
+runner before the next claim.
+
+**windows-unit: 6 files / 17 tests failing → GREEN → BLOCKING.** The dated note said "two bugs"; the
+runner's log said six clusters. All fixed at root cause, none papered over: (1) `new URL(...).pathname`
+→ `fileURLToPath()` (the `file:///D:/D:/` doubling), (2) `/bin/bash` → PATH `bash` (= Git Bash on
+runners, the same shell Claude Code hooks use on real Windows), (3) SHIPPED-code bug in
+sync-version.mjs — `path.relative()` backslashes vs a forward-slash EXEMPT set made its stray-literal
+gate unpassable on every Windows machine, (4) tests overrode HOME but `os.homedir()` reads USERPROFILE
+on Windows → consent state bled between tests through the runner's real profile, (5) no sqlite3 CLI on
+Windows runners → `describe.skipIf(!hasSqlite3)` gated on the CLI not the OS, (6) chmod-read-only is a
+no-op on win32 → that one scenario skipIf'd with the reason in code. First green ever: run
+29219328821; `continue-on-error` removed the same night and the gate-flip run (29219425277) passed
+with windows-unit REQUIRED.
+
+**gists-nightly: born broken (3/3 runs failed since 07-10), now green.** GITHUB_TOKEN is a GitHub App
+token and the gists API is closed to App tokens entirely — no permissions key can fix it. listGists
+now falls back to the unauthenticated public API (proven live: 438 gists via fallback with gh stripped
+from PATH); a shared-IP rate limit in --index-only exits 0 with a loud SKIP (self-heals next night).
+Dispatched run 29219196767 = first success in the workflow's life. The integration test guarding the
+old "gh failure = fatal" contract correctly caught the fallback hitting the live API from CI; updated
+to the new contract HERMETICALLY (RUVNET_GISTS_API seam → dead local port, asserts the DOUBLE failure).
+
+**Gong hole + a real security hole in ntfy-alerts.yml:** gists-nightly could fail silently because it
+was never in the ntfy watch list (now: ci, integration-linux, gists-nightly). And the send step
+interpolated attacker-controlled issue/PR titles straight into `run:` shell under pull_request_target
+— a genuine command-injection vector on a public repo. All event fields now pass via env ("$VAR"),
+`permissions: {}` strips the token.
+
+**Also verified tonight:** plugin v2.4.3 loaded live after restart; local brain-nightly last run =
+"VERIFIED SUCCESS v2.0.0 → v2.4.2", next fire 03:15; goldie-weekly loaded (exit 0); coverage 16.77%
+lines vs the 14% floor. Root cause of the recurring "perfect locally, red remotely" pattern, for the
+record: tests written against dev-machine state (deps, POSIX paths, macOS chmod semantics, HOME)
+instead of hermetic fixtures — the standing cure is remote-CI-per-job verification after every push
+plus everything-blocking, nothing-silent.
 
 ## 2026-07-12 (night) — MetaHarness router FINISHED: per-user profiles, proven cheap models, v2.4.0
 
