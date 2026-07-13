@@ -1,8 +1,71 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-12 EDT (late night)` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-13 EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
 
 ---
+
+## 2026-07-13 — Every scheduled job must PROVE it ran. And MetaHarness stops being decorative.
+
+Two of Stuart's hardest calls of the project, both fair, both acted on the same night.
+
+### 1. "The meta harness isn't doing anything for me."
+
+He was right, and the receipts proved it: **3 dispatches in the router's entire life, all of them my own
+test pings, $0.018 saved** — while real work ran inline on the most expensive model available. Two faults:
+
+- **Behavior.** SKILL.md said "consult the engine" — advisory, and advisory rules get ignored. Now a
+  **HARD RULE** with a taxonomy (mechanical→haiku · analytical→sonnet · judgment→main loop · pure-text→
+  OpenRouter) and a mandatory self-audit: doing mechanical work inline is a DEFECT you name out loud.
+- **Measurement.** A Claude Code subagent **INHERITS the main-loop model unless overridden** — a 5-agent
+  fan-out on a Fable session is 5 Fable agents. That is the biggest cost lever there is, and NOTHING
+  LOGGED IT (route-cheap only logged OpenRouter calls), so right-sizing was invisible even when it
+  happened. `scripts/dispatch-receipt.mjs` now receipts subagent dispatches against the model they WOULD
+  have inherited (the honest counterfactual). Live pricing, verified from the OpenRouter API: **fable-5
+  $10/$50 · opus-4.8 $5/$25 · sonnet-5 $2/$10 · haiku-4.5 $1/$5** — mechanical work on Fable costs **10x**
+  the same work on Haiku. Sizing prefers MEASURED tokens over chars/4 (a file-reading agent burns ~20x
+  what its prompt implies; estimating from the prompt understates savings so badly routing looks pointless).
+  Logger AND viewer now ship (npm + installer) — a router with no scoreboard stays decorative.
+
+**Result, same night: 5 real dispatches, ~$2 saved** (vs $0.018 in the router's whole prior life) — and
+they found real bugs, which is the point. Model guidance for Stuart: **Opus 4.8 as the main loop**; Fable
+is 2x the price for work Opus does as well. The leverage is in what gets SPAWNED.
+
+### 2. "You told me the gong strategy fixed this. Were you lying?"
+
+Fair, and the honest answer is that the effect was the same as a lie: the gong system covered the BRAIN
+going dark and DEAD KEYS — never **job liveness** — and I let him believe it was total.
+
+**THE TRAP, stated plainly because it defeats the obvious design:** `launchctl` reports **last exit status
+0 for a job that has NEVER RUN** — byte-identical to a job that ran and succeeded. "Check the exit code"
+*cannot distinguish triumph from total absence*. Silence was being read as health.
+
+**The fix is mechanism, not per-job discipline (discipline rots):**
+- `config/scheduled-jobs.json` — the **registry** of what MUST run. Reality is compared against it, so
+  unloaded / deleted / never-fired is a **violation**, not a silence.
+- `scripts/job-heartbeat.sh` — **wraps every job**: start receipt, end receipt, real exit code (still
+  exits with it, so launchd sees truth), urgent ntfy on failure. **Break-testing caught a real defect in
+  my own wrapper**: a POSIX shell blocked on a FOREGROUND child does not run its trap when signalled, so
+  a killed job left a stale "running" receipt — the exact silent death it exists to prevent. Fixed by
+  backgrounding the child and `wait`ing. Verified across all four death modes: ok→0 · fail→7 · SIGTERM→143 ·
+  SIGKILL→uncatchable by definition (caught one level up).
+- `scripts/nightly-watchdog.mjs` — MISSING · NEVER-RAN · STALE · FAILING · OK. Transition-only gongs.
+  It runs through the wrapper and sits in its own registry: **a supervisor nobody supervises just moves
+  the blind spot up one level.**
+
+**All 7 jobs now produce fresh, successful receipts.** `com.ruvnet.npm-token-renew` was **100% BLIND** —
+on a healthy day it wrote ZERO BYTES anywhere, so "ran fine" and "never ran" were indistinguishable ~76
+days out of 90. The wrapper cured it without touching a line of its logic. **Retired 5 dead Ask-Ruvnet
+LaunchAgents** (a Sonnet subagent traced all three failures to ONE defect: `kb-evergreen.mjs` hardcodes a
+`@claude-flow/embeddings` path the installed CLI no longer ships; `pipeline-health` had been exiting 1
+*correctly* every morning since 07-09, screaming into a void where nothing listened).
+
+**MY ERROR, ON THE RECORD.** I told Stuart brain-nightly had "never fired." **Wrong.** It fired at 03:15
+on 07-12 and crashed three times — `logs/nightly.err.log`, mtime 03:15: `/bin/bash: logs/nightly.log: No
+such file or directory`. It died *before it could write its own log*, and I read that empty log as "never
+ran." **That inference is precisely the trap the watchdog exists to catch, and I walked into it while
+building the watchdog.** Absence of evidence is not absence of an event — it is frequently the evidence of
+a crash. Root cause: no `WorkingDirectory` in the plist until 13:39 that day, so it ran from `/`. Fixed.
+Tonight's 03:15 run PROVES it with a receipt instead of me inferring anything.
 
 ## 2026-07-12 (late night) — EVERY workflow green: Windows becomes a real gate; gists-nightly resurrected; injection hole closed
 
