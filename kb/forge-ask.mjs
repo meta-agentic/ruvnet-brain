@@ -18,9 +18,23 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { loadRvf, loadTransformers, configureModel } from './resolve-deps.mjs';
 
-const { mod: rvfMod, via: rvfVia } = loadRvf();
-const { RvfDatabase } = rvfMod;
-if (process.env.KB_DEBUG) console.error(`[forge-ask] @ruvector/rvf via: ${rvfVia}`);
+// LAZY, not module-level (2026-07-12): an eager loadRvf() here killed every importer — including
+// forge-mcp-all's MCP server — at STARTUP on any machine without @ruvector/rvf resolvable, before
+// it could answer anything. That's why the check CI job was red on every run since it was added
+// (runners have no kb/node_modules and no ~/.npm-global fallback; dev machines do, which masked
+// it locally). Deferring to first store-open means a dep-less environment still starts, answers
+// "(no results)" for empty KBs, and surfaces the resolve error through searchAll's per-repo error
+// path — where brain-alarm turns it into the loud, actionable outage message instead of a dead
+// process.
+let _rvf = null;
+function getRvfDatabase() {
+  if (!_rvf) {
+    const { mod, via } = loadRvf();
+    if (process.env.KB_DEBUG) console.error(`[forge-ask] @ruvector/rvf via: ${via}`);
+    _rvf = mod;
+  }
+  return _rvf.RvfDatabase;
+}
 
 // ---------- TWO-VARIANT store resolution (mirrors Cognitum ask-kb resolveConf/variantPaths) ----------
 // A forged KB may ship TWO builds from the SAME passages (identical content, different embedder):
@@ -180,7 +194,7 @@ function getKb(dir, name, conf) {
   const entry = (async () => {
     const [{ byId, byPath }, db] = await Promise.all([
       loadPassages(conf.passages),
-      RvfDatabase.openReadonly(conf.rvf),
+      getRvfDatabase().openReadonly(conf.rvf),
     ]);
     const byPathKind = loadKinds(findMetaFile(dir, name, conf.variant));
     const crateTokens = crateTokenSet(byPath);
