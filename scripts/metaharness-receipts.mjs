@@ -43,13 +43,19 @@ export function loadReceipts(file) {
 }
 
 const fmt$ = (n) => `$${n < 0.01 ? n.toFixed(5) : n.toFixed(4)}`;
+// Measured wall-clock, human-readable. '-' when the receipt has no duration — never invented.
+const fmtT = (ms) => {
+  if (typeof ms !== 'number' || !(ms > 0)) return '-';
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m${String(Math.round((ms % 60_000) / 1000)).padStart(2, '0')}s`;
+};
 
 export function formatTable(rows) {
   if (!rows.length) return 'No routing receipts yet.\nRoute something cheap first:  node scripts/route-cheap.mjs --task "<text>"';
 
   // `channel` + `instead of` (2026-07-13): subagent receipts arrived with a per-row baseline — the
   // model that agent WOULD have inherited — so a single global "frontier" column would misreport them.
-  const header = ['date', 'channel', 'task class', 'model used', 'instead of', 'est. cost', 'est. baseline', 'saved'];
+  const header = ['date', 'channel', 'task class', 'model used', 'instead of', 'est. cost', 'est. baseline', 'saved', 'time'];
   const body = rows.map((r) => [
     (r.ts || '').replace('T', ' ').slice(0, 16),
     r.source === 'claude-subagent' ? 'subagent' : 'openrouter',
@@ -59,6 +65,7 @@ export function formatTable(rows) {
     fmt$(r.est_cost ?? 0),
     fmt$(r.est_frontier_cost ?? 0),
     fmt$(r.saved),
+    fmtT(r.duration_ms), // measured, never estimated — '-' when absent
   ]);
   const widths = header.map((h, i) => Math.max(h.length, ...body.map((row) => row[i].length)));
   const line = (cells) => cells.map((cell, i) => cell.padEnd(widths[i])).join('  ');
@@ -73,6 +80,8 @@ export function formatTable(rows) {
 
   // Baselines now vary per row; name them all rather than picking one and implying it covers everything.
   const baselines = [...new Set(rows.map((r) => r.frontier_ref || 'claude-opus-4.8'))].join(', ');
+  const timedTotal = rows.reduce((s, r) => s + (typeof r.duration_ms === 'number' && r.duration_ms > 0 ? r.duration_ms : 0), 0);
+  const timedRows = rows.filter((r) => typeof r.duration_ms === 'number' && r.duration_ms > 0).length;
   const subagents = rows.filter((r) => r.source === 'claude-subagent').length;
 
   // The card leads with the PERCENTAGE and a spent-vs-unrouted bar — "$1.83" reads as pocket
@@ -95,6 +104,12 @@ export function formatTable(rows) {
     '',
     `Baselines: ${baselines} — the model each task would have run on if it had not been routed.`,
     'Pricing is live-verified. Token counts are measured OR estimated per row (each row records which, in token_source).',
+    // Time honesty: durations are MEASURED wall-clock of the routed run. A "time saved vs baseline"
+    // number requires a measured per-tier speed baseline (the calibration batch) — until that exists
+    // we state the gap instead of inventing the comparison.
+    timedTotal > 0
+      ? `Measured time on routed models: ${fmtT(timedTotal)} across ${timedRows} timed task(s). Time-SAVED vs baseline: not yet measured — appears after the per-tier calibration run.`
+      : 'No measured durations in these receipts yet. Time-saved reporting activates after the per-tier calibration run.',
   ].join('\n');
 }
 
