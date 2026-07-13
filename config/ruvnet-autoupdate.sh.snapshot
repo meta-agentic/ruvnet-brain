@@ -1,0 +1,109 @@
+#!/bin/bash
+# Ruvnet Ecosystem Auto-Update
+# Updated: 2026-05-07
+#
+# Runs every night at 03:30 via ~/Library/LaunchAgents/com.stuartkerr.ruflo-autoupdate.plist
+# Discovers all currently-installed Ruvnet ecosystem packages and refreshes them.
+#
+# Tag policy:
+#   - ruflo, @claude-flow/cli       → @alpha (Stuart runs alpha track)
+#   - agentdb                       → RETIRED 2026-05-30: AgentDB is bundled inside
+#                                     @claude-flow/memory (Ruflo); no standalone install.
+#   - everything else (@ruvector/*, ruvector, @claude-flow/aidefence,
+#     agent-browser, agentic-flow, flow-nexus)
+#                                   → @latest
+
+set -uo pipefail
+
+LOG="$HOME/Library/Logs/ruflo-autoupdate.log"
+PATH="$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+export PATH
+
+ts() { date -u +"[%Y-%m-%dT%H:%M:%SZ]"; }
+
+echo "$(ts) ──── Ruvnet ecosystem update starting ────" | tee -a "$LOG"
+
+# Packages known to fail on this platform — skipped from auto-update.
+# @ruvector/edge-net pulls wrtc which needs a darwin-arm64 prebuilt binary
+# from S3 that returns 404. Bug in upstream wrtc package, not actionable here.
+SKIP_PACKAGES="@ruvector/edge-net"
+
+is_skipped() {
+  local pkg="$1"
+  for sk in $SKIP_PACKAGES; do
+    [ "$pkg" = "$sk" ] && return 0
+  done
+  return 1
+}
+
+# Discover all currently-installed packages of interest
+# Discover all currently-installed RuvNet packages.
+# 2026-07-13: the old filter listed only 7 names/prefixes, so agentic-qe, @metaharness/*, qudag,
+# ruv-swarm, ruvbot, ruvi, ruvector-extensions and agentic-robotics were installed but NEVER updated
+# — silently frozen at whatever version they landed on. Live drift found that day: agentic-qe
+# 3.11.5 vs 3.12.0, ruvbot 0.3.1 vs 0.3.2, ruvector-extensions 0.1.1 vs 0.1.2.
+# Principle: if it is an installed RuvNet package, it gets kept current. No arbitrary allowlist.
+# (@marketing/ai-swarms is a LOCAL npm link — never npm-install over it; it is excluded by name.)
+PACKAGES=$(npm ls -g --depth=0 --json 2>/dev/null | jq -r '
+  .dependencies // {} | keys[] | select(
+    startswith("@ruvector/") or
+    startswith("@claude-flow/") or
+    startswith("@metaharness/") or
+    startswith("@agentic-robotics/") or
+    . == "ruflo" or
+    . == "ruvector" or
+    . == "ruvector-extensions" or
+    . == "agent-browser" or
+    . == "agentic-flow" or
+    . == "agentic-qe" or
+    . == "agentic-robotics" or
+    . == "flow-nexus" or
+    . == "qudag" or
+    . == "ruv-swarm" or
+    . == "ruvbot" or
+    . == "ruvi"
+  ) | select(startswith("@marketing/") | not)
+')
+
+if [ -z "$PACKAGES" ]; then
+  echo "$(ts) ERROR: no Ruvnet packages found via 'npm ls -g'" | tee -a "$LOG"
+  exit 1
+fi
+
+# Build install args with the right tag per package
+INSTALL_ARGS=""
+SKIPPED=""
+ALPHA_PACKAGES="ruflo @claude-flow/cli"
+for pkg in $PACKAGES; do
+  if is_skipped "$pkg"; then
+    SKIPPED="$SKIPPED $pkg"
+    continue
+  fi
+  TAG="@latest"
+  for alpha_pkg in $ALPHA_PACKAGES; do
+    if [ "$pkg" = "$alpha_pkg" ]; then
+      TAG="@alpha"
+      break
+    fi
+  done
+  INSTALL_ARGS="$INSTALL_ARGS ${pkg}${TAG}"
+done
+
+if [ -n "$SKIPPED" ]; then
+  echo "$(ts) Skipping known-broken packages:$SKIPPED" | tee -a "$LOG"
+fi
+
+echo "$(ts) Updating: $INSTALL_ARGS" | tee -a "$LOG"
+
+# Run the install — keep going even if one package fails
+npm install -g $INSTALL_ARGS 2>&1 | tee -a "$LOG"
+
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+  echo "$(ts) ✓ auto-update finished cleanly" | tee -a "$LOG"
+else
+  echo "$(ts) ⚠ auto-update finished with exit code $EXIT_CODE — check log for failed packages" | tee -a "$LOG"
+fi
+
+echo "" | tee -a "$LOG"
+exit $EXIT_CODE
