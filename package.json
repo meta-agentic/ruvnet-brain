@@ -1,6 +1,6 @@
 {
   "name": "ruvnet-brain",
-  "version": "2.7.3",
+  "version": "2.8.0-dev",
   "description": "One-command installer for RuvNet Brain — a portable, source-grounded brain over rUv's RuvNet building blocks, delivered as a Claude Code plugin so Claude uses the stack instead of fighting it.",
   "type": "module",
   "bin": {

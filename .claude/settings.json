@@ -1,5 +1,20 @@
 {
+  "_note": "Project-scoped config for ruvnet-brain ONLY. version-bump-gate enforces THIS repo's every-commit-bumps rule (Stuart, 2026-07-13); it lived in the GLOBAL settings until 2026-07-14, taxing every Bash command in all 34+ projects with a rule that is only true here. A hook belongs in the narrowest scope where it is true.",
   "env": {
     "RUFLO_HARNESS_LOOP": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"/Users/stuartkerr/Code/ruvnet-brain/plugin/scripts/version-bump-gate.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

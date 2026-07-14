@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-13T01:03:50.708Z",
+  "builtUtc": "2026-07-14T09:57:36.490Z",
   "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "cognitum-support": {
-      "kbName": "cognitum-support",
-      "sourceRepo": "git@github.com:cognitum-one/support.git",
-      "sourceCommit": "26a92df8c17341fe73c0e455168c3f849130fafd",
-      "sourceDescribe": "seed-v0.22.20",
-      "builtUtc": "2026-07-13T01:03:50.708Z",
+    "open-claude-code": {
+      "kbName": "open-claude-code",
+      "sourceRepo": "https://github.com/ruvnet/open-claude-code",
+      "sourceCommit": "d248139faf51c41bb456641f420bb33551adf2f3",
+      "sourceDescribe": "v2.0.0-nightly.20260714",
+      "builtUtc": "2026-07-14T09:57:36.490Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-support-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs cognitum-support"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/open-claude-code-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs open-claude-code"
     }
   }
 }
