@@ -10,24 +10,28 @@
 // normally <= latest. Nothing asserted the direction, so nothing caught it.
 import { describe, it, expect } from 'vitest';
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 
-const HOOK = new URL('../../plugin/scripts/ground-ruvnet.sh', import.meta.url).pathname;
+// path.resolve(import.meta.dirname, ...) — NOT `new URL(...).pathname`, which on Windows yields
+// "/D:/a/..." and Node then prepends the drive, producing "D:\D:\a\..." (caught by CI's windows-unit
+// job; invisible on macOS). This is the repo's existing convention — I should have followed it first.
+const HOOK = path.resolve(import.meta.dirname, '../../plugin/scripts/ground-ruvnet.sh');
 const SRC = readFileSync(HOOK, 'utf8');
+const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
 
-// Pull ver_lt out of the hook and exercise it in a bare `sh` — the same shell the hook runs under.
+// Pull ver_lt out of the hook and exercise it in a real shell — the one the hook itself runs under.
 function verLt(a, b) {
   const fn = SRC.match(/^ver_lt\(\) \{[\s\S]*?^\}/m);
   expect(fn, 'ver_lt() must exist in ground-ruvnet.sh').toBeTruthy();
-  const out = execFileSync('sh', ['-c', `${fn[0]}\nif ver_lt "${a}" "${b}"; then echo YES; else echo NO; fi`],
+  const out = execFileSync('bash', ['-c', `${fn[0]}\nif ver_lt "${a}" "${b}"; then echo YES; else echo NO; fi`],
     { encoding: 'utf8' });
   return out.trim() === 'YES';
 }
 
-describe('stack currency — ver_lt ordering', () => {
+describe.skipIf(!hasBash || process.platform === 'win32')('stack currency — ver_lt ordering', () => {
   it('behind → true (the only case that may nag)', () => {
     expect(verLt('3.25.6', '3.28.0')).toBe(true);
     expect(verLt('3.9.0', '3.10.0')).toBe(true);
@@ -55,7 +59,7 @@ describe('stack currency — ver_lt ordering', () => {
   });
 });
 
-describe('stack currency — the hook end to end', () => {
+describe.skipIf(!hasBash || process.platform === 'win32')('stack currency — the hook end to end', () => {
   // Drive the real hook with a fake HOME so the cache and the "installed" package.json are ours.
   function runHook({ cached, installed }) {
     const home = mkdtempSync(join(tmpdir(), 'sc-'));
