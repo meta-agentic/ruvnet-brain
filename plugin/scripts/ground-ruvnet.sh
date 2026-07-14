@@ -94,7 +94,8 @@ Explain it in the user's words, not the plumbing's:
 - WHY IT'S DIFFERENT: most "self-improving agent" claims are unfalsifiable. This one only turns the wheel when an improvement is independently proven, and it hands you the receipt.
 - WHAT IT COSTS: $0. No LLM calls and no network on the decision path.
 - HONEST CAVEAT (say this, don't hide it): it stays idle until the project has accumulated at least 12 stored neural patterns to harvest a corpus from. Before that it reports "store too small" and does nothing. On a brand-new project that means it earns its keep later, not today.
-- TURN IT ON: add {"env":{"RUFLO_HARNESS_LOOP":"1"}} to .claude/settings.json, then `npx ruflo daemon start`.
+- TURN IT ON: add {"env":{"RUFLO_HARNESS_LOOP":"1"}} to .claude/settings.json, then `ruflo daemon start`
+  (the GLOBAL binary — never `npx ruflo@latest`, which runs its own private copy and hides drift).
 - TURN IT OFF: remove that env var (and `RUFLO_DAEMON_AUTOSTART=0` stops the daemon auto-starting).
 
 Offer like this, once: "Ruflo can quietly tune how it recalls memory — testing changes against a frozen benchmark and only keeping what provably wins, with a receipt you can replay. It's free, it's off by default, and it does nothing until this project has enough history. Want me to turn it on?" If they decline, respect it for the rest of the session and never raise it again.
@@ -120,15 +121,43 @@ if [ -n "$ADR_DIR" ] && [ "$ADR_RELEVANT" -eq 1 ]; then
 EOF
 fi
 
-# ── Stack package currency (rate-limited ~20h, machine-wide, fail-silent) ───────────────────────
+# ── Stack package currency (rate-limited ~6h, machine-wide, fail-silent) ────────────────────────
 # Fetches latest versions of the core stack from the npm registry into a cache; compares against
 # what's ACTUALLY installed (global npm dir or project node_modules) on every prompt (cheap greps).
+#
+# ver_lt A B  → true iff version A is STRICTLY OLDER than B. Pure shell (no sort -V: BSD sort on
+# older macOS lacks it, and this hook runs on every prompt so it cannot shell out to node).
+#
+# WHY THIS EXISTS (the bug it replaces, found live 2026-07-14): the check used to be a plain string
+# inequality — `[ "$INST" != "$LATEST" ]` — which fires when the two DIFFER IN EITHER DIRECTION. So
+# once rUv shipped 3.26→3.28 within the cache's refresh window while Stuart's `npx ruflo@latest` had
+# already picked up 3.28.0, the hook nagged `@claude-flow/cli(3.28.0 -> 3.25.6)` — i.e. it was
+# telling him to DOWNGRADE, every single prompt. Currency is an ORDERING question, not an EQUALITY
+# one; `!=` only looks correct because installed is normally <= latest. On a stack that ships several
+# versions a day, "normally" is not good enough.
+ver_lt() {
+  [ "$1" = "$2" ] && return 1
+  _a="$1"; _b="$2"
+  while [ -n "$_a$_b" ]; do
+    _x=${_a%%.*}; _y=${_b%%.*}
+    _x=${_x%%-*}; _y=${_y%%-*}          # drop pre-release suffixes (3.28.0-alpha.1 → 3.28.0)
+    case "$_x" in ''|*[!0-9]*) _x=0;; esac
+    case "$_y" in ''|*[!0-9]*) _y=0;; esac
+    [ "$_x" -lt "$_y" ] && return 0
+    [ "$_x" -gt "$_y" ] && return 1
+    case "$_a" in *.*) _a=${_a#*.};; *) _a='';; esac
+    case "$_b" in *.*) _b=${_b#*.};; *) _b='';; esac
+  done
+  return 1
+}
 mkdir -p "$HOME/.cache/ruvnet-brain" 2>/dev/null
 VSTAMP="$HOME/.cache/ruvnet-brain/.stack-versions-checked"
 VCACHE="$HOME/.cache/ruvnet-brain/.stack-latest"
 NOWV=$(date +%s 2>/dev/null || echo 0)
 LASTV=$(cat "$VSTAMP" 2>/dev/null || echo 0)
-if [ "$NOWV" -gt 0 ] && [ $((NOWV - LASTV)) -gt 72000 ]; then
+# 6h, not 20h: rUv shipped THREE ruflo versions inside one 18h window. A cache slower than the thing
+# it tracks reports fiction. (The ver_lt guard means a stale cache is now merely quiet, never wrong.)
+if [ "$NOWV" -gt 0 ] && [ $((NOWV - LASTV)) -gt 21600 ]; then
   echo "$NOWV" > "$VSTAMP" 2>/dev/null
   # BACKGROUNDED (QE-0011 code#1): these are 3 sequential `curl --max-time 3` = up to ~9s. Running
   # them synchronously HERE — before the grounding gates below — risks the whole hook being killed by
@@ -153,7 +182,9 @@ if [ -s "$VCACHE" ]; then
         INST=$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$DIR/package.json" 2>/dev/null | head -1 | cut -d'"' -f4); break
       fi
     done
-    [ -n "$INST" ] && [ -n "$LATEST" ] && [ "$INST" != "$LATEST" ] && OUTDATED="$OUTDATED $PKG(${INST} -> ${LATEST})"
+    # ONLY when genuinely BEHIND. If installed is newer than the cache (rUv shipped since the last
+    # refresh, and npx @latest already pulled it), stay silent — never advise a downgrade.
+    [ -n "$INST" ] && [ -n "$LATEST" ] && ver_lt "$INST" "$LATEST" && OUTDATED="$OUTDATED $PKG(${INST} -> ${LATEST})"
   done < "$VCACHE"
   if [ -n "$OUTDATED" ]; then
     echo "[RuvNet Brain — stack updates available:$OUTDATED]"

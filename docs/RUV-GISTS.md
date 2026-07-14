@@ -5,7 +5,7 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_438 gists · refreshed 2026-07-13_
+_438 gists · refreshed 2026-07-14_
 
 | Updated | Gist | Description |
 |---|---|---|
