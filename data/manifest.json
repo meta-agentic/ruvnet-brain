@@ -1,7 +1,7 @@
 {
   "brainVersion": "2.7.3",
-  "generated": "2026-07-13T07:15:52.716Z",
-  "generatedHuman": "Mon, 13 Jul 2026 07:15:52 GMT",
+  "generated": "2026-07-14T09:59:36.424Z",
+  "generatedHuman": "Tue, 14 Jul 2026 09:59:36 GMT",
   "coverage": {
     "built": 32,
     "catalogued": 173,
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "7ef4d4e655d81c0451f6f40f35729cce6c9928e7",
+      "builtFromSha": "73914bd2bea43eeaf85b9434b155398397e03c2c",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -189,7 +189,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "bdefce700d941aa91d03931a25872c68b2d5dc62",
+      "builtFromSha": "d248139faf51c41bb456641f420bb33551adf2f3",
       "latestRemoteSha": null,
       "status": "built"
     },
