@@ -9,19 +9,34 @@ supersedes: []
 relates: [ADR-013, ADR-014]
 ---
 
-**Status**: Proposed (near-term slice — router-optimizer engine, console panel, explainer preview — shipped in v3.0.1; full weekly self-optimizing engine remains proposed)
+**Status**: Proposed (near-term slice — router-optimizer engine, console panel, ongoing utilization view, explainer preview — shipped through v3.0.2; full weekly self-optimizing engine remains proposed)
 
 ## Status
 
-**Partially implemented — v3.0.1 (2026-07-15).** The near-term slice SHIPPED in v3.0.1:
+**Partially implemented — v3.0.1–v3.0.2 (2026-07-15).** The near-term slice SHIPPED:
 `scripts/router-optimizer.mjs` (computes two dev/production profiles from rUv's measured bench +
 this repo's verified live prices + the user's receipts), the **collapsed console panel** that displays
 them (band → model → effort → cost → why, measured-vs-default tags, OpenRouter-key-aware), and the
-**explainer's configurator preview**. Honest limits shipped with it: the profile is recomputed live on
-each console open (no scheduled job yet), and the reasoning-effort axis is principled *defaults* (no
-per-effort measurement exists in the corpus). The **full weekly self-optimizing engine** (a scheduled
-re-benchmark, the effort-axis *optimization*, and band-discovery from a live BenchPress/ADR-206 signal)
-remains **Proposed** — this ADR is its plan of record.
+**explainer's configurator preview**.
+
+**v3.0.2 adds the ongoing utilization view** (`scripts/router-utilization.mjs`) — the shape rUv
+specifies in ruflo **ADR-149 §6**: per-band task **distribution** (`modelDistribution` — "how many
+tasks landed in each bucket") and **`costOptimalitySaved`** (realized spend vs. sending every task to
+the frontier). It reads the real receipts ledger, makes no model/network call, and recomputes the
+frontier counterfactual for every receipt against the **current frontier model from each receipt's own
+token counts** — so the savings figure is never a stale number.
+
+Also in v3.0.2: the **frontier band is Fable 5** (`claude-fable-5`), which leads the Claude 5 family
+(2× Opus 4.8 per token). It is both the escalation target in the router profiles and the "instead-of"
+baseline the savings are measured against. rUv's own SWE-bench cascade numbers on the explainer keep
+their cited Opus baseline — a separate, historical measurement — and are unchanged.
+
+Honest limits shipped with it: the profile is recomputed live on each console open (no scheduled job
+yet), the reasoning-effort axis is principled *defaults* (no per-effort measurement exists in the
+corpus), and mechanical/frontier bands read 0 until a task actually lands there (shown honestly, never
+padded). The **full weekly self-optimizing engine** (a scheduled re-benchmark, the effort-axis
+*optimization*, and band-discovery from a live BenchPress/ADR-206 signal) remains **Proposed** — this
+ADR is its plan of record.
 
 Captures a feature Stuart specified for the Onboarding Console (ADR-013): an **opt-in, weekly,
 per-user** job that computes the optimal *(model, reasoning-effort)* pair per task bucket —

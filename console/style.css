@@ -453,6 +453,41 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .rp-foot { position: relative; margin-top: 14px; }
 .rp-getkey { color: var(--cyan-text); font-weight: 600; }
 
+/* ---- ongoing utilization: how many tasks per bucket + saved vs the frontier ---- */
+.mh-dist { margin-top: 18px; }
+.dist-lead { font-size: var(--fs--1); color: var(--ink); margin: 0 0 12px; line-height: 1.55; max-width: 62ch; }
+.dist-lead b { color: var(--ink); font-weight: 650; }
+.dist-grid { display: flex; flex-direction: column; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+.dist-row { display: grid; grid-template-columns: 92px minmax(120px, 1.1fr) minmax(0, 1.3fr) 68px; align-items: center; gap: 12px; padding: 10px 14px; }
+.dist-row + .dist-row { border-top: 1px solid var(--hair); }
+.dist-head { background: color-mix(in srgb, var(--ink) 3%, transparent); padding-top: 8px; padding-bottom: 8px; }
+.dist-head > div { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.dist-head .dist-saved { text-align: right; }
+.dist-row.is-empty { opacity: 0.5; }
+.dist-band { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; white-space: nowrap; }
+.dist-band.b-mech { color: var(--green-text); }
+.dist-band.b-cheap { color: var(--cyan-text); }
+.dist-band.b-mid { color: var(--warn-text); }
+.dist-band.b-front { color: var(--red-text); }
+.dist-track { position: relative; height: 24px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 5%, transparent); overflow: hidden; display: flex; align-items: center; }
+.dist-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; opacity: 0.38; min-width: 2px; transition: width 0.4s ease; }
+.dist-fill.b-mech { background: var(--green); }
+.dist-fill.b-cheap { background: var(--cyan); }
+.dist-fill.b-mid { background: var(--warn); }
+.dist-fill.b-front { background: var(--red); }
+.dist-count { position: relative; z-index: 1; padding-left: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dist-models { font-size: var(--fs--2); color: var(--muted); overflow-wrap: anywhere; }
+.dist-saved { font-family: var(--mono); font-size: var(--fs--2); text-align: right; color: var(--green-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 40em) {
+  .dist-row { grid-template-columns: 74px 1fr 60px; }
+  .dist-models { display: none; }
+}
+
+/* full receipt detail, collapsed under the distribution */
+.mh-receipts { margin-top: 16px; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: color-mix(in srgb, var(--ink) 2%, transparent); }
+.mh-receipts > .scroll-x { padding: 0 14px 14px; }
+.mh-receipts[open] .rp-chev { transform: rotate(90deg); }
+
 /* ============================== 6 · CHIPS ============================== */
 
 .chip {

@@ -98,12 +98,12 @@ describe('receiptsPath', () => {
 });
 
 describe('route-cheap cost math (verified OpenRouter pricing, 2026-07-07)', () => {
-  it('computes est cost vs opus-4.8 frontier from the SKILL.md-verified table', () => {
-    // deepseek: $0.20 in / $0.80 out per Mtok; frontier opus-4.8: $5 / $25
+  it('computes est cost vs fable-5 frontier from the SKILL.md-verified table', () => {
+    // deepseek: $0.20 in / $0.80 out per Mtok; frontier fable-5: $10 / $50
     const c = estimateCosts('deepseek/deepseek-chat', 1_000_000, 1_000_000);
     expect(c.cost).toBeCloseTo(1.0, 10);       // 0.20 + 0.80
-    expect(c.frontier).toBeCloseTo(30.0, 10);  // 5 + 25
-    expect(c.saved).toBeCloseTo(29.0, 10);
+    expect(c.frontier).toBeCloseTo(60.0, 10);  // 10 + 50
+    expect(c.saved).toBeCloseTo(59.0, 10);
   });
 
   it('refuses to price an unknown model (no invented savings)', () => {
@@ -124,6 +124,6 @@ describe('route-cheap cost math (verified OpenRouter pricing, 2026-07-07)', () =
 
   it('pricing table stays in sync with the models route-cheap accepts', () => {
     expect(Object.keys(PRICING)).toContain('deepseek/deepseek-chat');
-    expect(FRONTIER.name).toBe('claude-opus-4.8');
+    expect(FRONTIER.name).toBe('claude-fable-5');
   });
 });

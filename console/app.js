@@ -856,9 +856,55 @@ function renderRouterProfiles(rp) {
         keyLine)));
 }
 
+const MODEL_PRETTY = {
+  'claude-fable-5': 'Fable 5', 'claude-opus-4.8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5',
+  'claude-haiku-4.5': 'Haiku 4.5', 'agent-booster': 'Agent Booster',
+  'inclusionai/ling-2.6-flash': 'Ling 2.6 Flash', 'openai/gpt-4.1': 'GPT-4.1',
+  'meta-llama/llama-3.3-70b-instruct': 'Llama 3.3 70B', 'x-ai/grok-4.5': 'Grok 4.5',
+  'deepseek/deepseek-chat': 'DeepSeek Chat', 'deepseek/deepseek-v4-flash': 'DeepSeek v4 Flash',
+  'z-ai/glm-4.6': 'GLM 4.6', 'z-ai/glm-5': 'GLM 5',
+};
+const prettyModel = (id) => id ? (MODEL_PRETTY[id] || String(id).split('/').pop()) : '—';
+
+// The ONGOING view: once real tasks have been routed, how many landed in each band and what that
+// saved vs sending them all to the frontier model. Driven entirely by measured receipts.
+function renderDistribution(u) {
+  if (!u || !u.tasks) return null;
+  const frontierName = prettyModel(u.frontierModel);
+  const tone = { mechanical: 'b-mech', cheap: 'b-cheap', mid: 'b-mid', frontier: 'b-front' };
+  const rows = u.distribution.map((d) => {
+    const models = d.models.length
+      ? d.models.map((m) => prettyModel(m.model) + (m.tasks > 1 ? ' ×' + m.tasks : '')).join(', ')
+      : 'nothing here yet';
+    // Bar = share of ALL tasks, so it reads directly against the "Share of tasks" header.
+    const w = d.tasks ? Math.max(d.pctOfTasks, 4) : 0;
+    return el('div', { class: 'dist-row' + (d.tasks ? '' : ' is-empty') },
+      el('div', { class: 'dist-band ' + tone[d.band] }, d.label),
+      el('div', { class: 'dist-track' },
+        el('div', { class: 'dist-fill ' + tone[d.band], style: 'width:' + w + '%' }),
+        el('span', { class: 'dist-count' }, d.tasks ? d.tasks + ' · ' + d.pctOfTasks + '%' : '0')),
+      el('div', { class: 'dist-models cell-dim' }, models),
+      el('div', { class: 'dist-saved num' }, d.savedUsd > 0 ? fmtUsd(d.savedUsd) : '—'));
+  });
+  return el('div', { class: 'mh-dist' },
+    el('p', { class: 'dist-lead' },
+      el('b', {}, u.tasks + (u.tasks === 1 ? ' task' : ' tasks')), ' routed so far. Sending every one to ',
+      el('b', {}, frontierName), ' would have cost ', el('b', {}, fmtUsd(u.frontierUsd)),
+      ' — you spent ', el('b', {}, fmtUsd(u.realizedUsd)), '.'),
+    el('div', { class: 'dist-grid' },
+      el('div', { class: 'dist-row dist-head' },
+        el('div', { class: 'dist-band' }, 'Bucket'),
+        el('div', { class: 'dist-track-head' }, 'Share of tasks'),
+        el('div', { class: 'dist-models' }, 'Models used'),
+        el('div', { class: 'dist-saved' }, 'Saved')),
+      ...rows),
+    el('p', { class: 'fineprint' }, u.note));
+}
+
 function renderSavings(sv) {
   const body = $('#body-savings');
   const totals = sv && sv.totals;
+  const util = sv && sv.utilization && sv.utilization.tasks ? sv.utilization : null;
   const receipts = sv && Array.isArray(sv.receipts) ? sv.receipts : [];
 
   // The pitch is the action — always shown, whether or not routing is on yet.
@@ -886,50 +932,69 @@ function renderSavings(sv) {
 
   const blocks = [pitch];
 
-  if (!totals || !receipts.length) {
+  if (!util && !receipts.length) {
     setChips('chips-savings', [chip('nothing measured yet', 'wait')]);
     blocks.push(el('div', { class: 'empty' },
-      el('p', {}, 'No savings measured yet — and we won’t invent any. As routed tasks run, real receipts (never projections, never “up to”) appear here.')));
+      el('p', {}, 'No savings measured yet — and we won’t invent any. As routed tasks run, real receipts (never projections, never “up to”) appear here — with how many tasks landed in each bucket and what you saved versus the frontier model.')));
+    // Even before any task runs, show what the router WOULD choose per bucket — the plan is real.
+    const rp0 = renderRouterProfiles(sv.routerProfiles);
+    if (rp0) blocks.push(rp0);
     body.replaceChildren(withIllo('savings', ...blocks));
     return;
   }
 
-  const pct = totals.pctSaved != null
-    ? totals.pctSaved
-    : (totals.baselineUsd ? Math.round((totals.usdSaved / totals.baselineUsd) * 100) : null);
+  // Headline numbers come from the measured utilization (recomputed vs the current frontier, Fable 5).
+  const frontierName = util ? prettyModel(util.frontierModel) : 'the frontier';
+  const pct = util ? util.pctSaved
+    : (totals && totals.pctSaved != null ? totals.pctSaved
+      : (totals && totals.baselineUsd ? Math.round((totals.usdSaved / totals.baselineUsd) * 100) : null));
+  const savedUsd = util ? util.costOptimalitySaved : (totals ? totals.usdSaved : 0);
+  const taskCount = util ? util.tasks : (totals ? totals.count : 0);
 
   setChips('chips-savings', [
-    pct != null ? chip(`${pct}% saved`, 'green') : chip(`${fmtUsd(totals.usdSaved)} saved`, 'green'),
-    chip(`${fmtInt(totals.count)} routed`, 'grey'),
+    pct != null ? chip(`${pct}% saved`, 'green') : chip(`${fmtUsd(savedUsd)} saved`, 'green'),
+    chip(`${fmtInt(taskCount)} routed`, 'grey'),
   ]);
 
   blocks.push(el('div', { class: 'totals-strip' },
     el('div', { class: 'total-tile t-green' },
-      el('div', { class: 'total-num' }, pct != null ? `${pct}%` : fmtUsd(totals.usdSaved)),
-      el('div', { class: 'total-lab' }, 'measured savings')),
+      el('div', { class: 'total-num' }, pct != null ? `${pct}%` : fmtUsd(savedUsd)),
+      el('div', { class: 'total-lab' }, `saved vs ${frontierName}`)),
     el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, fmtUsd(totals.usdSaved)),
+      el('div', { class: 'total-num' }, fmtUsd(savedUsd)),
       el('div', { class: 'total-lab' }, '$ kept')),
     el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, fmtInt(totals.count)),
+      el('div', { class: 'total-num' }, fmtInt(taskCount)),
       el('div', { class: 'total-lab' }, 'tasks routed')),
     el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, totals.msSaved >= 0 ? fmtMs(totals.msSaved) : '≈ even'),
-      el('div', { class: 'total-lab' }, totals.msSaved >= 0 ? 'time saved' : 'speed — cost is the win'))));
+      el('div', { class: 'total-num' }, util ? fmtUsd(util.frontierUsd) : (totals && totals.msSaved >= 0 ? fmtMs(totals.msSaved) : '—')),
+      el('div', { class: 'total-lab' }, util ? `if all on ${frontierName}` : 'time saved'))));
 
-  blocks.push(el('div', { class: 'scroll-x scroll-y' },
-    el('table', { class: 'tb' },
-      el('thead', {}, el('tr', {},
-        el('th', { scope: 'col' }, 'When'), el('th', { scope: 'col' }, 'Routed to'),
-        el('th', { scope: 'col' }, 'Instead of'), el('th', { scope: 'col' }, 'Task'),
-        el('th', { scope: 'col' }, 'Saved'))),
-      el('tbody', {}, receipts.map((r) => el('tr', {},
-        el('td', { class: 'cell-mono cell-dim' }, fmtDate(r.at)),
-        el('td', { class: 'cell-mono' }, r.chosenTier || '—'),
-        el('td', { class: 'cell-mono cell-dim' }, r.baselineTier || '—'),
-        el('td', { class: 'cell-dim' }, (r.task && r.task.length > 60) ? r.task.slice(0, 58) + '…' : (r.task || '—')),
-        el('td', { class: 'cell-mono num' }, fmtUsd(r.measuredUsd)),
-      ))))));
+  // The distribution — how many tasks went to each bucket, and the saved-vs-frontier math.
+  const dist = renderDistribution(util);
+  if (dist) blocks.push(dist);
+
+  // Full receipt detail, collapsed so the summary stays clean for a first-time reader.
+  if (receipts.length) {
+    blocks.push(el('details', { class: 'mh-receipts' },
+      el('summary', { class: 'rp-summary' },
+        el('span', { class: 'rp-sum-t' }, 'Every routed task'),
+        el('span', { class: 'rp-sum-s' }, `${fmtInt(receipts.length)} measured receipt${receipts.length === 1 ? '' : 's'} · newest first`),
+        el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
+      el('div', { class: 'scroll-x scroll-y' },
+        el('table', { class: 'tb' },
+          el('thead', {}, el('tr', {},
+            el('th', { scope: 'col' }, 'When'), el('th', { scope: 'col' }, 'Routed to'),
+            el('th', { scope: 'col' }, 'Instead of'), el('th', { scope: 'col' }, 'Task'),
+            el('th', { scope: 'col' }, 'Saved'))),
+          el('tbody', {}, receipts.map((r) => el('tr', {},
+            el('td', { class: 'cell-mono cell-dim' }, fmtDate(r.at)),
+            el('td', { class: 'cell-mono' }, r.chosenTier || '—'),
+            el('td', { class: 'cell-mono cell-dim' }, r.baselineTier || '—'),
+            el('td', { class: 'cell-dim' }, (r.task && r.task.length > 60) ? r.task.slice(0, 58) + '…' : (r.task || '—')),
+            el('td', { class: 'cell-mono num' }, fmtUsd(r.measuredUsd)),
+          )))))));
+  }
 
   if (sv.note) blocks.push(el('p', { class: 'fineprint savings-note' }, sv.note));
 
@@ -1187,10 +1252,21 @@ const MOCK_STATE = {
     savings: {
       totals: { count: 3, usdSaved: 0.42, msSaved: 18400 },
       note: 'receipts only — no modelled or projected savings',
+      utilization: {
+        frontierModel: 'claude-fable-5', tasks: 3, unpriced: 0,
+        realizedUsd: 0.24, frontierUsd: 1.10, costOptimalitySaved: 0.86, pctSaved: 78,
+        distribution: [
+          { band: 'mechanical', label: 'Mechanical', tasks: 0, pctOfTasks: 0, realizedUsd: 0, frontierUsd: 0, savedUsd: 0, models: [] },
+          { band: 'cheap', label: 'Cheap', tasks: 2, pctOfTasks: 67, realizedUsd: 0.05, frontierUsd: 0.50, savedUsd: 0.45, models: [{ model: 'claude-haiku-4.5', tasks: 2 }] },
+          { band: 'mid', label: 'Mid', tasks: 1, pctOfTasks: 33, realizedUsd: 0.19, frontierUsd: 0.60, savedUsd: 0.41, models: [{ model: 'claude-sonnet-5', tasks: 1 }] },
+          { band: 'frontier', label: 'Frontier', tasks: 0, pctOfTasks: 0, realizedUsd: 0, frontierUsd: 0, savedUsd: 0, models: [] },
+        ],
+        note: 'Offline demo — the live console recomputes this from your real receipts.',
+      },
       receipts: [
-        { at: '2026-07-13T14:20:00Z', capability: 'model-routing', task: 'changelog summarization', chosenTier: 'haiku', baselineTier: 'opus', measuredMs: 4200, measuredUsd: 0.14 },
-        { at: '2026-07-13T15:02:00Z', capability: 'model-routing', task: 'commit message drafts', chosenTier: 'haiku', baselineTier: 'sonnet', measuredMs: 6100, measuredUsd: 0.09 },
-        { at: '2026-07-14T09:41:00Z', capability: 'agentic-qe', task: 'regression triage', chosenTier: 'sonnet', baselineTier: 'opus', measuredMs: 8100, measuredUsd: 0.19 },
+        { at: '2026-07-13T14:20:00Z', capability: 'model-routing', task: 'changelog summarization', chosenTier: 'claude-haiku-4.5', baselineTier: 'claude-fable-5', measuredMs: 4200, measuredUsd: 0.14 },
+        { at: '2026-07-13T15:02:00Z', capability: 'model-routing', task: 'commit message drafts', chosenTier: 'claude-haiku-4.5', baselineTier: 'claude-sonnet-5', measuredMs: 6100, measuredUsd: 0.09 },
+        { at: '2026-07-14T09:41:00Z', capability: 'agentic-qe', task: 'regression triage', chosenTier: 'claude-sonnet-5', baselineTier: 'claude-fable-5', measuredMs: 8100, measuredUsd: 0.19 },
       ],
     },
     config: {

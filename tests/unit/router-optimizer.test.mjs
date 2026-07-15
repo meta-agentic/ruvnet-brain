@@ -106,8 +106,8 @@ describe('router-optimizer — the two profiles the console renders', () => {
       expect(mid.costPerMTok).toBe(5);
     });
 
-    it('frontier is Opus 4.8, and production spends more reasoning effort than dev', () => {
-      expect(bandOf(o.profiles.development, 'frontier').model).toBe('claude-opus-4.8');
+    it('frontier is Fable 5 (leads the Claude 5 family), and production spends more reasoning effort than dev', () => {
+      expect(bandOf(o.profiles.development, 'frontier').model).toBe('claude-fable-5');
       expect(bandOf(o.profiles.development, 'frontier').effort).toBe('high');
       expect(bandOf(o.profiles.production, 'frontier').effort).toBe('xhigh');
     });
@@ -128,7 +128,7 @@ describe('router-optimizer — the two profiles the console renders', () => {
       expect(o.hasOpenRouterKey).toBe(false);
       expect(bandOf(o.profiles.production, 'cheap').model).toBe('claude-haiku-4.5');
       expect(bandOf(o.profiles.production, 'mid').model).toBe('claude-sonnet-5');
-      expect(bandOf(o.profiles.development, 'frontier').model).toBe('claude-opus-4.8');
+      expect(bandOf(o.profiles.development, 'frontier').model).toBe('claude-fable-5');
     });
 
     it('still exposes the four bands and the mechanical $0 tier', () => {

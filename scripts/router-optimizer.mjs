@@ -113,9 +113,11 @@ function buildProfile(kind, hasOR) {
     bands.push(cell('mid', 'claude-sonnet-5', 'anthropic', 'Balanced Claude tier — on your subscription', 'subscription'));
   }
 
-  // Frontier — reserved for the hardest tasks. Production leans harder on effort.
-  bands.push(cell('frontier', 'claude-opus-4.8', 'anthropic',
-    dev ? 'Frontier — only the hardest tasks; on your subscription in dev' : 'Frontier — reserved for the hardest, reliability-critical tasks',
+  // Frontier — the most capable model, reserved for the hardest tasks. Fable 5 leads the Claude 5
+  // family (2× Opus 4.8 per token), so it is both the escalation target and the savings baseline.
+  // Production leans harder on effort.
+  bands.push(cell('frontier', 'claude-fable-5', 'anthropic',
+    dev ? 'Frontier — the most capable model; only the hardest tasks, on your subscription in dev' : 'Frontier — the most capable model; reserved for the hardest, reliability-critical tasks',
     'subscription', dev ? 'high' : 'xhigh'));
 
   return {

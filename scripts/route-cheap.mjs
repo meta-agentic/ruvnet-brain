@@ -38,7 +38,10 @@ export const PRICING = {
   'deepseek/deepseek-v4-flash': { in: 0.077, out: 0.154 }, // verified 2026-07-12 OpenRouter /models live; successor to deepseek-chat (which resolves to legacy V3)
   'x-ai/grok-4.5': { in: 2.0, out: 6.0 }, // verified 2026-07-12 OpenRouter /models live; mid-priced frontier-adjacent
 };
-export const FRONTIER = { name: 'claude-opus-4.8', in: 5.0, out: 25.0 };
+// Frontier = the most capable model you'd otherwise reach for. Fable 5 leads the Claude 5 family
+// (2× Opus 4.8 per token — see CLAUDE_TIERS below), so it is the honest "instead of" baseline: every
+// $ the cascade saves is measured against what Fable 5 would have cost on the same tokens.
+export const FRONTIER = { name: 'claude-fable-5', in: 10.0, out: 50.0 };
 
 // Claude tiers — $/Mtok, verified live from the OpenRouter /models API 2026-07-13.
 // These are NOT routed through here (Claude Code's own Agent/Task tool spawns them). They are priced

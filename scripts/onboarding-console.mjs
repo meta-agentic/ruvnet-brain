@@ -30,6 +30,7 @@ import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth } from './console-engine.mjs';
 import { optimize } from './router-optimizer.mjs';
+import { utilization } from './router-utilization.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -269,6 +270,7 @@ function gatherState(cwd) {
   const memory = gatherMemory(cwd);
   const savings = gatherSavings();
   try { savings.routerProfiles = optimize({}); } catch { savings.routerProfiles = null; }
+  try { savings.utilization = utilization({}); } catch { savings.utilization = null; }
   const config = gatherConfig();
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
   // A cheap fingerprint of the state the page is about to render. The page echoes it back on apply;
