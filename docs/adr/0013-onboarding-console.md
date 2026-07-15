@@ -1,5 +1,5 @@
 ---
-id: ADR-0013
+id: ADR-013
 title: The Onboarding Console — RuvNet Brain becomes a mirror, an advisor, and only then a configurator
 status: Proposed
 date: 2026-07-14
@@ -8,6 +8,11 @@ tags: [onboarding, ux, config, stack, memory-health, savings, safety]
 supersedes: []
 related: [ADR-0012 (grounding gate), ruflo/plugins/ruflo-ruvector ADR-0001 (pin + smoke-test contract)]
 ---
+
+# ADR-013: The Onboarding Console
+
+**Status**: Proposed
+**Date**: 2026-07-14
 
 ## Context
 

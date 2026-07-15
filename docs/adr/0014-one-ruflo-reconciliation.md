@@ -1,5 +1,5 @@
 ---
-id: ADR-0014
+id: ADR-014
 title: The One-Ruflo Reconciliation — target architecture for the whole machine, and the phased plan to get there
 status: Proposed (awaiting Stuart's approval; NOTHING in Phases 1–5 executes without an explicit per-phase go)
 date: 2026-07-14
@@ -7,6 +7,12 @@ updated: 2026-07-14
 authors: [Stuart Kerr, Claude Code]
 related: [ADR-0012 (grounding gate), ADR-0013 (onboarding console), ruvnet/ruflo#2677 (doctor existence-only — acknowledged upstream in v3.30.0 release notes, same day)]
 ---
+
+# ADR-014: The One-Ruflo Reconciliation
+
+**Status**: Proposed
+**Date**: 2026-07-14
+**Updated**: 2026-07-14
 
 # Context — the 30,000-foot picture, measured, not recalled
 

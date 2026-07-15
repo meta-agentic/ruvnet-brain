@@ -99,12 +99,12 @@ export function verifyHeldOutStrata(file = path.join(ROOT, 'evals', 'held-out.js
 }
 
 // ── claim 3: "~56× cheaper" (explainer + hook) ──────────────────────────────────────────────────
-// Derived from the corpus fact recorded in the agent-harness-generator KB: a run cost $0.267
+// Derived from the corpus fact recorded in the metaharness KB: a run cost $0.267
 // (with the 51.33 figure alongside it). ~56× = $15 / $0.267 ≈ 56.2. We re-find both corpus
 // strings with a plain streaming grep (first match wins) and re-do the arithmetic. The passages
 // file ships with the 512MB brain, which CI does not have — absent file is a LOUD SKIP, never
 // a silent pass.
-export async function verifyCheaperFactor(file = path.join(ROOT, 'kb', 'agent-harness-generator.passages.jsonl')) {
+export async function verifyCheaperFactor(file = path.join(ROOT, 'kb', 'metaharness.passages.jsonl')) {
   if (!fs.existsSync(file)) {
     return skip(`brain not installed — ${path.relative(ROOT, file)} absent, cannot re-derive ~56× from corpus (runs on machines with the brain)`);
   }
@@ -235,7 +235,7 @@ export const ledger = [
   },
   {
     claim: '~56× cheaper (explainer + hook)',
-    source: 'kb/agent-harness-generator.passages.jsonl',
+    source: 'kb/metaharness.passages.jsonl',
     verify: verifyCheaperFactor,
   },
   {

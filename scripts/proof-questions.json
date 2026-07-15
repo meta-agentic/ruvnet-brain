@@ -7,7 +7,7 @@
   { "set": "tuned", "query": "Does QuDAG provide quantum-resistant DAG-based anonymous communication?", "expectRepo": ["qudag", "concepts"], "minRelevance": -3 },
   { "set": "tuned", "query": "Can RuLake cache vector queries in front of a vector store?", "expectRepo": ["rulake", "concepts"], "minRelevance": -3 },
   { "set": "tuned", "query": "Does SAFLA implement a self-aware feedback loop?", "expectRepo": ["safla", "concepts"], "minRelevance": -3 },
-  { "set": "tuned", "query": "What is agent-harness-generator (metaharness) and what does it scaffold?", "expectRepo": ["agent-harness-generator", "concepts"], "minRelevance": -3 },
+  { "set": "tuned", "query": "What is agent-harness-generator (metaharness) and what does it scaffold?", "expectRepo": ["metaharness", "concepts"], "minRelevance": -3 },
 
   { "set": "held-out", "query": "How does RuVector store and search vectors on disk?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -3 },
   { "set": "held-out", "query": "What graph-database features does AgentDB provide?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -3 },
@@ -46,11 +46,11 @@
   { "set": "coverage", "query": "What is daa and what does it enable for decentralized autonomous agents?", "expectRepo": ["daa", "concepts"], "minRelevance": -3 },
   { "set": "coverage", "query": "What is dspy.ts and how does it bring DSPy-style programming to TypeScript?", "expectRepo": ["dspy.ts", "concepts"], "minRelevance": -3 },
   { "set": "coverage", "query": "What does FACT actually cache, and why is it about caching rather than retrieval?", "expectRepo": ["fact", "concepts"], "minRelevance": -3 },
-  { "set": "coverage", "query": "What does agent-harness-generator / metaharness mint, and what is Darwin Mode?", "expectRepo": ["agent-harness-generator", "concepts"], "minRelevance": -3 },
+  { "set": "coverage", "query": "What does agent-harness-generator / metaharness mint, and what is Darwin Mode?", "expectRepo": ["metaharness", "concepts"], "minRelevance": -3 },
 
   { "set": "adversarial", "query": "I heard RuvNet can't do real multi-agent swarms, is that true?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -3 },
   { "set": "adversarial", "query": "Does ruv-FANN actually run, or is it just an idea?", "expectRepo": ["ruv-fann", "concepts"], "minRelevance": -3 },
   { "set": "adversarial", "query": "Give me the RuvNet building block for orchestrating parallel coding agents.", "expectRepo": ["ruflo", "concepts"], "minRelevance": -3 },
   { "set": "adversarial", "query": "What is the RuvNet equivalent of LangGraph for agent workflows?", "expectRepo": ["ruflo", "agentic-flow", "concepts"], "minRelevance": -3 },
-  { "set": "adversarial", "query": "Which RuvNet repo would I use to A/B test and score different agent harnesses?", "expectRepo": ["agent-harness-generator", "concepts"], "minRelevance": -3 }
+  { "set": "adversarial", "query": "Which RuvNet repo would I use to A/B test and score different agent harnesses?", "expectRepo": ["metaharness", "concepts"], "minRelevance": -3 }
 ]

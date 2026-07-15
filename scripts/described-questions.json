@@ -24,7 +24,7 @@
   { "set": "described", "query": "What framework supports decentralized autonomous agents and applications?", "expectRepo": ["daa", "concepts"], "minRelevance": -6 },
   { "set": "described", "query": "Is there a TypeScript way to program and optimize LLM pipelines the way DSPy does in Python?", "expectRepo": ["dspy.ts", "concepts"], "minRelevance": -6 },
   { "set": "described", "query": "What gives fast cached tool results for reliable, low-latency AI tool integration?", "expectRepo": ["fact", "concepts"], "minRelevance": -6 },
-  { "set": "described", "query": "How do I scaffold, A/B test, and score different agent harnesses?", "expectRepo": ["agent-harness-generator", "concepts"], "minRelevance": -6 },
+  { "set": "described", "query": "How do I scaffold, A/B test, and score different agent harnesses?", "expectRepo": ["metaharness", "concepts"], "minRelevance": -6 },
   { "set": "described", "query": "What is the building block for orchestrating parallel work across many specialized agents?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -6 },
   { "set": "described", "query": "I want private local semantic search over my own documents. Which engine should I build on?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -6 }
 ]
