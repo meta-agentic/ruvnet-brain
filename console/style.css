@@ -453,6 +453,14 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .rp-foot { position: relative; margin-top: 14px; }
 .rp-getkey { color: var(--cyan-text); font-weight: 600; }
 
+/* Your-house badge — makes the routing feel like it's about YOU, not a generic table */
+.rp-house { position: relative; display: flex; align-items: baseline; gap: 8px 10px; flex-wrap: wrap; margin: 2px 0 16px; padding: 9px 13px; border-radius: 10px; background: color-mix(in srgb, var(--cyan) 8%, transparent); border: 1px solid color-mix(in srgb, var(--cyan) 22%, transparent); }
+.rp-house-tag { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan-text); }
+.rp-house-name { color: var(--ink); font-weight: 650; }
+.rp-house-src { font-size: var(--fs--2); color: var(--muted); }
+.rp-split { position: relative; margin: -6px 0 16px; font-size: var(--fs--1); color: var(--muted); line-height: 1.5; max-width: 66ch; }
+.rp-split b { color: var(--ink); font-weight: 600; }
+
 /* ---- ongoing utilization: how many tasks per bucket + saved vs the frontier ---- */
 .mh-dist { margin-top: 18px; }
 .dist-lead { font-size: var(--fs--1); color: var(--ink); margin: 0 0 12px; line-height: 1.55; max-width: 62ch; }

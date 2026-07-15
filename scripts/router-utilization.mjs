@@ -64,9 +64,15 @@ function tokensOf(r) {
  * Summarize the receipts ledger into a per-band distribution + realized-vs-frontier savings.
  * @param {{ receiptsFile?: string }} [opts]
  */
-export function utilization({ receiptsFile } = {}) {
+export function utilization({ receiptsFile, frontier } = {}) {
   const file = receiptsFile || receiptsPath();
-  const fr = priceOf(FRONTIER.name); // current frontier price (Fable 5)
+  // Frontier = the user's OWN house flagship (passed in by the console from the live-verified catalog);
+  // falls back to route-cheap's default. The counterfactual is recomputed vs THIS, so an OpenAI shop sees
+  // "vs GPT-5.6 Sol" and a Claude shop sees "vs Fable 5" — personalized, never one house for everyone.
+  const frModel = frontier?.model || FRONTIER.name;
+  const fr = (frontier && Number.isFinite(frontier.in) && Number.isFinite(frontier.out))
+    ? { in: frontier.in, out: frontier.out }
+    : priceOf(FRONTIER.name);
 
   const bands = Object.fromEntries(
     BAND_ORDER.map((b) => [b, { band: b, label: BAND_LABEL[b], tasks: 0, realizedUsd: 0, frontierUsd: 0, models: {} }])
@@ -138,7 +144,7 @@ export function utilization({ receiptsFile } = {}) {
   const savedUsd = round(frontierUsd - realizedUsd);
   return {
     generatedAt: new Date().toISOString(),
-    frontierModel: FRONTIER.name,
+    frontierModel: frModel,
     tasks,
     unpriced,
     since,
@@ -148,7 +154,7 @@ export function utilization({ receiptsFile } = {}) {
     costOptimalitySaved: savedUsd, // ADR-149 name
     pctSaved: frontierUsd > 0 ? Math.round((savedUsd / frontierUsd) * 100) : null,
     distribution, // ADR-149 modelDistribution, grouped into the four legible bands
-    note: `Recomputed live from ${tasks} receipt(s) against the current frontier (${FRONTIER.name}); token counts are the receipts’ own est. values, never projected.`,
+    note: `Recomputed live from ${tasks} receipt(s) against your frontier (${frModel}); token counts are the receipts’ own est. values, never projected.`,
   };
 }
 

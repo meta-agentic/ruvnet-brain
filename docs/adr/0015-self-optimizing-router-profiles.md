@@ -9,7 +9,15 @@ supersedes: []
 relates: [ADR-013, ADR-014]
 ---
 
-**Status**: Proposed (near-term slice — router-optimizer engine, console panel, ongoing utilization view, explainer preview — shipped through v3.0.2; full weekly self-optimizing engine remains proposed)
+**Status**: Proposed (near-term slice — router-optimizer engine, ongoing utilization view, per-house personalized frontier, console panel — shipped through v3.0.4; full weekly self-optimizing engine remains proposed)
+
+**v3.0.4 (2026-07-15):** the router now reads each user's HOUSE frontier from the live-verified catalog
+(ADR-0016) — Claude shop → Fable 5, ChatGPT/Codex → GPT-5.6 Sol, Gemini → 3.1 Pro, Grok → 4.5, detected
+or set in the console — so the escalation target and savings baseline are personalized, never one house
+for everyone. Reasoning-effort defaults corrected to `high` (xhigh is opt-in for hard verifiable tasks
+only) from independent evidence that efficiency inverts before max. Console shows the detected house + a
+selector, and explains that the frontier stays in-house while cheap/mid route cross-provider for the
+saving.
 
 ## Status
 

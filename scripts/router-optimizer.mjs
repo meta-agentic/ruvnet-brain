@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { priceOf } from './route-cheap.mjs';
+import { loadCatalog, detectProvider, ladderFor } from './model-catalog.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
@@ -37,13 +38,16 @@ const MEASURED = {
   midValue: { model: 'meta-llama/llama-3.3-70b-instruct', provider: 'openrouter', why: '91% of Sonnet’s quality at 70× cheaper $/quality' },
 };
 
-// Effort defaults per band — principled starting points, NOT measured (refined from outcomes).
-const EFFORT_DEFAULT = { mechanical: 'none', cheap: 'low', mid: 'medium', frontier: 'high' };
+// Effort defaults per band — principled starting points, NOT measured. Corrected 2026-07-15 from
+// independent evidence (Artificial Analysis + Epoch AI + a 26-PR practitioner study): efficiency
+// INVERTS before max — "all-pass per dollar" peaks at high and DROPS at xhigh. So high is the default
+// workhorse at mid+frontier; xhigh/max is opt-in for hard, VERIFIABLE tasks only, never a default.
+const EFFORT_DEFAULT = { mechanical: 'none', cheap: 'low', mid: 'high', frontier: 'high' };
 
-// Blended $/Mtok for the measured OpenRouter picks, from openrouter-alts.json (2026-06-15):
-// Ling in 0.01/out 0.03 → 0.02; GPT-4.1 in 2.0/out 8.0 → 5.0. Llama-3.3-70b's per-Mtok is not in
-// the bench (it reports $/quality), so it stays unknown → rendered "—", never invented.
-const OR_PRICE = { 'inclusionai/ling-2.6-flash': 0.02, 'openai/gpt-4.1': 5.0 };
+// Blended $/Mtok for the measured OpenRouter picks. Ling and GPT-4.1 from openrouter-alts.json
+// (2026-06-15); Llama-3.3-70b priced from the live OpenRouter catalog snapshot (2026-07-15, in 0.13/
+// out 0.40 → 0.27) so the mid band shows a real number instead of "—".
+const OR_PRICE = { 'inclusionai/ling-2.6-flash': 0.02, 'openai/gpt-4.1': 5.0, 'meta-llama/llama-3.3-70b-instruct': 0.27 };
 const blended = (m) => {
   if (OR_PRICE[m] != null) return OR_PRICE[m];
   const p = priceOf(m);
@@ -90,10 +94,19 @@ function cell(band, model, provider, why, source, effort) {
   };
 }
 
-/** Build one profile. kind ∈ {development, production}. Same complexity axis, different objective. */
-function buildProfile(kind, hasOR) {
+/** Build one profile. kind ∈ {development, production}. Same complexity axis, different objective.
+ *  `ladder` is the user's HOUSE ladder (from the live-verified catalog) — the frontier is always their
+ *  own stack's flagship; without an OpenRouter key, cheap/mid are their house too. */
+function buildProfile(kind, hasOR, ladder) {
   const dev = kind === 'development';
   const bands = [];
+
+  // A band built straight from a verified catalog ladder entry (house cheap/mid/frontier).
+  const houseBand = (band, entry, effort) => entry ? {
+    band, model: entry.model, provider: ladder.provider,
+    effort, effortSource: 'default', costPerMTok: entry.costPerMTok,
+    why: entry.rank || 'from your stack’s ladder', source: `catalog (live-verified)${entry.released ? ' · ' + entry.released : ''}`,
+  } : null;
 
   // Band 0 — mechanical: $0, no LLM (Agent Booster, ADR-051). Identical in both profiles.
   bands.push({
@@ -103,24 +116,30 @@ function buildProfile(kind, hasOR) {
   });
 
   if (hasOR) {
+    // With an OpenRouter key: cheap/mid = cross-provider COST-optimal value picks (rUv's measured cascade,
+    // openrouter-alts.json 2026-06-15) — the cheapest good-enough regardless of house.
     bands.push(cell('cheap', MEASURED.cheap.model, MEASURED.cheap.provider, MEASURED.cheap.why, `measured ${MEASURED_AT}`));
-    // Dev favors the $/quality value pick; production favors the higher-quality pick.
-    const m = dev ? MEASURED.midValue : MEASURED.mid;
+    const m = dev ? MEASURED.midValue : MEASURED.mid; // dev favors $/quality value; prod favors higher quality
     bands.push(cell('mid', m.model, m.provider, m.why, `measured ${MEASURED_AT}`));
   } else {
-    // No OpenRouter key → subscription-only picks (honest: we can only recommend what you can reach).
-    bands.push(cell('cheap', 'claude-haiku-4.5', 'anthropic', 'Fastest Claude tier — on your subscription, no API key needed', 'subscription'));
-    bands.push(cell('mid', 'claude-sonnet-5', 'anthropic', 'Balanced Claude tier — on your subscription', 'subscription'));
+    // No OpenRouter key → recommend only what the user can reach: their own HOUSE's cheap/mid.
+    const c = houseBand('cheap', ladder.cheap, EFFORT_DEFAULT.cheap); if (c) bands.push(c);
+    const md = houseBand('mid', ladder.mid, EFFORT_DEFAULT.mid); if (md) bands.push(md);
   }
 
-  // Frontier — the most capable model, reserved for the hardest tasks. Fable 5 leads the Claude 5
-  // family (2× Opus 4.8 per token), so it is both the escalation target and the savings baseline.
-  // Production leans harder on effort.
-  bands.push(cell('frontier', 'claude-fable-5', 'anthropic',
-    dev ? 'Frontier — the most capable model; only the hardest tasks, on your subscription in dev' : 'Frontier — the most capable model; reserved for the hardest, reliability-critical tasks',
-    'subscription', dev ? 'high' : 'xhigh'));
+  // Frontier — the user's OWN HOUSE flagship (personalized), from the verified catalog: the escalation
+  // target AND the savings baseline. 'high' effort by default in both profiles; xhigh is opt-in for hard,
+  // verifiable tasks only (independent measurement: efficiency inverts before max — never default to xhigh).
+  const f = ladder.frontier;
+  bands.push({
+    band: 'frontier', model: f.model, provider: ladder.provider,
+    effort: 'high', effortSource: 'default', costPerMTok: f.costPerMTok,
+    why: `Your ${ladder.label} frontier — ${f.rank || 'the most capable model'}`,
+    source: `catalog (live-verified)${f.released ? ' · ' + f.released : ''}`,
+  });
 
   return {
+    house: ladder.label, provider: ladder.provider,
     objective: dev
       ? 'latency & throughput on your subscription (marginal-$ ≈ 0)'
       : '$/quality on metered API, reliability-weighted',
@@ -128,19 +147,24 @@ function buildProfile(kind, hasOR) {
   };
 }
 
-export function optimize({ noOpenRouter = false } = {}) {
+export function optimize({ noOpenRouter = false, provider } = {}) {
+  const catalog = loadCatalog();
+  const det = detectProvider(catalog, { provider });
+  const ladder = ladderFor(catalog, det.provider);
   const hasOR = !noOpenRouter && hasOpenRouterKey();
   const signal = receiptsSignal();
   return {
     generatedAt: new Date().toISOString(),
     measuredAt: MEASURED_AT,
+    catalogAsOf: catalog._meta?.generated || null,
+    house: { provider: det.provider, label: ladder.label, source: det.source },
     hasOpenRouterKey: hasOR,
     receiptsSeen: Object.values(signal).reduce((s, v) => s + v.n, 0),
-    source: 'rUv bench (openrouter-alts.json, 2026-06-15) + verified live prices (route-cheap.mjs) + your receipts',
-    note: 'Model picks are measured; effort levels start as principled defaults and refine from your outcomes.',
+    source: 'per-house frontier from the live-verified model catalog (ADR-0016) + rUv cross-provider cascade (openrouter-alts.json) + your receipts',
+    note: 'Frontier is your own stack’s flagship. Effort levels are principled defaults (high; xhigh only for hard, verifiable tasks) and refine from your outcomes.',
     profiles: {
-      development: buildProfile('development', hasOR),
-      production: buildProfile('production', hasOR),
+      development: buildProfile('development', hasOR, ladder),
+      production: buildProfile('production', hasOR, ladder),
     },
   };
 }

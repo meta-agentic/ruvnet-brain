@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { verifyCatalog, findModel } from '../../scripts/verify-model-catalog.mjs';
 import { priceMap, detectDrift, shapeSnapshot } from '../../scripts/refresh-model-catalog.mjs';
+import { loadCatalog, detectProvider, frontierFor, ladderFor, providerChoices, providerLabel } from '../../scripts/model-catalog.mjs';
 
 const CATALOG = {
   providers: {
@@ -93,5 +94,38 @@ describe('refresh-model-catalog helpers', () => {
     expect(s._meta.modelCount).toBe(6);
     expect(s._meta.pulledAt).toBe('2026-07-15T00:00:00Z');
     expect(s.models).toBe(MODELS);
+  });
+});
+
+describe('model-catalog accessor — per-house personalization over the REAL verified catalog', () => {
+  const cat = loadCatalog();
+
+  it('detectProvider: explicit config wins → env API key → default anthropic (Claude Code)', () => {
+    expect(detectProvider(cat, { provider: 'openai' })).toEqual({ provider: 'openai', source: 'config' });
+    expect(detectProvider(cat, { env: { OPENAI_API_KEY: 'x' } }).provider).toBe('openai');
+    expect(detectProvider(cat, { env: { XAI_API_KEY: 'x' } }).provider).toBe('xai');
+    expect(detectProvider(cat, { env: {} })).toEqual({ provider: 'anthropic', source: 'default' });
+  });
+
+  it('frontierFor personalizes per house; codex aliases to OpenAI Sol; price is real', () => {
+    expect(frontierFor(cat, 'anthropic').model).toBe('claude-fable-5');
+    expect(frontierFor(cat, 'openai').model).toBe('openai/gpt-5.6-sol');
+    expect(frontierFor(cat, 'codex').model).toBe('openai/gpt-5.6-sol'); // aliasOf openai
+    expect(frontierFor(cat, 'xai').model).toBe('x-ai/grok-4.5');
+    expect(frontierFor(cat, 'anthropic').costPerMTok).toBe(30); // (10 + 50) / 2
+  });
+
+  it('ladderFor returns cheap/mid/frontier; xai honestly has no cheap tier', () => {
+    const l = ladderFor(cat, 'anthropic');
+    expect(l.cheap.model).toBe('claude-haiku-4.5');
+    expect(l.mid.model).toBe('claude-sonnet-5');
+    expect(l.frontier.model).toBe('claude-fable-5');
+    expect(ladderFor(cat, 'xai').cheap).toBeNull();
+  });
+
+  it('providerChoices lists the houses; providerLabel resolves the label', () => {
+    expect(providerChoices(cat).map((c) => c.id)).toEqual(expect.arrayContaining(['anthropic', 'openai', 'codex', 'google', 'xai']));
+    expect(providerLabel(cat, 'anthropic')).toMatch(/Claude/);
+    expect(providerLabel(cat, 'codex')).toMatch(/Codex|OpenAI/);
   });
 });

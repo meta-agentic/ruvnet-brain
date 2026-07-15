@@ -821,7 +821,7 @@ function renderRouterProfiles(rp) {
   const money = (v) => (v == null ? '—' : v === 0 ? '$0' : '$' + v + '/Mtok');
   const bandRow = (b) => el('tr', {},
     el('td', { class: 'rp-band' }, b.band),
-    el('td', {}, el('div', { class: 'cell-mono rp-model' }, b.model), el('div', { class: 'rp-why' }, b.why)),
+    el('td', {}, el('div', { class: 'rp-model' }, prettyModel(b.model)), el('div', { class: 'rp-why' }, b.why)),
     el('td', { class: 'cell-mono cell-dim' }, b.effort + (b.effortSource === 'default' ? ' *' : '')),
     el('td', { class: 'cell-mono num' }, money(b.costPerMTok)),
   );
@@ -841,18 +841,31 @@ function renderRouterProfiles(rp) {
         el('a', { class: 'rp-getkey', href: 'https://openrouter.ai/keys', target: '_blank', rel: 'noopener' }, 'Create one →'));
   const bg = el('div', { class: 'rp-bg', 'aria-hidden': 'true' });
   bg.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 180" fill="none"><g stroke="#5ad6ff" stroke-width="1.5" opacity="0.1"><path d="M24 92 C 130 92, 170 34, 300 34"/><path d="M24 92 C 130 92, 170 74, 300 74"/><path d="M24 92 C 130 92, 170 112, 300 112"/><path d="M24 92 C 130 92, 170 150, 300 150"/></g><circle cx="24" cy="92" r="5" fill="#f0a830" opacity="0.18"/><circle cx="300" cy="34" r="4" fill="#5ad6ff" opacity="0.16"/><circle cx="300" cy="74" r="4" fill="#5fd38a" opacity="0.16"/><circle cx="300" cy="112" r="4" fill="#5ad6ff" opacity="0.13"/><circle cx="300" cy="150" r="4" fill="#f0a830" opacity="0.13"/></svg>';
+  const house = rp.house || {};
+  const houseName = house.label || 'your stack';
+  const houseLine = house.label ? el('div', { class: 'rp-house' },
+    el('span', { class: 'rp-house-tag' }, 'Your house'),
+    el('b', { class: 'rp-house-name' }, house.label),
+    el('span', { class: 'rp-house-src' }, HOUSE_SOURCE_NOTE[house.source] || '')) : null;
+  // When cross-provider routing is on, cheap/mid leave the house on purpose — say so, or it reads as a bug.
+  const splitNote = rp.hasOpenRouterKey ? el('p', { class: 'rp-split' },
+    'Your ', el('b', {}, 'frontier'), ' stays in your house. ', el('b', {}, 'Cheap & mid'),
+    ' go to the cheapest capable model anywhere — that’s where the saving comes from — because your OpenRouter key is on. Without it, all three stay ',
+    el('b', {}, houseName), '.') : null;
   return el('details', { class: 'mh-profiles' },
     el('summary', { class: 'rp-summary' },
       el('span', { class: 'rp-sum-t' }, 'See what it routes where'),
-      el('span', { class: 'rp-sum-s' }, 'development vs production · recomputed from your live prices & receipts'),
+      el('span', { class: 'rp-sum-s' }, `tuned to ${houseName} · development vs production`),
       el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
     el('div', { class: 'rp-body' },
       bg,
+      houseLine,
+      splitNote,
       el('div', { class: 'rp-grid' },
         profileBlock('Development', rp.profiles.development),
         profileBlock('Production', rp.profiles.production)),
       el('p', { class: 'rp-foot fineprint' },
-        `Model picks measured ${rp.measuredAt}. Effort marked * is a default that refines from your outcomes. `,
+        `Frontier is your ${houseName} flagship — model ids live-verified against the OpenRouter catalog${rp.catalogAsOf ? ' (' + rp.catalogAsOf + ')' : ''}, ranked by Artificial Analysis + Arena. Effort marked * is a default (high; xhigh only for hard, verifiable work). `,
         keyLine)));
 }
 
@@ -860,10 +873,23 @@ const MODEL_PRETTY = {
   'claude-fable-5': 'Fable 5', 'claude-opus-4.8': 'Opus 4.8', 'claude-sonnet-5': 'Sonnet 5',
   'claude-haiku-4.5': 'Haiku 4.5', 'agent-booster': 'Agent Booster',
   'inclusionai/ling-2.6-flash': 'Ling 2.6 Flash', 'openai/gpt-4.1': 'GPT-4.1',
-  'meta-llama/llama-3.3-70b-instruct': 'Llama 3.3 70B', 'x-ai/grok-4.5': 'Grok 4.5',
+  'meta-llama/llama-3.3-70b-instruct': 'Llama 3.3 70B', 'x-ai/grok-4.5': 'Grok 4.5', 'x-ai/grok-4.3': 'Grok 4.3',
   'deepseek/deepseek-chat': 'DeepSeek Chat', 'deepseek/deepseek-v4-flash': 'DeepSeek v4 Flash',
   'z-ai/glm-4.6': 'GLM 4.6', 'z-ai/glm-5': 'GLM 5',
+  // house frontiers / ladders (per-provider personalization)
+  'openai/gpt-5.6-sol': 'GPT-5.6 Sol', 'openai/gpt-5.6-terra': 'GPT-5.6 Terra', 'openai/gpt-5.6-luna': 'GPT-5.6 Luna',
+  'google/gemini-3.1-pro-preview': 'Gemini 3.1 Pro', 'google/gemini-3.5-flash': 'Gemini 3.5 Flash', 'google/gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
 };
+const HOUSE_SOURCE_NOTE = {
+  config: 'you set this',
+  env: 'detected from your API keys',
+  default: 'you’re running Claude Code, so this is your dev house — set your production house in Settings',
+};
+// Friendly labels for the model-house selector — the stored value stays the id (anthropic/openai/…).
+const SEG_LABEL = {
+  provider: { auto: 'Auto', anthropic: 'Claude', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' },
+};
+const segLabel = (key, opt) => (SEG_LABEL[key] && SEG_LABEL[key][opt]) || opt;
 const prettyModel = (id) => id ? (MODEL_PRETTY[id] || String(id).split('/').pop()) : '—';
 
 // The ONGOING view: once real tasks have been routed, how many landed in each band and what that
@@ -1087,7 +1113,7 @@ function renderSettings(cfg) {
         const input = el('input', { type: 'radio', name, value: opt, onchange: refreshDirty });
         input.checked = values[f.key] === opt;
         inputs.push(input);
-        seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, opt)));
+        seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, segLabel(f.key, opt))));
       }
       if (!inputs.some((i) => i.checked) && inputs[0]) inputs[0].checked = true;
       initial[f.key] = inputs.find((i) => i.checked)?.value;

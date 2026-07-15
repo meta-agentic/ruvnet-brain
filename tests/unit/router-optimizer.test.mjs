@@ -51,7 +51,7 @@ describe('router-optimizer — the two profiles the console renders', () => {
       // With no env var, hasOpenRouterKey() must attempt the config.json then .env reads. The result
       // depends on the machine, so we assert only that the shape is intact — the point is executing
       // (and thus covering) both fallback branches without a network or model call.
-      const o = optimize({});
+      const o = optimize({ provider: 'anthropic' });
       expect(typeof o.hasOpenRouterKey).toBe('boolean');
       expect(o.profiles.production.bands).toHaveLength(4);
     } finally {
@@ -63,7 +63,7 @@ describe('router-optimizer — the two profiles the console renders', () => {
     let o;
     beforeAll(() => {
       process.env.OPENROUTER_API_KEY = 'sk-or-test-key-1234567890';
-      o = optimize({});
+      o = optimize({ provider: 'anthropic' }); // pin the house so cross-env keys can't perturb the assertions
     });
 
     it('reports the key as present', () => {
@@ -94,10 +94,10 @@ describe('router-optimizer — the two profiles the console renders', () => {
       expect(c.effortSource).toBe('default');
     });
 
-    it('DEV mid favors the $/quality value pick (Llama-3.3-70b, price unknown → null)', () => {
+    it('DEV mid favors the $/quality value pick (Llama-3.3-70b, priced from the live catalog)', () => {
       const mid = bandOf(o.profiles.development, 'mid');
       expect(mid.model).toBe('meta-llama/llama-3.3-70b-instruct');
-      expect(mid.costPerMTok).toBeNull(); // not in the bench → rendered "—", never invented
+      expect(mid.costPerMTok).toBe(0.27); // priced from the live OpenRouter snapshot ($0.13/$0.40) — no more "—"
     });
 
     it('PROD mid favors the higher-quality pick (GPT-4.1 at $5/Mtok)', () => {
@@ -106,10 +106,12 @@ describe('router-optimizer — the two profiles the console renders', () => {
       expect(mid.costPerMTok).toBe(5);
     });
 
-    it('frontier is Fable 5 (leads the Claude 5 family), and production spends more reasoning effort than dev', () => {
+    it('frontier is the house flagship (Fable 5 for a Claude shop); effort is high by default, NOT xhigh', () => {
+      // Corrected 2026-07-15: independent evidence shows efficiency inverts before max, so high is the
+      // default in BOTH profiles; xhigh is opt-in for hard verifiable tasks, never a default.
       expect(bandOf(o.profiles.development, 'frontier').model).toBe('claude-fable-5');
       expect(bandOf(o.profiles.development, 'frontier').effort).toBe('high');
-      expect(bandOf(o.profiles.production, 'frontier').effort).toBe('xhigh');
+      expect(bandOf(o.profiles.production, 'frontier').effort).toBe('high');
     });
 
     it('the objectives differ (dev = throughput on subscription; prod = $/quality metered)', () => {
@@ -121,7 +123,7 @@ describe('router-optimizer — the two profiles the console renders', () => {
   describe('without an OpenRouter key (subscription-only, honest about reach)', () => {
     let o;
     beforeAll(() => {
-      o = optimize({ noOpenRouter: true });
+      o = optimize({ noOpenRouter: true, provider: 'anthropic' });
     });
 
     it('reports no key and recommends only Claude tiers the subscription can reach', () => {
@@ -134,6 +136,26 @@ describe('router-optimizer — the two profiles the console renders', () => {
     it('still exposes the four bands and the mechanical $0 tier', () => {
       expect(o.profiles.development.bands.map((b) => b.band)).toEqual(['mechanical', 'cheap', 'mid', 'frontier']);
       expect(bandOf(o.profiles.development, 'mechanical').costPerMTok).toBe(0);
+    });
+  });
+
+  describe('per-house personalization — the frontier is the user’s OWN stack, never one house for all', () => {
+    it('a ChatGPT shop gets GPT-5.6 Sol as its frontier (not Fable 5)', () => {
+      const o = optimize({ provider: 'openai' });
+      expect(bandOf(o.profiles.production, 'frontier').model).toBe('openai/gpt-5.6-sol');
+      expect(o.house).toMatchObject({ provider: 'openai', source: 'config' });
+      expect(o.house.label).toMatch(/ChatGPT|OpenAI/);
+    });
+    it('a Codex shop aliases to OpenAI Sol; a Grok shop gets Grok 4.5', () => {
+      expect(bandOf(optimize({ provider: 'codex' }).profiles.development, 'frontier').model).toBe('openai/gpt-5.6-sol');
+      expect(bandOf(optimize({ provider: 'xai' }).profiles.production, 'frontier').model).toBe('x-ai/grok-4.5');
+    });
+    it('every house frontier price is a real number from the verified catalog, never null', () => {
+      for (const house of ['anthropic', 'openai', 'google', 'xai']) {
+        const f = bandOf(optimize({ provider: house }).profiles.production, 'frontier');
+        expect(typeof f.costPerMTok).toBe('number');
+        expect(f.costPerMTok).toBeGreaterThan(0);
+      }
     });
   });
 

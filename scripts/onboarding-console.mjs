@@ -31,6 +31,7 @@ import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth } from './console-engine.mjs';
 import { optimize } from './router-optimizer.mjs';
 import { utilization } from './router-utilization.mjs';
+import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -244,6 +245,7 @@ function gatherSavings() {
 // ── Config (user-level) ──────────────────────────────────────────────────────────────────────────
 const CONFIG_SCHEMA = [
   { key: 'openrouterKey', label: 'OpenRouter API key', type: 'secret', secret: true, help: 'Unlocks cheap-model routing and the self-improvement loop. Stored only in your user folder.' },
+  { key: 'provider', label: 'Your model house', type: 'enum', options: ['auto', 'anthropic', 'openai', 'codex', 'google', 'xai'], help: 'Which stack is yours? Sets your frontier model + savings baseline — Claude → Fable 5, ChatGPT → GPT-5.6 Sol, Codex → Sol, Gemini → 3.1 Pro, Grok → 4.5. “auto” detects from your keys.' },
   { key: 'nightly', label: 'Nightly brain refresh', type: 'bool', help: 'Rebuild the knowledge base from pinned versions overnight so answers stay current.' },
   { key: 'routing', label: 'Token-smart routing', type: 'enum', options: ['auto', 'off'], help: 'Send cheap, mechanical tasks to smaller, cheaper models automatically.' },
   { key: 'qeFleet', label: 'On-demand QE test fleet', type: 'bool', help: 'Let RuvNet Brain spin up an Agentic-QE test fleet when you ask it to.' },
@@ -256,6 +258,7 @@ function gatherConfig() {
     exists: fs.existsSync(CONFIG_PATH),
     values: {
       openrouterKey: hasKey,                               // boolean only — never the secret itself
+      provider: cfg.provider || 'auto',                    // model house — 'auto' detects from keys
       nightly: cfg.nightly !== false,                      // default on
       routing: cfg.routing === 'off' ? 'off' : 'auto',     // default auto
       qeFleet: cfg.qeFleet === true,                       // default off
@@ -269,8 +272,13 @@ function gatherState(cwd) {
   const wiring = wiringSurvey();
   const memory = gatherMemory(cwd);
   const savings = gatherSavings();
-  try { savings.routerProfiles = optimize({}); } catch { savings.routerProfiles = null; }
-  try { savings.utilization = utilization({}); } catch { savings.utilization = null; }
+  const cfgNow = readJSON(CONFIG_PATH) || {};
+  try { savings.routerProfiles = optimize({ provider: cfgNow.provider }); } catch { savings.routerProfiles = null; }
+  try {
+    const cat = loadCatalog();
+    const det = detectProvider(cat, { provider: cfgNow.provider });
+    savings.utilization = utilization({ frontier: frontierFor(cat, det.provider) });
+  } catch { try { savings.utilization = utilization({}); } catch { savings.utilization = null; } }
   const config = gatherConfig();
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
   // A cheap fingerprint of the state the page is about to render. The page echoes it back on apply;
