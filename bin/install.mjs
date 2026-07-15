@@ -53,9 +53,9 @@ const ASSET_NAME = 'ruvnet-brain.zip';
 // asking for releases/download/v1.14.0-dev/ruvnet-brain.zip, which 404s, while the newest bundle
 // Release is v0.5.0-dev. Verified live: v1.14.0-dev → HTTP 404, v0.5.0-dev → HTTP 200. The safety net
 // was broken in exactly the situation it exists for. Bump this by hand when a new bundle ships.
-const RELEASE_VERSION = 'v0.5.0-dev'; // sync-version-ignore: the BUNDLE Release tag, not this package's version
+const RELEASE_VERSION = 'v2.9.0'; // sync-version-ignore: the BUNDLE Release tag, not this package's version
 const fallbackUrl = (tag) => `https://github.com/${REPO}/releases/download/${tag}/${ASSET_NAME}`;
-const APPROX_SIZE = '~512MB';
+const APPROX_SIZE = '~736MB';
 
 const argv = process.argv.slice(2);
 const FLAG_LOCAL = argv.includes('--local');
