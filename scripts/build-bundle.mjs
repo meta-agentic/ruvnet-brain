@@ -154,11 +154,10 @@ for (const name of built) {
   const hasSymbols = cp(`${name}.symbols.json`, OUT);
   const hasBig = fs.existsSync(path.join(KB, `${name}.big.rvf`));
   if (hasBig) {
-    // NOTE: .big.passages.jsonl is intentionally NOT shipped — it is a byte-for-byte duplicate of
-    // <name>.passages.jsonl (both variants embed from the SAME passages), and query-time retrieval
-    // reads only <name>.passages.jsonl. Shipping it doubled passage storage (~447 MB across the corpus)
-    // for zero query benefit. The big vectors (.big.rvf) resolve ids against the shared passages file.
-    for (const suf of ['.big.rvf', '.big.rvf.idmap.json', '.big.rvf.embed.json', '.big.meta.json']) cp(`${name}${suf}`, OUT);
+    // Ship .big.passages.jsonl — the big (768) variant's retrieval opens it BY NAME. It looks like a
+    // byte-dup of <name>.passages.jsonl, but dropping it (a "dedup" in v2.8.0) shipped a broken big
+    // variant: forge-ask/corpus-qa hard-fail with "passages sidecar not found". It is required.
+    for (const suf of ['.big.rvf', '.big.rvf.idmap.json', '.big.rvf.embed.json', '.big.passages.jsonl', '.big.meta.json']) cp(`${name}${suf}`, OUT);
   }
   const hasPrimer = cp(`${name}-primer.md`, OUT);
   // metadata
@@ -187,6 +186,13 @@ cpDir(path.join(ROOT, 'primer'), path.join(OUT, 'primer'));
 // bundle finds concepts.big.rvf automatically, so search_ruvnet searches it with no extra config.
 const hasConcepts = fs.existsSync(path.join(KB, 'concepts.big.rvf'));
 if (hasConcepts) for (const suf of ['concepts.big.rvf', 'concepts.big.rvf.idmap.json', 'concepts.big.rvf.embed.json', 'concepts.big.passages.jsonl', 'concepts.big.meta.json', 'concepts.passages.jsonl', 'concepts.meta.json']) cp(suf, OUT);
+
+// RUV-GISTS store (rUv's public gists — release notes / integration dossiers; big-only, same shape as
+// concepts, unioned by search_ruvnet at query time). BUG FIX: only `concepts` was special-cased above,
+// so ruv-gists — a PUBLIC store, not private-fenced — was silently omitted from EVERY bundle ever
+// shipped. Include it, WITH .big.passages.jsonl (the big variant opens it by name, same as concepts).
+const hasGists = fs.existsSync(path.join(KB, 'ruv-gists.big.rvf'));
+if (hasGists) for (const suf of ['ruv-gists.big.rvf', 'ruv-gists.big.rvf.idmap.json', 'ruv-gists.big.rvf.embed.json', 'ruv-gists.big.passages.jsonl', 'ruv-gists.big.meta.json', 'ruv-gists.passages.jsonl', 'ruv-gists.meta.json']) cp(suf, OUT);
 
 // shared runtime tools. forge-guard-injection.mjs is REQUIRED — forge-mcp-all.mjs imports it, so a
 // bundle without it crashes the brain on startup (MODULE_NOT_FOUND). forge-update.mjs is the consumer
