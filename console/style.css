@@ -496,6 +496,18 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .mh-receipts > .scroll-x { padding: 0 14px 14px; }
 .mh-receipts[open] .rp-chev { transform: rotate(90deg); }
 
+/* Learning strip — visible face of the recursive learning loop (ADR-0017); compact by design */
+.learn-strip { margin: 14px 0 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--cyan) 24%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--cyan) 7%, transparent), color-mix(in srgb, var(--green) 4%, transparent)); }
+.learn-head { display: flex; align-items: center; gap: 11px; }
+.learn-spark { font-size: 18px; color: var(--cyan-text); line-height: 1; }
+.learn-title { font-weight: 650; color: var(--ink); }
+.learn-sub { font-size: var(--fs--1); color: var(--muted); }
+.learn-sub b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.learn-recent { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.learn-recent-lab { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-right: 2px; }
+.learn-chip { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 2px 7px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 5%, transparent); border: 1px solid var(--hair); white-space: nowrap; }
+.learn-foot { margin-top: 10px; }
+
 /* ============================== 6 · CHIPS ============================== */
 
 .chip {

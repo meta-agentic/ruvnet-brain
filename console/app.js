@@ -744,6 +744,28 @@ function dial(score) {
   return box;
 }
 
+// Compact, delightful "it's learning how you work" strip — the visible face of the recursive learning
+// loop (ADR-0017). Deliberately small; shows the win without dominating the card.
+function renderLearnings(l) {
+  if (!l || !l.active) return null;
+  const recent = (l.recentWorkflow || []).slice(0, 6);
+  const when = l.daysSinceLastAdaptation === 0 ? 'updated today'
+    : (l.daysSinceLastAdaptation != null ? `last updated ${l.daysSinceLastAdaptation}d ago` : '');
+  return el('div', { class: 'learn-strip' },
+    el('div', { class: 'learn-head' },
+      el('span', { class: 'learn-spark', 'aria-hidden': 'true' }, '✦'),
+      el('div', { class: 'learn-headtext' },
+        el('div', { class: 'learn-title' }, 'Learning how you work'),
+        el('div', { class: 'learn-sub' },
+          el('b', {}, fmtInt(l.patterns) + ' patterns'), ' from ', el('b', {}, fmtInt(l.trajectories) + ' workflows'),
+          when ? ' · ' + when : ''))),
+    recent.length ? el('div', { class: 'learn-recent' },
+      el('span', { class: 'learn-recent-lab' }, 'recently observed'),
+      ...recent.map((a) => el('span', { class: 'learn-chip' }, a.length > 30 ? a.slice(0, 28) + '…' : a))) : null,
+    el('p', { class: 'learn-foot fineprint' },
+      'Shared across all your projects and getting smarter over time — but only ', el('b', {}, 'how you work'), '. Your project facts stay isolated; nothing here is project data.'));
+}
+
 function renderMemory(mem) {
   const body = $('#body-memory');
   if (!mem || !mem.health) {
@@ -770,6 +792,9 @@ function renderMemory(mem) {
         'A quality score, not a liveness light: a store can be up, populated, and still never surface the thing you need.'),
       el('p', { class: 'fineprint' },
         'Dimensions we didn’t probe this session are excluded from the score — shown grey below, never assumed. A known-broken dimension caps the score.'))));
+
+  const learn = renderLearnings(mem.learnings);
+  if (learn) main.push(learn);
 
   if (dims.length) {
     main.push(el('div', { class: 'dims' }, dims.map((d) => {

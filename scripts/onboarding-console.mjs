@@ -32,6 +32,7 @@ import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring,
 import { optimize } from './router-optimizer.mjs';
 import { utilization } from './router-utilization.mjs';
 import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
+import { learnings } from './learnings.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -271,6 +272,7 @@ function gatherConfig() {
 function gatherState(cwd) {
   const wiring = wiringSurvey();
   const memory = gatherMemory(cwd);
+  try { memory.learnings = learnings(); } catch { memory.learnings = null; }
   const savings = gatherSavings();
   const cfgNow = readJSON(CONFIG_PATH) || {};
   try { savings.routerProfiles = optimize({ provider: cfgNow.provider }); } catch { savings.routerProfiles = null; }
