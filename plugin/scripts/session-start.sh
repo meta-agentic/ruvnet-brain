@@ -124,6 +124,7 @@ LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
 if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
+    3.0.*) WHATS_NEW="now ships a visual configurator for easy, robust setup — run /ruvnet-brain:configure to open a local page that mirrors your machine's RuvNet setup in plain English (your stack, whether memory actually works, and MetaHarness cost-routing tuned separately for development vs production) and lets you turn things on safely with one click. Read-only until you say so; nothing leaves your machine." ;;
     2.4.*) WHATS_NEW="now routes every task to the cheapest model that can do the job — aware of YOUR subscriptions specifically (it detects what it can prove, asks what it can't, and records the answers instead of assuming), with two newly live-proven low-cost models wired in (DeepSeek V4 Flash, Grok 4.5), a Codex launch wrapper, and an outcome log that teaches the router from every override." ;;
     2.3.*) WHATS_NEW="can no longer break silently: if the brain's search ever fails, you get an urgent phone push within seconds, a red alert at the top of every new Claude session, and a nightly canary check — three independent alarms, all tested by deliberately breaking the brain and watching them ring. Searches that fail now say WHY (and how to fix it) instead of pretending nothing matched." ;;
     2.2.0*|2.2.1*|2.2.2*) WHATS_NEW="now ships a safety watchdog that alerts you the instant a background tool starts running up API costs OR a scheduled job starts failing silently — so nothing spends or breaks behind your back. (Heads-up: agentic QE testing, if you use it, still bills your Anthropic API key — now cost-optimized, and it's opt-in, never on by default.)" ;;
@@ -251,13 +252,16 @@ to download again, and nothing to initialize per project. One brain (~/.cache/ru
 everywhere. The `search_ruvnet` tool and the grounding hooks are live right now.
 
 At the very START of your first response in this session, give the user ONE short, warm confirmation so
-they have confidence it's on and know how to use it. Use roughly this (adapt naturally, keep it to 1–2 lines):
+they have confidence it's on and know how to use it. Use roughly this (adapt naturally, keep it to 2–3 lines):
 
   "🧠 RuvNet Brain active — across all your projects. Ask me anything about rUv's stack (RuVector/RVF,
    Ruflo, AgentDB, SPARC, agentic-flow…) and I'll ground my answers in his real source instead of
-   guessing. Not sure it's working? Run `npx github:stuinfla/ruvnet-brain --doctor` any time."
+   guessing. Not sure it's working? Run `npx github:stuinfla/ruvnet-brain --doctor` any time.
+   To implement and create settings, simply type `/ruvnet-brain:configure` — it opens a visual page
+   that mirrors your machine and saves your settings safely at your user level."
 
 Then proceed with whatever they asked. Do NOT repeat this confirmation on later turns in the same session.
+The configure one-liner names EXACTLY `/ruvnet-brain:configure` — never a bare `/configure` (too generic).
 EOF
 
 # ── MetaHarness token-intelligence + QE + brain-score announcement (2.0 features) — fires ONLY when

@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>RuvNet Brain — Onboarding Console</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><defs><linearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22><stop offset=%220%22 stop-color=%22%23f4b13a%22/><stop offset=%22.5%22 stop-color=%22%235ad6ff%22/><stop offset=%221%22 stop-color=%22%235fd38a%22/></linearGradient></defs><rect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2216%22 fill=%22%230b0d12%22 stroke=%22%232c3850%22 stroke-width=%221.5%22/><text x=%2233%22 y=%2247.5%22 text-anchor=%22middle%22 font-family=%22Georgia,serif%22 font-weight=%22700%22 font-size=%2248%22 fill=%22url(%23g)%22>3</text><circle cx=%2214%22 cy=%2216%22 r=%223.2%22 fill=%22%23f4b13a%22/><circle cx=%2250%22 cy=%2214%22 r=%222.8%22 fill=%22%235ad6ff%22/><circle cx=%2250%22 cy=%2250%22 r=%222.8%22 fill=%22%235fd38a%22/></svg>" />
+
+<!-- The server inlines the per-launch token here at render time:
+     <script>window.__CONSOLE_TOKEN__="…"</script>
+     The frontend tolerates it being absent (static preview). -->
+
+<script>
+/* Resolve theme BEFORE first paint: stored preference wins, else the OS. */
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('rbc-theme'); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') {
+    try { t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+    catch (e) { t = 'dark'; }
+  }
+  document.documentElement.dataset.theme = t;
+})();
+</script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="head">
+  <div class="wrap head-inner">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 28 28" aria-hidden="true">
+        <line x1="8.5" y1="20" x2="14" y2="8.5" /><line x1="14" y1="8.5" x2="20.5" y2="17.5" /><line x1="8.5" y1="20" x2="20.5" y2="17.5" />
+        <circle class="n1" cx="14" cy="8.5" r="3.2" /><circle class="n2" cx="8.5" cy="20" r="3.2" /><circle class="n3" cx="20.5" cy="17.5" r="3.2" />
+      </svg>
+      <span class="brand-text">RuvNet Brain <span class="brand-sub">Onboarding Console</span></span>
+    </div>
+    <div class="head-right">
+      <span class="host-chip mono" id="host-chip" hidden></span>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
+        <svg class="ic-sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.5" />
+          <g class="rays"><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="7" y2="7"/><line x1="17" y1="17" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="7" y2="17"/><line x1="17" y1="7" x2="19.1" y2="4.9"/></g>
+        </svg>
+        <svg class="ic-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.4 14.3A8.5 8.5 0 0 1 9.7 3.6a8.5 8.5 0 1 0 10.7 10.7Z" />
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div class="spectrum-edge" aria-hidden="true"></div>
+</header>
+
+<main id="main" class="wrap">
+
+  <!-- ======================================================= HERO -->
+  <section class="intro">
+    <div class="intro-grid">
+      <div class="intro-copy">
+        <p class="eyebrow">RuvNet Brain · your machine, mirrored</p>
+        <h1>Nothing changes <em>until you say so.</em></h1>
+        <p class="lede">This console reads your RuvNet stack and describes it exactly as it is —
+        what's installed, how it's wired, whether memory actually works. Every suggestion arrives
+        with evidence, a cost, and its undo. Applying any of it is always your explicit call.</p>
+        <p class="motto mono" aria-label="How this console works, in order">
+          <span class="m m-mirror">Mirror</span><span class="sep">→</span><span class="m m-mirror">Explain</span><span class="sep">→</span><span class="m m-rec">Recommend</span><span class="sep">→</span><span class="m m-rec">Apply</span><span class="m-note">with your consent</span><span class="sep">→</span><span class="m m-undo">Undo</span>
+        </p>
+        <div class="meta-row mono" id="host-meta" hidden></div>
+      </div>
+
+      <!-- Hero art: assets/hero.webp when present; the authored constellation
+           beneath it means the frame is never empty or broken. -->
+      <figure class="hero-art" aria-hidden="true">
+        <svg class="hero-scene" viewBox="0 0 640 420" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <radialGradient id="hgA" cx="16%" cy="10%" r="65%">
+              <stop offset="0" stop-color="#f0a830" stop-opacity="0.35"/><stop offset="1" stop-color="#f0a830" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="hgB" cx="90%" cy="26%" r="60%">
+              <stop offset="0" stop-color="#5ad6ff" stop-opacity="0.28"/><stop offset="1" stop-color="#5ad6ff" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="hgC" cx="52%" cy="100%" r="60%">
+              <stop offset="0" stop-color="#5fd38a" stop-opacity="0.22"/><stop offset="1" stop-color="#5fd38a" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect width="640" height="420" fill="#0b0d12"/>
+          <rect width="640" height="420" fill="url(#hgA)"/>
+          <rect width="640" height="420" fill="url(#hgB)"/>
+          <rect width="640" height="420" fill="url(#hgC)"/>
+          <g class="hs-edges" fill="none" stroke="#3a4152" stroke-width="1">
+            <path d="M96 312 L172 218 L262 276 L96 312"/>
+            <path d="M172 218 L306 152 L404 226 L262 276"/>
+            <path d="M306 152 L214 92 M306 152 L474 120 L560 186 L524 268 L404 226"/>
+            <path d="M404 226 L386 334 L262 276 M524 268 L386 334"/>
+          </g>
+          <g class="hs-nodes">
+            <circle cx="96"  cy="312" r="4"  fill="#59617a"/>
+            <circle cx="172" cy="218" r="5"  fill="#59617a"/>
+            <circle cx="262" cy="276" r="4"  fill="#59617a"/>
+            <circle cx="214" cy="92"  r="3.4" fill="#59617a"/>
+            <circle cx="560" cy="186" r="3.6" fill="#59617a"/>
+            <circle cx="524" cy="268" r="4.2" fill="#59617a"/>
+            <circle class="hs-glow g1" cx="306" cy="152" r="7" fill="#f0a830"/>
+            <circle class="hs-glow g2" cx="474" cy="120" r="6" fill="#5ad6ff"/>
+            <circle class="hs-glow g3" cx="386" cy="334" r="6" fill="#5fd38a"/>
+          </g>
+          <circle cx="306" cy="152" r="17" fill="none" stroke="#f0a830" stroke-opacity="0.35" class="hs-ring"/>
+        </svg>
+        <img class="hero-img" src="assets/hero.webp" alt="" onerror="this.remove()" />
+        <figcaption class="hero-cap mono">read locally · written never (until you say)</figcaption>
+      </figure>
+    </div>
+
+    <!-- "We looked at your computer and found…" — filled from live state -->
+    <div class="found-strip" id="found-strip" hidden></div>
+    <div class="banner-error" id="global-error" role="alert" hidden></div>
+  </section>
+
+  <noscript>
+    <div class="banner-error" role="alert">
+      This console needs JavaScript — it renders your machine's live state, and there is nothing to
+      show without it. No scripts load from the network; everything runs locally.
+    </div>
+  </noscript>
+
+  <!-- ================================================= 1 · YOUR STACK -->
+  <details class="card" id="card-stack" open>
+    <summary>
+      <span class="card-head">
+        <span class="stage st-mirror">Mirror</span>
+        <h2>Your stack</h2>
+        <span class="q">What's installed — current, doubled, or broken?</span>
+      </span>
+      <span class="chips" id="chips-stack"><span class="chip tone-wait">checking…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-stack">
+      <div class="skeleton" aria-hidden="true">
+        <div class="sk-bar w35"></div>
+        <div class="sk-bar w90"></div>
+        <div class="sk-bar w85"></div>
+        <div class="sk-bar w88"></div>
+        <div class="sk-bar w60"></div>
+      </div>
+      <p class="loading-note">Auditing your installed packages against the registry — this one touches
+      the network and usually takes 5–20 seconds. Everything below is already live.</p>
+    </div>
+  </details>
+
+  <!-- ============================================== 2 · MEMORY HEALTH -->
+  <details class="card" id="card-memory">
+    <summary>
+      <span class="card-head">
+        <span class="stage st-prove">Prove</span>
+        <h2>Is your memory actually working?</h2>
+        <span class="q">Not "is it up" — does recall return the right things when it counts?</span>
+      </span>
+      <span class="chips" id="chips-memory"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-memory">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+    </div>
+  </details>
+
+  <!-- ==================================== 3 · SMART ROUTING (MetaHarness) -->
+  <details class="card" id="card-savings" open>
+    <summary>
+      <span class="card-head">
+        <span class="stage st-prove">Prove</span>
+        <h2>MetaHarness</h2>
+        <span class="q">One of the stack's most powerful pieces. Its smart model routing ships off by default — turn it on and see what it saves you.</span>
+      </span>
+      <span class="chips" id="chips-savings"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-savings">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
+    </div>
+  </details>
+
+  <!-- =================================================== 4 · SETTINGS -->
+  <details class="card" id="card-settings">
+    <summary>
+      <span class="card-head">
+        <span class="stage st-rec">Apply</span>
+        <h2>Settings</h2>
+        <span class="q">Saves one file in your user folder — nothing else on your computer changes.</span>
+      </span>
+      <span class="chips" id="chips-settings"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-settings">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w65"></div></div>
+    </div>
+  </details>
+
+  <!-- ─────── Advanced: diagnostics & recommendations, below the essentials ─────── -->
+
+  <!-- =============================================== 5 · HOW IT'S WIRED -->
+  <details class="card" id="card-wiring">
+    <summary>
+      <span class="card-head">
+        <span class="stage st-mirror">Explain</span>
+        <h2>How it's wired</h2>
+        <span class="q">Do your tools resolve through npx or a global binary — and where?</span>
+      </span>
+      <span class="chips" id="chips-wiring"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-wiring">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
+    </div>
+  </details>
+
+  <!-- ============================================ 6 · WHAT WE'D SUGGEST -->
+  <details class="card" id="card-recs">
+    <summary>
+      <span class="card-head">
+        <span class="stage st-rec">Recommend</span>
+        <h2>What we'd suggest</h2>
+        <span class="q">Evidence, cost, and an undo for every proposal — Apply is always your call.</span>
+      </span>
+      <span class="chips" id="chips-recs"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-recs">
+      <div id="recs-list"></div>
+      <p class="pending-note" id="recs-pending">Still auditing your stack — more suggestions may appear here in a moment.</p>
+      <div id="recs-empty" hidden></div>
+    </div>
+  </details>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <p class="foot-line">RuvNet Brain · Onboarding Console — served locally from <code>127.0.0.1</code>. Nothing leaves your machine.</p>
+    <p class="foot-meta mono" id="foot-generated"></p>
+  </div>
+</footer>
+
+<div class="visually-hidden" role="status" aria-live="polite" id="live-region"></div>
+
+<!-- ============================================================ SPOT ILLUSTRATIONS
+     Hand-drawn, theme-aware (all colors come from CSS custom properties).
+     Cloned into section bodies by app.js. One visual language: 2px round-cap
+     line work, tinted plates, one accent per idea. -->
+<div id="illos" hidden>
+
+  <!-- Your stack: the tidy stack, and the dashed shadow copy beside it -->
+  <template id="illo-stack">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="A stack of installed packages with one duplicate shadow copy beside it">
+      <g fill="none" stroke="var(--illo-stroke)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="34" y="92" width="88" height="30" rx="7" fill="var(--illo-plate)"/>
+        <rect x="40" y="66" width="88" height="30" rx="7" fill="var(--illo-plate)"/>
+        <rect x="46" y="40" width="88" height="30" rx="7" fill="var(--illo-plate)"/>
+        <line x1="46" y1="54" x2="134" y2="54" stroke="var(--amber)" stroke-opacity="0.9"/>
+        <circle cx="60" cy="47" r="2.6" fill="var(--amber)" stroke="none"/>
+      </g>
+      <g fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 6">
+        <rect x="152" y="58" width="54" height="26" rx="7"/>
+        <path d="M134 52 C 146 46, 150 48, 156 54"/>
+      </g>
+      <circle cx="200" cy="58" r="6.5" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2"/>
+      <line x1="197" y1="58" x2="203" y2="58" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </template>
+
+  <!-- How it's wired: one prompt, two routes — the winding cache detour vs the straight binary -->
+  <template id="illo-wiring">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="Two resolution paths from a terminal: a winding route through a cache, and a straight route to one binary">
+      <g fill="none" stroke="var(--illo-stroke)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="14" y="56" width="52" height="40" rx="8" fill="var(--illo-plate)"/>
+        <path d="M26 70 l7 6 -7 6"/>
+        <line x1="40" y1="83" x2="52" y2="83"/>
+      </g>
+      <g fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 6">
+        <path d="M66 66 C 92 34, 104 40, 118 44"/>
+        <path d="M150 44 C 166 46, 176 38, 186 40"/>
+      </g>
+      <rect x="114" y="32" width="40" height="22" rx="11" fill="none" stroke="var(--cyan)" stroke-width="2"/>
+      <rect x="186" y="28" width="22" height="22" rx="6" fill="var(--illo-plate)" stroke="var(--illo-stroke)" stroke-width="2"/>
+      <g fill="none" stroke="var(--amber)" stroke-width="2.4" stroke-linecap="round">
+        <path d="M66 90 L 184 106"/>
+        <path d="M177 99 l8 7 -10 3"/>
+      </g>
+      <rect x="186" y="98" width="22" height="22" rx="6" fill="var(--illo-plate)" stroke="var(--amber)" stroke-width="2"/>
+      <circle cx="197" cy="109" r="3" fill="var(--amber)"/>
+    </svg>
+  </template>
+
+  <!-- What we'd suggest: a proposal card wrapped in its own undo loop -->
+  <template id="illo-recs">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="A proposal card wrapped in an undo arrow">
+      <g fill="none" stroke="var(--illo-stroke)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="66" y="36" width="92" height="80" rx="10" fill="var(--illo-plate)"/>
+        <line x1="80" y1="58" x2="128" y2="58"/>
+        <line x1="80" y1="74" x2="144" y2="74"/>
+        <line x1="80" y1="90" x2="120" y2="90"/>
+      </g>
+      <circle cx="152" cy="44" r="11" fill="var(--surface)" stroke="var(--amber)" stroke-width="2"/>
+      <path d="M147 44 l4 4 7 -8" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round">
+        <path d="M170 96 A 58 46 0 1 1 166 52"/>
+        <path d="M162 44 l6 8 -10 2"/>
+      </g>
+      <g fill="var(--cyan)" stroke="none">
+        <circle cx="84" cy="106" r="2.6"/><circle cx="96" cy="106" r="2.6"/><circle cx="108" cy="106" r="2.6"/>
+      </g>
+    </svg>
+  </template>
+
+  <!-- Memory: the cluster, and one fact recalled up into the light -->
+  <template id="illo-memory">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="A memory cluster with one node being recalled upward">
+      <g fill="none" stroke="var(--illo-faint)" stroke-width="1.6">
+        <path d="M78 96 L108 78 L142 92 L128 118 L92 120 Z"/>
+        <path d="M108 78 L128 118 M78 96 L142 92"/>
+      </g>
+      <g fill="var(--illo-stroke)" stroke="none">
+        <circle cx="78" cy="96" r="4"/><circle cx="142" cy="92" r="4"/>
+        <circle cx="128" cy="118" r="4"/><circle cx="92" cy="120" r="4"/>
+      </g>
+      <circle cx="108" cy="78" r="6" fill="var(--amber)"/>
+      <path d="M108 70 C 106 54, 112 48, 118 40" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M112 44 l6 -6 2 9" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="94" y="14" width="64" height="22" rx="11" fill="var(--illo-plate)" stroke="var(--cyan)" stroke-width="2"/>
+      <circle cx="108" cy="25" r="2.6" fill="var(--cyan)"/>
+      <line x1="118" y1="25" x2="146" y2="25" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </template>
+
+  <!-- Savings: a real receipt — measured lines and a total that happened -->
+  <template id="illo-savings">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="A printed receipt of measured savings">
+      <path d="M74 22 h74 v96 l-9 -7 -9 7 -9 -7 -10 7 -9 -7 -9 7 -10 -7 -9 7 Z"
+            fill="var(--illo-plate)" stroke="var(--illo-stroke)" stroke-width="2" stroke-linejoin="round"/>
+      <g stroke="var(--illo-faint)" stroke-width="2" stroke-linecap="round">
+        <line x1="86" y1="42" x2="128" y2="42"/>
+        <line x1="86" y1="56" x2="136" y2="56"/>
+        <line x1="86" y1="70" x2="122" y2="70"/>
+      </g>
+      <line x1="86" y1="90" x2="136" y2="90" stroke="var(--green)" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="166" cy="102" r="13" fill="var(--surface)" stroke="var(--amber)" stroke-width="2"/>
+      <path d="M166 96 v12 M162 99.5 h6.5 a3 3 0 1 1 0 6 h-6.5" fill="none" stroke="var(--amber)" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </template>
+
+  <!-- Settings: three faders, set by hand -->
+  <template id="illo-settings">
+    <svg class="illo" viewBox="0 0 220 150" role="img" aria-label="Three slider controls at hand-set positions">
+      <g stroke="var(--illo-faint)" stroke-width="2.4" stroke-linecap="round">
+        <line x1="76" y1="30" x2="76" y2="120"/>
+        <line x1="112" y1="30" x2="112" y2="120"/>
+        <line x1="148" y1="30" x2="148" y2="120"/>
+      </g>
+      <line x1="76" y1="58" x2="76" y2="120" stroke="var(--amber)" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="112" y1="96" x2="112" y2="120" stroke="var(--cyan)" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="148" y1="74" x2="148" y2="120" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="76" cy="58" r="8" fill="var(--surface)" stroke="var(--amber)" stroke-width="2.4"/>
+      <circle cx="112" cy="96" r="8" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2.4"/>
+      <circle cx="148" cy="74" r="8" fill="var(--surface)" stroke="var(--green)" stroke-width="2.4"/>
+    </svg>
+  </template>
+
+</div>
+
+<!-- Classic deferred script (no imports needed): unlike type="module", it also
+     runs from file:// during static preview, where modules are CORS-blocked. -->
+<script defer src="app.js"></script>
+</body>
+</html>
