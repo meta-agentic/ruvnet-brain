@@ -39,6 +39,35 @@ for (const t of ['T0', 'T1', 'T2', 'T3']) {
     });
   }
 }
+
+// DURABILITY FIX (nail-the-nightly): the nightly is now --fresh-window / live-scan driven, but this
+// stamper was tiers-file driven. A repo discovered by --fresh-window that isn't in the static
+// registry.tiers.json would build every night yet never receive a builtFromSha, so the freshness loop
+// would REBUILD it forever. Stamp EVERY built store on disk (tiers-listed or not) so "unchanged =>
+// skipped" holds for fresh-window repos too. Clone dir resolved case-insensitively (store names are
+// lowercased; clone dirs keep the repo's own casing, e.g. kb/photonlayer.rvf <- clones/PhotonLayer).
+const clonesDir = path.join(ROOT, 'clones');
+const cloneEntries = fs.existsSync(clonesDir) ? fs.readdirSync(clonesDir) : [];
+const findClone = (name) => {
+  if (CLONES[name] && fs.existsSync(path.join(CLONES[name], '.git'))) return CLONES[name];
+  const exact = path.join(clonesDir, name);
+  if (fs.existsSync(path.join(exact, '.git'))) return exact;
+  const ci = cloneEntries.find((d) => d.toLowerCase() === name.toLowerCase());
+  return ci && fs.existsSync(path.join(clonesDir, ci, '.git')) ? path.join(clonesDir, ci) : null;
+};
+const seen = new Set(repos.map((r) => r.name.toLowerCase()));
+for (const f of fs.readdirSync(path.join(ROOT, 'kb'))) {
+  const m = f.match(/\.rvf$/) ? f.replace(/\.rvf$/, '').replace(/\.big$/, '') : null;
+  if (!m || seen.has(m.toLowerCase())) continue;
+  seen.add(m.toLowerCase());
+  const cloneDir = findClone(m);
+  repos.push({
+    name: m, tier: 'fresh', stars: undefined,
+    builtFromSha: cloneDir ? (shaOf(cloneDir) || 'unknown') : 'unknown',
+    latestRemoteSha: null,
+    status: 'built',
+  });
+}
 const built = repos.filter((r) => r.status === 'built');
 const manifest = {
   brainVersion: stripTag(BRAIN_VERSION), // FIELD = bare literal; the "v" tag is display-only (see version.mjs)

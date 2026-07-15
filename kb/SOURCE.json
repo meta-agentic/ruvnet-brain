@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-14T09:57:36.490Z",
+  "builtUtc": "2026-07-14T23:44:03.100Z",
   "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "open-claude-code": {
-      "kbName": "open-claude-code",
-      "sourceRepo": "https://github.com/ruvnet/open-claude-code",
-      "sourceCommit": "d248139faf51c41bb456641f420bb33551adf2f3",
-      "sourceDescribe": "v2.0.0-nightly.20260714",
-      "builtUtc": "2026-07-14T09:57:36.490Z",
+    "metaharness": {
+      "kbName": "metaharness",
+      "sourceRepo": "https://github.com/ruvnet/metaharness",
+      "sourceCommit": "c86bc12a10b53b1f3e4afee03f69609802236eb3",
+      "sourceDescribe": "c86bc12",
+      "builtUtc": "2026-07-14T23:44:03.100Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/open-claude-code-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs open-claude-code"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/metaharness-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs metaharness"
     }
   }
 }

@@ -54,9 +54,9 @@ run_once() {
   { echo "===== nightly-wrapper attempt $1 — $(date -u +%FT%TZ) — before: $before ====="
     if [ "$SMOKE" = "1" ]; then
       echo "[SMOKE] dry-run: exercising the full chain, NOT building or publishing"
-      /usr/local/bin/node scripts/self-update.mjs
+      /usr/local/bin/node scripts/self-update.mjs --fresh-window 60
     else
-      /usr/local/bin/node scripts/self-update.mjs --apply --publish
+      /usr/local/bin/node scripts/self-update.mjs --apply --publish --fresh-window 60
     fi
   } >> "$LOG" 2>&1
   rc=$?

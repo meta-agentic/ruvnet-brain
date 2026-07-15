@@ -1,0 +1,4 @@
+{
+  "//": "Repos the rolling --fresh-window nightly must NOT auto-ingest, even when rUv pushes them inside the window. Two reasons: (1) deliberately-removed downstream consumer apps (helix — a Personal Health app built ON the stack, not a building block; excluded by design, see kb/_excluded-helix); (2) empty/placeholder repos with nothing to index (ruvn is 0.0MB). Edit this list to add/remove. self-update.mjs matches case-insensitively on repo name and LOGS every drop (no silent caps).",
+  "exclude": ["helix", "ruvn"]
+}

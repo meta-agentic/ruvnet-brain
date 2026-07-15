@@ -96,7 +96,7 @@ export default async function handler(req, res) {
 
   const gh = process.env.GITHUB_TOKEN || '';
 
-  const [repo, releases, clones, views, referrers, npmRange, telemetry] = await Promise.all([
+  const [repo, releases, clones, views, referrers, npmRange, telemetry, issuesRaw, starsRaw, forksRaw] = await Promise.all([
     ghJson(`/repos/${REPO}`, gh),
     ghJson(`/repos/${REPO}/releases?per_page=20`, gh),
     gh ? ghJson(`/repos/${REPO}/traffic/clones`, gh) : Promise.resolve(null),
@@ -104,7 +104,40 @@ export default async function handler(req, res) {
     gh ? ghJson(`/repos/${REPO}/traffic/popular/referrers`, gh) : Promise.resolve(null),
     fetch(`https://api.npmjs.org/downloads/range/last-month/${NPM_PKG}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     readTelemetry(14),
+    // People — the REAL engagement signal (public API, works with or without the token). Issue/PR
+    // authors doing repeat maintainer-grade work are the strongest proof the tool is actually used;
+    // clone/npm counts are bot-inflated and lie. Owner's own activity is filtered out below.
+    ghJson(`/repos/${REPO}/issues?state=all&per_page=100&sort=created&direction=desc`, gh),
+    ghJson(`/repos/${REPO}/stargazers?per_page=100`, gh),
+    ghJson(`/repos/${REPO}/forks?per_page=100&sort=newest`, gh),
   ]);
+
+  // ── people: group issues+PRs by external author, collect stargazers + forkers ──────────────────
+  const OWNER = 'stuinfla';
+  const issuesArr = Array.isArray(issuesRaw) ? issuesRaw : [];
+  const byAuthor = new Map();
+  for (const it of issuesArr) {
+    const login = it.user && it.user.login;
+    if (!login || login === OWNER) continue;                 // exclude the owner's own threads
+    const isPR = Boolean(it.pull_request);
+    const e = byAuthor.get(login) || { login, issues: 0, prs: 0, association: 'NONE', items: [] };
+    if (isPR) e.prs++; else e.issues++;
+    if (/CONTRIBUTOR|MEMBER|COLLABORATOR/.test(it.author_association || '')) e.association = it.author_association;
+    e.items.push({ number: it.number, title: it.title, state: it.state, isPR, url: it.html_url, at: (it.created_at || '').slice(0, 10) });
+    byAuthor.set(login, e);
+  }
+  const contributors = [...byAuthor.values()].sort((a, b) => (b.issues + b.prs) - (a.issues + a.prs));
+  const stargazers = (Array.isArray(starsRaw) ? starsRaw : []).map((s) => s.login).filter((l) => l && l !== OWNER);
+  const forks = (Array.isArray(forksRaw) ? forksRaw : []).map((f) => ({ login: f.owner && f.owner.login, at: (f.created_at || '').slice(0, 10) })).filter((f) => f.login && f.login !== OWNER);
+  const engagerSet = new Set([...contributors.map((c) => c.login), ...stargazers, ...forks.map((f) => f.login)]);
+  const people = {
+    externalEngagers: engagerSet.size,
+    totalIssues: issuesArr.filter((i) => !i.pull_request).length,
+    totalPRs: issuesArr.filter((i) => i.pull_request).length,
+    contributors,
+    stargazers,
+    forks,
+  };
 
   const npmDaily = npmRange && Array.isArray(npmRange.downloads) ? npmRange.downloads : [];
 
@@ -140,6 +173,7 @@ export default async function handler(req, res) {
       daily: npmDaily, // full month for the sparkline
     },
     telemetry,
+    people,
     feedback: {
       discussions: `https://github.com/${REPO}/discussions`,
       issues: `https://github.com/${REPO}/issues`,

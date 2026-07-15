@@ -1,12 +1,12 @@
 {
-  "brainVersion": "2.8.0-dev",
-  "generated": "2026-07-14T09:59:36.424Z",
-  "generatedHuman": "Tue, 14 Jul 2026 09:59:36 GMT",
+  "brainVersion": "2.8.0",
+  "generated": "2026-07-15T00:21:00.807Z",
+  "generatedHuman": "Wed, 15 Jul 2026 00:21:00 GMT",
   "coverage": {
-    "built": 32,
-    "catalogued": 173,
+    "built": 42,
+    "catalogued": 178,
     "orgTotalApprox": 248,
-    "pending": 141
+    "pending": 136
   },
   "builtRepos": [
     {
@@ -58,7 +58,7 @@
       "status": "built"
     },
     {
-      "name": "agent-harness-generator",
+      "name": "metaharness",
       "tier": "T1",
       "stars": 330,
       "builtFromSha": "c86bc12a10b53b1f3e4afee03f69609802236eb3",
@@ -162,6 +162,22 @@
       "status": "built"
     },
     {
+      "name": "rufield",
+      "tier": "T1",
+      "stars": 17,
+      "builtFromSha": "f3c149296aadaa783f076267c3f781e5560a4c6e",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "rvcsi",
+      "tier": "T1",
+      "stars": 13,
+      "builtFromSha": "77c8b6e051fe8a2a3370715d4c3139311b93c364",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "RuLake",
       "tier": "T1",
       "stars": 11,
@@ -194,6 +210,14 @@
       "status": "built"
     },
     {
+      "name": "ruvnet",
+      "tier": "T2",
+      "stars": 217,
+      "builtFromSha": "776dc65c72aeb4f405f0eb408fc7f54535ec4fee",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "marketing",
       "tier": "T2",
       "stars": 108,
@@ -222,6 +246,22 @@
       "tier": "T2",
       "stars": 14,
       "builtFromSha": "bb1269fb9f4b0920de5944d248e4e79a01f3b80c",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "PhotonLayer",
+      "tier": "T2",
+      "stars": 14,
+      "builtFromSha": "fe86c9fad9a1572ce46e337f118656961bdf4ebb",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "worldgraph",
+      "tier": "T2",
+      "stars": 7,
+      "builtFromSha": "4441bc07b566659877c25e22cd5aea457bdba4f2",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -264,24 +304,47 @@
       "builtFromSha": "1511b93c2abd82883b9234fa90231c4c3e207744",
       "latestRemoteSha": null,
       "status": "built"
+    },
+    {
+      "name": "cognitum-platform-docs",
+      "tier": "fresh",
+      "builtFromSha": "d732528386265e42a797d0565c0395ec2dde4eb1",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "cognitum-seed",
+      "tier": "fresh",
+      "builtFromSha": "208db2733d7e688987cbb910e15cc42af9808bd8",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "cognitum-v0-appliance",
+      "tier": "fresh",
+      "builtFromSha": "64e847b1d5fdc2a9f443f2d2ac1c0a242085c8b3",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "concepts",
+      "tier": "fresh",
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "ruv-gists",
+      "tier": "fresh",
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
     }
   ],
   "pendingRepos": [
     {
       "name": "ruv-neural",
       "tier": "T1"
-    },
-    {
-      "name": "rufield",
-      "tier": "T1"
-    },
-    {
-      "name": "rvcsi",
-      "tier": "T1"
-    },
-    {
-      "name": "ruvnet",
-      "tier": "T2"
     },
     {
       "name": "ruvbot",
@@ -312,10 +375,6 @@
       "tier": "T2"
     },
     {
-      "name": "PhotonLayer",
-      "tier": "T2"
-    },
-    {
       "name": "rvdna",
       "tier": "T2"
     },
@@ -329,10 +388,6 @@
     },
     {
       "name": "Connectome-OS",
-      "tier": "T2"
-    },
-    {
-      "name": "worldgraph",
       "tier": "T2"
     },
     {

@@ -50,7 +50,36 @@
     .qline { font-size: 14.5px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--ridge); border-radius: 12px; padding: 16px 20px; margin-top: 12px; max-width: none; }
     .qline a { color: var(--accent-2); }
     .qline b { color: var(--ink); }
-    @media (max-width: 880px) { .tiles { grid-template-columns: 1fr 1fr; } }
+    /* verdict banner — the plain-English "is anyone using this?" read */
+    .adm-verdict { background: var(--surface); border: 1px solid var(--ridge); border-radius: 14px; padding: 22px 24px; margin-bottom: 26px; }
+    .adm-verdict .headline { font-family: var(--display); font-weight: 600; font-size: 1.28rem; color: var(--ink); margin: 0 0 16px; line-height: 1.34; max-width: none; }
+    .adm-verdict .headline b { color: var(--accent); }
+    .verdict-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .vcol { border: 1px solid var(--ridge); border-radius: 10px; padding: 14px 16px; background: var(--bg-2); }
+    .vcol h4 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 9px; }
+    .vcol.good h4 { color: var(--good, #45c49b); }
+    .vcol.noise h4 { color: #d9a441; }
+    .vcol.blind h4 { color: var(--faint); }
+    .vcol p { font-size: 13px; color: var(--ink-2); margin: 0; line-height: 1.55; max-width: none; }
+    .vcol .big { font-family: var(--display); font-weight: 600; font-size: 1.25rem; color: var(--ink); }
+    /* people cards — the humans, not the counters */
+    .people-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+    .person-card { border: 1px solid var(--ridge); border-radius: 12px; padding: 16px 18px; background: var(--surface); }
+    .person-card.hot { border-color: var(--good, #45c49b); box-shadow: 0 0 0 1px var(--good, #45c49b) inset; }
+    .person-card .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .person-card .who b { font-family: var(--display); font-weight: 600; font-size: 1.05rem; }
+    .person-card .who a { color: var(--accent-2); text-decoration: none; }
+    .badge { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ridge); color: var(--muted); white-space: nowrap; }
+    .badge.hot { background: color-mix(in srgb, var(--good, #45c49b) 15%, transparent); border-color: var(--good, #45c49b); color: var(--good, #45c49b); }
+    .person-card ul { margin: 11px 0 0; padding: 0; list-style: none; }
+    .person-card li { font-size: 12.5px; color: var(--ink-2); padding: 6px 0; border-top: 1px solid var(--ridge); line-height: 1.4; }
+    .person-card li a { color: var(--accent-2); text-decoration: none; }
+    .person-card li .st { color: var(--faint); font-family: var(--mono); font-size: 10.5px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+    .chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--ridge); background: var(--surface); color: var(--ink-2); }
+    .chip .st { color: var(--faint); }
+    .people-lbl { font-size: 12.5px; color: var(--muted); margin: 18px 0 0; font-family: var(--mono); }
+    @media (max-width: 880px) { .tiles { grid-template-columns: 1fr 1fr; } .verdict-cols { grid-template-columns: 1fr; } .people-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -76,8 +105,16 @@
         <button data-logout style="margin-left:auto">Forget token</button>
       </div>
 
-      <div class="adm-sec" style="margin-top:0">
-        <h2>Adoption — are people getting it?</h2>
+      <div class="adm-verdict" data-verdict hidden></div>
+
+      <div class="adm-sec" data-people-sec hidden style="margin-top:0">
+        <h2>People — who's actually engaging</h2>
+        <p class="lead-note">The real signal. Humans who filed an issue, opened a PR, starred, or forked — repeat, maintainer-grade contributors first. This is what "is anyone using it" actually looks like (clone/npm counts below are mostly bots).</p>
+        <div data-people></div>
+      </div>
+
+      <div class="adm-sec">
+        <h2>Adoption — are people getting it? <span style="font-family:var(--mono);font-size:11px;color:var(--faint)">(bot-inflated — see verdict)</span></h2>
         <p class="lead-note">Unique cloners is the closest thing to "machines that installed it" — the raw clone count runs high on push days (CI checkouts).</p>
         <div class="tiles" data-adoption></div>
         <p class="note" data-adoption-note></p>
@@ -227,6 +264,62 @@
               '<tr><td>' + (i === 0 ? esc(r.tag) : '') + '</td><td>' + (i === 0 ? esc((r.publishedAt || '').slice(0, 10)) : '') + '</td><td>'
               + esc(a.name) + (a.sizeMB ? ' <span style="color:var(--faint)">(' + a.sizeMB + ' MB)</span>' : '') + '</td><td class="num">' + num(a.downloads) + '</td></tr>')).join('')
           : '<tr><td colspan="4">No releases found.</td></tr>');
+
+      renderVerdict(d);
+      renderPeople(d);
+    }
+
+    const isPower = (c) => (c.issues + c.prs) >= 2 || /CONTRIBUTOR|MEMBER|COLLABORATOR/.test(c.association || '');
+
+    // The interpretive layer the old page lacked: separate real humans from bot noise, in words.
+    function renderVerdict(d) {
+      const box = $('[data-verdict]'); if (!box) return;
+      const p = d.people || {};
+      const contrib = p.contributors || [];
+      const power = contrib.filter(isPower);
+      const stars = (d.repo && d.repo.stars) || 0;
+      const forks = (d.repo && d.repo.forks) || 0;
+      const dls = d.totalAssetDownloads || 0;
+      const engagers = p.externalEngagers != null ? p.externalEngagers : (stars + forks);
+      const searches = (d.telemetry && d.telemetry.totals && d.telemetry.totals.search) || 0;
+      const cloners = d.traffic && d.traffic.clones ? d.traffic.clones.uniques : null;
+      const npmWk = d.npm ? d.npm.lastWeek : null;
+      const headline = engagers > 0
+        ? '<b>Yes — small but real.</b> ' + engagers + ' distinct people have engaged'
+          + (power.length ? ', and ' + power.length + ' ' + (power.length === 1 ? 'is' : 'are') + ' doing maintainer-grade work — ' + power.map((c) => '@' + esc(c.login)).join(', ') + '. That is the seed of a community, not "nobody cares."' : '.')
+        : 'No external engagement recorded yet — early days.';
+      box.hidden = false;
+      box.innerHTML = '<p class="headline">' + headline + '</p><div class="verdict-cols">'
+        + '<div class="vcol good"><h4>✅ Real signal — people</h4><p><span class="big">' + stars + '</span> stars · <span class="big">' + forks + '</span> forks · <span class="big">' + num(dls) + '</span> genuine bundle downloads'
+          + (power.length ? ' · <span class="big">' + power.length + '</span> contributor' + (power.length > 1 ? 's' : '') + ' shipping fixes' : '') + '. These are humans.</p></div>'
+        + '<div class="vcol noise"><h4>⚠️ Discount as noise</h4><p><span class="big">' + num(cloners) + '</span> cloners &amp; <span class="big">' + num(npmWk) + '</span> npm/wk are dominated by CI checkouts, npm-mirror bots, and the plugin\'s own auto-update — they spike on <em>your</em> push days. Don\'t read them as people.</p></div>'
+        + '<div class="vcol blind"><h4>🕳️ The blind spot</h4><p><span class="big">' + num(searches) + '</span> recorded searches — but search runs locally and never phones home (private by design). Real usage is proven by the contributor issues above, not by this counter.</p></div>'
+        + '</div>';
+    }
+
+    // The section that answers "do we have any reactions?" — the actual humans, contributors first.
+    function renderPeople(d) {
+      const sec = $('[data-people-sec]'), host = $('[data-people]');
+      const p = d.people; if (!sec || !host) return;
+      const contrib = (p && p.contributors) || [];
+      const stars = (p && p.stargazers) || [];
+      const forks = (p && p.forks) || [];
+      if (!contrib.length && !stars.length && !forks.length) { sec.hidden = true; return; }
+      sec.hidden = false;
+      let html = '';
+      if (contrib.length) {
+        html += '<div class="people-grid">' + contrib.slice(0, 6).map((c) => {
+          const hot = isPower(c);
+          const items = (c.items || []).slice(0, 6).map((it) =>
+            '<li>' + (it.isPR ? 'PR ' : '#') + it.number + ' <a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a> <span class="st">' + esc(it.state) + ' · ' + esc(it.at) + '</span></li>').join('');
+          const assoc = c.association && c.association !== 'NONE' ? '<span class="badge">' + esc(c.association.toLowerCase()) + '</span>' : '';
+          return '<div class="person-card' + (hot ? ' hot' : '') + '"><div class="who"><b><a href="https://github.com/' + esc(c.login) + '" target="_blank" rel="noopener">@' + esc(c.login) + '</a></b>'
+            + '<span class="badge' + (hot ? ' hot' : '') + '">' + c.issues + ' issue' + (c.issues === 1 ? '' : 's') + (c.prs ? ' · ' + c.prs + ' PR' : '') + '</span>' + assoc + '</div><ul>' + items + '</ul></div>';
+        }).join('') + '</div>';
+      }
+      if (stars.length) html += '<p class="people-lbl">⭐ Starred by (' + stars.length + ')</p><div class="chips">' + stars.map((s) => '<span class="chip">@' + esc(s) + '</span>').join('') + '</div>';
+      if (forks.length) html += '<p class="people-lbl">🍴 Forked by (' + forks.length + ')</p><div class="chips">' + forks.map((f) => '<span class="chip">@' + esc(f.login) + ' <span class="st">' + esc(f.at) + '</span></span>').join('') + '</div>';
+      host.innerHTML = html;
     }
 
     const savedToken = () => localStorage.getItem(TOKEN_STORE) || '';

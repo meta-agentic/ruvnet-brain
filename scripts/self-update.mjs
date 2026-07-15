@@ -46,6 +46,12 @@ const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && proc
 const APPLY = has('--apply');
 const TIER = arg('--tier', null);
 const ONLY = arg('--repo', null);
+// --fresh-window <days>: LIVE-scan the org(s) and take every non-fork/non-archived repo pushed within
+// N days, bypassing the static registry.tiers.json AND the nightly T3 skip. This is THE fix for
+// "new repos rUv shipped never got ingested" — a brand-new repo is discovered and built the same night
+// it appears, but only within the rolling window, so the old "days of compute for all 173" risk that the
+// tier gate guarded against still cannot happen. Absent this flag, scoping is byte-for-byte unchanged.
+const FRESH_WINDOW = arg('--fresh-window', null);
 const MODEL_CACHE = process.env.KB_MODEL_CACHE || path.join(ROOT, 'kb', 'models-cache');
 
 // Optional author-side clone overrides via env (JSON map); default empty → uses CLONE_DIR/<name>.
@@ -69,13 +75,44 @@ const remoteHead = (owner, slug) => {
 };
 const clonePath = (name) => KNOWN_CLONES[name] || path.join(CLONE_DIR, name);
 
-const inScope = [];
-for (const t of ['T0', 'T1', 'T2', 'T3']) {
-  if (TIER && t !== TIER) continue;
-  for (const r of tiers.tiers[t].repos) {
-    if (ONLY && r.name !== ONLY) continue;
-    if (t === 'T3' && !ONLY) continue;            // T3 is deep-walked on demand, not nightly
-    inScope.push({ ...r, tier: t });
+let inScope = [];
+if (FRESH_WINDOW) {
+  const days = parseInt(FRESH_WINDOW, 10);
+  if (!Number.isFinite(days) || days <= 0) { console.error(`--fresh-window needs a positive day count, got "${FRESH_WINDOW}"`); process.exit(2); }
+  const cutoff = Date.now() - days * 86400 * 1000;
+  const orgs = (process.env.RUVNET_FRESH_ORGS || 'ruvnet').split(',').map((s) => s.trim()).filter(Boolean);
+  for (const org of orgs) {
+    let rows;
+    try {
+      rows = JSON.parse(execFileSync(GH, ['repo', 'list', org, '--limit', '1000', '--json', 'name,pushedAt,isFork,isArchived'], { timeout: 60000 }).toString());
+    } catch (e) { console.error(`[fresh-window] gh repo list ${org} FAILED: ${e.message} — skipping org (nothing from it this run)`); continue; }
+    for (const r of rows) {
+      if (r.isFork || r.isArchived) continue;
+      if (new Date(r.pushedAt).getTime() < cutoff) continue;
+      inScope.push({ name: r.name, owner: org, repo: r.name, tier: `${days}d`, pushedAt: r.pushedAt });
+    }
+  }
+  if (ONLY) inScope = inScope.filter((r) => r.name === ONLY);
+  // FENCE: deliberately-removed (helix — a downstream consumer app) + empty repos must NOT be silently
+  // re-added by the rolling window. data/nightly-exclude.json is the one editable list; every drop logged.
+  const exPath = path.join(ROOT, 'data/nightly-exclude.json');
+  if (fs.existsSync(exPath)) {
+    try {
+      const exSet = new Set((JSON.parse(fs.readFileSync(exPath, 'utf8')).exclude || []).map((s) => String(s).toLowerCase()));
+      const dropped = inScope.filter((r) => exSet.has(r.name.toLowerCase())).map((r) => r.name);
+      inScope = inScope.filter((r) => !exSet.has(r.name.toLowerCase()));
+      if (dropped.length) console.log(`[fresh-window] fenced out ${dropped.length}: ${dropped.join(', ')} (data/nightly-exclude.json)`);
+    } catch (e) { console.error(`[fresh-window] nightly-exclude.json unreadable (${e.message}) — proceeding WITHOUT fence`); }
+  }
+  console.log(`[fresh-window] live scan of [${orgs.join(', ')}] → ${inScope.length} repos in scope after fence, pushed since ${new Date(cutoff).toISOString().slice(0, 10)} (${days}d window)`);
+} else {
+  for (const t of ['T0', 'T1', 'T2', 'T3']) {
+    if (TIER && t !== TIER) continue;
+    for (const r of tiers.tiers[t].repos) {
+      if (ONLY && r.name !== ONLY) continue;
+      if (t === 'T3' && !ONLY) continue;            // T3 is deep-walked on demand, not nightly
+      inScope.push({ ...r, tier: t });
+    }
   }
 }
 
@@ -99,7 +136,9 @@ for (const p of plan) console.log(`  ${p.action.padEnd(20)} ${p.tier} ${p.name.p
 // shipped bundle current). Building brand-new repos is a supervised, multi-hour scaling effort, NOT an
 // unattended nightly job — gate it behind --include-new so the cron can't silently try to deep-walk 40+
 // repos (days of compute) on its first run.
-const INCLUDE_NEW = has('--include-new');
+// Fresh-window mode exists precisely to discover + build brand-new repos, so default INCLUDE_NEW on
+// there (still bounded to the N-day set). Static-tier mode keeps the original opt-in gate untouched.
+const INCLUDE_NEW = has('--include-new') || !!FRESH_WINDOW;
 const changed = plan.filter((p) => p.action === 'rebuild (changed)');
 const newRepos = plan.filter((p) => p.action === 'build (new)');
 const todo = INCLUDE_NEW ? [...changed, ...newRepos] : changed;

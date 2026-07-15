@@ -67,10 +67,10 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "2.8.0-dev",
+    "softwareVersion": "2.8.0",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-10",
-    "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 32 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
+    "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 36 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
     "url": "https://ruvnet-brain.vercel.app/",
     "downloadUrl": "https://github.com/stuinfla/ruvnet-brain/releases/latest",
     "installUrl": "https://www.npmjs.com/package/ruvnet-brain",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v2.8.0-dev</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v2.8.0</p>
     </div>
   </div>
 
@@ -309,7 +309,7 @@
             </p>
             <div class="meta-row">
               <span>INSTALL&nbsp;<b>npx ruvnet-brain</b></span>
-              <span>BRAIN&nbsp;<b>32 repos &middot; 129,037 source chunks</b></span>
+              <span>BRAIN&nbsp;<b>36 repos &middot; 129,686 source chunks</b></span>
               <span>STATUS&nbsp;<b>live</b></span>
             </div>
             <div class="cta-row">
@@ -361,7 +361,7 @@
               <p class="spear-lab">describe a need, get the right rUv tool<span class="spear-src">no name needed</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad"><span data-count="129037" data-decimals="0" data-commas="1">129,037</span> chunks</div>
+              <div class="spear-num grad"><span data-count="129686" data-decimals="0" data-commas="1">129,686</span> chunks</div>
               <p class="spear-lab">rUv&rsquo;s real source code, indexed<span class="spear-src">not docs</span></p>
             </div>
             <div class="spear-card reveal-stagger">
@@ -422,7 +422,7 @@
           120-question eval gate can &mdash; and did &mdash; block a release.</p>
         <div class="spear-grid">
           <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">24 &rarr; 32 repos</div>
+            <div class="spear-num grad">24 &rarr; 36 repos</div>
             <p class="spear-lab">every store verified by a live retrieval query<span class="spear-src">corpus</span></p>
           </div>
           <div class="spear-card reveal-stagger">
@@ -451,7 +451,7 @@
               </thead>
               <tbody>
                 <tr class="reveal-row"><td>End-user experience</td><td class="n before">54</td><td class="n after">83</td><td class="n win">+29</td><td class="moved">One-command install now offers nightly self-updates (default yes); the page lives on isovision.ai; publishing renews itself</td></tr>
-                <tr class="reveal-row"><td>Knowledge corpus</td><td class="n before">71</td><td class="n after">88</td><td class="n win">+17</td><td class="moved">24&rarr;32 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored &mdash; flagship went 0&rarr;2,996 source bodies</td></tr>
+                <tr class="reveal-row"><td>Knowledge corpus</td><td class="n before">71</td><td class="n after">88</td><td class="n win">+17</td><td class="moved">24&rarr;36 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored &mdash; flagship went 0&rarr;2,996 source bodies</td></tr>
                 <tr class="reveal-row"><td>Effectiveness (eval-proven retrieval)</td><td class="n before">58</td><td class="n after">88</td><td class="n win">+30</td><td class="moved">120-question Wilson-bound gate &mdash; it blocked a bad release, then passed the fix <em>above</em> the old baseline</td></tr>
                 <tr class="reveal-row"><td>Acting like rUv</td><td class="n before">38</td><td class="n after">72</td><td class="n win">+34</td><td class="moved">Memory layer root-caused and fixed with proofs; 6 exact patches queued upstream; real multi-agent swarm operations</td></tr>
                 <tr class="reveal-row"><td>Developer smarter</td><td class="n before">62</td><td class="n after">84</td><td class="n win">+22</td><td class="moved"><code>/brain-score</code> runs this same scorecard on any repo; honest tool announcements; per-answer source receipts</td></tr>
@@ -785,7 +785,7 @@
   <text x="609" y="156" text-anchor="middle" fill="#5ad6ff" font-family="ui-monospace,monospace" font-size="15" font-weight="700">search_ruvnet</text>
   <text x="609" y="184" text-anchor="middle" fill="#c3c2b6" font-family="system-ui,sans-serif" font-size="12">pulls the exact source</text>
   <text x="609" y="201" text-anchor="middle" fill="#c3c2b6" font-family="system-ui,sans-serif" font-size="12">passage from the Brain</text>
-  <text x="609" y="222" text-anchor="middle" fill="#8b8f9c" font-family="ui-monospace,monospace" font-size="11">RVF · 129,037 chunks</text>
+  <text x="609" y="222" text-anchor="middle" fill="#8b8f9c" font-family="ui-monospace,monospace" font-size="11">RVF · 129,686 chunks</text>
   </g>
 
   <line class="d-draw d-draw-grey d-draw-3" x1="714" y1="175" x2="742" y2="175" stroke="#8b8f9c" stroke-width="2" marker-end="url(#s04-a)"/>
@@ -828,20 +828,20 @@
             <span class="head-text">
               <h2>What&rsquo;s actually in the Brain</h2>
               <span class="q">What did you gather, exactly?</span>
-              <span class="tier tech" style="margin-top:6px">32 repos &middot; 129,037 source chunks</span>
+              <span class="tier tech" style="margin-top:6px">36 repos &middot; 129,686 source chunks</span>
             </span>
             <span class="chev" aria-hidden="true">&rsaquo;</span>
           </summary>
           <div class="body">
             <p class="lead-in">
-              32 of rUv&rsquo;s repos, <strong>129,037 source chunks</strong>, in a real vector brain (RVF).
+              36 of rUv&rsquo;s repos, <strong>129,686 source chunks</strong>, in a real vector brain (RVF).
               Not docs &mdash; the source.
             </p>
             <p class="tier tech">Coverage map &mdash; everything gathered in one brain</p>
             <figure class="figure diagram">
               <svg class="diagram-svg dgm-s06" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 864" role="img" aria-labelledby="s06-title s06-desc">
-  <title id="s06-title">Coverage map: the core of rUv's ecosystem — 32 repos indexed — gathered into one Brain</title>
-  <desc id="s06-desc">A central Brain hub fans out to a grid of the core building blocks, each shown gathered and read: ruflo, RuVector, AgentDB, RuLake, RuView, agentic-flow, SPARC, QuDAG, SAFLA, ruv-fann, SynthLang, rupixel, agenticow, metaharness, daa, dspy.ts, FACT, cve-bench, rvm, rUv-dev, open-claude-code, agentic-qe, flow-nexus, midstream, rudevolution, marketing, symbolic-scribe, sublinear-time-solver, Synaptic-Mesh, agentic-security, cognitum-cogs and cognitum-support — 32 repos indexed in total. Together they show the reassuring breadth of the ecosystem indexed in one place.</desc>
+  <title id="s06-title">Coverage map: the core of rUv's ecosystem — 36 repos indexed — gathered into one Brain</title>
+  <desc id="s06-desc">A central Brain hub fans out to a grid of the core building blocks, each shown gathered and read: ruflo, RuVector, AgentDB, RuLake, RuView, agentic-flow, SPARC, QuDAG, SAFLA, ruv-fann, SynthLang, rupixel, agenticow, metaharness, daa, dspy.ts, FACT, cve-bench, rvm, rUv-dev, open-claude-code, agentic-qe, flow-nexus, midstream, rudevolution, marketing, symbolic-scribe, sublinear-time-solver, Synaptic-Mesh, agentic-security, cognitum-cogs, cognitum-support, rufield, photonlayer, worldgraph and rvcsi — 36 repos indexed in total. Together they show the reassuring breadth of the ecosystem indexed in one place.</desc>
   <defs>
     <linearGradient id="s06-bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0b1018"/>
@@ -858,7 +858,7 @@
 
   <rect x="0" y="0" width="1000" height="664" rx="14" fill="url(#s06-bg)"/>
   <text x="500" y="40" text-anchor="middle" fill="#ece8dc" font-family="Georgia,serif" font-size="22" font-weight="700">Everything gathered into one Brain</text>
-  <text x="500" y="64" text-anchor="middle" fill="#8b8f9c" font-family="system-ui,sans-serif" font-size="13">32 repos · 129,037 source chunks · all read, nothing for you to chase down</text>
+  <text x="500" y="64" text-anchor="middle" fill="#8b8f9c" font-family="system-ui,sans-serif" font-size="13">36 repos · 129,686 source chunks · all read, nothing for you to chase down</text>
 
   <!-- constellation lines from hub to row 1 -->
   <g class="s06-lines" stroke="rgba(90,214,255,.22)" stroke-width="1" fill="none">
@@ -929,7 +929,7 @@
 
   <text class="d-fade d-fade-5" x="500" y="844" text-anchor="middle" fill="#5fd38a" font-family="Georgia,serif" font-size="14.5" font-style="italic">If rUv open-sourced it and it matters, it's in here. When he ships more, the Brain updates.</text>
 </svg>
-              <figcaption>Reassuring breadth, not a wall of jargon: 32 repos, all gathered and already read &mdash; the core building blocks mapped above &mdash; behind one <code>search_ruvnet</code> tool.</figcaption>
+              <figcaption>Reassuring breadth, not a wall of jargon: 36 repos, all gathered and already read &mdash; the core building blocks mapped above &mdash; behind one <code>search_ruvnet</code> tool.</figcaption>
             </figure>
             <p>
               Plus human-written primers and the <strong>capability cards</strong> that make routing work. Everything is
@@ -1781,7 +1781,7 @@ npx ruvnet-brain
 <span class="d">~/.cache/ruvnet-brain/kb/</span>            <span class="cmt"># the Brain (RVF) — travels with you, not the repo</span>
  ├ <span class="f">capability-cards.md</span>          <span class="cmt"># route by need, not by name</span>
  ├ <span class="d">concepts/</span>                    <span class="cmt"># plain-English primers per building block</span>
- ├ <span class="d">*.rvf</span>                        <span class="cmt"># 129,037 source chunks · HNSW vector index</span>
+ ├ <span class="d">*.rvf</span>                        <span class="cmt"># 129,686 source chunks · HNSW vector index</span>
  └ <span class="f">forge-mcp-all.mjs</span>            <span class="cmt"># the search_ruvnet tool — one tool, all repos</span>
 <span class="d">claude-code-plugin/</span>              <span class="cmt"># the grounding hook — fires on every prompt</span></pre>
           </div>

@@ -154,7 +154,11 @@ for (const name of built) {
   const hasSymbols = cp(`${name}.symbols.json`, OUT);
   const hasBig = fs.existsSync(path.join(KB, `${name}.big.rvf`));
   if (hasBig) {
-    for (const suf of ['.big.rvf', '.big.rvf.idmap.json', '.big.rvf.embed.json', '.big.passages.jsonl', '.big.meta.json']) cp(`${name}${suf}`, OUT);
+    // NOTE: .big.passages.jsonl is intentionally NOT shipped — it is a byte-for-byte duplicate of
+    // <name>.passages.jsonl (both variants embed from the SAME passages), and query-time retrieval
+    // reads only <name>.passages.jsonl. Shipping it doubled passage storage (~447 MB across the corpus)
+    // for zero query benefit. The big vectors (.big.rvf) resolve ids against the shared passages file.
+    for (const suf of ['.big.rvf', '.big.rvf.idmap.json', '.big.rvf.embed.json', '.big.meta.json']) cp(`${name}${suf}`, OUT);
   }
   const hasPrimer = cp(`${name}-primer.md`, OUT);
   // metadata
