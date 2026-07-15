@@ -1,19 +1,19 @@
 {
-  "brainVersion": "2.9.1",
-  "generated": "2026-07-15T00:21:00.807Z",
-  "generatedHuman": "Wed, 15 Jul 2026 00:21:00 GMT",
+  "brainVersion": "3.0.0",
+  "generated": "2026-07-15T11:31:06.953Z",
+  "generatedHuman": "Wed, 15 Jul 2026 11:31:06 GMT",
   "coverage": {
-    "built": 42,
-    "catalogued": 178,
+    "built": 56,
+    "catalogued": 180,
     "orgTotalApprox": 248,
-    "pending": 136
+    "pending": 124
   },
   "builtRepos": [
     {
       "name": "RuView",
       "tier": "T0",
       "stars": 75658,
-      "builtFromSha": "e6f26e9ac982aadaa18c8271ec65d29a302e49ec",
+      "builtFromSha": "82c1b8fdf81f3dd8b786f394dd9bbd3914921fa1",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "73914bd2bea43eeaf85b9434b155398397e03c2c",
+      "builtFromSha": "5fb503480d2d7a747eb4a7c1c10e17df5f91ec05",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -162,6 +162,14 @@
       "status": "built"
     },
     {
+      "name": "ruv-neural",
+      "tier": "T1",
+      "stars": 20,
+      "builtFromSha": "caaa14144a70829293737b0ca717ebc818fcc523",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "rufield",
       "tier": "T1",
       "stars": 17,
@@ -205,7 +213,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "d248139faf51c41bb456641f420bb33551adf2f3",
+      "builtFromSha": "6e577e8d1d0c5e39431ecc1778555d46acb7a0c8",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -234,10 +242,66 @@
       "status": "built"
     },
     {
+      "name": "ruvbot",
+      "tier": "T2",
+      "stars": 47,
+      "builtFromSha": "31b54e74339ca93ba75d69d2936ffb18df4bf5ff",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "agentic-security",
       "tier": "T2",
       "stars": 47,
       "builtFromSha": "0d862e0d5704d41df8141a31b84c3d8ff82ee759",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "drupaljs",
+      "tier": "T2",
+      "stars": 37,
+      "builtFromSha": "585b78fb9ccfb7560f11258eafe2ea9516d574a8",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "skygraph",
+      "tier": "T2",
+      "stars": 29,
+      "builtFromSha": "12381dbc003b6763fd29a83cd727812a2c1004cc",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "agentic-robotics",
+      "tier": "T2",
+      "stars": 26,
+      "builtFromSha": "d84bba2be6cf60e01db6056fdba464ccfad130d7",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "musicai",
+      "tier": "T2",
+      "stars": 26,
+      "builtFromSha": "92c0c53f2ca81d82a3e392f8781cc521f25b2c21",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "obsidian-brain",
+      "tier": "T2",
+      "stars": 19,
+      "builtFromSha": "68457cea6ab42c10dcd74ebdb84616ce2f2f9c87",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "musica",
+      "tier": "T2",
+      "stars": 17,
+      "builtFromSha": "fb4141230d04386e8b172601649b6756b5f8d2df",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -258,10 +322,42 @@
       "status": "built"
     },
     {
+      "name": "rvdna",
+      "tier": "T2",
+      "stars": 9,
+      "builtFromSha": "b751cbdaa2ab8516126b129e9589555e5b719067",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "ruv-drone",
+      "tier": "T2",
+      "stars": 8,
+      "builtFromSha": "691ce38e83ebccf01f846926ba4eef56b6468fd1",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "worldgraph",
       "tier": "T2",
       "stars": 7,
       "builtFromSha": "4441bc07b566659877c25e22cd5aea457bdba4f2",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "ruqu",
+      "tier": "T2",
+      "stars": 6,
+      "builtFromSha": "026d63ef900ab689c863b6b3254f5dce8c068bf6",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "SonicChamber",
+      "tier": "T2",
+      "stars": 2,
+      "builtFromSha": "c1bc0c90c8d9511846270ed565a3006c468bf36d",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -334,64 +430,34 @@
       "status": "built"
     },
     {
+      "name": "hackerone",
+      "tier": "fresh",
+      "builtFromSha": "1e3bcde8258d472a733abe9d9de9219f8ae06f16",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
       "name": "ruv-gists",
       "tier": "fresh",
       "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "rvface",
+      "tier": "fresh",
+      "builtFromSha": "612a09e5b16ec9ff7cec1623c2845ff64ca2544b",
       "latestRemoteSha": null,
       "status": "built"
     }
   ],
   "pendingRepos": [
     {
-      "name": "ruv-neural",
-      "tier": "T1"
-    },
-    {
-      "name": "ruvbot",
-      "tier": "T2"
-    },
-    {
-      "name": "drupaljs",
-      "tier": "T2"
-    },
-    {
-      "name": "skygraph",
-      "tier": "T2"
-    },
-    {
-      "name": "agentic-robotics",
-      "tier": "T2"
-    },
-    {
-      "name": "musicai",
-      "tier": "T2"
-    },
-    {
-      "name": "obsidian-brain",
-      "tier": "T2"
-    },
-    {
-      "name": "musica",
-      "tier": "T2"
-    },
-    {
-      "name": "rvdna",
-      "tier": "T2"
-    },
-    {
       "name": "ruos-macair",
       "tier": "T2"
     },
     {
-      "name": "ruv-drone",
-      "tier": "T2"
-    },
-    {
       "name": "Connectome-OS",
-      "tier": "T2"
-    },
-    {
-      "name": "ruqu",
       "tier": "T2"
     },
     {
@@ -400,10 +466,6 @@
     },
     {
       "name": "cognitum-claude-plugin",
-      "tier": "T2"
-    },
-    {
-      "name": "SonicChamber",
       "tier": "T2"
     },
     {
