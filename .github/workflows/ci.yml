@@ -36,6 +36,15 @@ jobs:
         # asks "does rUv already ship this, and am I passing my code off as his?" — the question that
         # actually mattered. Verified to fire on the pre-fix commit (8e98cf7) and pass on the fix.
         run: npm run substitution:check
+      - name: Model catalog live-verified (no model/version fact ships from memory — ADR-0016)
+        # Added 2026-07-15 after I claimed "no GPT-5.6 exists" from a lazy price-sort instead of the live
+        # check I'd said I would run. Rule 0 (verify the live source) kept getting skipped for model facts
+        # because the fact lived in prose/memory where laziness is invisible. Now every model in
+        # data/model-catalog.json must exist + be priced correctly in the committed OpenRouter snapshot
+        # (refreshed nightly by catalog:refresh), and a stale snapshot fails too. A missing/mispriced/stale
+        # model is a RED BUILD — the shortcut is structurally impossible. Verified: it caught two real
+        # errors in the first catalog + rejects a fabricated model id.
+        run: npm run catalog:verify
       - name: Structure + grounding-hook behavior (brain-independent)
         # QE-0011 tests#1: on a fresh runner the 512MB brain is absent, so the capability battery
         # SKIPS — now LOUDLY (run-tests prints "CORE CAPABILITY BATTERY SKIPPED" so green never
