@@ -440,14 +440,15 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .rp-bg { position: absolute; top: -8px; right: -14px; width: 260px; max-width: 42%; pointer-events: none; }
 .rp-bg svg { width: 100%; height: auto; display: block; }
 .rp-grid { position: relative; display: grid; grid-template-columns: 1fr; gap: 20px; }
-@media (min-width: 52em) { .rp-grid { grid-template-columns: 1fr 1fr; gap: 28px; } }
+@media (min-width: 52em) { .rp-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; } }
 .rp-head { margin-bottom: 8px; }
 .rp-name { font-weight: 650; color: var(--ink); }
 .rp-obj { display: block; font-size: var(--fs--2); color: var(--muted); margin-top: 2px; max-width: 40ch; }
-.rp-tb { font-size: var(--fs--2); }
+.rp-tb { font-size: var(--fs--2); width: 100%; }
 .rp-tb th, .rp-tb td { padding: 7px 10px; }
 .rp-band { font-family: var(--mono); font-size: 10px; color: var(--cyan-text); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-.rp-model { white-space: nowrap; }
+.rp-model { overflow-wrap: anywhere; }
+.rp-tb td.num, .rp-tb .cell-dim { white-space: nowrap; }
 .rp-why { font-size: var(--fs--2); color: var(--muted); margin-top: 3px; line-height: 1.4; max-width: 42ch; }
 .rp-foot { position: relative; margin-top: 14px; }
 .rp-getkey { color: var(--cyan-text); font-weight: 600; }
