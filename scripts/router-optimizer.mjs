@@ -143,7 +143,7 @@ export function optimize({ noOpenRouter = false } = {}) {
   };
 }
 
-function printSummary(o) {
+export function printSummary(o) {
   const money = (v) => (v == null ? '—' : v === 0 ? '$0' : '$' + v + '/Mtok');
   const line = (c) => `    ${c.band.padEnd(11)} ${String(c.model).padEnd(38)} effort:${String(c.effort).padEnd(7)} ${money(c.costPerMTok).padEnd(11)} ${c.source}`;
   console.log(`\nRouter profiles — generated ${o.generatedAt}`);
@@ -155,7 +155,7 @@ function printSummary(o) {
   console.log(`\n  ${o.note}`);
 }
 
-function main() {
+export function main() {
   const args = process.argv.slice(2);
   const o = optimize({ noOpenRouter: args.includes('--no-openrouter') });
   fs.mkdirSync(path.dirname(OUT), { recursive: true });

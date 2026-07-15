@@ -5,7 +5,7 @@
 // never makes a network or model call. This test pins the exact picks a user sees on the console
 // so a future edit can't silently change what we recommend, and exercises BOTH branches
 // (OpenRouter key present → measured cross-provider picks; absent → subscription-only picks).
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,10 +25,11 @@ fs.writeFileSync(
   ].join('\n') + '\n'
 );
 process.env.METAHARNESS_RECEIPTS = RECEIPTS;
+process.env.ROUTER_PROFILES = path.join(TMP, 'profiles.json');
 
-let optimize;
+let optimize, printSummary, main;
 beforeAll(async () => {
-  ({ optimize } = await import('../../scripts/router-optimizer.mjs'));
+  ({ optimize, printSummary, main } = await import('../../scripts/router-optimizer.mjs'));
 });
 
 const bandOf = (profile, name) => profile.bands.find((b) => b.band === name);
@@ -41,6 +42,21 @@ describe('router-optimizer — the two profiles the console renders', () => {
     expect(o.receiptsSeen).toBe(3);
     expect(o.measuredAt).toBe('2026-06-15');
     expect(Object.keys(o.profiles)).toEqual(['development', 'production']);
+  });
+
+  it('falls back to config/.env when OPENROUTER_API_KEY is not in the env (exercises the reads)', () => {
+    const saved = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      // With no env var, hasOpenRouterKey() must attempt the config.json then .env reads. The result
+      // depends on the machine, so we assert only that the shape is intact — the point is executing
+      // (and thus covering) both fallback branches without a network or model call.
+      const o = optimize({});
+      expect(typeof o.hasOpenRouterKey).toBe('boolean');
+      expect(o.profiles.production.bands).toHaveLength(4);
+    } finally {
+      if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved;
+    }
   });
 
   describe('with an OpenRouter key (measured cross-provider picks)', () => {
@@ -118,6 +134,27 @@ describe('router-optimizer — the two profiles the console renders', () => {
     it('still exposes the four bands and the mechanical $0 tier', () => {
       expect(o.profiles.development.bands.map((b) => b.band)).toEqual(['mechanical', 'cheap', 'mid', 'frontier']);
       expect(bandOf(o.profiles.development, 'mechanical').costPerMTok).toBe(0);
+    });
+  });
+
+  describe('CLI surface (printSummary + main)', () => {
+    it('printSummary renders every cost form ($0, a price, and unknown "—") without throwing', () => {
+      process.env.OPENROUTER_API_KEY = 'sk-or-test-key-1234567890';
+      const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      // the dev profile has mechanical ($0), ling ($0.02), llama (null → "—") — hits all money branches
+      expect(() => printSummary(optimize({}))).not.toThrow();
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it('main() writes both profiles to ROUTER_PROFILES', () => {
+      const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const argv = process.argv;
+      process.argv = ['node', 'router-optimizer.mjs', '--no-openrouter', '--print'];
+      try { main(); } finally { process.argv = argv; spy.mockRestore(); }
+      const written = JSON.parse(fs.readFileSync(process.env.ROUTER_PROFILES, 'utf8'));
+      expect(Object.keys(written.profiles)).toEqual(['development', 'production']);
+      expect(written.hasOpenRouterKey).toBe(false);
     });
   });
 });
