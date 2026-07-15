@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   refresh-index:
@@ -33,7 +34,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ingest-gists.mjs --index-only
 
-      - name: Commit only if it actually changed
+      - name: Open an auto-merging PR if the index changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet -- docs/RUV-GISTS.md; then
             echo "no new or updated gists — nothing to commit"
@@ -42,8 +45,17 @@ jobs:
           # Show WHAT changed in the job log, so a human can see the new gists without cloning.
           echo "── new / changed rows ──"
           git diff --unified=0 -- docs/RUV-GISTS.md | grep '^+|' | head -20 || true
+          # Protected `main` requires the `check` status, which the bot's DIRECT push can't satisfy
+          # (that is exactly why this job used to fail nightly). So push a branch and open a PR that
+          # AUTO-MERGES once `check` passes — secret-free, and it can never silently fail again.
+          BRANCH="chore/gists-index-$(date -u +%Y%m%d-%H%M%S)"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add docs/RUV-GISTS.md
           git commit -m "gists: refresh index (automated)"
-          git push
+          git push -u origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "gists: refresh index (automated)" \
+            --body "Automated nightly refresh of the rUv gist index (\`docs/RUV-GISTS.md\`). Auto-merges once the \`check\` status passes."
+          gh pr merge "$BRANCH" --auto --squash --delete-branch
