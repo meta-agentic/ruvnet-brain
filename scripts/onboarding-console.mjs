@@ -343,7 +343,7 @@ function saveConfig(values) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const prev = readJSON(CONFIG_PATH) || {};
   let backup = null;
-  if (fs.existsSync(CONFIG_PATH)) { backup = `${CONFIG_PATH}.bak-${stamp()}`; fs.copyFileSync(CONFIG_PATH, backup); }
+  if (fs.existsSync(CONFIG_PATH)) { backup = `${CONFIG_PATH}.bak-${stamp()}`; fs.copyFileSync(CONFIG_PATH, backup); fs.chmodSync(backup, 0o600); }
   const undoToken = journalUndo({ kind: 'restore-config', backup, existed: fs.existsSync(CONFIG_PATH) });
   const next = { ...prev };
   for (const s of CONFIG_SCHEMA) {
@@ -402,6 +402,12 @@ function readBody(req) { return new Promise((resolve) => { let b = ''; req.on('d
 
 function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = false, cwd = process.cwd() } = {}) {
   const server = http.createServer(async (req, res) => {
+    // DNS-rebinding guard: this server binds 127.0.0.1 only. Reject any request whose Host header
+    // isn't loopback, so a malicious web page can't rebind a hostname to 127.0.0.1 and read local state.
+    const reqHost = String(req.headers.host || '').split(':')[0].toLowerCase();
+    if (reqHost !== '127.0.0.1' && reqHost !== 'localhost' && reqHost !== '::1' && reqHost !== '[::1]') {
+      res.writeHead(403, { 'content-type': 'text/plain' }); res.end('forbidden host'); return;
+    }
     try {
       const url = req.url.split('?')[0];
       if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd));

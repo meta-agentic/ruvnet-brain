@@ -9,9 +9,11 @@ supersedes: []
 relates: [ADR-013, ADR-014]
 ---
 
+**Status**: Proposed (near-term slice — router-optimizer engine, console panel, explainer preview — shipped in v3.0.1; full weekly self-optimizing engine remains proposed)
+
 ## Status
 
-**Partially implemented — v3.0.0 (2026-07-15).** The near-term slice SHIPPED in v3.0.0:
+**Partially implemented — v3.0.1 (2026-07-15).** The near-term slice SHIPPED in v3.0.1:
 `scripts/router-optimizer.mjs` (computes two dev/production profiles from rUv's measured bench +
 this repo's verified live prices + the user's receipts), the **collapsed console panel** that displays
 them (band → model → effort → cost → why, measured-vs-default tags, OpenRouter-key-aware), and the
