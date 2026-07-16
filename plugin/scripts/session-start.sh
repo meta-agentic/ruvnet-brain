@@ -70,6 +70,21 @@ retrieval were working. Verify after fixing: npx github:stuinfla/ruvnet-brain --
 EOF
 fi
 
+# ── The Console: FIRST-LOAD OFFER (Stuart's exact UX, 2026-07-16): the console is the marquee —
+# make sure people see it the first time they load the solution. One yes/no, once ever per machine;
+# on yes the model launches it FOR them (/rvbc). Offered before the router nudge — seeing your whole
+# stack comes before tuning one part of it.
+CONSOLE_OFFERED="$HOME/.cache/ruvnet-brain/.console-offered"
+if [ ! -f "$CONSOLE_OFFERED" ]; then
+  mkdir -p "$HOME/.cache/ruvnet-brain" 2>/dev/null
+  touch "$CONSOLE_OFFERED" 2>/dev/null
+  echo "[RuvNet Brain — FIRST LOAD: offer the Console once]"
+  echo "Near the top of your first response, offer ONCE, in one line (then respect the answer):"
+  echo "  \"🧠 Want to see your whole RuvNet stack on one page? I can open the live Console — what's installed, what your AI has learned, and one-click fixes, all read-only until you click. Open it now? (yes/no — it's always available later as /rvbc)\""
+  echo "If YES: run the /rvbc command (plugin command rvbc — start node <repo>/scripts/onboarding-console.mjs --serve --open in the background and confirm the page opened in their browser)."
+  echo "If NO: one gracious line — \"any time: /rvbc\" — and never offer again."
+fi
+
 # ── MetaHarness router: the ONE-LINER OFFER (Stuart's exact UX, 2026-07-12): offer yes/no → on
 # yes, ask two questions → then SHOW the user their recommended path (zero-cost options + what the
 # router uses when work must go out to a paid API). Offered at most once ever per machine; without
@@ -124,6 +139,7 @@ LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
 if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
+    3.2.*|3.1.*) WHATS_NEW="now opens with the Console — type /rvbc and see your whole RuvNet stack on one live page: what's installed, what your AI has actually learned (real memories and distilled lessons from YOUR projects, drill-down to the verbatim cards), which subscription pays for what, and one-click reversible fixes for anything stale or drifted. It offers itself the first time you load; every number on it is measured from your machine, never projected." ;;
     3.0.*) WHATS_NEW="now ships a visual configurator for easy, robust setup — run /ruvnet-brain:configure to open a local page that mirrors your machine's RuvNet setup in plain English (your stack, whether memory actually works, and MetaHarness cost-routing tuned separately for development vs production) and lets you turn things on safely with one click. Read-only until you say so; nothing leaves your machine." ;;
     2.4.*) WHATS_NEW="now routes every task to the cheapest model that can do the job — aware of YOUR subscriptions specifically (it detects what it can prove, asks what it can't, and records the answers instead of assuming), with two newly live-proven low-cost models wired in (DeepSeek V4 Flash, Grok 4.5), a Codex launch wrapper, and an outcome log that teaches the router from every override." ;;
     2.3.*) WHATS_NEW="can no longer break silently: if the brain's search ever fails, you get an urgent phone push within seconds, a red alert at the top of every new Claude session, and a nightly canary check — three independent alarms, all tested by deliberately breaking the brain and watching them ring. Searches that fail now say WHY (and how to fix it) instead of pretending nothing matched." ;;
