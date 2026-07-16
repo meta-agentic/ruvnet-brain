@@ -172,7 +172,7 @@
       return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="' + stroke + '" stroke-width="1.5" /></svg>';
     }
 
-    // Relative URL on purpose — works on ruvnet-brain.vercel.app AND behind isovision.ai/ruvnet-brain.
+    // Relative URL on purpose — works on the canonical domain AND behind isovision.ai/ruvnet-brain.
     async function load(token, { silent } = {}) {
       $('[data-err]').textContent = '';
       let r, j;

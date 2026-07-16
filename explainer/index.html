@@ -25,7 +25,7 @@
   <meta property="og:title" content="RuvNet Brain for Claude Code — build 9 months ahead" />
   <meta property="og:description" content="A downloadable brain for Claude Code — rUv's real source code, indexed — that Claude reads before it answers. Built by Isovision.ai. Not the same as rUv's RuVector Brain." />
   <meta property="og:url" content="https://isovision.ai/ruvnet-brain/" />
-  <meta property="og:image" content="https://ruvnet-brain.vercel.app/assets/img/og-hero-2.png" />
+  <meta property="og:image" content="https://isovision.ai/ruvnet-brain/assets/img/og-hero-2.png" />
   <meta property="og:image:alt" content="RuvNet Brain — a brain of glowing amber and cyan filaments, rUv's whole toolkit in one intelligence" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -34,7 +34,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="RuvNet Brain — build 9 months ahead. Without being Ruv." />
   <meta name="twitter:description" content="The missing instruction manual for rUv's tools: a downloadable brain that grounds Claude in his real source so you build on the front edge of AI." />
-  <meta name="twitter:image" content="https://ruvnet-brain.vercel.app/assets/img/og-hero-2.png" />
+  <meta name="twitter:image" content="https://isovision.ai/ruvnet-brain/assets/img/og-hero-2.png" />
 
   <!-- Structured data — WebSite entity (defines "RuvNet Brain" as a named thing to search engines) -->
   <script type="application/ld+json">
@@ -43,7 +43,7 @@
     "@type": "WebSite",
     "name": "RuvNet Brain",
     "alternateName": ["RuvNet-Brain", "Ruvnet Brain", "Ruv Net Brain"],
-    "url": "https://ruvnet-brain.vercel.app/",
+    "url": "https://isovision.ai/ruvnet-brain/",
     "description": "A downloadable, source-grounded brain for Claude Code over Reuven Cohen's (rUv's) RuvNet stack.",
     "inLanguage": "en",
     "publisher": {
@@ -67,14 +67,14 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.2.1",
+    "softwareVersion": "3.2.2",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-10",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 36 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
-    "url": "https://ruvnet-brain.vercel.app/",
+    "url": "https://isovision.ai/ruvnet-brain/",
     "downloadUrl": "https://github.com/stuinfla/ruvnet-brain/releases/latest",
     "installUrl": "https://www.npmjs.com/package/ruvnet-brain",
-    "image": "https://ruvnet-brain.vercel.app/assets/img/hero.png",
+    "image": "https://isovision.ai/ruvnet-brain/assets/img/hero.png",
     "author": { "@type": "Person", "name": "Reuven Cohen", "alternateName": "rUv" },
     "creator": { "@type": "Person", "name": "Stuart Kerr", "url": "https://isovision.ai" },
     "keywords": "RuvNet, rUv, Reuven Cohen, RuVector, RVF, ruflo, AgentDB, RuLake, SPARC, Claude Code plugin, MCP, vector search, source-grounded AI",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.1</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.2</p>
     </div>
   </div>
 
@@ -419,39 +419,51 @@
         <h2>What&rsquo;s new in <span class="grad">3.2</span></h2>
         <p class="lede">The Brain stopped being invisible. A live console now shows you what it&rsquo;s doing &mdash;
           and everything it tells you is <strong>measured, never projected</strong>.</p>
-        <div class="spear-grid">
-          <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">a living console</div>
-            <p class="spear-lab">type <code>/rvbc</code> and see your whole stack on one page &mdash; what&rsquo;s
-              installed, how it&rsquo;s wired, what your AI learned &mdash; with one-click, undoable fixes<span class="spear-src">one command</span></p>
+        <!-- Cards LEFT, console RIGHT — no dead margins, the image is evidence beside the claims,
+             not a slab below them. The fade mask lives on the CLIPPING span so it always completes
+             at the visible edge, at every width. -->
+        <style>
+          .v31-duo{display:grid;grid-template-columns:minmax(320px,0.9fr) minmax(380px,1.1fr);gap:30px;align-items:start;margin-top:6px}
+          .v31-duo + .v2-fine{margin-top:34px}
+          .v31-duo .spear-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:0}
+          .v31-shot span{-webkit-mask-image:linear-gradient(to bottom,#000 58%,transparent 98%);mask-image:linear-gradient(to bottom,#000 58%,transparent 98%)}
+          .v31-cap{margin:10px 0 0;font-size:.94em;opacity:.85;text-wrap:balance}
+          @media (max-width:940px){.v31-duo{grid-template-columns:1fr}.v31-shot{max-width:640px;margin:0 auto}}
+        </style>
+        <div class="v31-duo">
+          <div class="spear-grid">
+            <div class="spear-card reveal-stagger">
+              <div class="spear-num grad">a living console</div>
+              <p class="spear-lab">type <code>/rvbc</code> and see your whole stack on one page &mdash; what&rsquo;s
+                installed, how it&rsquo;s wired, what your AI learned &mdash; with one-click, undoable fixes<span class="spear-src">one command</span></p>
+            </div>
+            <div class="spear-card reveal-stagger">
+              <div class="spear-num grad">your brain, visible</div>
+              <p class="spear-lab">a live Brain Activity feed &mdash; every memory stored, every lesson distilled; drill
+                into exactly what your AI knows<span class="spear-src">real rows from your own AgentDB</span></p>
+            </div>
+            <div class="spear-card reveal-stagger">
+              <div class="spear-num grad">receipts, not estimates</div>
+              <p class="spear-lab">smart model routing reports only measured savings from real routing receipts &mdash;
+                your subscriptions priced in, frontier only when the work earns it<span class="spear-src">routing receipts</span></p>
+            </div>
+            <div class="spear-card reveal-stagger">
+              <div class="spear-num grad">it learns YOU</div>
+              <p class="spear-lab">a recursive per-user learning loop &mdash; patterns from how you actually work, shared
+                across your projects, isolated where they must be<span class="spear-src">per-user</span></p>
+            </div>
           </div>
-          <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">your brain, visible</div>
-            <p class="spear-lab">a live Brain Activity feed &mdash; every memory stored, every lesson distilled; drill
-              into exactly what your AI knows<span class="spear-src">real rows from your own AgentDB</span></p>
-          </div>
-          <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">receipts, not estimates</div>
-            <p class="spear-lab">smart model routing reports only measured savings from real routing receipts &mdash;
-              your subscriptions priced in, frontier only when the work earns it<span class="spear-src">routing receipts</span></p>
-          </div>
-          <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">it learns YOU</div>
-            <p class="spear-lab">a recursive per-user learning loop &mdash; patterns from how you actually work, shared
-              across your projects, isolated where they must be<span class="spear-src">per-user</span></p>
+          <div class="v31-shot">
+            <a href="assets/console-v3.png" target="_blank" rel="noopener" title="The live console — click to see the full page"
+               style="display:block;border-radius:14px 14px 0 0;overflow:hidden;text-decoration:none;border:1px solid rgba(94,214,255,.22);border-bottom:none;box-shadow:0 24px 60px -28px rgba(0,0,0,.8)">
+              <span style="display:block;max-height:860px;overflow:hidden;line-height:0">
+                <img src="assets/console-v3.png" alt="The RuvNet Brain Console, live — hero, Brain Activity card with real memories and lessons from this machine"
+                     loading="lazy" style="display:block;width:100%;height:auto" />
+              </span>
+            </a>
+            <p class="v31-cap">the console, live on a real machine &mdash; type <code>/rvbc</code> &middot; <span style="opacity:.75">a crop &mdash; the page keeps going</span></p>
           </div>
         </div>
-
-        <!-- The console, shown not told — partial view fading out: there is much more below the fold. -->
-        <a href="assets/console-v3.png" target="_blank" rel="noopener" title="The live console — click to see the full page"
-           style="display:block;margin:34px auto 0;max-width:980px;border-radius:14px 14px 0 0;overflow:hidden;text-decoration:none;border:1px solid rgba(94,214,255,.22);border-bottom:none;box-shadow:0 24px 60px -28px rgba(0,0,0,.8)">
-          <span style="display:block;max-height:780px;overflow:hidden;line-height:0">
-            <img src="assets/console-v3.png" alt="The RuvNet Brain Console, live — hero, Brain Activity card with real memories and lessons from this machine"
-                 loading="lazy"
-                 style="display:block;width:100%;height:auto;-webkit-mask-image:linear-gradient(to bottom,#000 62%,transparent 99%);mask-image:linear-gradient(to bottom,#000 62%,transparent 99%)" />
-          </span>
-        </a>
-        <p style="text-align:center;margin:10px 0 0;font-size:.92em;opacity:.85">the console, live on a real machine &mdash; type <code>/rvbc</code> · <span style="opacity:.75">this is a crop; the page keeps going</span></p>
 
         <p class="v2-fine">Every number on this page traces to something measured &mdash; <b>the 2.0 eval-gate
           discipline now covers the whole surface</b>.</p>

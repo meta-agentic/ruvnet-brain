@@ -1,4 +1,4 @@
-# RuvNet Brain — https://ruvnet-brain.vercel.app/
+# RuvNet Brain — https://isovision.ai/ruvnet-brain/
 # Everything is public and meant to be found — except the owner dashboard and the API.
 User-agent: *
 Allow: /
@@ -15,4 +15,4 @@ Allow: /
 User-agent: PerplexityBot
 Allow: /
 
-Sitemap: https://ruvnet-brain.vercel.app/sitemap.xml
+Sitemap: https://isovision.ai/ruvnet-brain/sitemap.xml

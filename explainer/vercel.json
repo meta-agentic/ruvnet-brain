@@ -1,3 +1,22 @@
 {
-  "cleanUrls": true
+  "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "ruvnet-brain.vercel.app"
+        }
+      ],
+      "missing": [
+        {
+          "type": "header",
+          "key": "cf-connecting-ip"
+        }
+      ],
+      "destination": "https://isovision.ai/ruvnet-brain/$1",
+      "permanent": true
+    }
+  ]
 }

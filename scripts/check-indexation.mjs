@@ -23,7 +23,7 @@
 const TARGETS = [
   'https://isovision.ai/ruvnet-brain/',
   'https://github.com/stuinfla/ruvnet-brain',
-  'https://ruvnet-brain.vercel.app/',
+  'https://isovision.ai/ruvnet-brain/',
 ];
 
 const UA =
