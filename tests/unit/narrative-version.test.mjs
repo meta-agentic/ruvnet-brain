@@ -69,4 +69,22 @@ describe(`narrative version claims match the shipping version (${current})`, () 
   it('the retired version-stamped share image is gone from the repo', () => {
     expect(fs.existsSync(path.join(ROOT, 'explainer/assets/img/og-hero-2.png')), 'og-hero-2.png (VERSION 2.0 in pixels) must not exist').toBe(false);
   });
+
+  // The 2026-07-16 bundle-size failure: "512 MB" was hand-typed on Jun 30; the nightly-grown
+  // bundle was 738 MB when Stuart demoed the page. Sizes and corpus counts may only render via
+  // the live tether ([data-brain-size] filled from releases/latest at page load) or a stamped
+  // sync script — never as static prose. This bans the whole class, not the one number.
+  it('public surfaces carry no hand-typed bundle size (NNN MB)', () => {
+    for (const f of ['README.md', 'explainer/index.html', 'primer/ruvnet-primer.md']) {
+      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      const hits = [...src.matchAll(/\b\d{3,}\s*(?:&nbsp;)?MB\b/g)].map((m) => m[0]);
+      expect(hits, `${f} hand-types a bundle size: ${hits.join(', ')} — use the live tether instead`).toEqual([]);
+    }
+  });
+
+  it('the explainer live-size tether exists (spans + fetch)', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'explainer/index.html'), 'utf8');
+    expect((src.match(/data-brain-size/g) || []).length, 'expected >=3 data-brain-size spans + the fetch script').toBeGreaterThanOrEqual(4);
+    expect(src.includes('releases/latest'), 'tether must read from releases/latest').toBe(true);
+  });
 });

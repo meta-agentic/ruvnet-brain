@@ -4,13 +4,13 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.2.4 — updated 2026-07-16 05:44 EDT](https://img.shields.io/badge/version_3.2.4-updated_2026--07--16_05:44_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.2.5 — updated 2026-07-16 05:44 EDT](https://img.shields.io/badge/version_3.2.5-updated_2026--07--16_05:44_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
 [![plugin version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fstuinfla%2Fruvnet-brain%2Fmain%2Fplugin%2F.claude-plugin%2Fplugin.json&query=%24.version&label=plugin&color=e8a13a&style=flat-square)](plugin/.claude-plugin/plugin.json)
 [![installer version](https://img.shields.io/npm/v/ruvnet-brain?label=installer%20%28npm%29&color=2e7d32&style=flat-square)](https://www.npmjs.com/package/ruvnet-brain)
-[![download](https://img.shields.io/badge/download-512MB%20brain-2e7d32?style=flat-square)](https://github.com/stuinfla/ruvnet-brain/releases/latest)
+[![download](https://img.shields.io/badge/download-latest%20brain-2e7d32?style=flat-square)](https://github.com/stuinfla/ruvnet-brain/releases/latest)
 [![explainer](https://img.shields.io/badge/▶%20see%20it%20live-isovision.ai%2Fruvnet--brain-e8a13a?style=flat-square)](https://isovision.ai/ruvnet-brain/)
 [![license](https://img.shields.io/badge/license-MIT-8ecae6?style=flat-square)](LICENSE)
 [![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
@@ -19,7 +19,7 @@
 > **Three independent things version separately here — by design, not drift. Every number below is live (read straight from its real source, never hand-typed), so none of them can go stale:**
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
 > - **`installer (npm)`** (badge above) — the `npx ruvnet-brain` setup script. Read live from the [npm registry](https://www.npmjs.com/package/ruvnet-brain). Only moves when the installer script itself changes — rare.
-> - **Brain Release** (the downloadable 512MB knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
+> - **Brain Release** (the downloadable knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
 > - **Update an installed brain once:** `npx ruvnet-brain --update` — runs the bundle's own self-updater (backs up first, re-verifies, fails loud instead of half-applying).
 > - **Nightly auto-update is OFF by default:** `npx ruvnet-brain --enable-nightly` schedules it (macOS LaunchAgent, 03:47); `npx ruvnet-brain --disable-nightly` removes it; Linux/Windows get the cron line documented in the bundle's `forge-update.mjs`.
 > - **Either way, your copy only advances when a new Release is published** — the updater pulls `releases/latest`, so running it between releases is a safe no-op.
@@ -180,7 +180,7 @@ WITHOUT the brain — drift          |   WITH RuvNet Brain — grounded
 npx ruvnet-brain
 ```
 
-That single command runs the whole setup, narrating _what it's doing and why_ at each step: it downloads the brain (~512 MB) from the [latest GitHub Release](https://github.com/stuinfla/ruvnet-brain/releases/latest), unpacks it to `~/.cache/ruvnet-brain/kb`, installs its local reader (no cloud calls, no API keys), and wires the Claude Code plugin — the `search_ruvnet` MCP tool + the `UserPromptSubmit` grounding hook — at user scope. The installer and the `search_ruvnet` tool run on **macOS, Linux, and Windows**; the grounding/enforcement **hooks are POSIX shell**, so they fire on macOS, Linux, and Windows-via-WSL/Git-Bash (on native Windows without WSL the search tool still works, but the auto-grounding hooks don't fire — a Node port of the hooks is on the roadmap). It's safe to re-run, and the brain itself always fetches the current Release regardless of which install path you use — you install once; you don't keep re-downloading.
+That single command runs the whole setup, narrating _what it's doing and why_ at each step: it downloads the brain from the [latest GitHub Release](https://github.com/stuinfla/ruvnet-brain/releases/latest), unpacks it to `~/.cache/ruvnet-brain/kb`, installs its local reader (no cloud calls, no API keys), and wires the Claude Code plugin — the `search_ruvnet` MCP tool + the `UserPromptSubmit` grounding hook — at user scope. The installer and the `search_ruvnet` tool run on **macOS, Linux, and Windows**; the grounding/enforcement **hooks are POSIX shell**, so they fire on macOS, Linux, and Windows-via-WSL/Git-Bash (on native Windows without WSL the search tool still works, but the auto-grounding hooks don't fire — a Node port of the hooks is on the roadmap). It's safe to re-run, and the brain itself always fetches the current Release regardless of which install path you use — you install once; you don't keep re-downloading.
 
 > Want the bleeding-edge installer, even ahead of the last npm publish? `npx github:stuinfla/ruvnet-brain` always runs straight off the latest GitHub commit.
 
@@ -207,7 +207,7 @@ Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPrompt
 
 You install once. After that, three mechanisms keep you on the current brain without you having to remember an update command.
 
-- **Consent-gated auto-update heartbeat** (the `SessionStart` hook, `plugin/scripts/session-start.sh`). The **first** time the plugin runs on a machine it asks you **once** whether it may keep itself updated in the background — a security-conscious opt-in, because self-update can change the model's own instructions. Your answer is remembered (`~/.cache/ruvnet-brain/.auto-update-pref`) and never asked again. On each session start it does a rate-limited (~15 min) 3s-capped check of the live GitHub `plugin.json`. If a newer plugin version exists **and** you opted in, it downloads it in the background through Claude Code's own trusted marketplace path — but the new version is **staged, not active**: Claude Code only loads plugins at process start, so **this session keeps running the version it started with** until you restart (`claude --continue` brings your conversation right back on the new version). If you declined, it just tells you the command to run. The 512 MB knowledge bundle is handled more conservatively — **detect + notify only**, never auto-applied, because the bundle isn't cryptographically signed yet and applying it would overwrite executable tool files (SEC-0010 #6).
+- **Consent-gated auto-update heartbeat** (the `SessionStart` hook, `plugin/scripts/session-start.sh`). The **first** time the plugin runs on a machine it asks you **once** whether it may keep itself updated in the background — a security-conscious opt-in, because self-update can change the model's own instructions. Your answer is remembered (`~/.cache/ruvnet-brain/.auto-update-pref`) and never asked again. On each session start it does a rate-limited (~15 min) 3s-capped check of the live GitHub `plugin.json`. If a newer plugin version exists **and** you opted in, it downloads it in the background through Claude Code's own trusted marketplace path — but the new version is **staged, not active**: Claude Code only loads plugins at process start, so **this session keeps running the version it started with** until you restart (`claude --continue` brings your conversation right back on the new version). If you declined, it just tells you the command to run. The knowledge bundle is handled more conservatively — **detect + notify only**, never auto-applied, because the bundle isn't cryptographically signed yet and applying it would overwrite executable tool files (SEC-0010 #6).
 
 - **Stack watchdog status footer** (the `UserPromptSubmit` hook's always-on Gate 0, `plugin/scripts/ground-ruvnet.sh`). Every response ends with one dim status line — e.g. `🧠 RuvNet Brain v3.0.2 · Ruflo: yes · AgentDB memory: on` — read from **filesystem ground truth**, not impressions. The version shown is always the one **actually loaded in memory** for this session; if a newer version is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether project memory is wired.
 
@@ -305,7 +305,7 @@ node plugin/test/run-tests.mjs                    # full plugin QA over real JSO
 | **Context-scenario routing** | **7 / 8 (88%)** | full-scenario prompts route correctly |
 | **L1–L4 behavioral harness** | **all pass** | route · deep-recall (returns _code_) · implement (cites the API) · orchestrate (the hook drives the full pipeline) |
 | **Plugin QA** | **26 / 26** | manifests, hook firing, MCP `initialize`/`tools/list`, capability battery |
-| **Clean-room install** | **3 / 3** | download the published 512 MB bundle fresh → unzip → query → grounded, cited answers |
+| **Clean-room install** | **3 / 3** | download the published bundle fresh → unzip → query → grounded, cited answers |
 | **Unit tests** | **257 passing** · 10% of ALL source covered | `npm run test:cov` — the floor fails CI if it slips. 10% is the honest number over every shipped file; the previous "75%" measured a hand-picked 8-file subset |
 | **Grounding proof** | `npx ruvnet-brain --doctor` | asks a real question, then checks the cited path really exists in the on-disk store; a citation that doesn't resolve is reported as **NOT grounded** |
 | **Held-out eval** | **grounded 100/100** · routed 63/80 | `npm run eval` — 120 frozen, hash-pinned questions across 5 strata, never used for tuning, graded on ground truth, never by a model |
@@ -361,7 +361,7 @@ This project versions in the open (see the live badge up top for the exact plugi
 - `explainer/` — the source of the [live explainer](https://isovision.ai/ruvnet-brain/).
 - `SPEC.md` · `PROGRESS.md` — the master spec and the living, timestamped build log.
 
-The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/latest), not git — a fresh clone is lightweight; `npx` fetches the 512 MB bundle.
+The brain binaries ship via the [Release](https://github.com/stuinfla/ruvnet-brain/releases/latest), not git — a fresh clone is lightweight; `npx` fetches the full bundle.
 
 ---
 

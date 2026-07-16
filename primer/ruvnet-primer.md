@@ -1,6 +1,6 @@
 # The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v3.2.4 · Built: 2026-07-16 · Covers: 56/180 repos built @ pinned SHAs (see data/manifest.json)`
+`Brain version: v3.2.5 · Built: 2026-07-16 · Covers: 56/180 repos built @ pinned SHAs (see data/manifest.json)`
 
 > **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
 > **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
@@ -80,7 +80,7 @@ score ~93–98% **whether the question names the tool or just describes the need
 - Two honest residuals, not hidden: one described question (*"route to cheaper models to cut cost"*) still
   routes to **ruflo** instead of **agentic-flow** (orchestration/cost overlap); one Helix question (an unnamed
   *"methodology"* ask) routes to **synthlang** instead of **sparc**.
-- The **512 MB bundle** (`dist/ruvnet-brain.zip`) was **acceptance-tested as a fresh consumer** — extracted
+- The **brain bundle** (`dist/ruvnet-brain.zip`) was **acceptance-tested as a fresh consumer** — extracted
   on its own, `npm i`, queried, **3/3 grounded** — so it runs off the dev machine, not just on it.
 
 **The guarantee is narrow and true:** grounded, non-drifting, cited answers over this corpus **whether the
