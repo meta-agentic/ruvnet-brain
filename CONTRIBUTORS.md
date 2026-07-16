@@ -27,6 +27,24 @@ Thank you to everyone who has helped make RuvNet Brain better!
   - Windows PowerShell 5.1 detection: probe with a command both `powershell.exe` and `pwsh`
     understand, plus `-ExecutionPolicy Bypass` for locked-down sandboxes (PR #3)
 
+## Field Reporters
+
+- **[sparkling](https://github.com/sparkling)** — the project's most prolific field reporter:
+  eight surgical issues plus a coverage PR (#5), every single one legitimate, several
+  shipping-critical. Highlights:
+  - Caught the v3.1.0 console crash (#15) — a missing export that broke `/rvbc` on every
+    fresh install; report named the exact symbol *and* the process.exit-inside-a-server
+    hazard behind it. Fixed same day it was triaged (v3.2.8)
+  - Found two real defects in the interface-verification gate (#12, #13) — a quote-truncating
+    payload parser and an override that could never work as documented — including actually
+    testing the documented override before reporting it. Both fixed with pinned tests (v3.2.9)
+  - Caught the upstream metaharness rename (#10) before our own tooling did, a stale npm
+    dist-tag (#11), missing directories in the shipped bundle (#6), and the gap between the
+    advertised nightly freshness and what end users actually received (#4)
+
+  Five reports in five days drove the v3.2.8–v3.2.9 releases. This is what "field reports are
+  where the best fixes come from" looks like in practice.
+
 ## Special Thanks
 To everyone who has installed the brain, reported what broke, and told us what they built with it.
 Field reports like the ones above are where the best fixes come from.
