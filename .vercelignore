@@ -1,0 +1,9 @@
+# Deploy = the explainer site only. The repo carries 60k+ files of rUv repo mirrors
+# (clones/), KBs, and node_modules that must never upload (Vercel cap: 15k files).
+*
+!explainer
+!explainer/**
+explainer/.swarm
+explainer/.ruvnet-brain
+explainer/ruvector.db
+explainer/*.txt
