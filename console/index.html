@@ -41,6 +41,8 @@
     </div>
     <div class="head-right">
       <span class="host-chip mono" id="host-chip" hidden></span>
+      <button class="theme-toggle" id="recheck-btn" type="button" aria-label="Re-check my machine now"
+        title="Re-check my machine — refresh every card from live state (runs automatically after every fix)">↻</button>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
         <svg class="ic-sun" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="4.5" />
@@ -62,10 +64,13 @@
     <div class="intro-grid">
       <div class="intro-copy">
         <p class="eyebrow">RuvNet Brain · your machine, mirrored</p>
-        <h1>Nothing changes <em>until you say so.</em></h1>
-        <p class="lede">This console reads your RuvNet stack and describes it exactly as it is —
-        what's installed, how it's wired, whether memory actually works. Every suggestion arrives
-        with evidence, a cost, and its undo. Applying any of it is always your explicit call.</p>
+        <h1>Your invisible AI stack, <em>made visible.</em></h1>
+        <p class="lede">rUv's tools do their best work invisibly — memory learning in the background,
+        agents routing work, audits keeping score. This page makes it all visible and puts it to work
+        for you: what's installed, what it's doing right now, and one-click ways to get more from it.
+        You get thinking that runs months ahead of the mainstream without having to master every tool —
+        the Brain acts as the expert at your side. Every suggestion arrives with evidence, a cost, and
+        its undo — nothing changes until you say so.</p>
         <p class="motto mono" aria-label="How this console works, in order">
           <span class="m m-mirror">Mirror</span><span class="sep">→</span><span class="m m-mirror">Explain</span><span class="sep">→</span><span class="m m-rec">Recommend</span><span class="sep">→</span><span class="m m-rec">Apply</span><span class="m-note">with your consent</span><span class="sep">→</span><span class="m m-undo">Undo</span>
         </p>
@@ -117,6 +122,10 @@
 
     <!-- "We looked at your computer and found…" — filled from live state -->
     <div class="found-strip" id="found-strip" hidden></div>
+    <!-- Page-level standby line: shown until the first card hydrates, then fades (app.js). -->
+    <p class="standby-note" id="standby-note">Stand by — we're auditing how you use these tools
+    across the projects on your computer. This is private: it runs locally and only you can see it.
+    Coding setups are personal, so the recommendations are built for yours.</p>
     <div class="banner-error" id="global-error" role="alert" hidden></div>
   </section>
 
@@ -127,13 +136,29 @@
     </div>
   </noscript>
 
+  <!-- ============================================== 0 · BRAIN ACTIVITY -->
+  <details class="card" id="card-activity" open>
+    <summary>
+      <span class="card-head">
+        <span class="stage st-mirror">Mirror</span>
+        <h2>Brain activity</h2>
+        <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
+      </span>
+      <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-activity">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+    </div>
+  </details>
+
   <!-- ================================================= 1 · YOUR STACK -->
   <details class="card" id="card-stack" open>
     <summary>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
         <h2>Your stack</h2>
-        <span class="q">What's installed — current, doubled, or broken?</span>
+        <span class="q">Every rUv tool on your machine, kept at its best — and one click when anything drifts.</span>
       </span>
       <span class="chips" id="chips-stack"><span class="chip tone-wait">checking…</span></span>
       <span class="chev" aria-hidden="true">›</span>
@@ -147,7 +172,9 @@
         <div class="sk-bar w60"></div>
       </div>
       <p class="loading-note">Auditing your installed packages against the registry — this one touches
-      the network and usually takes 5–20 seconds. Everything below is already live.</p>
+      the network and usually takes 5–20 seconds. Private by design: the registry only ever sees
+      ordinary version lookups — nothing about you or your projects leaves this machine. Everything
+      below is already live.</p>
     </div>
   </details>
 
@@ -156,16 +183,19 @@
     <summary>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>Is your memory actually working?</h2>
-        <span class="q">Not "is it up" — does recall return the right things when it counts?</span>
+        <h2>Your memory, proven</h2>
+        <span class="q">Your system learns and shares intelligence across projects — this card tests it live, so you never have to wonder.</span>
       </span>
       <span class="chips" id="chips-memory"><span class="chip tone-wait">…</span></span>
       <span class="chev" aria-hidden="true">›</span>
     </summary>
     <div class="body" id="body-memory">
       <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+      <p class="loading-note">Running live recall probes on your local memory stores — everything stays
+      on this machine, and the score reflects how <em>you</em> actually work.</p>
     </div>
   </details>
+
 
   <!-- ==================================== 3 · SMART ROUTING (MetaHarness) -->
   <details class="card" id="card-savings" open>
@@ -180,6 +210,8 @@
     </summary>
     <div class="body" id="body-savings">
       <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
+      <p class="loading-note">Reading your real routing receipts from this machine — local and private,
+      measured from your own work, never projected.</p>
     </div>
   </details>
 
@@ -189,13 +221,15 @@
       <span class="card-head">
         <span class="stage st-rec">Apply</span>
         <h2>Settings</h2>
-        <span class="q">Saves one file in your user folder — nothing else on your computer changes.</span>
+        <span class="q">Tune how much of the stack works for you — saves one file in your user folder, nothing else changes.</span>
       </span>
       <span class="chips" id="chips-settings"><span class="chip tone-wait">…</span></span>
       <span class="chev" aria-hidden="true">›</span>
     </summary>
     <div class="body" id="body-settings">
       <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w65"></div></div>
+      <p class="loading-note">Reading one settings file from your user folder — local, yours, and the
+      only thing this page ever writes.</p>
     </div>
   </details>
 
@@ -207,13 +241,15 @@
       <span class="card-head">
         <span class="stage st-mirror">Explain</span>
         <h2>How it's wired</h2>
-        <span class="q">Do your tools resolve through npx or a global binary — and where?</span>
+        <span class="q">Where each project launches rUv's tools from — and one click to the fastest, safest wiring.</span>
       </span>
       <span class="chips" id="chips-wiring"><span class="chip tone-wait">…</span></span>
       <span class="chev" aria-hidden="true">›</span>
     </summary>
     <div class="body" id="body-wiring">
       <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
+      <p class="loading-note">Scanning your projects' hook files locally — how you launch your tools is
+      personal, and it stays on this machine.</p>
     </div>
   </details>
 
@@ -373,5 +409,6 @@
 <!-- Classic deferred script (no imports needed): unlike type="module", it also
      runs from file:// during static preview, where modules are CORS-blocked. -->
 <script defer src="app.js"></script>
+<script defer src="activity.js"></script>
 </body>
 </html>

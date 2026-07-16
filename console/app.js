@@ -256,9 +256,20 @@ function stackSkeleton() {
       <div class="sk-bar w35"></div><div class="sk-bar w90"></div>
       <div class="sk-bar w85"></div><div class="sk-bar w88"></div><div class="sk-bar w60"></div></div>`),
     el('p', { class: 'loading-note' },
-      'Auditing your installed packages against the registry — this one touches the network and usually takes 5–20 seconds.'),
+      'Checking every global package against the npm registry, one by one — read-only, nothing changes. ',
+      'Private by design: the registry only sees ordinary version lookups; nothing about you or your projects leaves this machine. ',
+      'On a full stack the first look honestly takes 30–60 seconds; after that it’s instant from cache. ',
+      el('span', { class: 'elapsed', id: 'stack-elapsed' }, '')),
   );
-  setChips('chips-stack', [chip('checking…', 'wait')]);
+  setChips('chips-stack', [chip('checking registry…', 'wait')]);
+  if (stackTicker) clearInterval(stackTicker);
+  const t0 = Date.now();
+  stackTicker = setInterval(() => {
+    const target = document.getElementById('stack-elapsed');
+    if (!target) { clearInterval(stackTicker); stackTicker = null; return; }
+    const s = Math.round((Date.now() - t0) / 1000);
+    target.textContent = `— ${s}s in, still working (the registry answers one package at a time)`;
+  }, 1000);
 }
 
 function pkgRow(p) {
@@ -269,7 +280,16 @@ function pkgRow(p) {
       p.installed != null ? p.installed : el('span', { style: 'color:var(--red-text)' }, 'unreadable')),
     el('td', { class: 'cell-mono' }, p.target ?? '—'),
     el('td', { class: 'cell-mono cell-dim' }, p.tag ?? '—'),
-    el('td', {}, chip(st, STATE_TONE[st], STATE_TITLE[st])),
+    el('td', {}, chip(st, STATE_TONE[st], STATE_TITLE[st]),
+      p.state === 'BEHIND' ? el('button', {
+        class: 'btn-fix', type: 'button',
+        title: `Update ${p.name} to ${p.target ?? 'latest'} — one click below, undo recorded first`,
+        onclick: () => jumpToRec(`sync:${p.name}`),
+      }, `update → ${p.target ?? 'latest'}`) : null,
+      p.state === 'BROKEN' ? el('button', {
+        class: 'btn-fix', type: 'button', title: `Repair ${p.name} — one click below`,
+        onclick: () => jumpToRec(`repair:${p.name}`),
+      }, 'repair') : null),
   );
 }
 
@@ -309,6 +329,158 @@ function groupFamilies(pkgs) {
   });
 }
 
+/* No status without a remedy: every "behind/broken" indicator carries a jump to its
+   one-click fix card (the consent-gated recommendation that already exists below). */
+let stackTicker = null;
+function jumpToRec(recId) {
+  const card = document.getElementById('card-recs');
+  if (card) card.open = true;
+  const rec = document.getElementById(`rec-${recId}`);
+  if (!rec) return;
+  rec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  rec.classList.add('rec-flash');
+  setTimeout(() => rec.classList.remove('rec-flash'), 2600);
+  // Land ready to act: the Apply button gets focus so the fix is one keystroke away —
+  // the jump must never feel like it WAS the fix.
+  setTimeout(() => rec.querySelector('.btn-apply')?.focus(), 650);
+}
+
+/* Re-mirror the machine — used by the header ↻ button and auto-run after every apply/undo,
+   so the page always shows the AFTER state instead of a stale before. */
+async function recheckMachine() {
+  setChips('chips-stack', [chip('re-checking your machine…', 'wait')]);
+  announce('Re-checking your machine — every card will update to the current state.');
+  await Promise.allSettled([loadStack({ skipCache: true }), loadState()]);
+  announce('Re-check complete.');
+}
+
+/* Jump-and-flash for a Settings row (provider chips land here) — same pattern as jumpToRec. */
+function jumpToSetting(key) {
+  const card = document.getElementById('card-settings');
+  if (card) card.open = true;
+  const row = document.getElementById(`field-${key}`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('rec-flash');
+  setTimeout(() => row.classList.remove('rec-flash'), 2600);
+}
+
+/* WP5 — the page-level "stand by, this is private" line fades once the first card hydrates. */
+function dismissStandby() {
+  const n = document.getElementById('standby-note');
+  if (!n || n.hidden) return;
+  n.classList.add('gone');
+  setTimeout(() => { n.hidden = true; }, 650);
+}
+
+/* ---------------------------------------- click-to-learn: ONE shared popover
+   Used by the Dev/Prod headers (WP3), every Settings row (WP4), and the wiring
+   lead (WP6). Anchored near its trigger, closes on Escape / click-outside /
+   scroll, never shifts the layout (position: fixed). */
+
+let infoPopEl = null;
+let infoPopOwner = null;
+
+function closeInfoPop() {
+  if (!infoPopEl) return;
+  const owner = infoPopOwner;
+  infoPopEl.remove();
+  infoPopEl = null;
+  infoPopOwner = null;
+  document.removeEventListener('pointerdown', onInfoDocDown, true);
+  document.removeEventListener('keydown', onInfoKey, true);
+  window.removeEventListener('scroll', closeInfoPop, true);
+  window.removeEventListener('resize', closeInfoPop);
+  if (owner && document.contains(owner)) owner.focus({ preventScroll: true });
+}
+
+function onInfoDocDown(e) {
+  if (!infoPopEl) return;
+  if (infoPopEl.contains(e.target)) return;
+  if (infoPopOwner && (e.target === infoPopOwner || infoPopOwner.contains(e.target))) return;
+  closeInfoPop();
+}
+
+function onInfoKey(e) { if (e.key === 'Escape') closeInfoPop(); }
+
+function openInfoPop(trigger, title, beats) {
+  if (infoPopEl && infoPopOwner === trigger) { closeInfoPop(); return; } // second click toggles off
+  closeInfoPop();
+  const pop = el('div', { class: 'info-pop', role: 'dialog', 'aria-label': title, tabindex: '-1' },
+    el('button', { class: 'ip-close', type: 'button', 'aria-label': 'Close', onclick: closeInfoPop }, '×'),
+    el('p', { class: 'ip-title' }, title),
+    (Array.isArray(beats) ? beats : [beats]).map((b) => (typeof b === 'string'
+      ? el('p', { class: 'ip-beat' }, b)
+      : el('p', { class: 'ip-beat' }, el('span', { class: 'ip-k' }, b.k), b.t))));
+  document.body.append(pop);
+  const r = trigger.getBoundingClientRect();
+  const pw = pop.offsetWidth;
+  const ph = pop.offsetHeight;
+  const left = Math.min(Math.max(12, r.left), Math.max(12, window.innerWidth - pw - 12));
+  let top = r.bottom + 8;
+  if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 8);
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+  infoPopEl = pop;
+  infoPopOwner = trigger;
+  document.addEventListener('pointerdown', onInfoDocDown, true);
+  document.addEventListener('keydown', onInfoKey, true);
+  window.addEventListener('scroll', closeInfoPop, true);
+  window.addEventListener('resize', closeInfoPop);
+  pop.focus({ preventScroll: true });
+}
+
+function infoBtn(title, beats) {
+  return el('button', {
+    class: 'info-btn', type: 'button',
+    'aria-label': `About “${title}” — what it is and why it matters`,
+    title: 'What is this — and why it matters',
+    onclick: (e) => { e.preventDefault(); e.stopPropagation(); openInfoPop(e.currentTarget, title, beats); },
+  }, 'i');
+}
+
+/* What/Why/How copy — three beats, every Settings row (WP4). */
+const SETTING_INFO = {
+  qeFleet: [
+    { k: 'What is this?', t: 'A squad of test agents that spins up only when you ask — it can write tests for your code, measure what your tests miss, scan for security holes, and check accessibility.' },
+    { k: 'Why does it matter?', t: 'Untested code breaks in front of users.' },
+    { k: 'How does it help me?', t: 'Say “QE this” and the fleet does a quality pass no human has patience for.' },
+  ],
+  routing: [
+    { k: 'What is this?', t: 'Sends small mechanical tasks to small cheap models and saves the big model for hard work.' },
+    { k: 'Why does it matter?', t: 'Most AI work doesn’t need the expensive model.' },
+    { k: 'How does it help me?', t: 'Same quality where it counts, at a fraction of the spend — every routing decision is receipted.' },
+  ],
+  nightly: [
+    { k: 'What is this?', t: 'Rebuilds the knowledge base overnight so answers track the newest source.' },
+    { k: 'Why does it matter?', t: 'This ecosystem ships fast — stale knowledge means wrong answers.' },
+    { k: 'How does it help me?', t: 'You wake up current without doing anything.' },
+  ],
+  provider: [
+    { k: 'What is this?', t: 'Which AI stack is yours — sets your frontier model and what “savings” are measured against.' },
+    { k: 'Why does it matter?', t: 'The router should ride licenses you already pay for.' },
+    { k: 'How does it help me?', t: 'Click your house and routing adapts to your subscriptions automatically.' },
+  ],
+  openrouterKey: [
+    { k: 'What is this?', t: 'One key that unlocks many cheap models from many providers.' },
+    { k: 'Why does it matter?', t: 'The biggest savings come from models outside your main subscription.' },
+    { k: 'How does it help me?', t: 'Paste it once, the cheap lane lights up — stored only in your user folder.' },
+  ],
+};
+
+/* Dev-vs-Prod economics, in the owner's words (WP3). */
+const PROFILE_INFO = {
+  Development: ['Development is you, building your app. You already pay for a subscription (Claude Max, Codex) — dev work rides it at no extra cost, so this table optimizes for speed on your license.'],
+  Production: ['Production is your app, serving other people. Your users can’t ride your personal subscription — production runs on metered API calls you pay per token, so this table optimizes for cost-per-quality on every call. Different economics — that’s why there are two tables.'],
+};
+
+/* The wiring card's click-to-learn (WP6). */
+const WIRING_INFO = [
+  { k: 'What is this?', t: 'A live map of how each project launches the RuvNet tools — a fresh npx download on every call, or your one global install.' },
+  { k: 'Why does it matter?', t: 'npx keeps hidden private copies that can go stale — old code quietly answers while every command still “works”.' },
+  { k: 'How does it help me?', t: 'You see exactly where each style is in use, and every fix below is one click with the undo recorded first.' },
+];
+
 function familyRow(fam) {
   const tone = fam.attention ? 'warn' : 'green';
   const statusText = fam.attention ? `${fam.attention} need${fam.attention === 1 ? 's' : ''} a look` : 'current';
@@ -318,6 +490,14 @@ function familyRow(fam) {
       el('span', { class: 'fam-name' }, fam.name),
       el('span', { class: 'fam-what' }, fam.what),
       el('span', { class: 'fam-status' }, chip(statusText, tone),
+        fam.attention ? el('button', {
+          class: 'btn-fix', type: 'button', title: 'Jump to the one-click fix below (evidence, cost, and undo included)',
+          onclick: (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const first = fam.items.find((i) => i.state === 'BEHIND' || i.state === 'BROKEN');
+            if (first) jumpToRec(`${first.state === 'BROKEN' ? 'repair' : 'sync'}:${first.name}`);
+          },
+        }, 'fix ↓') : null,
         el('span', { class: 'fam-count' }, count > 1 ? `${count} parts` : '1 pkg')),
       el('span', { class: 'fam-chev', 'aria-hidden': 'true' }, '›')),
     el('div', { class: 'fam-body' },
@@ -331,6 +511,7 @@ function familyRow(fam) {
 }
 
 function renderStack(data) {
+  if (stackTicker) { clearInterval(stackTicker); stackTicker = null; }
   const body = $('#body-stack');
   const sum = data.summary || {};
   const pkgs = Array.isArray(data.packages) ? [...data.packages] : [];
@@ -370,7 +551,12 @@ function renderStack(data) {
   if (pkgs.length) {
     main.push(el('p', { class: 'impact-note' },
       attention.length
-        ? `${fmtInt(attention.length)} package${attention.length === 1 ? '' : 's'} need a look — open the tool below to see which.`
+        ? el('span', {},
+            `${fmtInt(attention.length)} package${attention.length === 1 ? '' : 's'} need${attention.length === 1 ? 's' : ''} a look — every one has a one-click fix with evidence, cost, and undo. `,
+            el('button', {
+              class: 'btn-fix', type: 'button',
+              onclick: () => jumpToRec(attention[0].state === 'BROKEN' ? `repair:${attention[0].name}` : `sync:${attention[0].name}`),
+            }, 'take me to the fix ↓'))
         : 'Nothing needs attention — every package matches its target, one copy each.'));
     main.push(el('div', { class: 'fam-list' }, groupFamilies(pkgs).map(familyRow)));
   } else {
@@ -419,6 +605,12 @@ function renderWiring(w) {
   updateFoundStrip();
 
   const main = [];
+  // WP6 — plain-English first: what this means FOR YOU, before any numbers.
+  main.push(el('p', { class: 'lead-stat' },
+    'Some of your projects launch these tools by downloading a fresh copy each time (', el('code', {}, 'npx'),
+    '); others use your one global install. Stale hidden copies can quietly run old code — this card shows where each lives so you can pick, with one-click rewiring below.',
+    infoBtn('How it’s wired', WIRING_INFO)));
+
   main.push(el('p', { class: 'lead-stat' },
     el('b', {}, fmtInt(s.npx ?? 0)), ' of your tool calls resolve via ', el('code', {}, 'npx'),
     ' across ', el('b', {}, fmtInt(s.projectsWithNpx ?? 0)), ' projects. ',
@@ -521,14 +713,24 @@ function recsSettled(source, ok) {
 
 function addRecommendations(recs, source) {
   const list = $('#recs-list');
+  // Ordering explains itself (shown once): machine-wide first, then your active projects.
+  if (!document.getElementById('recs-order-note')) {
+    list.before(el('p', { class: 'impact-note', id: 'recs-order-note' },
+      'Ordered by what you’re working on — machine-wide updates first (they affect every project), then your most recently active projects.'));
+  }
   let dropped = 0;
+  const nodes = [];
   for (const rec of Array.isArray(recs) ? recs : []) {
     if (!rec || rec.id == null || renderedRecIds.has(rec.id)) continue;
     // The DDD invariant, honored in the UI too: no evidence/cost/undo → not rendered.
     if (!Array.isArray(rec.evidence) || !rec.evidence.length || !rec.cost || !rec.undo) { dropped += 1; continue; }
     renderedRecIds.add(rec.id);
-    list.append(buildRecCard(rec));
+    nodes.push(buildRecCard(rec));
   }
+  // Stack updates (sync:/repair:) arrive from the slow audit AFTER wiring recs — but they outrank
+  // them (machine-wide blast radius), so they go to the top instead of queueing at the bottom.
+  if (source === 'stack' && list.firstChild) list.prepend(...nodes);
+  else list.append(...nodes);
   if (dropped) {
     list.append(el('p', { class: 'fineprint' },
       `${dropped} proposal${dropped === 1 ? '' : 's'} arrived without evidence, cost, or an undo and ${dropped === 1 ? 'was' : 'were'} not rendered — the contract requires all three.`));
@@ -643,6 +845,8 @@ function buildRecCard(rec) {
         el('div', { class: 'applied-btns' }, undoBtn)));
     announce(`${rec.title} applied.`);
     undoBtn.focus();
+    // Close the loop: re-mirror the machine so every card shows the AFTER state.
+    recheckMachine();
   }
 
   async function doUndo(undoToken, btn) {
@@ -657,6 +861,7 @@ function buildRecCard(rec) {
         actions.replaceChildren(el('p', { class: 'reverted' }, 'Reverted — your machine is back exactly the way it was.'));
         actions.append(el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: setIdleActions }, 'Offer it again'));
         announce(`${rec.title} reverted.`);
+        recheckMachine(); // show the restored state everywhere, not just on this card
       } else {
         fail('Undo didn’t complete. The backup file still exists — nothing is lost.');
       }
@@ -846,13 +1051,22 @@ function renderRouterProfiles(rp) {
   const money = (v) => (v == null ? '—' : v === 0 ? '$0' : '$' + v + '/Mtok');
   const bandRow = (b) => el('tr', {},
     el('td', { class: 'rp-band' }, b.band),
-    el('td', {}, el('div', { class: 'rp-model' }, prettyModel(b.model)), el('div', { class: 'rp-why' }, b.why)),
+    el('td', {}, el('div', { class: 'rp-model' }, prettyModel(b.model)), el('div', { class: 'rp-why' }, b.why),
+      String(b.band).toLowerCase() === 'frontier'
+        ? el('span', { class: 'rp-esc' }, 'escalation — last resort by design') : null),
     el('td', { class: 'cell-mono cell-dim' }, b.effort + (b.effortSource === 'default' ? ' *' : '')),
     el('td', { class: 'cell-mono num' }, money(b.costPerMTok)),
   );
+  // WP3 — the Dev/Prod headers are click-to-learn: why two tables, in plain economics.
   const profileBlock = (name, p) => el('div', { class: 'rp-profile' },
     el('div', { class: 'rp-head' },
-      el('span', { class: 'rp-name' }, name),
+      el('button', {
+        class: 'rp-name-btn', type: 'button',
+        title: `What does “${name}” mean here?`,
+        onclick: (e) => openInfoPop(e.currentTarget, name, PROFILE_INFO[name] || []),
+      },
+        el('span', { class: 'rp-name' }, name),
+        el('span', { class: 'info-btn', 'aria-hidden': 'true' }, 'i')),
       el('span', { class: 'rp-obj' }, p.objective)),
     el('div', { class: 'scroll-x' },
       el('table', { class: 'tb rp-tb' },
@@ -886,6 +1100,8 @@ function renderRouterProfiles(rp) {
       bg,
       houseLine,
       splitNote,
+      el('p', { class: 'dist-ladder' },
+        'Ordered the way the router thinks — cheapest first, frontier only when the work earns it.'),
       el('div', { class: 'rp-grid' },
         profileBlock('Development', rp.profiles.development),
         profileBlock('Production', rp.profiles.production)),
@@ -930,7 +1146,8 @@ function renderDistribution(u) {
     // Bar = share of ALL tasks, so it reads directly against the "Share of tasks" header.
     const w = d.tasks ? Math.max(d.pctOfTasks, 4) : 0;
     return el('div', { class: 'dist-row' + (d.tasks ? '' : ' is-empty') },
-      el('div', { class: 'dist-band ' + tone[d.band] }, d.label),
+      el('div', { class: 'dist-band ' + tone[d.band] }, d.label,
+        d.band === 'frontier' ? el('div', { class: 'dist-esc' }, 'escalation — last resort by design') : null),
       el('div', { class: 'dist-track' },
         el('div', { class: 'dist-fill ' + tone[d.band], style: 'width:' + w + '%' }),
         el('span', { class: 'dist-count' }, d.tasks ? d.tasks + ' · ' + d.pctOfTasks + '%' : '0')),
@@ -942,6 +1159,8 @@ function renderDistribution(u) {
       el('b', {}, u.tasks + (u.tasks === 1 ? ' task' : ' tasks')), ' routed so far. Sending every one to ',
       el('b', {}, frontierName), ' would have cost ', el('b', {}, fmtUsd(u.frontierUsd)),
       ' — you spent ', el('b', {}, fmtUsd(u.realizedUsd)), '.'),
+    el('p', { class: 'dist-ladder' },
+      'Ordered the way the router thinks — cheapest first, frontier only when the work earns it.'),
     el('div', { class: 'dist-grid' },
       el('div', { class: 'dist-row dist-head' },
         el('div', { class: 'dist-band' }, 'Bucket'),
@@ -950,6 +1169,38 @@ function renderDistribution(u) {
         el('div', { class: 'dist-saved' }, 'Saved')),
       ...rows),
     el('p', { class: 'fineprint' }, u.note));
+}
+
+// WP2d — what we detected on YOUR machine, as chips. Each chip clicks through to the
+// setting that already owns the choice (no second provider-switching mechanism).
+function renderProviders(sv) {
+  const rp = sv && sv.routerProfiles;
+  if (!rp) return null;
+  const house = rp.house || {};
+  const HOUSE_NAME = { anthropic: 'Claude Max', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' };
+  const houseName = HOUSE_NAME[house.provider] || house.label || 'Your stack';
+  const chipBtn = (on, boldPart, rest, target, tip) => el('button', {
+    class: `prov-chip ${on ? 'on' : 'dim'}`, type: 'button', title: tip,
+    onclick: () => jumpToSetting(target),
+  },
+    el('span', { class: 'pc-dot', 'aria-hidden': 'true' }),
+    el('span', {}, el('b', {}, boldPart), rest));
+  const chips = [
+    chipBtn(true, houseName, ' — main model on your subscription ($0 extra)', 'provider',
+      'Your model house — change it in Settings'),
+    rp.hasOpenRouterKey
+      ? chipBtn(true, 'OpenRouter key', ' — cheap models live', 'openrouterKey',
+          'Your OpenRouter key — manage it in Settings')
+      : chipBtn(false, 'OpenRouter key', ' — not detected', 'openrouterKey',
+          'Paste a key in Settings to light up the cheap lane'),
+  ];
+  for (const [id, label] of [['openai', 'OpenAI'], ['google', 'Gemini'], ['xai', 'Grok']]) {
+    if (id === house.provider || chips.length >= 4) continue;
+    chips.push(chipBtn(false, label, ' — not detected', 'provider',
+      `If ${label} is your house, set it under “Your model house” in Settings`));
+  }
+  return el('div', { class: 'prov-strip' },
+    el('span', { class: 'prov-lab' }, 'Your providers:'), ...chips);
 }
 
 function renderSavings(sv) {
@@ -981,14 +1232,21 @@ function renderSavings(sv) {
       ' — sending each prompt, and every sub-agent Ruflo spins up, to the cheapest model that’s genuinely good enough (escalating only when the work needs it), learning which model wins from your real results, across the providers you already pay for. Most people never turn it on. Here it’s one click — and yours to switch off anytime.'),
     el('div', { class: 'mh-cta' }, enableBtn, enableNote));
 
-  const blocks = [pitch];
+  const blocks = [];
+  const prov = renderProviders(sv);
+  if (prov) blocks.push(prov);
+  blocks.push(pitch);
 
   if (!util && !receipts.length) {
-    setChips('chips-savings', [chip('nothing measured yet', 'wait')]);
-    blocks.push(el('div', { class: 'empty' },
-      el('p', {}, 'No savings measured yet — and we won’t invent any. As routed tasks run, real receipts (never projections, never “up to”) appear here — with how many tasks landed in each bucket and what you saved versus the frontier model.')));
+    setChips('chips-savings', [chip('nothing routed yet', 'wait')]);
+    // WP2b — the first-run state is a confident promise, not an apology.
+    blocks.push(el('div', { class: 'mh-empty' },
+      el('p', { class: 'mh-empty-title' }, 'Nothing routed yet — that’s expected.'),
+      el('p', { class: 'mh-empty-body' },
+        'Turn it on, work normally for a week, then come back. You’ll see exactly what you saved by not sending everything to the most expensive frontier model — every number here will be a ',
+        el('b', {}, 'real receipt'), ', never a projection.')));
     // Even before any task runs, show what the router WOULD choose per bucket — the plan is real.
-    const rp0 = renderRouterProfiles(sv.routerProfiles);
+    const rp0 = renderRouterProfiles(sv && sv.routerProfiles);
     if (rp0) blocks.push(rp0);
     body.replaceChildren(withIllo('savings', ...blocks));
     return;
@@ -1021,6 +1279,14 @@ function renderSavings(sv) {
       el('div', { class: 'total-num' }, util ? fmtUsd(util.frontierUsd) : (totals && totals.msSaved >= 0 ? fmtMs(totals.msSaved) : '—')),
       el('div', { class: 'total-lab' }, util ? `if all on ${frontierName}` : 'time saved'))));
 
+  // WP2a — provenance, worn openly: these numbers are receipts, not projections.
+  const receiptCount = util ? util.tasks : (totals && totals.count != null ? totals.count : receipts.length);
+  blocks.push(el('p', { class: 'prov-badge' },
+    el('span', { class: 'prov-dot', 'aria-hidden': 'true' }),
+    el('span', {}, 'real numbers — recomputed from your ',
+      el('b', {}, `${fmtInt(receiptCount)} receipt${receiptCount === 1 ? '' : 's'}`),
+      ', never projected')));
+
   // The distribution — how many tasks went to each bucket, and the saved-vs-frontier math.
   const dist = renderDistribution(util);
   if (dist) blocks.push(dist);
@@ -1030,7 +1296,10 @@ function renderSavings(sv) {
     blocks.push(el('details', { class: 'mh-receipts' },
       el('summary', { class: 'rp-summary' },
         el('span', { class: 'rp-sum-t' }, 'Every routed task'),
-        el('span', { class: 'rp-sum-s' }, `${fmtInt(receipts.length)} measured receipt${receipts.length === 1 ? '' : 's'} · newest first`),
+        el('span', { class: 'rp-sum-s' },
+          totals && totals.count > receipts.length
+            ? `${fmtInt(totals.count)} measured receipts — showing the ${fmtInt(receipts.length)} newest`
+            : `${fmtInt(receipts.length)} measured receipt${receipts.length === 1 ? '' : 's'} · newest first`),
         el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
       el('div', { class: 'scroll-x scroll-y' },
         el('table', { class: 'tb' },
@@ -1047,7 +1316,7 @@ function renderSavings(sv) {
           )))))));
   }
 
-  if (sv.note) blocks.push(el('p', { class: 'fineprint savings-note' }, sv.note));
+  // (sv.note used to render here as 11px fineprint — the provenance badge above replaced it.)
 
   const rp = renderRouterProfiles(sv.routerProfiles);
   if (rp) blocks.push(rp);
@@ -1154,9 +1423,12 @@ function renderSettings(cfg) {
       collectors[f.key] = () => ({ include: true, value: input.value });
     }
 
-    form.append(el('div', { class: 'field' },
+    // WP4 — every row answers What / Why / How on click; unknown keys fall back to their help text.
+    const beats = SETTING_INFO[f.key]
+      || (f.help ? [{ k: 'What is this?', t: f.help }] : [{ k: 'What is this?', t: 'A RuvNet Brain option, stored in your settings file.' }]);
+    form.append(el('div', { class: 'field', id: `field-${f.key}` },
       el('div', {},
-        el('span', { class: 'field-label', id: labId }, f.label || f.key),
+        el('span', { class: 'field-label', id: labId }, f.label || f.key, infoBtn(f.label || f.key, beats)),
         f.help ? el('p', { class: 'field-help', id: helpId }, f.help) : el('span', { id: helpId })),
       ctl));
   }
@@ -1238,7 +1510,9 @@ async function loadState() {
     renderSettings(s.config);
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);
+    dismissStandby(); // first cards are hydrated — the standby line has done its job
   } catch (err) {
+    dismissStandby(); // don't say "stand by" over an error banner
     showGlobalError(err);
     const retry = () => loadState();
     inlineError('body-wiring', String(err.message || err), retry);
@@ -1252,13 +1526,27 @@ async function loadState() {
   }
 }
 
-async function loadStack() {
+async function loadStack({ skipCache = false } = {}) {
   try {
+    // Instant first paint from the last good audit, honestly labeled — then the live re-check
+    // replaces it. skipCache=true (used right after an apply/undo) goes straight to the live
+    // audit so the page shows the AFTER state, never the stale before.
+    if (!skipCache) {
+      try {
+        const fast = await getJSON('/api/stack?fast=1');
+        if (fast && fast.fromCache && Array.isArray(fast.packages)) {
+          renderStack(fast);
+          const when = fast.cachedAt ? new Date(fast.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'earlier';
+          setChips('chips-stack', [chip(`as of ${when}`, 'cyan'), chip('re-checking…', 'wait')]);
+        }
+      } catch { /* no cache yet — the skeleton narration carries the wait */ }
+    }
     const stack = await getJSON('/api/stack');
     renderStack(stack);
     addRecommendations(stack.recommendations, 'stack');
     recsSettled('stack', true);
   } catch (err) {
+    if (stackTicker) { clearInterval(stackTicker); stackTicker = null; }
     setChips('chips-stack', [chip('couldn’t audit', 'grey')]);
     inlineError('body-stack', String(err.message || err), () => { stackSkeleton(); loadStack(); });
     recsSettled('stack', false);
@@ -1400,3 +1688,4 @@ async function mockPost(url, body) {
 initTheme();
 loadState();
 loadStack();
+$('#recheck-btn')?.addEventListener('click', () => recheckMachine());

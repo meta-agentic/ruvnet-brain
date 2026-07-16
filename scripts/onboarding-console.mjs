@@ -66,6 +66,17 @@ function robustRead(db, sql) {
   }
   return { ok: false, value: null, mode: null, err: String(lastErr && lastErr.message || 'unreadable') };
 }
+// Row-returning sibling of robustRead: same WAL-safe two-mode ladder, `sqlite3 -json` output.
+function robustReadJSON(db, sql) {
+  for (const mode of ['mode=ro', 'immutable=1']) {
+    try {
+      const uri = `file:${encodeURI(db)}?${mode}`;
+      const v = execFileSync('sqlite3', ['-json', uri, sql], { encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      return { ok: true, rows: v ? JSON.parse(v) : [], mode };
+    } catch { /* try next mode */ }
+  }
+  return { ok: false, rows: [], mode: null };
+}
 
 // ── Wiring survey (read-only): how do this machine's projects launch rUv tools? ───────────────────
 const VENDOR = ['/clones/', '/node_modules/', '/vendor/', '/upstream/', '.claude-backup', '_snapshots'];
@@ -202,6 +213,7 @@ function gatherSavings() {
   ];
   const receipts = [];
   let baselineUsd = 0;
+  let skippedUnmeasured = 0; // rows with neither a $ nor a time saving — counted so labels can say so
   for (const f of files) {
     if (!fs.existsSync(f)) continue;
     for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
@@ -218,7 +230,7 @@ function gatherSavings() {
       if (!Number.isFinite(ms) && Number.isFinite(Number(r.baseline_duration_ms)) && Number.isFinite(Number(r.duration_ms))) {
         ms = Number(r.baseline_duration_ms) - Number(r.duration_ms);
       }
-      if (!Number.isFinite(usd) && !Number.isFinite(ms)) continue;
+      if (!Number.isFinite(usd) && !Number.isFinite(ms)) { skippedUnmeasured += 1; continue; }
       const base = Number(r.est_frontier_cost);
       if (Number.isFinite(base)) baselineUsd += base;
       receipts.push({
@@ -240,7 +252,7 @@ function gatherSavings() {
     baselineUsd: +baselineUsd.toFixed(4),
     pctSaved: baselineUsd > 0 ? Math.round((usdSaved / baselineUsd) * 100) : null,
   } : null;
-  return { totals, note: 'receipts only — no modelled, projected, or “up to” savings', receipts: receipts.slice(-25).reverse() };
+  return { totals, note: 'receipts only — no modelled, projected, or “up to” savings', skippedUnmeasured, receipts: receipts.slice(-25).reverse() };
 }
 
 // ── Config (user-level) ──────────────────────────────────────────────────────────────────────────
@@ -268,6 +280,68 @@ function gatherConfig() {
   };
 }
 
+// ── Brain activity read-model (ADR-0018) — read-only, file reads + sqlite3 CLI only ──────────────
+// Fleet scan is cached for 10 min: ~50 stores × a CLI spawn each is fine once, not per poll.
+let ACTIVITY_MACHINE_CACHE = null;
+function findMemoryStores(root) {
+  const out = [];
+  const walk = (dir, depth) => {
+    if (depth > 3) return;
+    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      if (VENDOR.some((m) => (p + '/').includes(m))) continue;
+      if (e.name === '.swarm') {
+        if (fs.existsSync(path.join(p, 'memory.db'))) out.push({ project: dir, db: path.join(p, 'memory.db') });
+        continue;
+      }
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      walk(p, depth + 1);
+    }
+  };
+  walk(root, 0);
+  return out;
+}
+function gatherActivity(cwd) {
+  const project = fs.existsSync(path.join(cwd, '.swarm/memory.db')) ? cwd : REPO;
+  const db = path.join(project, '.swarm/memory.db');
+  const out = { generatedAt: new Date().toISOString(), project: path.basename(project), hasStore: fs.existsSync(db) };
+  if (!out.hasStore) return out;
+  const rows = (sql) => robustReadJSON(db, sql).rows;
+  out.totals = {
+    memories: Number(robustRead(db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0),
+    lessons: Number(robustRead(db, "SELECT COUNT(*) FROM memory_entries WHERE namespace='lessons' AND status='active'").value || 0),
+  };
+  out.lessons = rows("SELECT key, access_count, date(created_at/1000,'unixepoch') AS learned, substr(content,1,600) AS excerpt FROM memory_entries WHERE namespace='lessons' AND status='active' ORDER BY created_at DESC");
+  out.recent = rows("SELECT key, namespace, type, datetime(updated_at/1000,'unixepoch','localtime') AS at FROM memory_entries WHERE status='active' ORDER BY updated_at DESC LIMIT 18");
+  out.breakdown = rows("SELECT namespace, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY namespace ORDER BY n DESC");
+  out.growth = rows("SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY 1 ORDER BY 1");
+  if (!ACTIVITY_MACHINE_CACHE || Date.now() - ACTIVITY_MACHINE_CACHE.at > 600000) {
+    const projects = [];
+    let total = 0;
+    for (const s of findMemoryStores(path.join(HOME, 'Code'))) {
+      const n = Number(robustRead(s.db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0);
+      if (n > 0) {
+        // MAX(updated_at) = when this project was last actively worked — the memory store doubles
+        // as the attention signal (relevance ordering, Stuart 2026-07-15).
+        const lastTouched = Number(robustRead(s.db, 'SELECT MAX(updated_at) FROM memory_entries').value || 0);
+        // rel = the ~/Code-relative path — the SAME key reconcile:<id> recommendations use.
+        projects.push({ name: path.basename(s.project), rel: path.relative(path.join(HOME, 'Code'), s.project), memories: n, lastTouched });
+        total += n;
+      }
+    }
+    projects.sort((a, b) => b.memories - a.memories);
+    ACTIVITY_MACHINE_CACHE = { at: Date.now(), projects, totalMemories: total };
+  }
+  out.machine = {
+    projects: ACTIVITY_MACHINE_CACHE.projects,
+    totalMemories: ACTIVITY_MACHINE_CACHE.totalMemories,
+    scannedAt: new Date(ACTIVITY_MACHINE_CACHE.at).toISOString(),
+  };
+  return out;
+}
+
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
 function gatherState(cwd) {
   const wiring = wiringSurvey();
@@ -283,6 +357,17 @@ function gatherState(cwd) {
   } catch { try { savings.utilization = utilization({}); } catch { savings.utilization = null; } }
   const config = gatherConfig();
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
+  // Relevance order (never alphabetical/walk-order): machine-wide first, then projects by when
+  // the user last actually worked in them — read from each project's own memory store.
+  {
+    const touched = {};
+    for (const p of (ACTIVITY_MACHINE_CACHE && ACTIVITY_MACHINE_CACHE.projects) || []) {
+      if (p.rel) touched[p.rel] = p.lastTouched || 0;
+      touched[p.name] = Math.max(touched[p.name] || 0, p.lastTouched || 0);
+    }
+    const rank = (r) => r.id.startsWith('reconcile:') ? (touched[r.id.slice('reconcile:'.length)] || 0) : Number.MAX_SAFE_INTEGER;
+    recommendations.sort((a, b) => rank(b) - rank(a));
+  }
   // A cheap fingerprint of the state the page is about to render. The page echoes it back on apply;
   // apply's authoritative guard is still per-recommendation re-verification (currentValidIds), but
   // this lets the UI reason about staleness too.
@@ -304,7 +389,15 @@ function gatherStack() {
   const by = (st) => rows.filter((r) => r.state === st).length;
   const summary = { total: rows.length, behind: by('BEHIND'), broken: by('BROKEN'), ahead: by('AHEAD'), current: by('CURRENT'), unresolved: by('UNRESOLVED'), shadows: shadows.length, stale: a.stale.length };
   const recommendations = buildStackRecommendations({ rows: a.rows, stale: a.stale });
-  return { error: a.error, packages: rows, shadows, summary, recommendations };
+  const result = { error: a.error, packages: rows, shadows, summary, recommendations };
+  // Cache the last good audit so repeat page-loads render instantly ("as of HH:MM — re-checking").
+  if (!a.error) {
+    try {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+      fs.writeFileSync(path.join(CONFIG_DIR, 'stack-audit-cache.json'), JSON.stringify({ at: new Date().toISOString(), data: result }));
+    } catch { /* cache is best-effort; the live audit is the product */ }
+  }
+  return result;
 }
 
 // ── The ONLY writer: apply / save / undo ─────────────────────────────────────────────────────────
@@ -423,6 +516,11 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     try {
       const url = req.url.split('?')[0];
       if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd));
+      if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
+      if (req.method === 'GET' && url === '/api/stack' && /[?&]fast=1/.test(req.url)) {
+        const c = readJSON(path.join(CONFIG_DIR, 'stack-audit-cache.json'));
+        return sendJSON(res, 200, c && c.data ? { ...c.data, fromCache: true, cachedAt: c.at } : { fromCache: false });
+      }
       if (req.method === 'GET' && url === '/api/stack') return sendJSON(res, 200, gatherStack());
       if (req.method === 'POST') {
         const body = await readBody(req);
@@ -446,6 +544,9 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     console.log(`\n  🧠  RuvNet Brain — Onboarding Console`);
     console.log(`      ${url}`);
     console.log(`      read-only until you click · token-gated · ^C to stop\n`);
+    // Warm the fleet attention cache off the request path so the very first page load
+    // gets relevance-ordered recommendations (and an instant activity card).
+    setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
     if (open) {
       const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
       try { spawnSync(opener, [url], { stdio: 'ignore' }); } catch { /* headless is fine */ }
