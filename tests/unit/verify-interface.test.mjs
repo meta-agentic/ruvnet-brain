@@ -86,6 +86,81 @@ describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh �
     for (const bin of ['python3', 'jq', '$(cat', '| grep', '| sed']) {
       expect(src, `verify-interface.sh must not depend on ${bin}`).not.toContain(bin);
     }
+    // MATCH_RE (which CLI, which subcommand) is still bash regex — only JSON payload parsing moved
+    // to node (issue #13). BASH_REMATCH must still be how the tool/subcommand are captured.
     expect(src).toMatch(/BASH_REMATCH/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// Regression tests for issues #12 and #13 (github.com/stuinfla/ruvnet-brain), filed by a real user
+// this gate blocked mid-session — including a `git commit` whose message merely mentioned a tool
+// name. Both issues are about the SAME gate but different layers: #13 is what the gate is GIVEN
+// (payload parsing), #12 is what it MATCHES against once it has the real command.
+describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh — issue #13: JSON payload parsing, not a truncating regex', () => {
+  it('quoted commands parse in full: a real invocation AFTER a quoted argument is still seen and blocked', () => {
+    // The OLD field() regex — "([^"]*)" — cannot cross a `"`, and a JSON-escaped `\"` still contains
+    // a literal `"` byte in the raw text. So `field(command)` on this payload used to truncate at the
+    // very first quote, capturing only `echo ` — the entire tail, including the real `ruflo memory
+    // search` invocation after `&&`, was NEVER SEEN by the gate. That is issue #13's false negative:
+    // the exact call this gate exists to catch sailed through unchecked. With real JSON parsing the
+    // full string survives, and the invocation after `&&` is still at command position (issue #12's
+    // anchor), so it correctly blocks.
+    const r = run('echo "a quoted note" && ruflo memory search -q x');
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/BLOCKED — you have not read the interface for: ruflo memory search/);
+  });
+
+  it('malformed JSON (truncated, not just non-JSON garbage) FAILS OPEN, not just totally-invalid input', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vi-'));
+    fs.mkdirSync(path.join(home, '.claude/model-router'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), '{}');
+    const truncated = '{"tool_name":"Bash","tool_input":{"command":"ruflo memory search';
+    const r = spawnSync('bash', [GATE], { input: truncated, env: { ...process.env, HOME: home }, encoding: 'utf8' });
+    expect(r.status).toBe(0);
+  });
+});
+
+describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh — issue #12: word-boundary command-position matching, and a working override', () => {
+  it('does NOT block a different binary that merely shares a hyphenated prefix: ruflo-source-patch', () => {
+    // The OLD version-suffix class `[@a-z0-9.-]*` absorbed an arbitrary hyphenated tail, not just
+    // `@latest` — so `ruflo-source-patch adr-index status` (a DIFFERENT binary, its own CLI) was
+    // misread as `ruflo` with subcommand `adr-index status`, and the gate demanded `ruflo adr-index
+    // status --help` — a command that does not exist. The fix requires an explicit `@` for the
+    // version suffix, so `ruflo-source-patch` no longer matches `ruflo` at all.
+    const r = run('ruflo-source-patch adr-index status');
+    expect(r.status).toBe(0);
+  });
+
+  it('does NOT block prose that merely mentions a tool name — it is not at command position', () => {
+    const r = run('git commit -m "explained how ruflo memory search returns results for this query"');
+    expect(r.status).toBe(0);
+  });
+
+  it('DOES block a real, direct invocation of the exact gated CLI with no --help read', () => {
+    const r = run('ruflo memory search -q x');
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/BLOCKED — you have not read the interface for: ruflo memory search/);
+    expect(r.stderr).toMatch(/ruflo memory search --help/);
+  });
+
+  it('the documented override actually works: RUVNET_SKIP_INTERFACE_CHECK=1 prefixed on the command', () => {
+    // The OLD check read `RUVNET_SKIP_INTERFACE_CHECK` from the HOOK PROCESS's own environment — but
+    // a PreToolUse hook only ever receives the proposed command as JSON on stdin and never executes
+    // it, so setting the var "on the command" (exactly what the block message instructed) had zero
+    // effect. The fix checks the COMMAND STRING itself for the token.
+    const r = run('RUVNET_SKIP_INTERFACE_CHECK=1 ruflo memory search -q x');
+    expect(r.status).toBe(0);
+  });
+
+  it('the block message documents an override that actually works, on the command string', () => {
+    const r = run('ruflo memory search -q x');
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/RUVNET_SKIP_INTERFACE_CHECK=1 ruflo memory search/);
+  });
+
+  it('still recognizes a real npx-wrapped invocation as command position (no regression)', () => {
+    const r = run('npx ruflo@latest memory search -q test');
+    expect(r.status).toBe(2);
   });
 });

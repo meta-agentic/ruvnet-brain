@@ -88,6 +88,13 @@
       "schedule": "daily 09:00",
       "maxAgeHours": 26,
       "required": true
+    },
+    {
+      "label": "com.ruvnet.issue-watch",
+      "what": "Hourly GitHub-issues SLA watcher (stuinfla/ruvnet-brain) — pages ntfy when an open issue sits >4h with no comment from the repo owner",
+      "schedule": "hourly",
+      "maxAgeHours": 3,
+      "required": true
     }
   ]
 }

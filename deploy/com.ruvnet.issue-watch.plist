@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Hourly GitHub-issues SLA watcher for stuinfla/ruvnet-brain (Stuart's mandate: no open issue may
+	sit &gt;4h without an owner response). Runs scripts/issue-watch.mjs, which alerts via ntfy (urgent,
+	topic from ~/.cache/ruvnet-brain/ntfy-topic) when an issue has been open &gt;4h with no comment from
+	stuinfla, deduped to at most one alert per issue per 4h window (state:
+	~/.claude/ruvnet-brain/issue-watch-state.json). Wrapped in job-heartbeat.sh per the house
+	positive-confirmation pattern (see config/scheduled-jobs.json, scripts/nightly-watchdog.mjs) —
+	a crash still leaves a receipt and pages the phone; silence is not health.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/stuartkerr</string>
+		<key>PATH</key>
+		<string>/Users/stuartkerr/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.ruvnet.issue-watch</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>/Users/stuartkerr/Code/ruvnet-brain/scripts/job-heartbeat.sh</string>
+		<string>com.ruvnet.issue-watch</string>
+		<string>--</string>
+		<string>/usr/local/bin/node</string>
+		<string>/Users/stuartkerr/Code/ruvnet-brain/scripts/issue-watch.mjs</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/issue-watch.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/issue-watch.out.log</string>
+	<key>StartInterval</key>
+	<integer>3600</integer>
+</dict>
+</plist>

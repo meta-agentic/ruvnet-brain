@@ -27,6 +27,40 @@
 # CONTRACT: exit 0 = allow · exit 2 + stderr = BLOCK (stderr returns to the model as the reason).
 # FAILS OPEN on anything it cannot parse — a gate that breaks your shell is worse than the bug.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# FIX (2026-07-16, issues #12 and #13 — reported by github.com/sparkling, a real user this gate
+# blocked mid-session, including a git commit).
+#
+# #13 — the payload was parsed with a bash regex: field() { local re="\"$1\"[[:space:]]*:[[:space:]]*
+# \"([^\"]*)\""; ... }. `([^"]*)` cannot cross a `"`, and a JSON-escaped quote (`\"`) still contains a
+# literal `"` byte in the raw text — so any command with an embedded quote was silently truncated at
+# the first one. That cuts both ways: real invocations wrapped in an outer quote became invisible to
+# the gate (false negative — the exact call this gate exists to catch sailed through unchecked), and
+# a truncated fragment happening not to match made a broken check look like a passing one. Fixed by
+# parsing with an actual JSON parser (node -e, piped stdin) instead of a regex — JSON string escaping
+# is not a regular language, no regex fixes this. Fails open (exit 0) if node is missing or the parse
+# throws.
+#
+# #12 — two further defects, now fixed:
+#   1. `[@a-z0-9.-]*` after the tool name (meant only to absorb `@latest`) also absorbed an arbitrary
+#      hyphenated suffix, so a DIFFERENT binary — `ruflo-source-patch`, `ruflo-adr-reindex.sh` — was
+#      misread as `ruflo` with a bogus subcommand, and demanded `--help` for a command that doesn't
+#      exist. And because the match was unanchored, it fired on ordinary prose that happened to
+#      contain a tool's name (a git commit message body). Fixed: the version suffix now requires an
+#      explicit `@`, and matching is anchored to actual command position (start of the command, or
+#      right after a shell separator — `;`, `&`, `|`, `(`, newline — optionally through an `npx `
+#      wrapper) instead of anywhere a substring happens to appear. Prose that merely *mentions* a
+#      tool's name — inside a quoted string, a commit message, an echo argument — is not at command
+#      position and no longer matches.
+#   2. The documented override, `RUVNET_SKIP_INTERFACE_CHECK=1`, was read from the HOOK PROCESS's own
+#      environment. A PreToolUse hook receives the proposed command as JSON on stdin and never
+#      executes it, so setting the variable the way the message instructed — on the command itself —
+#      had no effect on this process at all. The escape hatch was unreachable from the side told to
+#      use it. Fixed: the command STRING is now checked for a `RUVNET_SKIP_INTERFACE_CHECK=1` token,
+#      which is what a caller can actually do. (The old env-var check is kept too, for a genuinely
+#      different, valid use: a persistent opt-out set in the shell that launches Claude Code itself —
+#      but that is a session-wide switch, not the documented per-command override.)
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 set -uo pipefail
 
@@ -37,42 +71,86 @@ while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
 # Opt-in, like every other gate here: no router profile = this user never asked for our discipline.
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
+# Session-wide opt-out: the hook PROCESS's own environment (e.g. exported in the shell that launches
+# Claude Code). Different from — and not a substitute for — the per-command override checked below.
 [ "${RUVNET_SKIP_INTERFACE_CHECK:-0}" = "1" ] && exit 0
 
-field() { local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""; [[ $INPUT =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"; }
-[ "$(field tool_name)" = "Bash" ] || exit 0
+# Real JSON parsing, not a regex (issue #13). `([^"]*)`-style bash regexes cannot cross a `"`, and a
+# JSON-escaped `\"` still contains a literal `"` byte — any command with an embedded quote used to be
+# silently truncated. node is guaranteed present in Claude Code's environment; fail open if it isn't.
+NODE_BIN=$(command -v node) || exit 0
 
-CMD=$(field command)
+TOOL_NAME=$(printf '%s' "$INPUT" | "$NODE_BIN" -e '
+  let s = "";
+  process.stdin.on("data", (d) => { s += d; });
+  process.stdin.on("end", () => {
+    try {
+      const j = JSON.parse(s);
+      process.stdout.write(typeof j.tool_name === "string" ? j.tool_name : "");
+    } catch (e) {
+      process.exit(1);
+    }
+  });
+' 2>/dev/null) || exit 0   # parse failure -> FAIL OPEN
+[ "$TOOL_NAME" = "Bash" ] || exit 0
+
+CMD=$(printf '%s' "$INPUT" | "$NODE_BIN" -e '
+  let s = "";
+  process.stdin.on("data", (d) => { s += d; });
+  process.stdin.on("end", () => {
+    try {
+      const j = JSON.parse(s);
+      const c = (j.tool_input && j.tool_input.command) || j.command || "";
+      process.stdout.write(typeof c === "string" ? c : "");
+    } catch (e) {
+      process.exit(1);
+    }
+  });
+' 2>/dev/null) || exit 0   # parse failure -> FAIL OPEN
 [ -n "$CMD" ] || exit 0
+
+# Per-command override (issue #12, defect 2). The block message tells the caller to set this ON THE
+# COMMAND — so check the command STRING, not this process's environment (which the caller never
+# touches: a PreToolUse hook only ever sees the proposed command as text on stdin).
+[[ $CMD =~ (^|[[:space:]])RUVNET_SKIP_INTERFACE_CHECK=1([[:space:]]|$) ]] && exit 0
 
 # Only the ecosystem CLIs whose interfaces I keep guessing at. NOT git/ls/grep — this must not become
 # a tax on ordinary work, or it gets switched off and protects nothing.
 TOOLS='ruflo|claude-flow|agentic-flow|agentic-qe|ruvector|agent-browser|ruv-swarm'
 
 # ONE regex, used by BOTH paths. My first version used a DIFFERENT (weaker) regex on the help-recording
-# path — it lacked the `[@a-z0-9.-]*` that absorbs `@latest`, so reading `ruflo@latest memory search
+# path — it lacked the `@[A-Za-z0-9._-]+` that absorbs `@latest`, so reading `ruflo@latest memory search
 # --help` recorded NOTHING and the very next call was still blocked. The break-test caught it before it
 # shipped. Two regexes for one concept is how you get a gate that never opens.
 #
 # Capture TWO levels (`memory search`, not just `memory`): `ruflo memory --help` lists subcommands but
 # does NOT show `search`'s `-q` flag — and `-q` is the exact thing I guessed wrong. Granularity has to
 # match the mistake it prevents.
-MATCH_RE="($TOOLS)[@a-z0-9.-]*[[:space:]]+([a-z][a-z-]*)([[:space:]]+([a-z][a-z-]*))?"
+#
+# ANCHORED to command position (issue #12, defect 1): the version suffix now requires a leading `@`
+# (it no longer absorbs an arbitrary hyphenated tail, which used to misread `ruflo-source-patch` as
+# `ruflo` with subcommand `source-patch`), and the whole match must start at the beginning of the
+# command, or right after a shell separator (`;`, `&`, `|`, `(`, newline) — optionally through a
+# leading `npx ` — instead of anywhere the tool's name happens to appear. This is what keeps
+# `npx ruflo@latest memory search` recognized as a real invocation while a sentence that merely
+# *mentions* `ruflo memory search` inside a quoted string, echo argument, or commit message is not.
+NL=$'\n'
+MATCH_RE="(^|[;&|(${NL}])[[:space:]]*(npx[[:space:]]+)?($TOOLS)(@[A-Za-z0-9._-]+)?[[:space:]]+([a-z][a-z-]*)([[:space:]]+([a-z][a-z-]*))?"
 
 if [[ $CMD =~ (--help|-h)([[:space:]]|$) ]]; then   # reading help is ALWAYS allowed — and recorded
   if [[ $CMD =~ $MATCH_RE ]]; then
-    KEY="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${BASH_REMATCH[4]:+.${BASH_REMATCH[4]}}"
+    KEY="${BASH_REMATCH[3]}.${BASH_REMATCH[5]}${BASH_REMATCH[7]:+.${BASH_REMATCH[7]}}"
     mkdir -p "$HOME/.cache/ruvnet-brain/help-read" 2>/dev/null || true
     : > "$HOME/.cache/ruvnet-brain/help-read/$KEY" 2>/dev/null || true
     # `ruflo memory search --help` also satisfies the parent `ruflo memory` — the child is strictly more.
-    : > "$HOME/.cache/ruvnet-brain/help-read/${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" 2>/dev/null || true
+    : > "$HOME/.cache/ruvnet-brain/help-read/${BASH_REMATCH[3]}.${BASH_REMATCH[5]}" 2>/dev/null || true
   fi
   exit 0
 fi
 
 [[ $CMD =~ $MATCH_RE ]] || exit 0
-TOOL="${BASH_REMATCH[1]}"; SUB="${BASH_REMATCH[2]}${BASH_REMATCH[4]:+ ${BASH_REMATCH[4]}}"
-KEY="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${BASH_REMATCH[4]:+.${BASH_REMATCH[4]}}"
+TOOL="${BASH_REMATCH[3]}"; SUB="${BASH_REMATCH[5]}${BASH_REMATCH[7]:+ ${BASH_REMATCH[7]}}"
+KEY="${BASH_REMATCH[3]}.${BASH_REMATCH[5]}${BASH_REMATCH[7]:+.${BASH_REMATCH[7]}}"
 
 STAMP="$HOME/.cache/ruvnet-brain/help-read/$KEY"
 # Read within the last 24h? (interfaces move — these are @latest/@alpha packages)
@@ -97,7 +175,9 @@ in the TOOL, not in your assumptions. Run this first — it takes five seconds:
 Then re-issue your command with the flags it actually documents.
 
 EFFECTIVE BEATS EFFICIENT. Skipping this step has never once saved time.
-(Deliberate override, say why out loud: RUVNET_SKIP_INTERFACE_CHECK=1)
+(Deliberate override, say why out loud — prefix the COMMAND ITSELF, this is text a hook reads on
+stdin and never executes, so exporting the variable in your shell first does nothing:
+    RUVNET_SKIP_INTERFACE_CHECK=1 ${TOOL} ${SUB} ...)
 EOF
 printf '%s\n' "$MSG" >&2
 exit 2
