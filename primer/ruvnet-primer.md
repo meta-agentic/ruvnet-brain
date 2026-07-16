@@ -1,6 +1,6 @@
 # The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v3.2.7 · Built: 2026-07-16 · Covers: 56/180 repos built @ pinned SHAs (see data/manifest.json)`
+`Brain version: v3.2.8 · Built: 2026-07-16 · Covers: 56/180 repos built @ pinned SHAs (see data/manifest.json)`
 
 > **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
 > **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
@@ -33,7 +33,7 @@
 **Method & routing**
 - **agentic-flow** — cheap multi-model routing for agents.
 - **SPARC** — 5-phase build methodology (Spec → Pseudocode → Architecture → Refinement → Completion).
-- **agent-harness-generator / metaharness** — generate and evaluate agent harnesses.
+- **metaharness** (formerly agent-harness-generator) — generate and evaluate agent harnesses.
 
 **Specialized**
 - **qudag** — quantum-resistant DAG / anonymous comms.

@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.2.7 — updated 2026-07-16 05:44 EDT](https://img.shields.io/badge/version_3.2.7-updated_2026--07--16_05:44_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.2.8 — updated 2026-07-16 05:44 EDT](https://img.shields.io/badge/version_3.2.8-updated_2026--07--16_05:44_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -281,7 +281,7 @@ The brain answers **both** kinds of questions. **Name the repo or ask something 
 | [`ruv-fann`](https://github.com/ruvnet/ruv-FANN) | Fast neural nets (Rust/WASM) + ruv-swarm | [`daa`](https://github.com/ruvnet/daa) | Decentralized autonomous agents |
 | [`synthlang`](https://github.com/ruvnet/synthlang) | Prompt compression (~75% token cut) | [`rupixel`](https://github.com/ruvnet/rupixel) | On-device visual embeddings |
 | [`dspy.ts`](https://github.com/ruvnet/dspy.ts) | DSPy-style programmable LLM pipelines in TS | [`fact`](https://github.com/ruvnet/fact) | Fast-Access Cached Tools + circuit breaker |
-| [`cve-bench`](https://github.com/ruvnet/cve-bench) | Security-fix benchmark | [`agent-harness-generator`](https://github.com/ruvnet/agent-harness-generator) | Harness scaffolding / metaharness |
+| [`cve-bench`](https://github.com/ruvnet/cve-bench) | Security-fix benchmark | [`metaharness`](https://github.com/ruvnet/metaharness) | Harness scaffolding / metaharness |
 | [`rvm`](https://github.com/ruvnet/rvm) | Proof-gated capability microhypervisor | [`rUv-dev`](https://github.com/ruvnet/rUv-dev) · [`open-claude-code`](https://github.com/ruvnet/open-claude-code) | Dev workflow + agent tooling |
 
 > **Not in the public brain:** rUv's private **Cognitum One** repos (seed, v0-appliance, platform-docs) are fenced out of the download by design — verified zero-leak in every build. **Helix** (rUv's local-first health app) is a finished product, not a building block, so it's out too.

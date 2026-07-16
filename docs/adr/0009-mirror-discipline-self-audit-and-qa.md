@@ -63,7 +63,7 @@ which is the most damning possible failure for an anti-drift product.
 
 ### Grounding — rUv already ships the QA machinery we lack
 
-- **Anti-Slop quality model** — `agent-harness-generator/docs/adrs/ADR-009-anti-slop.md` (Proposed):
+- **Anti-Slop quality model** — `metaharness/docs/adrs/ADR-009-anti-slop.md` (Proposed):
   a plugin is *not publishable* unless its bundled **smoke contract** passes (gating, Ed25519-signed);
   quality is expressed as **measured signals**, never editorial; trust tiers are **derived, not declared**.
   RuvNet Brain *is* a plugin and has **none** of this. This is the template for defects 3 & 4.

@@ -242,6 +242,6 @@ check within one run.
 - `docs/adr/0009-mirror-discipline-self-audit-and-qa.md` — the brain must pass its own bar.
 - `ruflo/v3/@claude-flow/integration/src/long-running-worker.ts` — checkpoint / resume / retry pattern.
 - `agenticow/examples/checkpointing.mjs` — rollback without replay.
-- `agent-harness-generator/docs/adrs/ADR-157-darwin-checkpoints-durable-execution.md` — durable,
+- `metaharness/docs/adrs/ADR-157-darwin-checkpoints-durable-execution.md` — durable,
   crash-resumable runs with a content-addressed call cache (Status: Proposed).
 - AgentDB `scorecard-2026-07-09` — the scored baseline this program is measured against.

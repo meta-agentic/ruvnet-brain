@@ -138,16 +138,12 @@ export function findShadows(npxCache = NPX_CACHE, lib = GLOBAL_LIB) {
   return shadows;
 }
 
-function audit() {
-  const pkgs = listInstalled();
-  if (!pkgs.length) die(`no stack packages under ${GLOBAL_LIB} — is the npm prefix right?`);
-
-  // A BLIND TOOL MUST NOT REPORT HEALTH. (Adversarial review, 2026-07-14 — a real bug in the first
-  // version of this file.) If the registry is unreachable, EVERY package resolves UNRESOLVED, the
-  // drift count is 0+0+0, and --audit used to print "all current" and exit 0 — a currency claim
-  // that was never measured. That is the exact failure this whole file exists to kill, reproduced
-  // inside the fix for it. Silence is not health.
-  const rows = pkgs.map((p) => {
+// Classify installed packages against the registry. Ordering is STILL decided only in cmpVersion/
+// isBehind — this function assigns a state label, it does not compare versions itself except through
+// the single comparator. Extracted so audit() (CLI, may exit) and auditModel() (embedders, never
+// exits) share ONE classification, never two that can drift.
+export function classify(pkgs) {
+  return pkgs.map((p) => {
     const want = TAG_POLICY[p.name] || DEFAULT_TAG;
     const tags = registryTags(p.name);
     // A package may legitimately have no alpha tag: fall back to latest rather than invent one.
@@ -161,6 +157,18 @@ function audit() {
     else state = 'CURRENT';
     return { ...p, tag, target, state };
   });
+}
+
+function audit() {
+  const pkgs = listInstalled();
+  if (!pkgs.length) die(`no stack packages under ${GLOBAL_LIB} — is the npm prefix right?`);
+
+  // A BLIND TOOL MUST NOT REPORT HEALTH. (Adversarial review, 2026-07-14 — a real bug in the first
+  // version of this file.) If the registry is unreachable, EVERY package resolves UNRESOLVED, the
+  // drift count is 0+0+0, and --audit used to print "all current" and exit 0 — a currency claim
+  // that was never measured. That is the exact failure this whole file exists to kill, reproduced
+  // inside the fix for it. Silence is not health.
+  const rows = classify(pkgs);
   const unresolved = rows.filter((r) => r.state === 'UNRESOLVED');
   if (unresolved.length === rows.length) {
     die(`could not reach the npm registry for ANY of ${rows.length} packages.\n` +
@@ -169,6 +177,22 @@ function audit() {
 
   const shadows = findShadows();
   return { rows, unresolved, shadows, stale: shadows.filter((s) => s.global && s.version !== s.global) };
+}
+
+// Non-exiting audit for embedders (the Onboarding Console). Same measurement as audit(), but returns
+// a model with an `error` field instead of calling process.exit — a long-lived server must never be
+// killed by a transient registry blip. Honours the SAME "a blind tool must not report health" rule:
+// if the registry was unreachable for EVERY package, that is surfaced as an error, not as "all current".
+export function auditModel() {
+  const pkgs = listInstalled();
+  if (!pkgs.length) return { error: `no stack packages under ${GLOBAL_LIB}`, rows: [], unresolved: [], shadows: [], stale: [] };
+  const rows = classify(pkgs);
+  const unresolved = rows.filter((r) => r.state === 'UNRESOLVED');
+  const shadows = findShadows();
+  const stale = shadows.filter((s) => s.global && s.version !== s.global);
+  const error = unresolved.length === rows.length
+    ? `could not reach the npm registry for any of ${rows.length} packages` : null;
+  return { rows, unresolved, shadows, stale, error };
 }
 
 function report({ rows, shadows, stale }) {
