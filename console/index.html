@@ -137,23 +137,10 @@
   </noscript>
 
   <!-- ============================================== 0 · BRAIN ACTIVITY -->
-  <details class="card" id="card-activity" open>
-    <summary>
-      <span class="card-head">
-        <span class="stage st-mirror">Mirror</span>
-        <h2>Brain activity</h2>
-        <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
-      </span>
-      <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-activity">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
-    </div>
-  </details>
-
-  <!-- ================================================= 1 · YOUR STACK -->
-  <details class="card" id="card-stack" open>
+  <!-- ================================================= 0 · YOUR STACK (leads; Stuart 2026-07-16)
+       Starts EXPANDED only when it has something to say: an action to take, or the user's first
+       visit. A clean, all-current stack on a repeat visit starts collapsed — app.js decides. -->
+  <details class="card" id="card-stack">
     <summary>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
@@ -175,6 +162,21 @@
       the network and usually takes 5–20 seconds. Private by design: the registry only ever sees
       ordinary version lookups — nothing about you or your projects leaves this machine. Everything
       below is already live.</p>
+    </div>
+  </details>
+
+  <details class="card" id="card-activity" open>
+    <summary>
+      <span class="card-head">
+        <span class="stage st-mirror">Mirror</span>
+        <h2>Brain activity</h2>
+        <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
+      </span>
+      <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-activity">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
     </div>
   </details>
 

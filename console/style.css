@@ -479,6 +479,15 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .dist-grid { display: flex; flex-direction: column; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
 .dist-row { display: grid; grid-template-columns: 118px minmax(120px, 1.1fr) minmax(0, 1.3fr) 68px; align-items: center; gap: 12px; padding: 10px 14px; }
 .dist-row + .dist-row { border-top: 1px solid var(--hair); }
+
+/* Router decisions — their own stacked layout: model + attribution + time on one line, the plain
+   reason underneath. Long model names must never collide with prose (2026-07-16). */
+.dec-row { padding: 10px 14px; }
+.dec-row + .dec-row { border-top: 1px solid var(--hair); }
+.dec-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dec-model { font-size: 0.98rem; }
+.dec-when { margin-left: auto; font-size: 0.82rem; }
+.dec-why { margin-top: 3px; font-size: 0.9rem; line-height: 1.45; max-width: 72ch; }
 .dist-head { background: color-mix(in srgb, var(--ink) 3%, transparent); padding-top: 8px; padding-bottom: 8px; }
 .dist-head > div { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .dist-head .dist-saved { text-align: right; }
@@ -1171,3 +1180,20 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 /* settings rows are jump-targets for the provider chips (rec-flash lands on them) */
 .field { border-radius: 10px; }
 .field.rec-flash { padding-left: 10px; padding-right: 10px; }
+
+/* How it's wired — the four launch lanes as one proportional bar + legend (2026-07-16).
+   Lane colors: global = grounded green (one verifiable path), npx = amber (can drift),
+   MCP = cyan (observed/live), plugin = neutral. */
+.wire-bar { display: flex; height: 18px; border-radius: 9px; overflow: hidden; margin: 10px 0 14px; border: 1px solid var(--hair); }
+.wire-seg { display: block; min-width: 6px; }
+.w-global { background: var(--green, #5fd38a); }
+.w-npx { background: var(--amber, #f0a830); }
+.w-mcp { background: var(--cyan, #5ad6ff); }
+.w-plugin { background: var(--muted, #9aa1ad); }
+.wire-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 18px; margin-bottom: 14px; }
+.wire-lane { display: grid; grid-template-columns: 10px auto auto; grid-template-rows: auto auto; align-items: baseline; column-gap: 8px; }
+.wire-lane.is-empty { opacity: 0.55; }
+.wire-dot { width: 10px; height: 10px; border-radius: 50%; align-self: center; }
+.wire-n { font-size: 1.15rem; }
+.wire-lab { font-family: var(--mono, ui-monospace, monospace); font-size: 0.82rem; }
+.wire-meaning { grid-column: 2 / -1; font-size: 0.85rem; line-height: 1.4; }

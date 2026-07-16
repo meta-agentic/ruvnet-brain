@@ -67,9 +67,18 @@ export function effectivePrices(candidates, profile) {
   const prices = {};
   for (const c of candidates) {
     const covered = (c.subscription || []).some((h) => profile?.harnesses?.[h]?.subscription === true);
-    const blended = typeof c.costPerMTok === 'number'
-      ? c.costPerMTok
-      : ((c.costIn ?? 0) + (c.costOut ?? 0)) / 2; // blended $/Mtok — the axis Router minimises
+    // Blended $/Mtok — the axis Router minimises. The catalog stores prices as costPerMTok:{in,out}
+    // (see ~/.claude/model-router/catalog.json); this function originally only understood a bare
+    // number or costIn/costOut, so every {in,out}-priced metered model blended to $0 and the
+    // cost-optimal router was choosing over all-zero prices (found 2026-07-16 when the console
+    // panel showed DeepSeek as "$0 · yours"). All three shapes are handled now; an unpriced
+    // candidate is Infinity, never a fake $0 — a missing price must not read as free.
+    const p = c.costPerMTok;
+    const blended =
+      typeof p === 'number' ? p
+      : p && typeof p.in === 'number' && typeof p.out === 'number' ? (p.in + p.out) / 2
+      : typeof c.costIn === 'number' && typeof c.costOut === 'number' ? (c.costIn + c.costOut) / 2
+      : Infinity;
     prices[c.id] = covered ? 0 : blended;
   }
   return prices;

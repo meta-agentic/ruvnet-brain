@@ -29,7 +29,8 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth } from './console-engine.mjs';
-import { optimize } from './router-optimizer.mjs';
+import { loadCatalog as engineCatalog, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
+import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
 import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
 import { learnings } from './learnings.mjs';
@@ -342,6 +343,62 @@ function gatherActivity(cwd) {
   return out;
 }
 
+// ── Router engine read-model ─────────────────────────────────────────────────────────────────────
+// 2026-07-16 (Stuart: "if MetaHarness does all of this then let it do it, but let us add user-
+// selected constraints"). This panel previously displayed router-optimizer.mjs — a parallel,
+// subscription-blind re-derivation of routing strategy that bypassed the REAL engine wired on
+// 2026-07-13 (model-router-engine.mjs → @metaharness/router). The replica is deleted. This
+// read-model contains ZERO routing logic: it shows the engine's own inputs (catalog × this user's
+// profile → effective marginal prices — the ONLY thing the local layer owns) and the engine's own
+// recent decisions from its append-only log. Nothing here can disagree with what actually routes.
+function gatherRouterEngine() {
+  const profile = engineProfile();
+  const candidates = applyProfile(engineCatalog(), profile);
+  const prices = effectivePrices(candidates, profile);
+  const { rows, unusable } = loadLabelledRows();
+  const installed = fs.existsSync(path.join(__dirname, '..', 'node_modules', '@metaharness', 'router', 'package.json'));
+  const list = (c) => (typeof c.costPerMTok === 'number' ? c.costPerMTok
+    : c.costPerMTok && typeof c.costPerMTok.in === 'number' ? +(((c.costPerMTok.in + c.costPerMTok.out) / 2).toFixed(3))
+    : null);
+  const decisions = [];
+  try {
+    const log = path.join(os.homedir(), '.claude', 'metaharness', 'routing-decisions.jsonl');
+    const lines = fs.readFileSync(log, 'utf8').trim().split('\n');
+    for (const l of lines.slice(-8).reverse()) {
+      try { const d = JSON.parse(l); decisions.push({ ts: d.ts, model: d.model, tier: d.tier, routedBy: d.routedBy, reason: d.reason }); } catch { /* skip bad line */ }
+    }
+  } catch { /* no decisions yet */ }
+  // User-constraint detection (Brain-side by design — a fact about THIS user, not routing logic):
+  // an OpenRouter key decides whether metered cross-provider candidates are even reachable.
+  let openrouterKey = !!process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) {
+    const cfg = readJSON(CONFIG_PATH) || {};
+    openrouterKey = !!(cfg.openrouterKey && String(cfg.openrouterKey).length > 8);
+  }
+  return {
+    engine: {
+      package: '@metaharness/router', installed,
+      labels: rows.length, needed: MIN_LABELS, unusableLabels: unusable,
+      mode: !installed ? 'UNAVAILABLE' : rows.length >= MIN_LABELS ? 'LEARNED' : 'COLD-START',
+      outcomesLog: OUTCOMES.replace(os.homedir(), '~'),
+    },
+    keys: { openrouter: openrouterKey },
+    profile: { present: !!profile, path: PROFILE_PATH.replace(os.homedir(), '~') },
+    pool: candidates
+      .map((c) => ({
+        id: c.id, provider: c.provider, tier: c.tier || null, harness: c.harness || [],
+        marginalPerMTok: Number.isFinite(prices[c.id]) ? prices[c.id] : null,
+        listPerMTok: list(c),
+        // From the profile fact, never inferred from a $0 price — a mispriced metered model must
+        // not display as "yours" (exactly the bug this read-model caught on 2026-07-16).
+        subscriptionCovered: (c.subscription || []).some((h) => profile?.harnesses?.[h]?.subscription === true),
+        verified: c.verified || null, note: c.note || null,
+      }))
+      .sort((a, b) => (a.marginalPerMTok ?? Infinity) - (b.marginalPerMTok ?? Infinity)),
+    decisions,
+  };
+}
+
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
 function gatherState(cwd) {
   const wiring = wiringSurvey();
@@ -349,7 +406,7 @@ function gatherState(cwd) {
   try { memory.learnings = learnings(); } catch { memory.learnings = null; }
   const savings = gatherSavings();
   const cfgNow = readJSON(CONFIG_PATH) || {};
-  try { savings.routerProfiles = optimize({ provider: cfgNow.provider }); } catch { savings.routerProfiles = null; }
+  try { savings.routerEngine = gatherRouterEngine(); } catch { savings.routerEngine = null; }
   try {
     const cat = loadCatalog();
     const det = detectProvider(cat, { provider: cfgNow.provider });

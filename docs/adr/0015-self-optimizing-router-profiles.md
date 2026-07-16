@@ -9,7 +9,7 @@ supersedes: []
 relates: [ADR-013, ADR-014]
 ---
 
-**Status**: Proposed (near-term slice — router-optimizer engine, ongoing utilization view, per-house personalized frontier, console panel — shipped through v3.0.4; full weekly self-optimizing engine remains proposed)
+**Status**: Superseded (in part, 2026-07-16) — `router-optimizer.mjs` DELETED. It was a parallel, subscription-blind re-derivation of routing strategy that bypassed the real engine this repo had already wired on 2026-07-13 (`model-router-engine.mjs` → `@metaharness/router`, ADR-040/043) and told a Max subscriber to pay for a worse model than their plan covers. The console panel now renders the ENGINE's own truth: its candidate pool × the user's profile (marginal $0 where the subscription covers), its learned/cold-start mode, and its recent decisions from its append-only log. The ongoing utilization view (receipts) and per-house frontier catalog (ADR-0016) remain. The "full weekly self-optimizing engine" ambition is superseded by the same principle: rUv's router learns from labelled outcomes — the Brain contributes constraints as data, never a second decision engine.
 
 **v3.0.4 (2026-07-15):** the router now reads each user's HOUSE frontier from the live-verified catalog
 (ADR-0016) — Claude shop → Fable 5, ChatGPT/Codex → GPT-5.6 Sol, Gemini → 3.1 Pro, Grok → 4.5, detected

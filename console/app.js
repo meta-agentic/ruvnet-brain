@@ -531,6 +531,16 @@ function renderStack(data) {
   if (stale) chips.push(chip(`${fmtInt(stale)} stale shadows`, 'warn'));
   setChips('chips-stack', chips);
 
+  // The stack card leads the page but only EXPANDS when it has something to say (Stuart,
+  // 2026-07-16): an action to take (behind/broken/stale), or the user's first visit ever.
+  // A clean stack on a repeat visit stays collapsed — the green chip is the whole story.
+  const stackCard = $('#card-stack');
+  if (stackCard && !stackCard.dataset.userToggled) {
+    const firstVisit = !localStorage.getItem('rvbc-seen');
+    if (behind || broken || stale || firstVisit) stackCard.open = true;
+  }
+  try { localStorage.setItem('rvbc-seen', '1'); } catch { /* private mode */ }
+
   found.pkgTotal = total;
   found.pkgCurrent = current;
   updateFoundStrip();
@@ -605,22 +615,34 @@ function renderWiring(w) {
   updateFoundStrip();
 
   const main = [];
-  // WP6 — plain-English first: what this means FOR YOU, before any numbers.
+  // Visual first (Stuart 2026-07-16: "make this section visual — this just doesn't help"): the four
+  // wiring lanes as one proportional bar + stat doors, each lane carrying its one-line meaning.
+  // The prose wall is gone; the info popover keeps the full explanation for whoever wants it.
+  const lanes = [
+    { key: 'global', n: s.global ?? 0, label: 'global binary', tone: 'w-global', meaning: 'one path, one version — verifiable at a glance' },
+    { key: 'npx', n: s.npx ?? 0, label: 'npx', tone: 'w-npx', meaning: 'downloads a private copy per call — can drift stale' },
+    { key: 'mcp', n: s.mcp ?? 0, label: 'MCP server', tone: 'w-mcp', meaning: 'a running tool the AI calls directly' },
+    { key: 'plugin', n: s.plugin ?? 0, label: 'plugin', tone: 'w-plugin', meaning: 'ships inside Claude Code itself' },
+  ];
+  const totalSites = lanes.reduce((t, l) => t + l.n, 0) || 1;
   main.push(el('p', { class: 'lead-stat' },
-    'Some of your projects launch these tools by downloading a fresh copy each time (', el('code', {}, 'npx'),
-    '); others use your one global install. Stale hidden copies can quietly run old code — this card shows where each lives so you can pick, with one-click rewiring below.',
+    'Every rUv tool call on this machine launches through one of ', el('b', {}, '4 lanes'),
+    ' — the picture is ', el('b', {}, fmtInt(totalSites)), ' resolution sites across ',
+    el('b', {}, fmtInt(s.projectsWithNpx ?? 0)), ' projects:',
     infoBtn('How it’s wired', WIRING_INFO)));
-
-  main.push(el('p', { class: 'lead-stat' },
-    el('b', {}, fmtInt(s.npx ?? 0)), ' of your tool calls resolve via ', el('code', {}, 'npx'),
-    ' across ', el('b', {}, fmtInt(s.projectsWithNpx ?? 0)), ' projects. ',
-    el('b', {}, fmtInt(s.global ?? 0)), ' use a global binary, ',
-    el('b', {}, fmtInt(s.mcp ?? 0)), ' an MCP server, and ',
-    el('b', {}, fmtInt(s.plugin ?? 0)), ' a plugin.'));
-
-  main.push(el('p', {},
-    'Neither wiring is wrong — they trade differently. ', el('code', {}, 'npx'),
-    ' re-resolves its own copy on every call: always available, but it adds startup latency each time and keeps a private copy that can drift from your global install. A global binary is one path, one version, verifiable at a glance. This is where each one is in use, so the choice stays yours.'));
+  main.push(el('div', { class: 'wire-bar', role: 'img',
+    'aria-label': lanes.map((l) => `${l.label} ${l.n}`).join(', ') },
+    ...lanes.filter((l) => l.n > 0).map((l) => el('span', {
+      class: 'wire-seg ' + l.tone,
+      style: `flex-grow:${Math.max(l.n, totalSites * 0.02)}`,
+      title: `${l.label} — ${fmtInt(l.n)} (${Math.round((l.n / totalSites) * 100)}%)`,
+    }))));
+  main.push(el('div', { class: 'wire-lanes' },
+    ...lanes.map((l) => el('div', { class: 'wire-lane' + (l.n ? '' : ' is-empty') },
+      el('span', { class: 'wire-dot ' + l.tone, 'aria-hidden': 'true' }),
+      el('b', { class: 'wire-n' }, fmtInt(l.n)),
+      el('span', { class: 'wire-lab' }, l.label),
+      el('span', { class: 'wire-meaning cell-dim' }, l.meaning)))));
 
   if (sites.length) {
     const groups = new Map();
@@ -1046,67 +1068,144 @@ function renderMemory(mem) {
 
 /* ---------------------------------------------------------- section 5: savings */
 
-function renderRouterProfiles(rp) {
-  if (!rp || !rp.profiles) return null;
+/* Router panel (rebuilt 2026-07-16). The old panel displayed router-optimizer.mjs — a parallel,
+   subscription-blind re-derivation of routing strategy that bypassed the real engine and told a
+   Max subscriber to PAY for a worse model than the Sonnet 5 their plan covers. The replica is
+   deleted. This panel renders only the ENGINE'S OWN truth: who decides (@metaharness/router —
+   rUv's learned cost-optimal router — or a loudly-announced cold-start), the real candidate pool
+   with THIS user's marginal prices ($0 where the subscription covers it), and the engine's own
+   recent decisions from its append-only log. Nothing shown here can disagree with what routes. */
+function renderRouterEngine(re) {
+  if (!re || !re.engine) return null;
   const money = (v) => (v == null ? '—' : v === 0 ? '$0' : '$' + v + '/Mtok');
-  const bandRow = (b) => el('tr', {},
-    el('td', { class: 'rp-band' }, b.band),
-    el('td', {}, el('div', { class: 'rp-model' }, prettyModel(b.model)), el('div', { class: 'rp-why' }, b.why),
-      String(b.band).toLowerCase() === 'frontier'
-        ? el('span', { class: 'rp-esc' }, 'escalation — last resort by design') : null),
-    el('td', { class: 'cell-mono cell-dim' }, b.effort + (b.effortSource === 'default' ? ' *' : '')),
-    el('td', { class: 'cell-mono num' }, money(b.costPerMTok)),
-  );
-  // WP3 — the Dev/Prod headers are click-to-learn: why two tables, in plain economics.
-  const profileBlock = (name, p) => el('div', { class: 'rp-profile' },
+  const eng = re.engine;
+
+  const modeChip =
+    eng.mode === 'LEARNED' ? chip(`learned · ${eng.labels} real outcomes`, 'green')
+    : eng.mode === 'COLD-START' ? chip(`cold-start · ${eng.labels} of ${eng.needed} labels`, 'warn')
+    : chip('router package missing', 'red');
+
+  const engineLine = el('div', { class: 'rp-house' },
+    el('span', { class: 'rp-house-tag' }, 'Who decides'),
+    el('b', { class: 'rp-house-name' }, '@metaharness/router'),
+    el('span', { class: 'rp-house-src' }, 'rUv’s learned cost-optimal router — the Brain adds only your constraints'),
+    modeChip);
+
+  const modeNote =
+    eng.mode === 'COLD-START' ? el('p', { class: 'rp-split' },
+      'It routes by learning from ', el('b', {}, 'your real outcomes'), ' — it has ',
+      el('b', {}, String(eng.labels)), ' of the ', el('b', {}, String(eng.needed)),
+      ' labelled examples it needs before its predictions count. Until then it says so and falls back — every routed task teaches it. This stops being a fallback with use.')
+    : eng.mode === 'UNAVAILABLE' ? el('p', { class: 'rp-split' },
+      'The router package isn’t installed here — nothing is silently substituted in its place. ',
+      el('span', { class: 'cell-mono' }, 'npm i @metaharness/router'), ' restores it.')
+    : null;
+
+  // Dev/Prod are LENSES over the engine's one pool — a filter and a price column, never a second
+  // strategy (Stuart 2026-07-16: "not sure I'm seeing dev vs production"). Development = you, in
+  // Claude Code, where covered models are $0 marginal. Production = your deployed app on metered
+  // APIs, where a personal subscription cannot apply and list price is the real cost.
+  const pool = Array.isArray(re.pool) ? re.pool : [];
+  const TIER_ORDER = { mechanical: 0, cheap: 1, mid: 2, frontier: 3 };
+  const byTier = (a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9);
+  const lensTable = (rows, costOf, costHead) => el('div', { class: 'scroll-x' },
+    el('table', { class: 'tb rp-tb' },
+      el('thead', {}, el('tr', {},
+        el('th', { scope: 'col' }, 'Bucket'), el('th', { scope: 'col' }, 'Model'),
+        el('th', { scope: 'col' }, costHead))),
+      el('tbody', {}, rows.map((p) => el('tr', {},
+        el('td', { class: 'rp-band' }, p.tier || '—'),
+        el('td', {}, el('div', { class: 'rp-model' }, prettyModel(p.id))),
+        el('td', { class: 'cell-mono num' }, costOf(p)),
+      )))));
+  // Development: only what this machine's harness can launch; best (cheapest-marginal) per bucket.
+  const bestPerTier = (rows, price) => {
+    const seen = {};
+    for (const p of rows) {
+      const k = p.tier || '?';
+      if (!seen[k] || price(p) < price(seen[k])) seen[k] = p;
+    }
+    return Object.values(seen).sort(byTier);
+  };
+  const devRows = bestPerTier(
+    pool.filter((p) => (p.harness || []).includes('claude-code')),
+    (p) => (p.subscriptionCovered ? -1 : p.marginalPerMTok ?? Infinity));
+  const prodRows = bestPerTier(
+    pool.filter((p) => p.listPerMTok != null && p.provider !== 'local'),
+    (p) => p.listPerMTok ?? Infinity);
+  const devBlock = el('div', { class: 'rp-profile' },
     el('div', { class: 'rp-head' },
-      el('button', {
-        class: 'rp-name-btn', type: 'button',
-        title: `What does “${name}” mean here?`,
-        onclick: (e) => openInfoPop(e.currentTarget, name, PROFILE_INFO[name] || []),
-      },
-        el('span', { class: 'rp-name' }, name),
-        el('span', { class: 'info-btn', 'aria-hidden': 'true' }, 'i')),
-      el('span', { class: 'rp-obj' }, p.objective)),
-    el('div', { class: 'scroll-x' },
-      el('table', { class: 'tb rp-tb' },
-        el('thead', {}, el('tr', {},
-          el('th', { scope: 'col' }, 'Band'), el('th', { scope: 'col' }, 'Model'),
-          el('th', { scope: 'col' }, 'Effort'), el('th', { scope: 'col' }, 'Cost'))),
-        el('tbody', {}, p.bands.map(bandRow)))));
-  const keyLine = rp.hasOpenRouterKey
-    ? el('span', {}, 'OpenRouter key detected — the full measured range is in play.')
-    : el('span', {}, 'No OpenRouter key yet — showing subscription-only picks. ',
+      el('span', { class: 'rp-name' }, 'Development'),
+      el('span', { class: 'rp-obj' }, 'you, in Claude Code — models your plan covers win at $0 marginal')),
+    lensTable(devRows,
+      (p) => (p.subscriptionCovered ? el('b', { title: 'covered by your subscription — zero marginal cost' }, '$0 · yours') : money(p.marginalPerMTok)),
+      'Your cost'));
+  const prodBlock = el('div', { class: 'rp-profile' },
+    el('div', { class: 'rp-head' },
+      el('span', { class: 'rp-name' }, 'Production'),
+      el('span', { class: 'rp-obj' }, 'your deployed app on metered APIs — a personal plan can’t apply there')),
+    lensTable(prodRows, (p) => money(p.listPerMTok), 'API price'));
+  const lensGrid = el('div', { class: 'rp-grid' }, devBlock, prodBlock);
+  const poolFoot = el('p', { class: 'fineprint' },
+    `Best pick per bucket shown; the engine weighs all ${pool.length} candidates in its catalog on every call — nothing is retired by being off this summary.`);
+
+  // Decisions: dedupe consecutive identical picks, keep 3, humanize the reason head. The full
+  // append-only log stays on disk — this is a pulse, not a table of record.
+  const decisionsRaw = Array.isArray(re.decisions) ? re.decisions : [];
+  const decisions = [];
+  for (const d of decisionsRaw) {
+    const prev = decisions[decisions.length - 1];
+    if (prev && prev.model === d.model && prev.routedBy === d.routedBy) continue;
+    decisions.push(d);
+    if (decisions.length >= 3) break;
+  }
+  const humanReason = (r) => {
+    const s = String(r || '');
+    if (s.includes('predicted quality')) return s.match(/predicted quality [\d.]+/)?.[0] + (s.includes('clears') ? ' — clears the bar' : '');
+    if (s.includes('NOT a tuned heuristic')) return 'starter policy while the router learns — prefers your covered models';
+    return s.split('—')[0].split(';')[0].slice(0, 90);
+  };
+  const decRow = (d) => el('div', { class: 'dec-row' },
+    el('div', { class: 'dec-top' },
+      el('b', { class: 'dec-model' }, prettyModel(d.model)),
+      (String(d.routedBy || '').startsWith('@metaharness/router')
+        ? chip('rUv’s router', 'green') : chip('learning fallback', 'warn')),
+      el('span', { class: 'dec-when cell-mono cell-dim' }, d.ts ? String(d.ts).slice(5, 16).replace('T', ' ') : '—')),
+    el('div', { class: 'dec-why cell-dim' }, humanReason(d.reason)));
+  const lastTs = decisionsRaw[0] && decisionsRaw[0].ts ? new Date(decisionsRaw[0].ts) : null;
+  const daysQuiet = lastTs ? Math.floor((Date.now() - lastTs.getTime()) / 86400000) : null;
+  const decisionsBlock = decisions.length ? el('div', { class: 'mh-dist' },
+    el('p', { class: 'dist-ladder' }, 'Latest real decisions — from the engine’s own log, not simulated',
+      daysQuiet > 1 ? el('span', { class: 'cell-dim' }, ` · quiet for ${daysQuiet} days — turn on smart routing above to feed it daily`) : null),
+    ...decisions.map(decRow)) : null;
+
+  const keyLine = re.keys && re.keys.openrouter
+    ? el('span', {}, 'OpenRouter key detected — metered cross-provider candidates are reachable.')
+    : el('span', {}, 'No OpenRouter key — only subscription and local candidates are reachable. ',
         el('a', { class: 'rp-getkey', href: 'https://openrouter.ai/keys', target: '_blank', rel: 'noopener' }, 'Create one →'));
-  const bg = el('div', { class: 'rp-bg', 'aria-hidden': 'true' });
-  bg.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 180" fill="none"><g stroke="#5ad6ff" stroke-width="1.5" opacity="0.1"><path d="M24 92 C 130 92, 170 34, 300 34"/><path d="M24 92 C 130 92, 170 74, 300 74"/><path d="M24 92 C 130 92, 170 112, 300 112"/><path d="M24 92 C 130 92, 170 150, 300 150"/></g><circle cx="24" cy="92" r="5" fill="#f0a830" opacity="0.18"/><circle cx="300" cy="34" r="4" fill="#5ad6ff" opacity="0.16"/><circle cx="300" cy="74" r="4" fill="#5fd38a" opacity="0.16"/><circle cx="300" cy="112" r="4" fill="#5ad6ff" opacity="0.13"/><circle cx="300" cy="150" r="4" fill="#f0a830" opacity="0.13"/></svg>';
-  const house = rp.house || {};
-  const houseName = house.label || 'your stack';
-  const houseLine = house.label ? el('div', { class: 'rp-house' },
-    el('span', { class: 'rp-house-tag' }, 'Your house'),
-    el('b', { class: 'rp-house-name' }, house.label),
-    el('span', { class: 'rp-house-src' }, HOUSE_SOURCE_NOTE[house.source] || '')) : null;
-  // When cross-provider routing is on, cheap/mid leave the house on purpose — say so, or it reads as a bug.
-  const splitNote = rp.hasOpenRouterKey ? el('p', { class: 'rp-split' },
-    'Your ', el('b', {}, 'frontier'), ' stays in your house. ', el('b', {}, 'Cheap & mid'),
-    ' go to the cheapest capable model anywhere — that’s where the saving comes from — because your OpenRouter key is on. Without it, all three stay ',
-    el('b', {}, houseName), '.') : null;
+
+  const constraintLine = re.profile && re.profile.present
+    ? el('p', { class: 'rp-split' }, el('b', {}, 'Your constraints, applied as data: '),
+        'models your subscription covers enter the pool at ', el('b', {}, '$0 marginal'),
+        ' — so the cost-optimal math prefers what you already pay for. Cheapest real cost first; frontier only when the work earns it.')
+    : el('p', { class: 'rp-split' }, 'No personal profile yet — run ',
+        el('span', { class: 'cell-mono' }, 'node scripts/model-router-setup.mjs'),
+        ' so the router knows which models your plan already covers.');
+
   return el('details', { class: 'mh-profiles' },
     el('summary', { class: 'rp-summary' },
-      el('span', { class: 'rp-sum-t' }, 'See what it routes where'),
-      el('span', { class: 'rp-sum-s' }, `tuned to ${houseName} · development vs production`),
+      el('span', { class: 'rp-sum-t' }, 'Who routes your work — and with what'),
+      el('span', { class: 'rp-sum-s' }, `rUv’s learned router · your prices · ${eng.mode.toLowerCase().replace('-', ' ')}`),
       el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
     el('div', { class: 'rp-body' },
-      bg,
-      houseLine,
-      splitNote,
-      el('p', { class: 'dist-ladder' },
-        'Ordered the way the router thinks — cheapest first, frontier only when the work earns it.'),
-      el('div', { class: 'rp-grid' },
-        profileBlock('Development', rp.profiles.development),
-        profileBlock('Production', rp.profiles.production)),
+      engineLine,
+      modeNote,
+      constraintLine,
+      lensGrid,
+      poolFoot,
+      decisionsBlock,
       el('p', { class: 'rp-foot fineprint' },
-        `Frontier is your ${houseName} flagship — model ids live-verified against the OpenRouter catalog${rp.catalogAsOf ? ' (' + rp.catalogAsOf + ')' : ''}, ranked by Artificial Analysis + Arena. Effort marked * is a default (high; xhigh only for hard, verifiable work). `,
+        'Candidate pool = the engine’s own catalog × your profile (', re.profile ? re.profile.path : '', '). ',
         keyLine)));
 }
 
@@ -1131,7 +1230,15 @@ const SEG_LABEL = {
   provider: { auto: 'Auto', anthropic: 'Claude', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' },
 };
 const segLabel = (key, opt) => (SEG_LABEL[key] && SEG_LABEL[key][opt]) || opt;
-const prettyModel = (id) => id ? (MODEL_PRETTY[id] || String(id).split('/').pop()) : '—';
+const prettyModel = (id) => {
+  if (!id) return '—';
+  if (MODEL_PRETTY[id]) return MODEL_PRETTY[id];
+  // Fallback prettifier: drop provider prefix + date-pinned suffixes ("claude-haiku-4-5-20251001"
+  // must never render raw — Stuart called the wall of ids a mess), title-case the words.
+  const base = String(id).split('/').pop().replace(/-\d{8}$/, '');
+  return base.split('-').map((w) => (/^\d/.test(w) ? w.replace(/-/g, '.') : w[0].toUpperCase() + w.slice(1)))
+    .join(' ').replace(/(\d) (\d)/g, '$1.$2');
+};
 
 // The ONGOING view: once real tasks have been routed, how many landed in each band and what that
 // saved vs sending them all to the frontier model. Driven entirely by measured receipts.
@@ -1174,11 +1281,13 @@ function renderDistribution(u) {
 // WP2d — what we detected on YOUR machine, as chips. Each chip clicks through to the
 // setting that already owns the choice (no second provider-switching mechanism).
 function renderProviders(sv) {
-  const rp = sv && sv.routerProfiles;
-  if (!rp) return null;
-  const house = rp.house || {};
+  const re = sv && sv.routerEngine;
+  if (!re) return null;
+  // House = the provider whose models this user's subscription covers (from the engine's own pool).
+  const covered = (re.pool || []).find((p) => p.subscriptionCovered);
   const HOUSE_NAME = { anthropic: 'Claude Max', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' };
-  const houseName = HOUSE_NAME[house.provider] || house.label || 'Your stack';
+  const house = { provider: covered ? covered.provider : null };
+  const houseName = HOUSE_NAME[house.provider] || 'Your stack';
   const chipBtn = (on, boldPart, rest, target, tip) => el('button', {
     class: `prov-chip ${on ? 'on' : 'dim'}`, type: 'button', title: tip,
     onclick: () => jumpToSetting(target),
@@ -1188,7 +1297,7 @@ function renderProviders(sv) {
   const chips = [
     chipBtn(true, houseName, ' — main model on your subscription ($0 extra)', 'provider',
       'Your model house — change it in Settings'),
-    rp.hasOpenRouterKey
+    (re.keys && re.keys.openrouter)
       ? chipBtn(true, 'OpenRouter key', ' — cheap models live', 'openrouterKey',
           'Your OpenRouter key — manage it in Settings')
       : chipBtn(false, 'OpenRouter key', ' — not detected', 'openrouterKey',
@@ -1246,7 +1355,7 @@ function renderSavings(sv) {
         'Turn it on, work normally for a week, then come back. You’ll see exactly what you saved by not sending everything to the most expensive frontier model — every number here will be a ',
         el('b', {}, 'real receipt'), ', never a projection.')));
     // Even before any task runs, show what the router WOULD choose per bucket — the plan is real.
-    const rp0 = renderRouterProfiles(sv && sv.routerProfiles);
+    const rp0 = renderRouterEngine(sv && sv.routerEngine);
     if (rp0) blocks.push(rp0);
     body.replaceChildren(withIllo('savings', ...blocks));
     return;
@@ -1318,7 +1427,7 @@ function renderSavings(sv) {
 
   // (sv.note used to render here as 11px fineprint — the provenance badge above replaced it.)
 
-  const rp = renderRouterProfiles(sv.routerProfiles);
+  const rp = renderRouterEngine(sv.routerEngine);
   if (rp) blocks.push(rp);
 
   body.replaceChildren(withIllo('savings', ...blocks));
@@ -1689,3 +1798,14 @@ initTheme();
 loadState();
 loadStack();
 $('#recheck-btn')?.addEventListener('click', () => recheckMachine());
+
+// Stack card leads (Stuart 2026-07-16): expand immediately on a true first visit so newcomers
+// watch it populate; afterwards only real drift opens it (renderStack). A manual toggle by the
+// user wins over both — mark it so the auto-open never fights a deliberate collapse.
+{
+  const sc = $('#card-stack');
+  if (sc) {
+    sc.querySelector('summary')?.addEventListener('click', () => { sc.dataset.userToggled = '1'; });
+    if (!localStorage.getItem('rvbc-seen')) sc.open = true;
+  }
+}

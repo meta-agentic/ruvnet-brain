@@ -5,22 +5,25 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_438 gists · refreshed 2026-07-14_
+_440 gists · refreshed 2026-07-16_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-16 | [meta-wrapper.md](https://gist.github.com/ruvnet/e1008e2a4aa13bf2a991e6aca4028d03) | Always-running MetaHarness coding service on GCP |
+| 2026-07-15 | [*specification.md](https://gist.github.com/ruvnet/6217ea3bd75cc0c27522965965e7383b) | TikTok-like recommender Algorithm |
+| 2026-07-15 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |
+| 2026-07-14 | [redaction.md](https://gist.github.com/ruvnet/332336ad5e0516daa810d98f8f0ddca9) | Redaction hooks for Claude Code |
+| 2026-07-14 | [daemon-flywheel-fix.md](https://gist.github.com/ruvnet/f4cda824aaf58e1f2dae72368e692220) | The worktree-daemon flywheel: how ruflo accidentally invented a Claude-quota DoS against itself (#2661) |
 | 2026-07-12 | [ruvector-lattice-embeddings-rust-npm-cve-fix.md](https://gist.github.com/ruvnet/cf3877071a2b1ab9252785673340ab95) | RuVector 2.3.0: local Rust & npm embeddings via Lattice, plus a full cargo-audit/cargo-deny CVE cleanup |
 | 2026-07-11 | [.roomodes.json](https://gist.github.com/ruvnet/a206de8d484e710499398e4c39fa6299) | This guide introduces Roo Code and the innovative Boomerang task concept, now integrated into SPARC Orchestration. By fo |
 | 2026-07-10 | [claude-flow-firsts-executive-brief.md](https://gist.github.com/ruvnet/a8df1bae4686ebf3914dd61c8afe6d69) | Claude-Flow / Ruflo: Year One Executive Brief — 31 verified first-mover positions, harness-not-model thesis, top 20 inno |
 | 2026-07-09 | [ruflo-3.24.0-flywheel.md](https://gist.github.com/ruvnet/f8e2851fd307df5d5de7b5c70c37fa0c) | ruflo 3.24.0 — Self-Learning Flywheel: what it is, how it works, usage & upgrade notes |
 | 2026-07-09 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
-| 2026-07-08 | [*specification.md](https://gist.github.com/ruvnet/6217ea3bd75cc0c27522965965e7383b) | TikTok-like recommender Algorithm |
 | 2026-07-08 | [ruflo-v3.25.5-release.md](https://gist.github.com/ruvnet/ed276119404d4d3fffdadfc0797705f8) | ruflo v3.25.5 npm release: wrapper publish + CI-red fixes |
 | 2026-07-08 | [memory.md](https://gist.github.com/ruvnet/4a55971e8971a3c430a009c7f5b49d12) | Claude Memory Template |
 | 2026-07-08 | [anv-gist.md](https://gist.github.com/ruvnet/0d858ad440a4439b4a2281a40c39b1a0) | Agent-Native Versioning (ANV) — the BC→AD versioning scheme for ruflo (ADR-184) |
 | 2026-07-08 | [Ruvnet-first-to-market.md](https://gist.github.com/ruvnet/0aaad8499c8f7dfac1279bd0afa4e898) | The list of firsts |
 | 2026-07-07 | [jacobian-lens-interpretability-open-weight-llms.md](https://gist.github.com/ruvnet/197eb50028368d4f278e8530e9432387) | Jacobian-Lens interpretability for open-weight LLMs — @metaharness/workspace-lens (runtime mechanistic governance, IntOp |
-| 2026-07-06 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |
 | 2026-07-06 | [ruvector-nervous-system.md](https://gist.github.com/ruvnet/5cfda0d67fcf6b3580c7d1ea7ba426bd) | Bio-Inspired Neural Computing / Ai Nervous-System |
 | 2026-07-05 | [ruflo-lattice-wasm.md](https://gist.github.com/ruvnet/d9c7611170025156baad38de3ddec878) | ruflo 3.25.0 — Lattice WASM embedder tier: real multi-model embeddings, fail-closed, usage & upgrade notes |
 | 2026-07-05 | [ruvector-0.2.34-overview.md](https://gist.github.com/ruvnet/06d0ec4e9b470b785528c86783d79425) | RuVector 0.2.34 — RVF DX + privacy fixes, lattice Metal backend (plain-language overview) |
@@ -181,7 +184,6 @@ _438 gists · refreshed 2026-07-14_
 | 2026-04-23 | [Contextual Retrieval system.md](https://gist.github.com/ruvnet/6959450aa7fe0e919ff52b05e3c26a44) | Contextual Retrieval system |
 | 2026-04-23 | [00-README.md](https://gist.github.com/ruvnet/29be261d41ebd66dcdb9e389e9393458) | RuVector: Connectome-Driven Embodied Brain — graph-native structural intelligence infrastructure (not mind upload) |
 | 2026-04-22 | [1-readme.md](https://gist.github.com/ruvnet/11cfb552fb85585a1dcc4a783f072527) | 11cfb552fb85585a1dcc4a783f072527 |
-| 2026-04-20 | [redaction.md](https://gist.github.com/ruvnet/332336ad5e0516daa810d98f8f0ddca9) | Redaction hooks for Claude Code |
 | 2026-04-18 | [readme.md](https://gist.github.com/ruvnet/a0d8f1a6ec98bb3843f6de1f105691d3) | Single File ReAct Agent Template (Deno) |
 | 2026-04-17 | [*SNM.md](https://gist.github.com/ruvnet/f89b040c999108b49e964620186f2397) | Synaptic Mesh Platform |
 | 2026-04-17 | [01-experiment-output.md](https://gist.github.com/ruvnet/10596316f4e29107b296568f1ff57045) | Boundary-First Seizure Prediction: 45 Seconds of Warning via Graph MinCut on EEG Coherence (z=-32.62) — Clinical Researc |
