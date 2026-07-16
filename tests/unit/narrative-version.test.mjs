@@ -24,6 +24,15 @@ describe(`narrative version claims match the shipping version (${current})`, () 
     });
   }
 
+  it('public surfaces never teach retired command names (the /configure→/rvbc rename, told 4×)', () => {
+    const BANNED = [/run <code>\/configure<\/code>/, /\/ruvnet-brain:configure/, /run `\/configure`/];
+    for (const f of ['README.md', 'explainer/index.html']) {
+      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      const hits = BANNED.filter((re) => re.test(src)).map(String);
+      expect(hits, `${f} still teaches a retired command: ${hits.join(', ')}`).toEqual([]);
+    }
+  });
+
   it('explainer social meta tags carry no version number (versioned og tags rot silently)', () => {
     const src = fs.readFileSync(path.join(ROOT, 'explainer/index.html'), 'utf8');
     const metas = src.split('\n').filter((l) => /property="og:(title|description|image:alt)"|name="twitter:(title|description)"/.test(l));
