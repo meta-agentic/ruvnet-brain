@@ -123,10 +123,14 @@ body {
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Substrate: the two brand tints + a whisper of dot-grid texture (4% ink at 26px pitch —
+     structure you feel more than see; text sits on cards, so legibility pays nothing). */
   background-image:
+    radial-gradient(color-mix(in srgb, var(--ink) 4.5%, transparent) 1px, transparent 1.5px),
     radial-gradient(1000px 560px at 82% -6%, color-mix(in srgb, var(--amber) 9%, transparent), transparent 62%),
     radial-gradient(820px 640px at -8% 4%,  color-mix(in srgb, var(--cyan) 7%, transparent), transparent 56%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  background-size: 26px 26px, auto, auto, auto;
   background-attachment: fixed;
 }
 
@@ -204,11 +208,15 @@ p:last-child { margin-bottom: 0; }
 .spectrum-edge { height: 2px; background: var(--spectrum); opacity: 0.9; }
 
 .brand { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
-.brand .mark { width: 26px; height: 26px; flex: none; }
-.brand .mark line { stroke: var(--faint); stroke-width: 1.3; }
-.brand .mark .n1 { fill: var(--amber); }
-.brand .mark .n2 { fill: var(--cyan); }
-.brand .mark .n3 { fill: var(--green); }
+.brand .mark { width: 28px; height: 28px; flex: none; }
+/* The mark keeps its own dark plate in BOTH themes (like the favicon and the hero art):
+   the amber circuit-brain is drawn for that substrate, so the colors are literals, not vars. */
+.brand .mark .mk-plate  { fill: #0b0d12; stroke: #2c3850; stroke-width: 1.5; }
+.brand .mark .mk-brain  { fill: none; stroke: #f0a830; stroke-width: 3.4; stroke-linejoin: round; }
+.brand .mark .mk-branch { fill: none; stroke: #f0a830; stroke-width: 2.4; stroke-linecap: round; opacity: 0.9; }
+.brand .mark .n1 { fill: #f4b13a; }
+.brand .mark .n2 { fill: #5ad6ff; }
+.brand .mark .n3 { fill: #5fd38a; }
 .brand-text {
   font-family: var(--display); font-weight: 600; font-size: 1.02rem;
   letter-spacing: -0.01em; color: var(--ink); white-space: nowrap;
@@ -353,14 +361,55 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
   font-size: var(--fs--1); color: var(--ink-2); line-height: 1.45;
 }
 
+/* Stage chips — the color semantics worn as a pill (dot + tint), matching the card's rail.
+   cyan observes · green proves · amber acts. Named once in the legend above the cards. */
 .stage {
-  display: inline-block;
-  font-family: var(--mono); font-size: 11px; font-weight: 600;
-  letter-spacing: 0.24em; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 2.5px 10px 2.5px 8px; border-radius: 100px; border: 1px solid;
 }
-.st-mirror { color: var(--cyan-text); }
-.st-rec    { color: var(--amber-text); }
-.st-prove  { color: var(--green-text); }
+.stage::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.st-mirror { color: var(--cyan-text);  border-color: color-mix(in srgb, var(--cyan) 30%, transparent);  background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.st-rec    { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+.st-prove  { color: var(--green-text); border-color: color-mix(in srgb, var(--green) 30%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+
+/* The stage rail: a 3px color spine down each card's left edge (clipped to the card's own
+   radius by its overflow:hidden). Same three meanings as the chips — visible at a glance
+   even when every card is collapsed. */
+.card { position: relative; }
+.card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; z-index: 1;
+  pointer-events: none;
+}
+.rail-mirror::before { background: color-mix(in srgb, var(--cyan) 64%, transparent); }
+.rail-prove::before  { background: color-mix(in srgb, var(--green) 64%, transparent); }
+.rail-act::before    { background: color-mix(in srgb, var(--amber) 66%, transparent); }
+
+/* Card identity icons — one 24-grid line glyph per card, tinted by its stage. */
+.card-ic {
+  flex: none; width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center;
+  border: 1px solid;
+}
+.card-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ic-mirror { color: var(--cyan-text);  border-color: color-mix(in srgb, var(--cyan) 22%, transparent);  background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.ic-prove  { color: var(--green-text); border-color: color-mix(in srgb, var(--green) 22%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.ic-act    { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 24%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+
+/* The one-line legend that names the color system (static semantics, above the first card). */
+.stage-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 16px;
+  margin: clamp(1rem, 2.5vw, 1.6rem) 0 14px;
+  font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+  max-width: none;
+}
+.stage-legend .lg-cap { color: var(--faint); letter-spacing: 0.2em; }
+.stage-legend .lg { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.stage-legend .lg-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.stage-legend .d-cyan  { background: var(--cyan); }
+.stage-legend .d-green { background: var(--green); }
+.stage-legend .d-amber { background: var(--amber); }
 
 .chips {
   flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px;
@@ -1197,3 +1246,58 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 .wire-n { font-size: 1.15rem; }
 .wire-lab { font-family: var(--mono, ui-monospace, monospace); font-size: 0.82rem; }
 .wire-meaning { grid-column: 2 / -1; font-size: 0.85rem; line-height: 1.4; }
+
+/* ============================== 20 · TRUST & PROVENANCE (v3.3 preview) ============================== */
+
+/* Four rows: signature (real today) · SBOM (honest empty) · channel (real) · advisor (preview).
+   Same grammar as the rest of the page: status chip, plain-words value, mono only for data. */
+.trust-list { margin-top: 16px; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: color-mix(in srgb, var(--ink) 2%, transparent); }
+.trust-row { display: grid; grid-template-columns: minmax(150px, 0.9fr) minmax(0, 2.1fr) auto; gap: 6px 16px; padding: 14px 16px; align-items: start; }
+.trust-row + .trust-row { border-top: 1px solid var(--hair); }
+.trust-row.is-coming { background: color-mix(in srgb, var(--ink) 1.5%, transparent); }
+.trust-name { font-weight: 650; color: var(--ink); font-size: var(--fs--1); display: inline-flex; align-items: center; }
+.trust-val { min-width: 0; font-size: var(--fs--1); color: var(--ink-2); line-height: 1.55; }
+.trust-val p { max-width: none; margin: 0 0 4px; font-size: inherit; }
+.trust-val p:last-child { margin-bottom: 0; }
+.trust-hash {
+  display: block; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.02em;
+  color: var(--green-text); overflow-wrap: anywhere; line-height: 1.5;
+  padding: 6px 9px; border-radius: 8px; margin: 4px 0;
+  background: color-mix(in srgb, var(--green) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--green) 22%, transparent);
+}
+.trust-src { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.trust-status { justify-self: end; display: inline-flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* "coming" chip — dashed like every honest not-yet state on this page */
+.chip.tone-coming { color: var(--muted); border-style: dashed; background: transparent; }
+
+/* Advisor Mode preview switch: a real segmented control, deliberately inert — the preview
+   tag says so before anyone clicks. */
+.adv-seg { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.adv-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 500 13px/1.4 var(--sans); padding: 6px 13px; border-radius: 100px;
+  border: 1px dashed var(--hair-strong); background: transparent; color: var(--ink-2);
+  cursor: pointer; transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.adv-opt .pc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.adv-opt.on {
+  border-style: solid; color: var(--ink);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  background: color-mix(in srgb, var(--green) 9%, transparent);
+}
+.adv-opt.on .pc-dot { background: var(--green); }
+.adv-opt:hover { border-color: var(--amber); background: var(--fill); }
+.preview-tag {
+  font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--warn-text);
+  border: 1px dashed color-mix(in srgb, var(--warn) 45%, transparent);
+  border-radius: 100px; padding: 2px 8px;
+}
+.adv-note { margin-top: 8px; font-size: 13px; color: var(--muted); max-width: 60ch; }
+
+@media (max-width: 40em) {
+  .trust-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .trust-val { grid-column: 1 / -1; order: 3; }
+}

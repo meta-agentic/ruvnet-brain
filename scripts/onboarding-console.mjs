@@ -399,6 +399,70 @@ function gatherRouterEngine() {
   };
 }
 
+// ── Trust & provenance read-model (v3.3 preview; ADR-0013 follow-on) ─────────────────────────────
+// One measurement is REAL today: the release bundle's published sha256, read live from the latest
+// GitHub release's .sha256 asset (read-only metadata — the same class of network touch as the stack
+// registry audit). Install channel is read from the plugin cache on disk. SBOM and Advisor Mode are
+// v3.3 and are reported as honest empty states by the frontend — this read-model never fabricates.
+const TRUST_REPO = 'stuinfla/ruvnet-brain';
+let TRUST_CACHE = null; // successful release reads cached 10 min; failures are never cached
+async function fetchReleaseDigest() {
+  const ua = { 'user-agent': 'ruvnet-brain-console' };
+  const rel = await fetch(`https://api.github.com/repos/${TRUST_REPO}/releases/latest`,
+    { headers: { ...ua, accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
+  if (!rel.ok) throw new Error(`GitHub answered HTTP ${rel.status}`);
+  const j = await rel.json();
+  const assets = Array.isArray(j.assets) ? j.assets : [];
+  const shaAsset = assets.find((a) => String(a.name).endsWith('.sha256'));
+  const sigAsset = assets.find((a) => String(a.name).endsWith('.sig'));
+  let sha256 = null;
+  let file = null;
+  if (shaAsset) {
+    const r2 = await fetch(shaAsset.browser_download_url, { headers: ua, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    if (r2.ok) {
+      const m = (await r2.text()).trim().match(/^([0-9a-f]{64})\s+\*?(\S+)/i);
+      if (m) { sha256 = m[1]; file = m[2]; }
+    }
+  }
+  return {
+    ok: !!sha256,
+    tag: j.tag_name || null,
+    publishedAt: j.published_at || null,
+    asset: file || (shaAsset ? String(shaAsset.name).replace(/\.sha256$/, '') : null),
+    sha256,
+    sig: !!sigAsset,
+    source: `github.com/${TRUST_REPO}/releases/latest`,
+  };
+}
+function readInstallChannel() {
+  const reg = readJSON(path.join(HOME, '.claude/plugins/installed_plugins.json'));
+  const entries = reg && reg.plugins && reg.plugins['ruvnet-brain@ruvnet-brain'];
+  const e = Array.isArray(entries) ? entries[0] : null;
+  if (!e || !e.installPath || !fs.existsSync(e.installPath)) return { installed: false };
+  const km = readJSON(path.join(HOME, '.claude/plugins/known_marketplaces.json'));
+  const src = km && km['ruvnet-brain'] && km['ruvnet-brain'].source;
+  const pinned = !!(src && (src.ref || src.tag || src.commit)); // no pin recorded → tracking latest
+  return {
+    installed: true,
+    version: path.basename(e.installPath) || e.version || null, // the plugin cache version dir IS the truth
+    channel: pinned ? 'pinned' : 'latest',
+    lastUpdated: e.lastUpdated || null,
+    cacheDir: String(e.installPath).replace(HOME, '~'),
+    repo: (src && src.repo) || null,
+  };
+}
+async function gatherTrust() {
+  if (TRUST_CACHE && Date.now() - TRUST_CACHE.at < 600000) {
+    return { ...TRUST_CACHE.data, channel: readInstallChannel() }; // disk facts stay live
+  }
+  let release;
+  try { release = await fetchReleaseDigest(); }
+  catch (e) { release = { ok: false, error: String((e && e.message) || e) }; }
+  const data = { generatedAt: new Date().toISOString(), release };
+  if (release.ok) TRUST_CACHE = { at: Date.now(), data };
+  return { ...data, channel: readInstallChannel() };
+}
+
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
 function gatherState(cwd) {
   const wiring = wiringSurvey();
@@ -574,6 +638,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       const url = req.url.split('?')[0];
       if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd));
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
+      if (req.method === 'GET' && url === '/api/trust') return sendJSON(res, 200, await gatherTrust());
       if (req.method === 'GET' && url === '/api/stack' && /[?&]fast=1/.test(req.url)) {
         const c = readJSON(path.join(CONFIG_DIR, 'stack-audit-cache.json'));
         return sendJSON(res, 200, c && c.data ? { ...c.data, fromCache: true, cachedAt: c.at } : { fromCache: false });
@@ -621,4 +686,4 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   else { console.log(`\n  onboarding-console — the RuvNet Brain configure page\n\n    --serve [--open]   start the local server (and open your browser)\n    --print-state      print the read-only state JSON and exit (for tests)\n    --print-stack      print the stack audit JSON and exit\n`); }
 }
 
-export { gatherState, gatherStack, wiringSurvey, probeMemory, apply, saveConfig, undo };
+export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo };

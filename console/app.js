@@ -190,24 +190,52 @@ function showGlobalError(err) {
 
 /* ---------------------------------------------------- the "found" ribbon */
 
+/* One-time count-up for the found-strip numbers: each figure rolls in the first time it
+   appears, then stays static across the ribbon's later re-renders. Real values only — the
+   animation is a reveal, never an estimate — and prefers-reduced-motion gets the final
+   number immediately. */
+const REDUCED_MOTION = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; } })();
+const countedKeys = new Set();
+function countUpNum(key, value, render = fmtInt) {
+  const target = Number(value);
+  const b = el('b', {}, render(target));
+  if (REDUCED_MOTION || countedKeys.has(key) || !Number.isFinite(target) || target <= 0) {
+    countedKeys.add(key);
+    return b;
+  }
+  countedKeys.add(key);
+  const dur = 700;
+  let t0 = null;
+  const tick = (t) => {
+    if (t0 == null) t0 = t;
+    const p = Math.min(1, (t - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    b.textContent = render(Math.round(target * eased));
+    if (p < 1) requestAnimationFrame(tick);
+    else b.textContent = render(target);
+  };
+  requestAnimationFrame(tick);
+  return b;
+}
+
 function updateFoundStrip() {
   const strip = $('#found-strip');
   if (!strip || !found.host) return;
   const bits = [];
   if (found.pkgTotal != null) {
-    bits.push(el('span', {}, el('b', {}, fmtInt(found.pkgTotal)), ' packages on your global stack',
-      found.pkgCurrent != null ? el('span', {}, ' (', el('b', {}, fmtInt(found.pkgCurrent)), ' current)') : ''));
+    bits.push(el('span', {}, countUpNum('pkgTotal', found.pkgTotal), ' packages on your global stack',
+      found.pkgCurrent != null ? el('span', {}, ' (', countUpNum('pkgCurrent', found.pkgCurrent), ' current)') : ''));
   }
   if (found.npx != null) {
-    bits.push(el('span', {}, el('b', {}, fmtInt(found.npx)), ' npx call sites across ',
-      el('b', {}, fmtInt(found.projects ?? 0)), ' projects',
+    bits.push(el('span', {}, countUpNum('npx', found.npx), ' npx call sites across ',
+      countUpNum('projects', found.projects ?? 0), ' projects',
       found.projectNames?.length
         ? el('span', {}, ' — ', el('span', { class: 'fs-path' }, found.projectNames.slice(0, 2).join(', ')),
             found.projectNames.length > 2 ? ` +${found.projectNames.length - 2} more` : '')
         : ''));
   }
   if (found.memScore != null) {
-    bits.push(el('span', {}, 'memory quality ', el('b', {}, `${found.memScore}/100`)));
+    bits.push(el('span', {}, 'memory quality ', countUpNum('memScore', found.memScore, (v) => `${v}/100`)));
   }
   strip.replaceChildren(
     el('span', {}, 'We looked around ', el('b', {}, found.host), '’s machine: '),
@@ -1604,6 +1632,158 @@ function renderSettings(cfg) {
   body.replaceChildren(withIllo('settings', form));
 }
 
+/* -------------------------------------------------- section 7: trust & provenance
+   v3.3 preview (PROVE stage). One row is REAL today — the release bundle's published
+   sha256, read live from the latest GitHub release — plus the install channel read from
+   the plugin cache on disk. The SBOM and Advisor Mode rows are honest empty states: each
+   says exactly what will fill it and when. Nothing here is placeholder data. */
+
+const TRUST_INFO = {
+  signature: [
+    { k: 'What is this?', t: 'The sha256 fingerprint of the release bundle, published as its own asset on every GitHub release.' },
+    { k: 'Why does it matter?', t: 'If your download’s fingerprint matches the published one, the bundle is byte-identical to what was released — nothing altered, nothing truncated.' },
+    { k: 'How do I use it?', t: 'Run shasum -a 256 ruvnet-brain.zip on your download and compare. v3.3 adds a one-click local check right here.' },
+  ],
+  sbom: [
+    { k: 'What is this?', t: 'A Software Bill of Materials — the complete, machine-readable list of every package inside the bundle.' },
+    { k: 'Why does it matter?', t: 'You can see what’s in the box without unzipping it, and scanners can watch it for known vulnerabilities.' },
+    { k: 'How does it help me?', t: 'v3.3 attaches a CycloneDX SBOM to every release; this row will then show its package count and digest, measured from the published asset.' },
+  ],
+  channel: [
+    { k: 'What is this?', t: 'How your plugin updates: riding the latest release, or pinned to a version you chose.' },
+    { k: 'Why does it matter?', t: 'This stack ships fast — latest keeps you current. Pinning holds a known-good release when you need repeatable builds.' },
+    { k: 'How does it help me?', t: 'Read from your plugin cache on disk, never assumed. Version pinning ships in v3.3 — both choices will live on this row.' },
+  ],
+  advisor: [
+    { k: 'What is this?', t: 'A coming mode switch. Full lets the console apply consent-gated, undoable fixes; Advisor makes every Apply button read-only — it shows the exact command and steps aside.' },
+    { k: 'Why does it matter?', t: 'Some machines want eyes-only — work laptops, shared rigs, cautious first weeks. The right choice should be easy in both directions.' },
+    { k: 'How does it help me?', t: 'Ships in v3.3. Today the switch is a preview — it changes nothing, and says so.' },
+  ],
+};
+
+function trustRow({ name, info, coming, status, value }) {
+  return el('div', { class: `trust-row${coming ? ' is-coming' : ''}` },
+    el('span', { class: 'trust-name' }, name, infoBtn(name, info)),
+    el('div', { class: 'trust-val' }, ...value),
+    el('span', { class: 'trust-status' }, status));
+}
+
+function renderTrust(t) {
+  const body = $('#body-trust');
+  const rel = t.release || {};
+  const ch = t.channel || {};
+
+  setChips('chips-trust', [
+    rel.ok ? chip('sha256 published ✓', 'green', 'The release bundle’s fingerprint is published and was read live this session')
+           : chip('digest unreachable', 'warn', 'Couldn’t read the published digest this session'),
+    chip('SBOM — v3.3', 'coming', 'A CycloneDX SBOM ships with every release from v3.3'),
+    ch.installed ? chip(ch.channel === 'pinned' ? 'pinned' : 'latest channel', 'cyan') : chip('no plugin install', 'grey'),
+  ]);
+
+  const rows = [];
+
+  /* 1 · bundle signature — the one REAL measurement today */
+  rows.push(trustRow({
+    name: 'Bundle signature', info: TRUST_INFO.signature,
+    status: rel.ok ? chip('published ✓', 'green') : chip('unreachable', 'warn'),
+    value: rel.ok ? [
+      el('p', {}, 'Latest release ', el('b', {}, rel.tag || '—'),
+        rel.asset ? el('span', {}, ' · ', el('span', { class: 'cell-mono' }, rel.asset)) : '',
+        rel.publishedAt ? ` · published ${fmtDate(rel.publishedAt)}` : ''),
+      el('code', { class: 'trust-hash', title: 'sha256 of the release bundle, as published' }, rel.sha256 || ''),
+      el('p', {}, 'Check your download against it: ', el('code', {}, 'shasum -a 256 ruvnet-brain.zip'),
+        ' — the 64 characters must match exactly.'),
+      rel.sig ? el('p', {}, 'A detached signature (', el('span', { class: 'cell-mono' }, '.sig'),
+        ') ships alongside — one-click signature verification lands here in v3.3.') : null,
+      el('span', { class: 'trust-src' }, 'read live · ', rel.source || 'github.com — latest release'),
+    ] : [
+      el('p', {}, 'Couldn’t reach GitHub this session', rel.error ? el('span', {}, ' (', el('span', { class: 'cell-mono' }, rel.error), ')') : '',
+        ' — nothing is shown that wasn’t read. The digest is published on the latest release.'),
+      el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => { trustSkeleton(); loadTrust(); } }, 'Try again'),
+    ],
+  }));
+
+  /* 2 · SBOM — honest empty state */
+  rows.push(trustRow({
+    name: 'SBOM', info: TRUST_INFO.sbom, coming: true,
+    status: chip('coming · v3.3', 'coming'),
+    value: [
+      el('p', {}, 'Not published yet — nothing to show, so nothing is shown. From ', el('b', {}, 'v3.3'),
+        ' every release carries a ', el('b', {}, 'CycloneDX SBOM'),
+        '; this row will then report its package count and digest, measured from the published asset itself.'),
+    ],
+  }));
+
+  /* 3 · install channel — read from the plugin cache on disk */
+  rows.push(trustRow({
+    name: 'Install channel', info: TRUST_INFO.channel,
+    status: ch.installed ? chip(ch.channel === 'pinned' ? 'pinned' : 'latest', 'cyan') : chip('not found', 'grey'),
+    value: ch.installed ? [
+      el('p', {}, el('b', {}, ch.channel === 'pinned' ? 'Pinned' : 'Latest'),
+        ch.channel === 'pinned'
+          ? ' — held at a version you chose.'
+          : ' — auto-updates from GitHub, so you ride each release as it ships.'),
+      el('p', {}, 'On disk right now: ', el('b', {}, `v${ch.version || '?'}`),
+        ch.lastUpdated ? ` · updated ${fmtDate(ch.lastUpdated)}` : ''),
+      el('span', { class: 'trust-src' }, ch.cacheDir || ''),
+      ch.channel !== 'pinned' ? el('p', { style: 'margin-top:6px' },
+        'Prefer to hold a known-good release? ', el('b', {}, 'Version pinning arrives in v3.3'),
+        ' — you’ll choose it right here.') : null,
+    ] : [
+      el('p', {}, 'No plugin-cache install found on this machine — you may be running from a repo checkout. ',
+        'This row reads ', el('span', { class: 'cell-mono' }, '~/.claude/plugins'), ', never guesses.'),
+    ],
+  }));
+
+  /* 4 · advisor mode — display-only preview, clearly labeled */
+  const advNote = el('p', { class: 'adv-note' },
+    'Full is on: every change stays consent-gated, with its undo recorded first. The switch itself goes live in v3.3 — today it’s a preview and changes nothing.');
+  const advisorBtn = el('button', {
+    class: 'adv-opt', type: 'button',
+    title: 'Preview — Advisor Mode ships in v3.3; clicking changes nothing today',
+    onclick: () => {
+      advNote.textContent = 'Advisor Mode arrives in v3.3 — nothing changed just now. When it lands, this switch makes every Apply button read-only: the console shows the exact command and steps aside.';
+    },
+  }, el('span', { class: 'pc-dot', 'aria-hidden': 'true' }), 'Advisor — read-only');
+  rows.push(trustRow({
+    name: 'Advisor Mode', info: TRUST_INFO.advisor,
+    status: chip('preview', 'coming'),
+    value: [
+      el('div', { class: 'adv-seg' },
+        el('button', { class: 'adv-opt on', type: 'button', title: 'Your current behavior — consent-gated changes with undo' },
+          el('span', { class: 'pc-dot', 'aria-hidden': 'true' }), 'Full — recommended'),
+        advisorBtn,
+        el('span', { class: 'preview-tag' }, 'preview · v3.3')),
+      advNote,
+    ],
+  }));
+
+  body.replaceChildren(
+    el('p', { class: 'lead-stat' },
+      'Provenance you can check, not take on faith — ', el('b', {}, '1'),
+      ' measurement is live today; the rest of this card names exactly what v3.3 will measure.'),
+    el('div', { class: 'trust-list', 'data-trust-ready': '1' }, ...rows),
+  );
+}
+
+function trustSkeleton() {
+  $('#body-trust').replaceChildren(
+    frag('<div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>'),
+    el('p', { class: 'loading-note' },
+      'Reading the published release fingerprint from GitHub (read-only metadata — the one network touch this card makes) and your plugin cache on disk.'));
+  setChips('chips-trust', [chip('checking…', 'wait')]);
+}
+
+async function loadTrust() {
+  try {
+    const t = await getJSON('/api/trust');
+    renderTrust(t);
+  } catch (err) {
+    setChips('chips-trust', [chip('unavailable', 'grey')]);
+    inlineError('body-trust', String(err.message || err), () => { trustSkeleton(); loadTrust(); });
+  }
+}
+
 /* ------------------------------------------------------------------ loaders */
 
 async function loadState() {
@@ -1797,6 +1977,7 @@ async function mockPost(url, body) {
 initTheme();
 loadState();
 loadStack();
+loadTrust();
 $('#recheck-btn')?.addEventListener('click', () => recheckMachine());
 
 // Stack card leads (Stuart 2026-07-16): expand immediately on a true first visit so newcomers

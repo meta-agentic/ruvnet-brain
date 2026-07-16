@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark light" />
 <title>RuvNet Brain — Onboarding Console</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><defs><linearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22><stop offset=%220%22 stop-color=%22%23f4b13a%22/><stop offset=%22.5%22 stop-color=%22%235ad6ff%22/><stop offset=%221%22 stop-color=%22%235fd38a%22/></linearGradient></defs><rect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2216%22 fill=%22%230b0d12%22 stroke=%22%232c3850%22 stroke-width=%221.5%22/><text x=%2233%22 y=%2247.5%22 text-anchor=%22middle%22 font-family=%22Georgia,serif%22 font-weight=%22700%22 font-size=%2248%22 fill=%22url(%23g)%22>3</text><circle cx=%2214%22 cy=%2216%22 r=%223.2%22 fill=%22%23f4b13a%22/><circle cx=%2250%22 cy=%2214%22 r=%222.8%22 fill=%22%235ad6ff%22/><circle cx=%2250%22 cy=%2250%22 r=%222.8%22 fill=%22%235fd38a%22/></svg>" />
+<!-- Version-free brain mark (same glyph as explainer/favicon.svg): amber circuit-brain,
+     three signal nodes in the console's own semantics — cyan observed, amber acting, green grounded. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2216%22 fill=%22%230b0d12%22 stroke=%22%232c3850%22 stroke-width=%221.5%22/><path d=%22M25 48 C17 48 11.5 41.5 13.5 34.5 C10 29 13 21 19 19 C21 12.5 29 9.5 35 12 C43 9 50.5 14.5 50.5 22 C55 26 55 34.5 50 38 C49 43.5 43 47.5 37 46.5 L31 47.5 Z%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%223.4%22 stroke-linejoin=%22round%22/><path d=%22M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 opacity=%22.9%22/><circle cx=%2224%22 cy=%2227%22 r=%223.4%22 fill=%22%235ad6ff%22/><circle cx=%2240%22 cy=%2224.5%22 r=%223.4%22 fill=%22%23f4b13a%22/><circle cx=%2241%22 cy=%2236.5%22 r=%223.4%22 fill=%22%235fd38a%22/></svg>" />
 
 <!-- The server inlines the per-launch token here at render time:
      <script>window.__CONSOLE_TOKEN__="…"</script>
@@ -33,9 +35,13 @@
 <header class="head">
   <div class="wrap head-inner">
     <div class="brand">
-      <svg class="mark" viewBox="0 0 28 28" aria-hidden="true">
-        <line x1="8.5" y1="20" x2="14" y2="8.5" /><line x1="14" y1="8.5" x2="20.5" y2="17.5" /><line x1="8.5" y1="20" x2="20.5" y2="17.5" />
-        <circle class="n1" cx="14" cy="8.5" r="3.2" /><circle class="n2" cx="8.5" cy="20" r="3.2" /><circle class="n3" cx="20.5" cy="17.5" r="3.2" />
+      <!-- The brain, worn openly: the same version-free circuit-brain as the favicon and the
+           explainer. Node colors ARE the page's semantics: cyan observed · amber acting · green grounded. -->
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect class="mk-plate" x="2" y="2" width="60" height="60" rx="16" />
+        <path class="mk-brain" d="M25 48 C17 48 11.5 41.5 13.5 34.5 C10 29 13 21 19 19 C21 12.5 29 9.5 35 12 C43 9 50.5 14.5 50.5 22 C55 26 55 34.5 50 38 C49 43.5 43 47.5 37 46.5 L31 47.5 Z" />
+        <path class="mk-branch" d="M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5" />
+        <circle class="n2" cx="24" cy="27" r="4" /><circle class="n1" cx="40" cy="24.5" r="4" /><circle class="n3" cx="41" cy="36.5" r="4" />
       </svg>
       <span class="brand-text">RuvNet Brain <span class="brand-sub">Onboarding Console</span></span>
     </div>
@@ -136,12 +142,24 @@
     </div>
   </noscript>
 
+  <!-- One line that names the color system every card wears (rail, stage chip, icon).
+       Static semantics, not data — safe to show before anything hydrates. -->
+  <p class="stage-legend mono" aria-label="What the card colors mean">
+    <span class="lg-cap">card colors</span>
+    <span class="lg"><span class="lg-dot d-cyan"></span>cyan observes</span>
+    <span class="lg"><span class="lg-dot d-green"></span>green proves it live</span>
+    <span class="lg"><span class="lg-dot d-amber"></span>amber acts — only with your consent</span>
+  </p>
+
   <!-- ============================================== 0 · BRAIN ACTIVITY -->
   <!-- ================================================= 0 · YOUR STACK (leads; Stuart 2026-07-16)
        Starts EXPANDED only when it has something to say: an action to take, or the user's first
        visit. A clean, all-current stack on a repeat visit starts collapsed — app.js decides. -->
-  <details class="card" id="card-stack">
+  <details class="card rail-mirror" id="card-stack">
     <summary>
+      <span class="card-ic ic-mirror" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z"/><path d="M4.5 12 12 16l7.5-4"/><path d="M4.5 16 12 20l7.5-4"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
         <h2>Your stack</h2>
@@ -165,8 +183,11 @@
     </div>
   </details>
 
-  <details class="card" id="card-activity" open>
+  <details class="card rail-mirror" id="card-activity" open>
     <summary>
+      <span class="card-ic ic-mirror" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
         <h2>Brain activity</h2>
@@ -181,8 +202,11 @@
   </details>
 
   <!-- ============================================== 2 · MEMORY HEALTH -->
-  <details class="card" id="card-memory">
+  <details class="card rail-prove" id="card-memory">
     <summary>
+      <span class="card-ic ic-prove" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
         <h2>Your memory, proven</h2>
@@ -200,8 +224,11 @@
 
 
   <!-- ==================================== 3 · SMART ROUTING (MetaHarness) -->
-  <details class="card" id="card-savings" open>
+  <details class="card rail-prove" id="card-savings" open>
     <summary>
+      <span class="card-ic ic-prove" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3.5 12h5c3.5 0 3.5-5.5 7-5.5h4.5"/><path d="M8.5 12c3.5 0 3.5 5.5 7 5.5H20"/><path d="m17.5 3.8 3 2.7-3 2.7"/><path d="m17.5 14.8 3 2.7-3 2.7"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
         <h2>MetaHarness</h2>
@@ -217,9 +244,36 @@
     </div>
   </details>
 
-  <!-- =================================================== 4 · SETTINGS -->
-  <details class="card" id="card-settings">
+  <!-- ============================================ 3b · TRUST & PROVENANCE (v3.3 preview)
+       PROVE-stage: what you install is what we published. One number is REAL today (the release
+       bundle's published sha256); the empty rows say exactly what will fill them and when —
+       never placeholder data. -->
+  <details class="card rail-prove" id="card-trust">
     <summary>
+      <span class="card-ic ic-prove" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.4 2.9 7.5 7 9 4.1-1.5 7-4.6 7-9V6l-7-2.5Z"/><path d="m8.8 12 2.3 2.3 4.1-4.6"/></svg>
+      </span>
+      <span class="card-head">
+        <span class="stage st-prove">Prove</span>
+        <h2>Trust &amp; provenance</h2>
+        <span class="q">Is the Brain you're running the one we published? Checked against the release, not asserted.</span>
+      </span>
+      <span class="chips" id="chips-trust"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-trust">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
+      <p class="loading-note">Reading the published release fingerprint from GitHub (read-only metadata —
+      the one network touch this card makes) and your plugin cache on disk.</p>
+    </div>
+  </details>
+
+  <!-- =================================================== 4 · SETTINGS -->
+  <details class="card rail-act" id="card-settings">
+    <summary>
+      <span class="card-ic ic-act" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 4v6.5M5 15v5"/><circle cx="5" cy="12.8" r="2.1"/><path d="M12 4v2M12 10.5v9.5"/><circle cx="12" cy="8.3" r="2.1"/><path d="M19 4v9M19 17.5V20"/><circle cx="19" cy="15.3" r="2.1"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-rec">Apply</span>
         <h2>Settings</h2>
@@ -238,8 +292,11 @@
   <!-- ─────── Advanced: diagnostics & recommendations, below the essentials ─────── -->
 
   <!-- =============================================== 5 · HOW IT'S WIRED -->
-  <details class="card" id="card-wiring">
+  <details class="card rail-mirror" id="card-wiring">
     <summary>
+      <span class="card-ic ic-mirror" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.2"/><path d="M6.6 17.4 11 13h5.5"/><rect x="16.5" y="9.5" width="5.5" height="7" rx="1.6"/><path d="M11 13V6.5h5.5"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-mirror">Explain</span>
         <h2>How it's wired</h2>
@@ -256,8 +313,11 @@
   </details>
 
   <!-- ============================================ 6 · WHAT WE'D SUGGEST -->
-  <details class="card" id="card-recs">
+  <details class="card rail-act" id="card-recs">
     <summary>
+      <span class="card-ic ic-act" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M9.7 18h4.6"/><path d="M10.4 21h3.2"/><path d="M8.6 14.4C7 13.1 6 11.3 6 9.4a6 6 0 1 1 12 0c0 1.9-1 3.7-2.6 5-.6.5-.9 1.3-.9 2.1v.5H9.5v-.5c0-.8-.3-1.6-.9-2.1Z"/></svg>
+      </span>
       <span class="card-head">
         <span class="stage st-rec">Recommend</span>
         <h2>What we'd suggest</h2>
