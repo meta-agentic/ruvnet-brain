@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.2.9",
+    "softwareVersion": "3.2.10",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-16",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 56 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.9</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.10</p>
     </div>
   </div>
 
@@ -279,7 +279,7 @@
                MacBook — measured, both times. Headline first (the thesis), film second (the proof),
                prose third (for whoever wants it), CTA last (once you've been convinced). -->
           <div class="hero-copy">
-            <p class="eyebrow">ruvnet brain &middot; a downloadable brain for Claude Code</p>
+            <p class="eyebrow"><span class="nb">ruvnet brain</span> &middot; <span class="nb">a downloadable brain for Claude Code</span></p>
             <h1>Measure it. <span class="grad">Master it.</span><br />rUv&rsquo;s whole stack &mdash;<br />without being <span class="grad">rUv</span>.</h1>
           </div>
           <figure class="hero-art">
@@ -375,6 +375,13 @@
 
     <!-- ===================== WHAT'S NEW — 3.1 (compact band) ===================== -->
     <style>
+      /* Thoughtful line breaks, page-wide (Stuart 2026-07-16: "review all line breaks for logical
+         breaks so it looks thoughtful"). balance makes multi-line display text break evenly instead
+         of orphaning a word; .nb spans mark phrases that must never split (break at separators only),
+         released on small screens so nothing overflows. Hand-set <br>s (the hero) are respected. */
+      h1,h2,h3,.eyebrow,.lede,.oh,figcaption,.spear-lab{text-wrap:balance}
+      .eyebrow .nb{white-space:nowrap}
+      @media (max-width:720px){.eyebrow .nb{white-space:normal}}
       /* scoped — existing design-system tokens only, mirrors the spearband/closing patterns */
       .v2band{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--fill),transparent)}
       .v2band-inner{padding:var(--space-2xl) 0 var(--space-xl)}
