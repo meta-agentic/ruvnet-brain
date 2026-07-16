@@ -36,7 +36,22 @@
 
 ---
 
-## What's new in 2.5 — it uses rUv's real tools, and every job proves it ran
+## What's new in 3.1 — the invisible stack, made visible
+
+**Shipped 2026-07-16.** rUv's tools do their best work invisibly — which meant nobody could see them working, working stale, or working in conflict. The 3.x line makes the machinery visible, and everything it shows you is measured, never projected.
+
+- **A living console** — `/ruvnet-brain:configure` puts your whole stack on one page: what's installed, how it's wired, what your AI learned. Every warning arrives paired with a one-click, undoable fix, and the page re-checks itself after every change so you always see the *after* state.
+- **Your brain, visible** — a live **Brain Activity** card: every memory stored, every lesson distilled, clickable down to the verbatim task → what-failed → what-works cards from your own AgentDB (ADR-0018).
+- **Receipts, not estimates** — the routing dashboard recomputes from real routing receipts against *your* frontier; subscriptions price at $0; a providers row shows exactly which license pays for what.
+- **No model fact ships from memory** — the 3.0 live-verification wall: every model/version claim checks the live catalog in CI (ADR-0016), and router profiles self-optimize from rUv's bench plus live prices (ADR-0015).
+- **It learns YOU** — a recursive per-user learning loop (ADR-017): patterns from how you actually work, shared across your projects, isolated where they must be.
+
+> New gate with this release: **narrative versions are tested.** If any public page says "What's new in X" where X isn't the shipping version, CI fails — because this README sat on 2.5 while 3.1 shipped, and nobody's eyes are a gate.
+
+<details>
+<summary><b>Earlier &#8212; what 2.5 proved</b> &#183; it uses rUv's real tools (a CI gate makes silent hand-rolls impossible), every scheduled job must prove it ran, and no subagent inherits an expensive model by accident. <i>Expand for the receipts.</i></summary>
+
+## 2.5 — the receipts
 
 **Shipped 2026-07-13. Two hard lessons, both fixed at the root.**
 
@@ -68,10 +83,12 @@ So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any 
 
 ![MetaHarness routing — your subscriptions first, always](assets/diagrams/router-path.svg)
 
+</details>
+
 <details>
 <summary><b>Earlier &#8212; what 2.0 proved</b> &#183; the release where the brain stopped taking its own word for anything: 32 verified repos, a 120-question fail-closed eval gate, ~90% cheaper per-turn injection, and an 8-dimension evidence-backed scorecard (55 &#8594; 83 in two days). <i>Expand for the receipts.</i></summary>
 
-### What's new in 2.0
+### 2.0 — the receipts
 
 **2.0 is the release where the brain got bigger — and, more importantly, stopped taking its own word for anything.** Every number below regenerates from an artifact on disk; the claims ledger (`node scripts/claims-verify.mjs`) re-checks the advertised ones in CI:
 

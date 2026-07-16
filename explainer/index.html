@@ -22,17 +22,17 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="RuvNet Brain · by Isovision.ai" />
-  <meta property="og:title" content="RuvNet Brain 2.0 for Claude Code — build 9 months ahead" />
+  <meta property="og:title" content="RuvNet Brain for Claude Code — build 9 months ahead" />
   <meta property="og:description" content="A downloadable brain for Claude Code — rUv's real source code, indexed — that Claude reads before it answers. Built by Isovision.ai. Not the same as rUv's RuVector Brain." />
   <meta property="og:url" content="https://isovision.ai/ruvnet-brain/" />
   <meta property="og:image" content="https://ruvnet-brain.vercel.app/assets/img/og-hero-2.png" />
-  <meta property="og:image:alt" content="RuvNet Brain 2.0 — a brain of glowing amber and cyan filaments, rUv's whole toolkit in one intelligence" />
+  <meta property="og:image:alt" content="RuvNet Brain — a brain of glowing amber and cyan filaments, rUv's whole toolkit in one intelligence" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="RuvNet Brain 2.0 — build 9 months ahead. Without being Ruv." />
+  <meta name="twitter:title" content="RuvNet Brain — build 9 months ahead. Without being Ruv." />
   <meta name="twitter:description" content="The missing instruction manual for rUv's tools: a downloadable brain that grounds Claude in his real source so you build on the front edge of AI." />
   <meta name="twitter:image" content="https://ruvnet-brain.vercel.app/assets/img/og-hero-2.png" />
 
@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.1.0",
+    "softwareVersion": "3.1.1",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-10",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 36 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.1.0</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.1.1</p>
     </div>
   </div>
 
@@ -373,7 +373,7 @@
       </div>
     </section>
 
-    <!-- ===================== WHAT'S NEW — 2.0 (compact band) ===================== -->
+    <!-- ===================== WHAT'S NEW — 3.1 (compact band) ===================== -->
     <style>
       /* scoped — existing design-system tokens only, mirrors the spearband/closing patterns */
       .v2band{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--fill),transparent)}
@@ -413,70 +413,37 @@
         .v2-score .tbl td.moved{grid-column:1 / -1;margin-top:2px;min-width:0}
       }
     </style>
-    <section class="v2band" id="v2" aria-label="What's new in version 2.0">
+    <section class="v2band" id="v2" aria-label="What's new in version 3.1">
       <div class="wrap v2band-inner reveal">
-        <p class="eyebrow">new &middot; version 2.0</p>
-        <h2>What&rsquo;s new in <span class="grad">2.0</span></h2>
-        <p class="lede">The Brain got bigger &mdash; and stopped taking its own word for anything. Every store now has to
-          <strong>prove</strong> it embeds correctly <em>and</em> reads correctly before it ships, and a frozen
-          120-question eval gate can &mdash; and did &mdash; block a release.</p>
+        <p class="eyebrow">new &middot; version 3.1</p>
+        <h2>What&rsquo;s new in <span class="grad">3.1</span></h2>
+        <p class="lede">The Brain stopped being invisible. A live console now shows you what it&rsquo;s doing &mdash;
+          and everything it tells you is <strong>measured, never projected</strong>.</p>
         <div class="spear-grid">
           <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">24 &rarr; 36 repos</div>
-            <p class="spear-lab">every store verified by a live retrieval query<span class="spear-src">corpus</span></p>
+            <div class="spear-num grad">a living console</div>
+            <p class="spear-lab">run <code>/configure</code> and see your whole stack on one page &mdash; what&rsquo;s
+              installed, how it&rsquo;s wired, what your AI learned &mdash; with one-click, undoable fixes<span class="spear-src">one command</span></p>
           </div>
           <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">12 &rarr; 120 questions</div>
-            <p class="spear-lab">frozen, hash-pinned eval &mdash; releases gated on it, fail-closed<span class="spear-src">eval flywheel</span></p>
+            <div class="spear-num grad">your brain, visible</div>
+            <p class="spear-lab">a live Brain Activity feed &mdash; every memory stored, every lesson distilled; drill
+              into exactly what your AI knows<span class="spear-src">real rows from your own AgentDB</span></p>
           </div>
           <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">6,183 &rarr; 684 bytes</div>
-            <p class="spear-lab">per-turn hook cost, ~90% cut &mdash; eval-proven zero quality loss<span class="spear-src">token cost</span></p>
+            <div class="spear-num grad">receipts, not estimates</div>
+            <p class="spear-lab">smart model routing reports only measured savings from real routing receipts &mdash;
+              your subscriptions priced in, frontier only when the work earns it<span class="spear-src">routing receipts</span></p>
           </div>
           <div class="spear-card reveal-stagger">
-            <div class="spear-num grad">437 gists</div>
-            <p class="spear-lab">rUv&rsquo;s gists indexed nightly, with per-chunk freshness banners<span class="spear-src">nightly</span></p>
+            <div class="spear-num grad">it learns YOU</div>
+            <p class="spear-lab">a recursive per-user learning loop &mdash; patterns from how you actually work, shared
+              across your projects, isolated where they must be<span class="spear-src">per-user</span></p>
           </div>
         </div>
 
-        <details class="v2-details" id="v2score">
-          <summary>
-            <span class="tier tech">The scorecard &mdash; 8 dimensions, self-scored /100, every deduction evidenced &middot; 2026-07-10 (evening re-score)</span>
-            <span class="chev" aria-hidden="true">&rsaquo;</span>
-          </summary>
-          <div class="v2-score">
-            <table class="tbl">
-              <thead>
-                <tr><th scope="col">Dimension</th><th scope="col" class="nh">v1 &middot; 07-09</th><th scope="col" class="nh">v2.0 &middot; now</th><th scope="col" class="nh">&Delta;</th><th scope="col" class="moved-h">What moved it</th></tr>
-              </thead>
-              <tbody>
-                <tr class="reveal-row"><td>End-user experience</td><td class="n before">54</td><td class="n after">83</td><td class="n win">+29</td><td class="moved">One-command install now offers nightly self-updates (default yes); the page lives on isovision.ai; publishing renews itself</td></tr>
-                <tr class="reveal-row"><td>Knowledge corpus</td><td class="n before">71</td><td class="n after">88</td><td class="n win">+17</td><td class="moved">24&rarr;36 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored &mdash; flagship went 0&rarr;2,996 source bodies</td></tr>
-                <tr class="reveal-row"><td>Effectiveness (eval-proven retrieval)</td><td class="n before">58</td><td class="n after">88</td><td class="n win">+30</td><td class="moved">120-question Wilson-bound gate &mdash; it blocked a bad release, then passed the fix <em>above</em> the old baseline</td></tr>
-                <tr class="reveal-row"><td>Acting like rUv</td><td class="n before">38</td><td class="n after">72</td><td class="n win">+34</td><td class="moved">Memory layer root-caused and fixed with proofs; 6 exact patches queued upstream; real multi-agent swarm operations</td></tr>
-                <tr class="reveal-row"><td>Developer smarter</td><td class="n before">62</td><td class="n after">84</td><td class="n win">+22</td><td class="moved"><code>/brain-score</code> runs this same scorecard on any repo; honest tool announcements; per-answer source receipts</td></tr>
-                <tr class="reveal-row"><td>Token cost efficiency</td><td class="n before">41</td><td class="n after">82</td><td class="n win">+41</td><td class="moved">~90% smaller per-turn injection, eval-proven free; a live token meter &mdash; measured, not guessed</td></tr>
-                <tr class="reveal-row"><td>Engineering reliability</td><td class="n before">61</td><td class="n after">86</td><td class="n win">+25</td><td class="moved">312 tests green; a claims ledger re-verifies marketing claims in CI; fail-closed publishing; Windows CI added</td></tr>
-                <tr class="reveal-row"><td>Safety &amp; privacy</td><td class="n before">74</td><td class="n after">82</td><td class="n win">+8</td><td class="moved">Private-store fence held under full rebuild; secrets never transit chat; autonomy hard fence</td></tr>
-                <tr class="reveal-row"><td>Overall</td><td class="n before">55</td><td class="n after">83</td><td class="n win">+28</td><td class="moved">&mdash;</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="v2-fine">Self-scores under a hard rule: <b>every deduction requires specific evidence, and a known
-            architectural flaw caps a dimension at &le;70 until the flaw is fixed</b> &mdash; <em>acting like rUv</em>
-            spent the morning capped for its memory-layer flaw; the flaw was root-caused and fixed with proofs, the cap
-            lifted, and it re-scored 72. Overall <b>55 &rarr; 83 in two days</b>, each number regenerating from a stored
-            receipt &mdash; and the same scoring that produced these blocked a release mid-day.
-            <b>That&rsquo;s why they&rsquo;re credible: scores you can trust beat scores that flatter.</b></p>
-        </details>
-
-        <p class="v2-fine"><b>Also in 2.0:</b> code-level depth restored (flagship <code>ruvector</code>: 18,491 &rarr; 28,018
-          passages, 0 &rarr; 2,996 full source bodies) &middot; a 72/72 corpus QA gate wired fail-closed into the nightly
-          publish &middot; ~27% faster repeat queries &middot; a <code>/loop</code> contract so hooks stop asking questions
-          to an empty room &middot; 3 root-caused memory-layer fixes, queued upstream to ruflo.
-          <br /><b>The honest small print:</b> warm query is ~21&nbsp;s on the large corpus (next optimization: candidate
-          dedup/pruning) &middot; the 8 newest repos are findable by name but don&rsquo;t yet have capability cards for
-          described-need routing &middot; the Windows CI job is unproven until its first green run.</p>
+        <p class="v2-fine">Every number on this page traces to something measured &mdash; <b>the 2.0 eval-gate
+          discipline now covers the whole surface</b>.</p>
       </div>
     </section>
 
