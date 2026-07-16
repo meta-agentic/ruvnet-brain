@@ -39,4 +39,34 @@ describe(`narrative version claims match the shipping version (${current})`, () 
     const versioned = metas.filter((l) => /\b\d+\.\d+(\.\d+)?\b/.test(l));
     expect(versioned, `versioned social meta lines:\n${versioned.join('\n')}`).toEqual([]);
   });
+
+  // The 2026-07-16 share-card failure: og-hero-2.png had "VERSION 2.0" BAKED INTO ITS PIXELS,
+  // so every WhatsApp/iMessage/Twitter preview said 2.0 while the page said 3.2 — and no string
+  // gate can read pixels. The og image is therefore hash-CERTIFIED: this constant is only ever
+  // updated by a human-in-the-loop who has LOOKED at the new image and confirmed it carries no
+  // version number. Swapping the file without re-certifying fails the build.
+  const CERTIFIED_OG = {
+    file: 'explainer/assets/img/og-hero-3.png',
+    sha256: '1abfc99834b5aadf97196a364823960011d13c989e3209f93bcd89e610c878ec',
+  };
+
+  it('og/twitter image points at the certified version-free asset', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'explainer/index.html'), 'utf8');
+    const imgs = [...src.matchAll(/(?:property="og:image"|name="twitter:image")\s+content="([^"]+)"/g)].map((m) => m[1]);
+    expect(imgs.length, 'expected og:image and twitter:image tags').toBeGreaterThanOrEqual(2);
+    for (const u of imgs) {
+      expect(u.endsWith(path.basename(CERTIFIED_OG.file)), `${u} is not the certified share image`).toBe(true);
+    }
+  });
+
+  it('the certified share image bytes are unchanged since certification (pixels can lie; hashes cannot)', async () => {
+    const { createHash } = await import('node:crypto');
+    const buf = fs.readFileSync(path.join(ROOT, CERTIFIED_OG.file));
+    const got = createHash('sha256').update(buf).digest('hex');
+    expect(got, `og image changed — LOOK at it, confirm no version in the pixels, then update CERTIFIED_OG.sha256`).toBe(CERTIFIED_OG.sha256);
+  });
+
+  it('the retired version-stamped share image is gone from the repo', () => {
+    expect(fs.existsSync(path.join(ROOT, 'explainer/assets/img/og-hero-2.png')), 'og-hero-2.png (VERSION 2.0 in pixels) must not exist').toBe(false);
+  });
 });
