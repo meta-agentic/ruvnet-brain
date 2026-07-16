@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.2.2",
+    "softwareVersion": "3.2.3",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-10",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 36 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.2</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.2.3</p>
     </div>
   </div>
 
@@ -434,7 +434,7 @@
           <div class="spear-grid">
             <div class="spear-card reveal-stagger">
               <div class="spear-num grad">a living console</div>
-              <p class="spear-lab">type <code>/rvbc</code> and see your whole stack on one page &mdash; what&rsquo;s
+              <p class="spear-lab">type <strong><code>/rvbc</code></strong> and see your whole stack on one page &mdash; what&rsquo;s
                 installed, how it&rsquo;s wired, what your AI learned &mdash; with one-click, undoable fixes<span class="spear-src">one command</span></p>
             </div>
             <div class="spear-card reveal-stagger">
@@ -461,7 +461,7 @@
                      loading="lazy" style="display:block;width:100%;height:auto" />
               </span>
             </a>
-            <p class="v31-cap">the console, live on a real machine &mdash; type <code>/rvbc</code> &middot; <span style="opacity:.75">a crop &mdash; the page keeps going</span></p>
+            <p class="v31-cap">the console, live on a real machine &mdash; type <strong><code>/rvbc</code></strong> &middot; <span style="opacity:.75">a crop &mdash; the page keeps going</span></p>
           </div>
         </div>
 
@@ -485,22 +485,48 @@
             <span class="chev" aria-hidden="true">&rsaquo;</span>
           </summary>
           <div class="body">
-            <p class="lead-in">
-              Meet <strong>Maya</strong> &mdash; a capable developer, brand-new to rUv&rsquo;s tools. She opens Claude
-              Code and asks the obvious thing: <em>&ldquo;Set up vector search for this project using RuVector.&rdquo;</em>
-            </p>
-            <p>
-              <strong>Without the Brain.</strong> Claude has never been trained on RuVector. So it does what classical
-              training taught it &mdash; it reaches for Pinecone, or pgvector, or hand-rolls cosine similarity in JSON.
-              It even gently <em>argues</em> with her: &ldquo;a managed vector DB would be more standard.&rdquo; Maya,
-              nervous and new, assumes Claude knows best. She ends up far from rUv&rsquo;s actual stack &mdash; slower,
-              heavier, wrong.
-            </p>
-            <p>
-              <strong>With the Brain.</strong> Claude reads rUv&rsquo;s real RuVector source first, sees RVF binary
-              vector files + HNSW, and writes the <em>correct</em> <code>RvfDatabase.open(...).query(...)</code> code
-              &mdash; the way rUv would. No argument. No drift. Maya ships the front-edge version on her first try.
-            </p>
+<style>
+              /* Maya gets a face; the two futures sit side by side so the contrast reads at a glance. */
+              .maya-row{display:grid;grid-template-columns:128px 1fr;gap:22px;align-items:center;margin:0 0 20px}
+              .maya-row img{width:128px;height:128px;object-fit:cover;object-position:top;border-radius:14px;border:1px solid var(--line-strong);display:block}
+              .maya-row .lead-in{margin:0}
+              .fork{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:4px 0 6px}
+              .fork .path{border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:var(--surface-2)}
+              .fork .path h3{margin:0 0 10px;font-family:var(--mono);font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+              .fork .without{border-color:color-mix(in srgb, var(--bad) 40%, transparent)}
+              .fork .without h3{color:var(--bad)}
+              .fork .with{border-color:color-mix(in srgb, var(--accent-3) 40%, transparent)}
+              .fork .with h3{color:var(--accent-3)}
+              .fork .path p{margin:0}
+              @media (max-width:760px){.fork{grid-template-columns:1fr}.maya-row{grid-template-columns:88px 1fr;gap:14px}.maya-row img{width:88px;height:88px}}
+            </style>
+            <div class="maya-row">
+              <img src="assets/img/maya.webp" alt="Maya &mdash; a developer at her laptop, lit by the screen" width="128" height="128" loading="lazy" />
+              <p class="lead-in">
+                Meet <strong>Maya</strong> &mdash; a capable developer, brand-new to rUv&rsquo;s tools. She opens Claude
+                Code and asks the obvious thing: <em>&ldquo;Set up vector search for this project using RuVector.&rdquo;</em>
+              </p>
+            </div>
+            <div class="fork" role="group" aria-label="The same question, without and with the Brain">
+              <div class="path without">
+                <h3>Without the Brain</h3>
+                <p>
+                  Claude has never been trained on RuVector. So it does what classical training taught it &mdash; it
+                  reaches for Pinecone, or pgvector, or hand-rolls cosine similarity in JSON. It even gently
+                  <em>argues</em> with her: &ldquo;a managed vector DB would be more standard.&rdquo; Maya, nervous and
+                  new, assumes Claude knows best. She ends up far from rUv&rsquo;s actual stack &mdash; slower,
+                  heavier, wrong.
+                </p>
+              </div>
+              <div class="path with">
+                <h3>With the Brain</h3>
+                <p>
+                  Claude reads rUv&rsquo;s real RuVector source first, sees RVF binary vector files + HNSW, and writes
+                  the <em>correct</em> <code>RvfDatabase.open(...).query(...)</code> code &mdash; the way rUv would.
+                  No argument. No drift. Maya ships the front-edge version on her first try.
+                </p>
+              </div>
+            </div>
 
             <div class="oh">
               The Brain doesn&rsquo;t make Claude smarter. <strong>It makes Claude stop guessing &mdash; and start
@@ -1638,7 +1664,7 @@ npx ruvnet-brain
 
             <div class="configurator-preview" style="margin-top:24px;border-top:1px solid #2a3140;padding-top:18px">
               <h3 style="margin:0 0 6px">There&rsquo;s a visual configurator</h3>
-              <p style="margin:0 0 12px;font-size:1.03em"><strong>To open your console, run</strong> <code>/rvbc</code> <span style="opacity:.75">(RuvNet Brain Console — offered automatically on first load)</span></p>
+              <p style="margin:0 0 12px;font-size:1.03em"><strong>To open your console, run</strong> <strong><code>/rvbc</code></strong> <span style="opacity:.75">(RuvNet Brain Console — offered automatically on first load)</span></p>
               <p style="max-width:60ch;color:var(--ink-2)">It opens a local page that mirrors your machine&rsquo;s RuvNet setup in plain English &mdash; your stack, whether memory actually works, and MetaHarness cost-routing (development vs production) &mdash; and lets you safely turn things on. Read-only until you click; nothing leaves your machine.</p>
               <a href="assets/console-v3.png" target="_blank" rel="noopener" title="Click to enlarge" style="display:inline-block;max-width:460px;border:1px solid #2a3140;border-radius:12px;overflow:hidden;text-decoration:none">
                 <span style="display:block;max-height:300px;overflow:hidden;line-height:0"><img src="assets/console-v3.png" alt="RuvNet Brain Onboarding Console — your machine mirrored, with MetaHarness cost routing" loading="lazy" style="display:block;width:100%;height:auto" /></span>
