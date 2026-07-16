@@ -95,6 +95,13 @@
       "schedule": "hourly",
       "maxAgeHours": 3,
       "required": true
+    },
+    {
+      "label": "com.ruvnet.issue-fix",
+      "what": "Every 10 min: auto-fixes newly opened GitHub issues (stuinfla/ruvnet-brain) — bounded headless `claude -p` per issue in a disposable git worktree, pushes an issue-fix/<N> branch + comment or posts an honest triage comment, never touches main, never closes an issue",
+      "schedule": "every 10 min",
+      "maxAgeHours": 1,
+      "required": true
     }
   ]
 }

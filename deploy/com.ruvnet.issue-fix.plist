@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>Every-10-min GitHub-issues AUTO-FIXER for stuinfla/ruvnet-brain (Stuart's mandate: "look for any
+	open issues and fix as soon as they hit"). Runs scripts/issue-fix.mjs, which finds new open issues
+	(state: ~/.claude/ruvnet-brain/issue-watch-state.json, namespaced under "__issueFix" so it can never
+	collide with com.ruvnet.issue-watch's own per-issue SLA-alert keys in the SAME file), spawns ONE
+	bounded headless `claude -p` child per issue inside a disposable git worktree (never the shared live
+	tree, never main), and either pushes an issue-fix/&lt;N&gt; review branch + comments, or posts an
+	honest triage comment — never closes an issue. Concurrency 1 via its own lock file (a fix can run up
+	to 15 minutes, longer than this cadence, so overlapping ticks correctly no-op). Wrapped in
+	job-heartbeat.sh per the house positive-confirmation pattern (see config/scheduled-jobs.json,
+	scripts/nightly-watchdog.mjs) — a crash still leaves a receipt and pages the phone; silence is not
+	health. Runs alongside, and does not replace, com.ruvnet.issue-watch (detection/SLA-alert only).</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/stuartkerr</string>
+		<key>PATH</key>
+		<string>/Users/stuartkerr/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.ruvnet.issue-fix</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>/Users/stuartkerr/Code/ruvnet-brain/scripts/job-heartbeat.sh</string>
+		<string>com.ruvnet.issue-fix</string>
+		<string>--</string>
+		<string>/usr/local/bin/node</string>
+		<string>/Users/stuartkerr/Code/ruvnet-brain/scripts/issue-fix.mjs</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/issue-fix.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/issue-fix.out.log</string>
+	<key>StartInterval</key>
+	<integer>600</integer>
+</dict>
+</plist>
