@@ -1927,12 +1927,15 @@ function renderGates(g) {
     el('b', {}, String(s.advisory)), ' add context without ever blocking.'));
 
   if (caught) {
-    main.push(el('div', { class: 'wire-lanes' },
-      ...g.catches.map((c) => el('div', { class: 'wire-lane' },
-        el('span', { class: 'wire-dot w-npx', 'aria-hidden': 'true' }),
-        el('b', { class: 'wire-n' }, c.gate || 'gate'),
-        el('span', { class: 'wire-lab' }, c.subject || ''),
-        el('span', { class: 'wire-meaning cell-dim' }, c.reason || '')))));
+    // Deliberately NOT the .wire-lane grid: its fixed columns are sized for (count, label, meaning)
+    // and fling a gate name and its subject to opposite sides of a dead gap. A catch is a sentence —
+    // who stopped what, and why — so it reads as one.
+    main.push(el('ul', { class: 'gate-catches' },
+      ...g.catches.map((c) => el('li', {},
+        el('b', {}, c.gate || 'gate'),
+        ' stopped ', el('b', {}, c.subject || 'a call'),
+        ' — ', el('span', { class: 'cell-dim' }, c.reason || ''),
+        c.at ? el('span', { class: 'cell-dim' }, ' · ' + new Date(c.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : ''))));
   } else {
     // Honest empty state. The gates only started writing receipts on 2026-07-17; saying "0 blocks"
     // as though it were a measured safety record would be a lie of omission.
