@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.4.1-dev — updated 2026-07-17 09:40 EDT](https://img.shields.io/badge/version_3.4.1--dev-updated_2026--07--17_09:40_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.4.2-dev — updated 2026-07-17 09:40 EDT](https://img.shields.io/badge/version_3.4.2--dev-updated_2026--07--17_09:40_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -20,9 +20,13 @@
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
 > - **`installer (npm)`** (badge above) — the `npx ruvnet-brain` setup script. Read live from the [npm registry](https://www.npmjs.com/package/ruvnet-brain). Only moves when the installer script itself changes — rare.
 > - **Brain Release** (the downloadable knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
-> - **Update an installed brain once:** `npx ruvnet-brain --update` — runs the bundle's own self-updater (backs up first, re-verifies, fails loud instead of half-applying).
-> - **Nightly auto-update is OFF by default:** `npx ruvnet-brain --enable-nightly` schedules it (macOS LaunchAgent, 03:47); `npx ruvnet-brain --disable-nightly` removes it; Linux/Windows get the cron line documented in the bundle's `forge-update.mjs`.
-> - **Either way, your copy only advances when a new Release is published** — the updater pulls `releases/latest`, so running it between releases is a safe no-op.
+> - **On an old version? One line makes you current — and, with `--auto`, keeps you current forever:**
+>   ```
+>   npx ruvnet-brain@latest --update --auto
+>   ```
+>   `--update` pulls the latest plugin + knowledge (backs up first, re-verifies, fails loud instead of half-applying). Adding `--auto` enrolls you in **Evergreen** — the brain keeps itself up to date from then on, so you never run this again. Drop `--auto` for a one-time update: `npx ruvnet-brain@latest --update`.
+> - **Turn Evergreen off any time:** `npx ruvnet-brain --disable-nightly` (Linux/Windows get the cron line documented in the bundle's `forge-update.mjs`).
+> - **Your copy only advances when a new Release is published** — the updater pulls `releases/latest`, so running it between releases is a safe no-op.
 
 <sub>Built by **[Stuart Kerr](https://isovision.ai)** at [Isovision.ai](https://isovision.ai) · free & fair use, to help everyone leverage the high end of agentic coding.</sub>
 
