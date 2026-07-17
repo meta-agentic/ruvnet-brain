@@ -17,7 +17,16 @@ const SURFACES = ['README.md', 'explainer/index.html', 'primer/ruvnet-primer.md'
 describe(`narrative version claims match the shipping version (${current})`, () => {
   for (const f of SURFACES) {
     it(`${f} — every "What's new in X" says ${mm}`, () => {
-      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      const raw = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      // Strip HTML tags first so a version wrapped in markup — e.g. the explainer's
+      // `What's new in <span class="grad">3.2</span>` — is still caught. That exact tag-split
+      // hid a stale "3.2" on the LIVE explainer while 3.4 shipped (Stuart caught it 2026-07-17);
+      // the old regex only matched contiguous text and sailed right past it. Never again.
+      // …AND decode the apostrophe entities HTML uses (&rsquo; / &#8217; / &apos; / &#39;), because
+      // the explainer writes "What&rsquo;s new in" — the entity, not a literal ', so even after tag
+      // stripping the old regex's [’']? never matched. Both gaps (tags + entities) hid the same 3.2.
+      const src = (f.endsWith('.html') ? raw.replace(/<[^>]+>/g, '') : raw)
+        .replace(/&(?:rsquo|apos|#8217|#39);/gi, "'");
       const hits = [...src.matchAll(/what[’']?s new in (\d+\.\d+)/gi)].map((m) => m[1]);
       const stale = hits.filter((v) => v !== mm);
       expect(stale, `${f} still claims "What's new in ${stale.join(', ')}" while ${current} is shipping`).toEqual([]);

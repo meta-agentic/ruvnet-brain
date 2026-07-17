@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.4.3-dev",
+    "softwareVersion": "3.4.4-dev",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-16",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 56 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.4.3-dev</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.4.4-dev</p>
     </div>
   </div>
 
@@ -373,7 +373,7 @@
       </div>
     </section>
 
-    <!-- ===================== WHAT'S NEW — 3.1 (compact band) ===================== -->
+    <!-- ===================== WHAT'S NEW — 3.4 (compact band) ===================== -->
     <style>
       /* Thoughtful line breaks, page-wide (Stuart 2026-07-16: "review all line breaks for logical
          breaks so it looks thoughtful"). balance makes multi-line display text break evenly instead
@@ -420,55 +420,75 @@
         .v2-score .tbl td.moved{grid-column:1 / -1;margin-top:2px;min-width:0}
       }
     </style>
-    <section class="v2band" id="v2" aria-label="What's new in version 3.2">
+    <section class="v2band" id="v2" aria-label="What's new in version 3.4">
       <div class="wrap v2band-inner reveal">
-        <p class="eyebrow">new &middot; version 3.2</p>
-        <h2>What&rsquo;s new in <span class="grad">3.2</span></h2>
-        <p class="lede">The Brain stopped being invisible. A live console now shows you what it&rsquo;s doing &mdash;
-          and everything it tells you is <strong>measured, never projected</strong>.</p>
-        <!-- Cards LEFT, console RIGHT — no dead margins, the image is evidence beside the claims,
-             not a slab below them. The fade mask lives on the CLIPPING span so it always completes
-             at the visible edge, at every width. -->
+        <p class="eyebrow">new &middot; version 3.4</p>
+        <h2>What&rsquo;s new in <span class="grad">3.4</span></h2>
+        <p class="lede">The harness&rsquo;s invisible work, finally made visible &mdash; and the Brain now
+          <strong>keeps itself up to date</strong>.</p>
+        <!-- Cards LEFT, update command RIGHT — the command is the hero of the right side:
+             one line makes any old install current, and auto-update takes it from there.
+             Reuses .install-block / pre.code-block exactly; only the size is scoped up. -->
         <style>
-          .v31-duo{display:grid;grid-template-columns:minmax(320px,0.9fr) minmax(380px,1.1fr);gap:30px;align-items:start;margin-top:6px}
-          .v31-duo + .v2-fine{margin-top:34px}
-          .v31-duo .spear-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:0}
-          .v31-shot span{-webkit-mask-image:linear-gradient(to bottom,#000 58%,transparent 98%);mask-image:linear-gradient(to bottom,#000 58%,transparent 98%)}
-          .v31-cap{margin:10px 0 0;font-size:.94em;opacity:.85;text-wrap:balance}
-          @media (max-width:940px){.v31-duo{grid-template-columns:1fr}.v31-shot{max-width:640px;margin:0 auto}}
+          .v34-duo{display:grid;grid-template-columns:minmax(320px,0.9fr) minmax(380px,1.1fr);gap:30px;align-items:start;margin-top:6px}
+          .v34-duo > *{min-width:0} /* the pre's min-content must never blow the track out */
+          .v34-duo + .v2-fine{margin-top:34px}
+          .v34-duo .spear-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:0}
+          .v34-kicker{margin:0 0 12px;font-size:var(--step-1);color:var(--ink-2);text-wrap:balance}
+          .v34-kicker strong{color:var(--ink)}
+          .v34-update .install-block{margin:0}
+          .v34-update pre.code-block{max-width:none;margin:0 0 14px;
+            font-size:clamp(1.02rem, 0.9rem + 0.42vw, 1.2rem);line-height:1.6}
+          .v34-update pre.code-block .c{font-size:.78em}
+          .v34-once{margin:0 0 10px;max-width:none;color:var(--ink-2)}
+          .v34-once strong{color:var(--ink)}
+          .v34-alt{margin:0;max-width:none;font-size:var(--step--1);color:var(--muted)}
+          .v34-alt code{white-space:nowrap} /* never split "--update" across lines */
+          @media (max-width:940px){.v34-duo{grid-template-columns:1fr}}
+          /* narrow screens: the command WRAPS at spaces (copy still yields one line) — never clipped.
+             The flags stay pre (unbreakable) so "--update" can never split at its hyphens. */
+          @media (max-width:600px){
+            .v34-update pre.code-block code{white-space:pre-wrap}
+            .v34-update pre.code-block .s{white-space:pre}
+          }
         </style>
-        <div class="v31-duo">
+        <div class="v34-duo">
           <div class="spear-grid">
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">a living console</div>
-              <p class="spear-lab">type <strong><code>/rvbc</code></strong> and see your whole stack on one page &mdash; what&rsquo;s
-                installed, how it&rsquo;s wired, what your AI learned &mdash; with one-click, undoable fixes<span class="spear-src">one command</span></p>
+              <div class="spear-num grad">see the whole argument</div>
+              <p class="spear-lab">a new animation runs the same prompt two ways &mdash; plain Claude Code (one expensive
+                model, no grounding, no memory, no gates) beside the same model in the harness: grounded, routed to the
+                cheapest capable model, remembering your project, able to refuse a bad write, verified on the way
+                out<span class="spear-src">the value, drawn</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">your brain, visible</div>
-              <p class="spear-lab">a live Brain Activity feed &mdash; every memory stored, every lesson distilled; drill
-                into exactly what your AI knows<span class="spear-src">real rows from your own AgentDB</span></p>
+              <div class="spear-num grad">MetaHarness, as a picture</div>
+              <p class="spear-lab">the model sits frozen at the center while seven policy surfaces evolve around it &mdash;
+                <em>freeze the model, evolve the harness</em>. Measured: 28.5% cheaper at 98.1% bar-compliance
+                (ADR-073)<span class="spear-src">grounded in accepted ADRs</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">receipts, not estimates</div>
-              <p class="spear-lab">smart model routing reports only measured savings from real routing receipts &mdash;
-                your subscriptions priced in, frontier only when the work earns it<span class="spear-src">routing receipts</span></p>
+              <div class="spear-num grad">diagrams you can actually read</div>
+              <p class="spear-lab">two diagrams had shipped with labels rendering at 8px and 3px &mdash; present but
+                invisible. A gate now measures effective pixel size in the live page, so it can&rsquo;t happen
+                again<span class="spear-src">legibility, enforced</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">it learns YOU</div>
-              <p class="spear-lab">a recursive per-user learning loop &mdash; patterns from how you actually work, shared
-                across your projects, isolated where they must be<span class="spear-src">per-user</span></p>
+              <div class="spear-num grad">it keeps itself current</div>
+              <p class="spear-lab">Evergreen auto-update &mdash; run one command once and the Brain updates itself from
+                then on, verifying each bundle&rsquo;s signature before applying<span class="spear-src">run once, stay current</span></p>
             </div>
           </div>
-          <div class="v31-shot">
-            <a href="assets/console-v3.png" target="_blank" rel="noopener" title="The live console — click to see the full page"
-               style="display:block;border-radius:14px 14px 0 0;overflow:hidden;text-decoration:none;border:1px solid rgba(94,214,255,.22);border-bottom:none;box-shadow:0 24px 60px -28px rgba(0,0,0,.8)">
-              <span style="display:block;max-height:860px;overflow:hidden;line-height:0">
-                <img src="assets/console-v3.png" alt="The RuvNet Brain Console, live — hero, Brain Activity card with real memories and lessons from this machine"
-                     loading="lazy" style="display:block;width:100%;height:auto" />
-              </span>
-            </a>
-            <p class="v31-cap">the console, live on a real machine &mdash; type <strong><code>/rvbc</code></strong> &middot; <span style="opacity:.75">a crop &mdash; the page keeps going</span></p>
+          <div class="v34-update">
+            <p class="v34-kicker">On an old version? <strong>One line makes you current.</strong></p>
+            <div class="install-block">
+              <pre class="code-block"><code><span class="c"># one line: update now, stay current forever</span>
+npx ruvnet-brain@latest <span class="s">--update --auto</span></code></pre>
+              <p class="v34-once"><strong>Run it once &mdash; it auto-updates from then on.</strong> You never have to
+                run it again: every future bundle is fetched, signature-verified, and applied for you.</p>
+              <p class="v34-alt">Prefer a one-time update without auto-enroll?
+                <code>npx ruvnet-brain@latest --update</code></p>
+            </div>
           </div>
         </div>
 
