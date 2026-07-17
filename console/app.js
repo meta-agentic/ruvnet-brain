@@ -1321,35 +1321,69 @@ function renderDistribution(u) {
   if (!u || !u.tasks) return null;
   const frontierName = prettyModel(u.frontierModel);
   const tone = { mechanical: 'b-mech', cheap: 'b-cheap', mid: 'b-mid', frontier: 'b-front' };
-  const rows = u.distribution.map((d) => {
+  const dist = Array.isArray(u.distribution) ? u.distribution : [];
+  const active = dist.filter((d) => d.tasks > 0);
+  const frontierBand = dist.find((d) => d.band === 'frontier');
+  const frontierIdle = !!frontierBand && !frontierBand.tasks;
+  const saved = (u.frontierUsd != null && u.realizedUsd != null) ? u.frontierUsd - u.realizedUsd : null;
+
+  // Verdict first: the money saved is the headline, everything else supports it.
+  const hero = el('div', { class: 'dv-hero' },
+    saved != null
+      ? el('div', { class: 'dv-hero-num' }, fmtUsd(saved), el('span', { class: 'dv-hero-word' }, ' saved'))
+      : null,
+    el('p', { class: 'dv-hero-sub' },
+      'across ', el('b', {}, u.tasks + ' routed ' + (u.tasks === 1 ? 'task' : 'tasks')),
+      frontierIdle ? el('span', {}, ' · frontier never fired') : null,
+      (frontierBand && frontierBand.tasks > 0)
+        ? el('span', {}, ' · ' + frontierBand.tasks + ' escalated to ' + frontierName) : null),
+    (u.frontierUsd != null && u.realizedUsd != null)
+      ? el('p', { class: 'dv-hero-math' },
+          frontierName + ' for everything would have cost ' + fmtUsd(u.frontierUsd) +
+          ' — you actually spent ' + fmtUsd(u.realizedUsd) + '.')
+      : null);
+
+  // ONE continuous stacked bar — the mix in a single glance. Widths exactly
+  // proportional to task counts (flex-grow), band colours carried by tone class.
+  const bar = active.length
+    ? el('div', {
+        class: 'dv-bar', role: 'img',
+        'aria-label': 'Task mix: ' + active.map((d) => `${d.label} ${d.pctOfTasks}%`).join(', '),
+      },
+      ...active.map((d) => el('div', {
+        class: 'dv-seg ' + tone[d.band],
+        style: 'flex:' + d.tasks + ' 1 0%',
+        title: `${d.label} — ${d.tasks} ${d.tasks === 1 ? 'task' : 'tasks'} (${d.pctOfTasks}%)` +
+          (d.savedUsd > 0 ? ` · saved ${fmtUsd(d.savedUsd)}` : ''),
+      },
+        d.pctOfTasks >= 15 ? el('span', { class: 'dv-seg-lab' }, `${d.label} ${d.pctOfTasks}%`) : null)))
+    : null;
+
+  // Compact legend: only bands that fired, each with its models + what it saved.
+  const legendRows = active.map((d) => {
     const models = d.models.length
       ? d.models.map((m) => prettyModel(m.model) + (m.tasks > 1 ? ' ×' + m.tasks : '')).join(', ')
-      : 'nothing here yet';
-    // Bar = share of ALL tasks, so it reads directly against the "Share of tasks" header.
-    const w = d.tasks ? Math.max(d.pctOfTasks, 4) : 0;
-    return el('div', { class: 'dist-row' + (d.tasks ? '' : ' is-empty') },
-      el('div', { class: 'dist-band ' + tone[d.band] }, d.label,
-        d.band === 'frontier' ? el('div', { class: 'dist-esc' }, 'escalation — last resort by design') : null),
-      el('div', { class: 'dist-track' },
-        el('div', { class: 'dist-fill ' + tone[d.band], style: 'width:' + w + '%' }),
-        el('span', { class: 'dist-count' }, d.tasks ? d.tasks + ' · ' + d.pctOfTasks + '%' : '0')),
-      el('div', { class: 'dist-models cell-dim' }, models),
-      el('div', { class: 'dist-saved num' }, d.savedUsd > 0 ? fmtUsd(d.savedUsd) : '—'));
+      : null;
+    return el('div', { class: 'dv-leg-row' },
+      el('span', { class: 'dv-dot ' + tone[d.band], 'aria-hidden': 'true' }),
+      el('span', { class: 'dv-leg-band ' + tone[d.band] }, d.label),
+      el('span', { class: 'dv-leg-meta cell-dim' },
+        `${d.tasks} ${d.tasks === 1 ? 'task' : 'tasks'} · ${d.pctOfTasks}%` + (models ? ' — ' + models : '')),
+      el('span', { class: 'dv-leg-saved num' }, d.savedUsd > 0 ? 'saved ' + fmtUsd(d.savedUsd) : ''));
   });
-  return el('div', { class: 'mh-dist' },
-    el('p', { class: 'dist-lead' },
-      el('b', {}, u.tasks + (u.tasks === 1 ? ' task' : ' tasks')), ' routed so far. Sending every one to ',
-      el('b', {}, frontierName), ' would have cost ', el('b', {}, fmtUsd(u.frontierUsd)),
-      ' — you spent ', el('b', {}, fmtUsd(u.realizedUsd)), '.'),
-    el('p', { class: 'dist-ladder' },
-      'Ordered the way the router thinks — cheapest first, frontier only when the work earns it.'),
-    el('div', { class: 'dist-grid' },
-      el('div', { class: 'dist-row dist-head' },
-        el('div', { class: 'dist-band' }, 'Bucket'),
-        el('div', { class: 'dist-track-head' }, 'Share of tasks'),
-        el('div', { class: 'dist-models' }, 'Models used'),
-        el('div', { class: 'dist-saved' }, 'Saved')),
-      ...rows),
+  // Frontier at zero is the punchline, not missing data — say so where its row would be.
+  if (frontierIdle) {
+    legendRows.push(el('div', { class: 'dv-leg-row dv-leg-punch' },
+      el('span', { class: 'dv-check', 'aria-hidden': 'true' }, '✓'),
+      el('span', { class: 'dv-leg-band b-front' }, frontierBand.label),
+      el('span', { class: 'dv-leg-meta cell-dim' },
+        el('b', {}, 'never fired'), ' — escalation is last resort by design'),
+      el('span', { class: 'dv-leg-saved num' }, '')));
+  }
+
+  return el('div', { class: 'mh-dist dv-wrap' },
+    hero, bar,
+    el('div', { class: 'dv-legend' }, ...legendRows),
     el('p', { class: 'fineprint' }, u.note));
 }
 
@@ -1449,19 +1483,27 @@ function renderSavings(sv) {
     chip(`${fmtInt(taskCount)} routed`, 'grey'),
   ]);
 
-  blocks.push(el('div', { class: 'totals-strip' },
-    el('div', { class: 'total-tile t-green' },
-      el('div', { class: 'total-num' }, pct != null ? `${pct}%` : fmtUsd(savedUsd)),
-      el('div', { class: 'total-lab' }, `saved vs ${frontierName}`)),
-    el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, fmtUsd(savedUsd)),
-      el('div', { class: 'total-lab' }, '$ kept')),
-    el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, fmtInt(taskCount)),
-      el('div', { class: 'total-lab' }, 'tasks routed')),
-    el('div', { class: 'total-tile' },
-      el('div', { class: 'total-num' }, util ? fmtUsd(util.frontierUsd) : (totals && totals.msSaved >= 0 ? fmtMs(totals.msSaved) : '—')),
-      el('div', { class: 'total-lab' }, util ? `if all on ${frontierName}` : 'time saved'))));
+  // The distribution hero states the same four numbers ($ saved, tasks, frontier-if-all, actual
+  // spend) at a size you can read across the room, and the chip carries the %. Rendering the tiles
+  // above it too would say $15.17 twice on one card — the "everything at the same weight" problem
+  // this card was just rebuilt to fix, wearing a different hat. So the strip is now the FALLBACK:
+  // it only appears when there are no receipts yet and the hero has nothing to say.
+  const dist = renderDistribution(util);
+  if (!dist) {
+    blocks.push(el('div', { class: 'totals-strip' },
+      el('div', { class: 'total-tile t-green' },
+        el('div', { class: 'total-num' }, pct != null ? `${pct}%` : fmtUsd(savedUsd)),
+        el('div', { class: 'total-lab' }, `saved vs ${frontierName}`)),
+      el('div', { class: 'total-tile' },
+        el('div', { class: 'total-num' }, fmtUsd(savedUsd)),
+        el('div', { class: 'total-lab' }, '$ kept')),
+      el('div', { class: 'total-tile' },
+        el('div', { class: 'total-num' }, fmtInt(taskCount)),
+        el('div', { class: 'total-lab' }, 'tasks routed')),
+      el('div', { class: 'total-tile' },
+        el('div', { class: 'total-num' }, util ? fmtUsd(util.frontierUsd) : (totals && totals.msSaved >= 0 ? fmtMs(totals.msSaved) : '—')),
+        el('div', { class: 'total-lab' }, util ? `if all on ${frontierName}` : 'time saved'))));
+  }
 
   // WP2a — provenance, worn openly: these numbers are receipts, not projections.
   const receiptCount = util ? util.tasks : (totals && totals.count != null ? totals.count : receipts.length);
@@ -1472,7 +1514,7 @@ function renderSavings(sv) {
       ', never projected')));
 
   // The distribution — how many tasks went to each bucket, and the saved-vs-frontier math.
-  const dist = renderDistribution(util);
+  // (computed above, so the totals-strip can stand down when this hero is doing the talking)
   if (dist) blocks.push(dist);
 
   // Full receipt detail, collapsed so the summary stays clean for a first-time reader.

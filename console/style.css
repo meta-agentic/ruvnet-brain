@@ -1317,3 +1317,72 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   border: 1px solid var(--line); border-radius: 9px; background: var(--fill);
 }
 .gate-catches li b { color: var(--ink); }
+
+/* ============ 13b · SAVINGS — distribution redesign (appended 2026-07-17) ============
+   Verdict-first replacement for the four-box distribution table: money headline,
+   ONE continuous stacked bar, frontier-at-zero stated as a feature. New dv-* classes
+   only — the old .dist-* rules above are intentionally untouched (concurrent session). */
+.dv-wrap { margin-top: 20px; }
+
+.dv-hero-num {
+  font-family: var(--display); font-weight: 600; font-size: var(--fs-3);
+  color: var(--green-text); line-height: 1.05; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.dv-hero-word { font-size: 0.52em; color: var(--ink); font-weight: 600; margin-left: 0.14em; }
+.dv-hero-sub { margin: 6px 0 0; font-size: var(--fs-0); color: var(--ink-2); line-height: 1.5; }
+.dv-hero-sub b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.dv-hero-math { margin: 3px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+.dv-bar {
+  display: flex; gap: 2px; height: 28px; margin: 16px 0 12px;
+  border-radius: 8px; overflow: hidden;
+}
+.dv-seg {
+  position: relative; min-width: 6px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.dv-seg.b-mech  { background: var(--green); }
+.dv-seg.b-cheap { background: var(--cyan); }
+.dv-seg.b-mid   { background: var(--warn); }
+.dv-seg.b-front { background: var(--red); }
+.dv-seg-lab {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+  color: var(--on-accent);
+}
+
+.dv-legend { display: flex; flex-direction: column; gap: 7px; }
+.dv-leg-row {
+  display: grid; grid-template-columns: 12px 88px minmax(0, 1fr) auto;
+  gap: 10px; align-items: baseline;
+}
+.dv-dot { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+.dv-dot.b-mech  { background: var(--green); }
+.dv-dot.b-cheap { background: var(--cyan); }
+.dv-dot.b-mid   { background: var(--warn); }
+.dv-dot.b-front { background: var(--red); }
+.dv-leg-band {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+}
+.dv-leg-band.b-mech  { color: var(--green-text); }
+.dv-leg-band.b-cheap { color: var(--cyan-text); }
+.dv-leg-band.b-mid   { color: var(--warn-text); }
+.dv-leg-band.b-front { color: var(--red-text); }
+.dv-leg-meta { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.dv-leg-meta b { color: var(--ink); font-weight: 650; }
+.dv-leg-saved {
+  font-family: var(--mono); font-size: 12.5px; color: var(--green-text);
+  text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.dv-check {
+  color: var(--green-text); font-weight: 700; font-size: 13px;
+  line-height: 1; align-self: center; text-align: center;
+}
+.dv-wrap .fineprint { margin-top: 12px; }
+
+@media (max-width: 560px) {
+  .dv-leg-row { grid-template-columns: 12px 74px minmax(0, 1fr); }
+  .dv-leg-saved { grid-column: 3; text-align: left; }
+}
