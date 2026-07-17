@@ -65,7 +65,15 @@ jobs:
         run: node tests/integration/redteam-guard.mjs
       - name: Dependency audit (high+ severity fails)
         # QE-0011 deps#5: catch a re-introduced CVE in the reader deps (protobufjs etc.).
-        run: cd kb && npm ci --no-audit --no-fund && npm audit --audit-level=high
+        # --ignore-scripts: this step AUDITS the dependency tree, it does not run the brain. Without
+        # it, `npm ci` also COMPILES every native module — including sharp, a transitive dep of
+        # @xenova/transformers (vision models the text-only brain never uses). sharp has no prebuilt
+        # for this runner, so it falls back to node-gyp and dies on `fatal error: vips/vips8` because
+        # the runner has no libvips. That is a BUILD failure mislabelled as an audit failure. The
+        # audit reads package-lock.json; it needs the tree resolved, not the binaries built. Skipping
+        # install scripts fixes the build AND is the more correct way to audit — you should not run
+        # arbitrary postinstall just to read the dep graph. (2026-07-17)
+        run: cd kb && npm ci --no-audit --no-fund --ignore-scripts && npm audit --audit-level=high
 
   windows-unit:
     # ADR-0011 engineering_reliability: "Windows is completely untested" while the installer
