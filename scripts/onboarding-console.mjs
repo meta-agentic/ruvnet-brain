@@ -81,7 +81,13 @@ function robustReadJSON(db, sql) {
 }
 
 // ── Wiring survey (read-only): how do this machine's projects launch rUv tools? ───────────────────
-const VENDOR = ['/clones/', '/node_modules/', '/vendor/', '/upstream/', '.claude-backup', '_snapshots'];
+// Directories that are somebody else's code sitting on your disk. Their hook wiring is not YOUR
+// wiring: you will never "fix" it, and counting it makes the card describe a machine you don't have.
+// `ruvnet-repos` was the expensive omission — 98 of 768 sites (13% of the card) came from clones of
+// rUv's OWN repos, including a directory literally named tests/init-test, and 18 of the 21 npx call
+// sites the card warned about were his test fixtures rather than anything Stuart configured.
+const VENDOR = ['/clones/', '/node_modules/', '/vendor/', '/upstream/', '.claude-backup', '_snapshots',
+  '/ruvnet-repos/', '/ruvnet_repos/'];
 function findProjects(root) {
   const out = new Set();
   const walk = (dir, depth) => {
@@ -100,9 +106,15 @@ function findProjects(root) {
   walk(root, 0);
   return [...out].sort();
 }
+// Text that PRINTS the word npx is not an npx call site. Two of the sites this card warned about were
+// `echo "Session ended. Run: npx aqe learn status"` — advice being displayed to the user, matched as
+// though the machine were executing it. Strip quoted echo/printf payloads before classifying.
+const stripPrinted = (cmd) => String(cmd)
+  .replace(/\b(?:echo|printf)\s+(['"])(?:\\.|(?!\1)[\s\S])*?\1/g, ' ')
+  .replace(/\b(?:echo|printf)\s+[^|;&]*/g, ' ');
 function classifyCommand(cmd) {
   if (typeof cmd !== 'string' || !cmd.trim()) return null;
-  if (NPX_RUV.test(cmd)) return 'NPX';
+  if (NPX_RUV.test(stripPrinted(cmd))) return 'NPX';
   if (/\.npm-global\/bin\/(ruflo|ruvector|ruv-swarm|flow-nexus)/.test(cmd) || /hook-handler\.cjs/.test(cmd)) return 'GLOBAL_BINARY';
   if (/CLAUDE_PLUGIN_ROOT/.test(cmd)) return 'PLUGIN';
   return null;
@@ -728,6 +740,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         return sendJSON(res, 200, c && c.data ? { ...c.data, fromCache: true, cachedAt: c.at } : { fromCache: false });
       }
       if (req.method === 'GET' && url === '/api/stack') return sendJSON(res, 200, gatherStack());
+      if (req.method === 'GET' && url === '/tips') { req.url = '/tips.html'; return serveStatic(req, res); }
       if (req.method === 'POST') {
         const body = await readBody(req);
         if (body.token !== TOKEN) return sendJSON(res, 403, { error: 'bad or missing token' });

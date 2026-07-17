@@ -1386,3 +1386,80 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   .dv-leg-row { grid-template-columns: 12px 74px minmax(0, 1fr); }
   .dv-leg-saved { grid-column: 3; text-align: left; }
 }
+
+/* ============================== APPENDED · WIRING VERDICT (2026-07-17) ==============================
+   The wiring card now leads with the ANSWER ("can anything here silently run stale?") instead of a
+   census. Banner speaks in the house's .impact-banner voice; the lane counts collapse into a quiet
+   legend patterned on .dv-leg-row. Append-only block — a concurrent session owns the rules above;
+   .wire-bar/.wire-lanes above are superseded by these, not edited. */
+.wire-verdict {
+  display: flex; gap: 14px; align-items: flex-start;
+  margin: 2px 0 0; padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--green) 36%, transparent);
+  border-left: 3px solid var(--green);
+  border-radius: 12px;
+  background: linear-gradient(120deg,
+    color-mix(in srgb, var(--green) 10%, transparent),
+    color-mix(in srgb, var(--green) 4%, transparent));
+}
+.wire-verdict.is-drift {
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+  border-left-color: var(--amber);
+  background: linear-gradient(120deg,
+    color-mix(in srgb, var(--amber) 11%, transparent),
+    color-mix(in srgb, var(--amber) 5%, transparent));
+}
+.wv-icon {
+  flex: none; width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center; margin-top: 1px;
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+}
+.wire-verdict.is-drift .wv-icon { background: color-mix(in srgb, var(--amber) 18%, transparent); }
+.wv-icon svg {
+  width: 19px; height: 19px; fill: none; stroke: var(--green-text);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.wire-verdict.is-drift .wv-icon svg { stroke: var(--amber-text); }
+.wv-text { min-width: 0; }
+.wv-title {
+  margin: 0 0 4px; font-family: var(--display); font-weight: 700;
+  font-size: var(--fs-1); line-height: 1.35; color: var(--ink);
+  max-width: none; text-wrap: balance;
+}
+.wv-sub { margin: 0; font-size: var(--fs--1); color: var(--ink-2); line-height: 1.55; max-width: 72ch; }
+.wv-sub b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* drift sites — each offender is a sentence-row (who · where · what it launches) */
+.wv-sites { list-style: none; margin: 12px 0 0; padding: 0; }
+.wv-sites li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding: 8px 0 0; margin-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--amber) 30%, transparent);
+  font-size: 13.5px; color: var(--ink-2);
+}
+.wv-sites .site-where { font-family: var(--mono); font-size: 0.82rem; color: var(--ink); }
+.wv-sites .site-spec { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+
+/* subordinate lane legend — one quiet line per lane in use; zero-lanes are omitted, not excused */
+.wire-legend { margin: 14px 0 2px; display: grid; gap: 7px; }
+.wire-leg-row {
+  display: grid; grid-template-columns: 10px auto auto minmax(0, 1fr);
+  align-items: baseline; column-gap: 10px;
+}
+.wire-leg-row .wire-dot { align-self: center; }
+.wire-leg-n { font-family: var(--mono); font-size: 0.88rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.wire-leg-lab { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-2); white-space: nowrap; }
+.wire-leg-meaning { font-size: 0.85rem; line-height: 1.45; }
+@media (max-width: 560px) {
+  .wire-leg-row { grid-template-columns: 10px auto minmax(0, 1fr); }
+  .wire-leg-meaning { grid-column: 2 / -1; }
+}
+
+/* ── MetaHarness, explained where the decision is made ────────────────────────────────────────────
+   The card asks you to switch on a word you have never seen. Seven lines of prose is not how anyone
+   learns a new word, so the diagram carries it and gets room rather than being squeezed beside text. */
+.mh-diagram {
+  margin: 12px 0 14px; padding: 12px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--fill); overflow-x: auto;
+}
+.mh-diagram img { display: block; width: 100%; height: auto; max-width: 900px; margin-inline: auto; }

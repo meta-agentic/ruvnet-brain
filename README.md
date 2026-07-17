@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.2.16 — updated 2026-07-16 05:44 EDT](https://img.shields.io/badge/version_3.2.16-updated_2026--07--16_05:44_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.3.0 — updated 2026-07-17 02:15 EDT](https://img.shields.io/badge/version_3.3.0-updated_2026--07--17_02:15_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -36,7 +36,21 @@
 
 ---
 
-## What's new in 3.2 — the invisible stack, made visible
+## What's new in 3.3 — it stopped reciting facts and started making a point
+
+**Shipped 2026-07-17.** 3.2 made the stack visible. Visible turned out not to be the same as *useful*: the console could tell you 21 things and leave you no smarter. Stuart, looking at his own product: *"I have no idea what message it's supposed to tell me… it seems to be facts without purpose."* 3.3 is the answer to that — every card now leads with a **verdict**, not a census.
+
+- **A second page — [how to actually use this](console/tips.html)** — the question nobody could answer: *there are plugins, there are commands, and there's just… typing. Which am I supposed to use?* One page, three depths, and the first depth is **doing nothing**. Built on rUv's own doctrine: *"I don't have to load 350 skills that 99% of which I never use — the system is smart enough to know which one this task needs."*
+- **MetaHarness, explained where you decide** — the card asked you to switch on a word you'd never seen. It now shows the architecture instead: the model **frozen** at the centre, seven policy surfaces evolving around it, four pillars underneath. rUv called this exact risk in ADR-076 (*"'Meta-harness' is a newer term… must define it in the first screen so it doesn't read as jargon"*); we'd shipped the jargon and skipped the mitigation. Every element traces to an accepted ADR.
+- **The wiring card was lying to you** — it warned about 21 npx call sites. 18 were inside *clones of rUv's own repos* (one a `tests/init-test` fixture), and two were `echo` strings printing advice. Real exposure: **zero**. It now says so: *"Every rUv tool here resolves to one known version."* A card that shows amber for a problem you don't have is worse than no card.
+- **The money leads** — the router card buried *$15.17 saved* as the dimmest text on the row while `FRONTIER — 0` read like missing data. It's the punchline: the expensive model never had to fire. Now it says that, in that order.
+- **What caught Claude** — a new card. 21 gates read every move before it lands; 6 can stop one. The walls now record what they *catch*, not just what they pass — because the ledger held 13 receipts, 13 passing, while the design wall had refused a commit minutes earlier and written nothing down.
+- **The console loads in 0.2s** (was ~14s) — a fleet-wide scan of 107 memory stores sat on the critical path of first paint. It hydrates late now.
+
+<details>
+<summary><b>Earlier &#8212; what 3.2 proved</b> &#183; the invisible stack, made visible. <i>Expand for the receipts.</i></summary>
+
+## 3.2 — the invisible stack, made visible
 
 **Shipped 2026-07-16.** rUv's tools do their best work invisibly — which meant nobody could see them working, working stale, or working in conflict. The 3.x line makes the machinery visible, and everything it shows you is measured, never projected.
 
@@ -51,6 +65,8 @@
 **Open it any time with `/rvbc`** (RuvNet Brain Console) — and the first time you load the Brain, it offers to open it for you.
 
 > New gate with this release: **narrative versions are tested.** If any public page says "What's new in X" where X isn't the shipping version, CI fails — because this README sat on 2.5 while 3.1 shipped, and nobody's eyes are a gate.
+
+</details>
 
 <details>
 <summary><b>Earlier &#8212; what 2.5 proved</b> &#183; it uses rUv's real tools (a CI gate makes silent hand-rolls impossible), every scheduled job must prove it ran, and no subagent inherits an expensive model by accident. <i>Expand for the receipts.</i></summary>
@@ -209,7 +225,10 @@ You install once. After that, three mechanisms keep you on the current brain wit
 
 - **Consent-gated auto-update heartbeat** (the `SessionStart` hook, `plugin/scripts/session-start.sh`). The **first** time the plugin runs on a machine it asks you **once** whether it may keep itself updated in the background — a security-conscious opt-in, because self-update can change the model's own instructions. Your answer is remembered (`~/.cache/ruvnet-brain/.auto-update-pref`) and never asked again. On each session start it does a rate-limited (~15 min) 3s-capped check of the live GitHub `plugin.json`. If a newer plugin version exists **and** you opted in, it downloads it in the background through Claude Code's own trusted marketplace path — but the new version is **staged, not active**: Claude Code only loads plugins at process start, so **this session keeps running the version it started with** until you restart (`claude --continue` brings your conversation right back on the new version). If you declined, it just tells you the command to run. The knowledge bundle is handled more conservatively — **detect + notify only**, never auto-applied, because the bundle isn't cryptographically signed yet and applying it would overwrite executable tool files (SEC-0010 #6).
 
-- **Stack watchdog status footer** (the `UserPromptSubmit` hook's always-on Gate 0, `plugin/scripts/ground-ruvnet.sh`). Every response ends with one dim status line — e.g. `🧠 RuvNet Brain v3.0.2 · Ruflo: yes · AgentDB memory: on` — read from **filesystem ground truth**, not impressions. The version shown is always the one **actually loaded in memory** for this session; if a newer version is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether project memory is wired.
+- **Grounding receipt line** (the `UserPromptSubmit` gate, `plugin/scripts/ground-ruvnet.sh`). When the brain engages on a prompt, the answer ends with one dim line stating what it actually did — either it read rUv's real source and **names the file**, or it says plainly that it didn't:
+  `🧠 RuvNet Brain jumped in · cited agentic-flow/docs/adr/ADR-076-reposition-agentic-flow-as-agentic-meta-harness.md · v3.2.16`
+  `🧠 RuvNet Brain jumped in · guidance only, no source read · v3.2.16`
+  An unearned citation is worse than no citation, so the line may only name a path the tools genuinely returned — and on a prompt where nothing fires, it stays silent rather than manufacture a receipt. The version shown is the one **actually loaded in memory** for this session; if a newer one is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether an answer was grounded or guessed.
 
 - **Nightly publish → `releases/latest` chain** (`scripts/self-update.mjs --publish`, run by the `deploy/com.ruvnet.brain-nightly.plist` LaunchAgent at 03:15). The nightly rebuilds only the repos whose upstream changed, and **if anything was rebuilt** it bumps the product version, cuts a GitHub Release, and advances [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest). Plugin and knowledge bundle move under **one** version number, so the heartbeat above picks up both automatically. (The LaunchAgent is not auto-installed — enabling a system scheduler needs explicit owner approval.)
 

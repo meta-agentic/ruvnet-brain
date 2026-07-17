@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>RuvNet Brain — How to use it</title>
+<!-- Same version-free brain mark as the console. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2216%22 fill=%22%230b0d12%22 stroke=%22%232c3850%22 stroke-width=%221.5%22/><path d=%22M25 48 C17 48 11.5 41.5 13.5 34.5 C10 29 13 21 19 19 C21 12.5 29 9.5 35 12 C43 9 50.5 14.5 50.5 22 C55 26 55 34.5 50 38 C49 43.5 43 47.5 37 46.5 L31 47.5 Z%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%223.4%22 stroke-linejoin=%22round%22/><path d=%22M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 opacity=%22.9%22/><circle cx=%2224%22 cy=%2227%22 r=%223.4%22 fill=%22%235ad6ff%22/><circle cx=%2240%22 cy=%2224.5%22 r=%223.4%22 fill=%22%23f4b13a%22/><circle cx=%2241%22 cy=%2236.5%22 r=%223.4%22 fill=%22%235fd38a%22/></svg>" />
+
+<script>
+/* Resolve theme BEFORE first paint — same mechanism as the console (index.html). */
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('rbc-theme'); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') {
+    try { t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+    catch (e) { t = 'dark'; }
+  }
+  document.documentElement.dataset.theme = t;
+})();
+</script>
+
+<link rel="stylesheet" href="tips.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="head">
+  <div class="wrap head-inner">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect class="mk-plate" x="2" y="2" width="60" height="60" rx="16" />
+        <path class="mk-brain" d="M25 48 C17 48 11.5 41.5 13.5 34.5 C10 29 13 21 19 19 C21 12.5 29 9.5 35 12 C43 9 50.5 14.5 50.5 22 C55 26 55 34.5 50 38 C49 43.5 43 47.5 37 46.5 L31 47.5 Z" />
+        <path class="mk-branch" d="M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5" />
+        <circle class="n2" cx="24" cy="27" r="4" /><circle class="n1" cx="40" cy="24.5" r="4" /><circle class="n3" cx="41" cy="36.5" r="4" />
+      </svg>
+      <span class="brand-text">RuvNet Brain <span class="brand-sub">How to use it</span></span>
+    </div>
+    <div class="head-right">
+      <a class="back-chip mono" href="./">‹ console</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
+        <svg class="ic-sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.5" />
+          <g class="rays"><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="7" y2="7"/><line x1="17" y1="17" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="7" y2="17"/><line x1="17" y1="7" x2="19.1" y2="4.9"/></g>
+        </svg>
+        <svg class="ic-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.4 14.3A8.5 8.5 0 0 1 9.7 3.6a8.5 8.5 0 1 0 10.7 10.7Z" />
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div class="spectrum-edge" aria-hidden="true"></div>
+</header>
+
+<main id="main" class="wrap">
+
+  <!-- ======================================================= HERO -->
+  <section class="intro">
+    <div class="intro-grid">
+      <div class="intro-copy">
+        <p class="eyebrow">RuvNet Brain · the guide</p>
+        <h1>You don't have to learn the toolkit. <em>That's the design.</em></h1>
+        <p class="lede">The Brain looks like a lot of pieces — grounding, memory, gates, routing,
+        skills. Here's the whole trick: it arranges itself around the way you already work.
+        There are three depths of use, and the first one is <b>doing nothing</b>.</p>
+
+        <blockquote class="ruv-quote">
+          <p>“I don't have to load 350 skills in RootFlow that 99% of which I never use.
+          I can specifically learn and say that, for this particular task, I need a particular
+          plugin or skill. And the system is smart enough to be able to say, okay, I've seen
+          this before, therefore, I know that I need this particular skill to do this
+          particular task.”</p>
+          <footer class="mono">— rUv · hackerspace call, 2026-07-16 · sourced from the brain (<code>ruv-meetings</code>)</footer>
+        </blockquote>
+      </div>
+
+      <!-- The one metaphor, stated once and reused everywhere: three depth rings
+           around your prompt. Ring 1 is solid — it's always on. The outer rings
+           are dotted — they exist only when you reach for them. -->
+      <figure class="hero-art">
+        <svg class="hero-scene" viewBox="0 0 640 420" role="img"
+             aria-label="Three concentric rings around a chat prompt: ring one, always on — grounding, memory and gates; ring two, plain-English asks; ring three, tools you name directly.">
+          <defs>
+            <radialGradient id="tgA" cx="16%" cy="10%" r="65%">
+              <stop offset="0" stop-color="#f0a830" stop-opacity="0.30"/><stop offset="1" stop-color="#f0a830" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="tgB" cx="90%" cy="26%" r="60%">
+              <stop offset="0" stop-color="#5ad6ff" stop-opacity="0.24"/><stop offset="1" stop-color="#5ad6ff" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="tgC" cx="40%" cy="100%" r="60%">
+              <stop offset="0" stop-color="#5fd38a" stop-opacity="0.18"/><stop offset="1" stop-color="#5fd38a" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect width="640" height="420" fill="#0b0d12"/>
+          <rect width="640" height="420" fill="url(#tgA)"/>
+          <rect width="640" height="420" fill="url(#tgB)"/>
+          <rect width="640" height="420" fill="url(#tgC)"/>
+
+          <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green) -->
+          <circle cx="225" cy="212" r="62"  fill="none" stroke="#5ad6ff" stroke-width="9" stroke-opacity="0.14" class="ring-halo"/>
+          <circle cx="225" cy="212" r="62"  fill="none" stroke="#5ad6ff" stroke-width="2.2"/>
+          <circle cx="225" cy="212" r="112" fill="none" stroke="#f0a830" stroke-width="2" stroke-dasharray="7 8" stroke-linecap="round" opacity="0.85"/>
+          <circle cx="225" cy="212" r="162" fill="none" stroke="#5fd38a" stroke-width="2" stroke-dasharray="2 11" stroke-linecap="round" opacity="0.8"/>
+
+          <!-- the center: you, typing normally -->
+          <rect x="163" y="196" width="124" height="32" rx="9" fill="#12161d" stroke="#3a4152" stroke-width="1.5"/>
+          <text x="176" y="217" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#f0a830">&gt;</text>
+          <text x="190" y="217" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#c0c7d6">just type</text>
+          <rect class="caret" x="258" y="203" width="2" height="17" fill="#f0a830"/>
+
+          <!-- leader lines out to the labels -->
+          <g font-family="ui-monospace,Menlo,monospace">
+            <circle cx="336" cy="92" r="2.6" fill="#5fd38a"/>
+            <line x1="336" y1="92" x2="404" y2="92" stroke="#5fd38a" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="414" y="88"  font-size="11.5" fill="#5fd38a" letter-spacing="2">03 · NAME IT</text>
+            <text x="414" y="105" font-size="11.5" fill="#8f94a1">commands · skills · tools</text>
+
+            <circle cx="333" cy="176" r="2.6" fill="#f0a830"/>
+            <line x1="333" y1="176" x2="404" y2="176" stroke="#f0a830" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="414" y="172" font-size="11.5" fill="#f4b13a" letter-spacing="2">02 · SAY IT</text>
+            <text x="414" y="189" font-size="11.5" fill="#8f94a1">plain-English asks</text>
+
+            <circle cx="252" cy="268" r="2.6" fill="#5ad6ff"/>
+            <line x1="252" y1="268" x2="404" y2="268" stroke="#5ad6ff" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="414" y="264" font-size="11.5" fill="#5ad6ff" letter-spacing="2">01 · ALWAYS ON</text>
+            <text x="414" y="281" font-size="11.5" fill="#8f94a1">grounding · memory · gates</text>
+            <text x="414" y="297" font-size="11.5" fill="#8f94a1">you do nothing</text>
+          </g>
+
+          <text x="26" y="38" font-family="ui-monospace,Menlo,monospace"
+                font-size="11" font-style="italic" fill="#8f94a1">most work never leaves ring 1</text>
+        </svg>
+        <figcaption class="hero-cap mono">three depths · depth 1 wraps every prompt</figcaption>
+      </figure>
+    </div>
+
+    <p class="stage-legend mono" aria-label="The three depths of use">
+      <span class="lg-cap">three depths</span>
+      <span class="lg"><span class="lg-dot d-cyan"></span>1 · do nothing — always on</span>
+      <span class="lg"><span class="lg-dot d-amber"></span>2 · say it in plain English</span>
+      <span class="lg"><span class="lg-dot d-green"></span>3 · name the exact tool</span>
+    </p>
+  </section>
+
+  <!-- ================================================ DEPTH 1 · AMBIENT -->
+  <section class="depth card rail-mirror" id="depth-1" aria-labelledby="d1-h">
+    <header class="depth-head">
+      <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
+        <circle cx="38" cy="38" r="28" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="2 8" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="19" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="5 6" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="10" fill="none" stroke="var(--cyan)" stroke-width="2.6"/>
+        <circle cx="38" cy="28" r="3" fill="var(--cyan)"/>
+        <circle cx="38" cy="38" r="2.4" fill="var(--illo-stroke)"/>
+      </svg>
+      <div class="depth-title">
+        <span class="stage st-mirror">Depth 1 · always on</span>
+        <h2 id="d1-h">It just works — do nothing</h2>
+        <p class="q">Type normally, like it's plain Claude. For most people, this is the whole product.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">01</span>
+    </header>
+    <div class="depth-body">
+      <ul class="ambient-grid">
+        <li>
+          <span class="amb-ic ic-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a2 2 0 0 1 2 2V19.5H7a2 2 0 0 1-2-2Z"/><path d="M5 17.5a2 2 0 0 0 2 2h10.5v-3"/><path d="m9 10 2.2 2.2L15.5 8"/></svg>
+          </span>
+          <b>Grounded answers</b>
+          <p>Any claim about rUv's tools is checked against his real source before it's asserted. No guessing.</p>
+        </li>
+        <li>
+          <span class="amb-ic ic-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 15.5 L11 10 L15 13 L18 6.5"/><circle cx="8" cy="15.5" r="1.8"/><circle cx="11" cy="10" r="1.8"/><circle cx="15" cy="13" r="1.8"/><circle cx="18" cy="6.5" r="1.8"/><path d="M4.5 4v16h16"/></svg>
+          </span>
+          <b>Project memory</b>
+          <p>Decisions from past sessions come back on their own as you work. You never re-explain the project.</p>
+        </li>
+        <li>
+          <span class="amb-ic ic-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+          </span>
+          <b>Gates on every move</b>
+          <p>On this machine, 21 gates read each move before it lands — and 6 of them can stop a bad one.</p>
+        </li>
+      </ul>
+      <p class="metaphor">Like a good spotter at the gym: silent on every rep, loud only when
+      you're about to drop the bar.</p>
+    </div>
+  </section>
+
+  <div class="stop-here mono" role="note">you can stop here — everything below is optional depth</div>
+
+  <!-- ================================================= DEPTH 2 · ASKED -->
+  <section class="depth card rail-act" id="depth-2" aria-labelledby="d2-h">
+    <header class="depth-head">
+      <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
+        <circle cx="38" cy="38" r="28" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="2 8" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="19" fill="none" stroke="var(--amber)" stroke-width="2.6" stroke-dasharray="5 6" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="10" fill="none" stroke="var(--illo-faint)" stroke-width="1.6"/>
+        <circle cx="38" cy="19" r="3" fill="var(--amber)"/>
+        <circle cx="38" cy="38" r="2.4" fill="var(--illo-stroke)"/>
+      </svg>
+      <div class="depth-title">
+        <span class="stage st-rec">Depth 2 · when you ask</span>
+        <h2 id="d2-h">Say what you want — plain English</h2>
+        <p class="q">No syntax to learn. These phrases are live triggers, verbatim from the shipped
+        plugin — say one and the right machinery wakes up.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">02</span>
+    </header>
+    <div class="depth-body">
+      <div class="ask-rows">
+        <div class="ask-row">
+          <span class="ask-cap mono">spend less</span>
+          <div class="say-wrap">
+            <span class="say">“do this cheaper”</span>
+            <span class="say">“cost-optimize this”</span>
+            <span class="say">“route this to a cheaper model”</span>
+          </div>
+        </div>
+        <div class="ask-row">
+          <span class="ask-cap mono">check the work</span>
+          <div class="say-wrap">
+            <span class="say">“QE this”</span>
+            <span class="say">“test this”</span>
+            <span class="say">“check coverage”</span>
+          </div>
+        </div>
+        <div class="ask-row">
+          <span class="ask-cap mono">tune the harness</span>
+          <div class="say-wrap">
+            <span class="say">“score my harness”</span>
+            <span class="say">“evolve my harness”</span>
+            <span class="say">“audit my harness”</span>
+          </div>
+        </div>
+        <div class="ask-row">
+          <span class="ask-cap mono">grade a repo</span>
+          <div class="say-wrap">
+            <span class="say">“score this repo”</span>
+          </div>
+        </div>
+      </div>
+      <p class="metaphor">It's asking a colleague, not typing a command.</p>
+    </div>
+  </section>
+
+  <!-- ================================================= DEPTH 3 · NAMED -->
+  <section class="depth card rail-prove" id="depth-3" aria-labelledby="d3-h">
+    <header class="depth-head">
+      <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
+        <circle cx="38" cy="38" r="28" fill="none" stroke="var(--green)" stroke-width="2.6" stroke-dasharray="2 8" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="19" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="5 6" stroke-linecap="round"/>
+        <circle cx="38" cy="38" r="10" fill="none" stroke="var(--illo-faint)" stroke-width="1.6"/>
+        <circle cx="38" cy="10" r="3" fill="var(--green)"/>
+        <circle cx="38" cy="38" r="2.4" fill="var(--illo-stroke)"/>
+      </svg>
+      <div class="depth-title">
+        <span class="stage st-prove">Depth 3 · when you name it</span>
+        <h2 id="d3-h">Name it directly</h2>
+        <p class="q">When you know exactly what you want, reach for it by name. This is the complete
+        board — nothing hidden, nothing extra.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">03</span>
+    </header>
+    <div class="depth-body">
+      <div class="peg-groups">
+        <div class="peg">
+          <h3 class="peg-cap mono">slash commands</h3>
+          <ul class="peg-list">
+            <li><code>/ruvnet-brain:rvbc</code></li>
+            <li><code>/rvcb</code></li>
+            <li><code>/ruvnet-brain:configure</code></li>
+          </ul>
+          <p class="peg-note">All three open the same place — the console, the live mirror of your stack.</p>
+        </div>
+        <div class="peg">
+          <h3 class="peg-cap mono">skills</h3>
+          <ul class="peg-list">
+            <li><code>/brain-build</code><span class="peg-gloss">say what you want built — it runs the whole disciplined build</span></li>
+            <li><code>/brain-prompt</code><span class="peg-gloss">turns a rough idea into the right prompt</span></li>
+            <li><code>/brain-score</code><span class="peg-gloss">scores any repo 0–100, every deduction evidence-cited</span></li>
+            <li><code>/savings</code><span class="peg-gloss">the routing ledger — what each task cost, what it displaced</span></li>
+            <li><code>ruvnet-brain</code><span class="peg-gloss">the always-on one from depth 1 — you rarely type it yourself</span></li>
+          </ul>
+          <p class="peg-note">The complete set — five. That is the whole board.</p>
+        </div>
+        <div class="peg">
+          <h3 class="peg-cap mono">direct tools</h3>
+          <ul class="peg-list">
+            <li><code>search_ruvnet</code><span class="peg-gloss">query rUv's real source (MCP tool)</span></li>
+            <li><code>ruflo memory store</code><span class="peg-gloss">project memory, from the CLI</span></li>
+            <li><code>ruflo memory search</code><span class="peg-gloss">recall it the same way</span></li>
+          </ul>
+          <p class="peg-note">For when you want to touch the machinery yourself.</p>
+        </div>
+      </div>
+      <p class="metaphor">Reaching for a specific tool on the pegboard — because you already know which one.</p>
+    </div>
+  </section>
+
+  <!-- =================================================== THE WORD NOBODY KNOWS
+       Stuart: "If you haven't ever seen MetaHarness, you have no idea what the word means, and you
+       have no idea what you should expect it to do. Saying 'do you want to use it or not' without
+       any visual explaining what it does is a little challenging."
+       rUv wrote the same risk into ADR-076 himself: "'Meta-harness' is a newer term; the README must
+       define it in the first screen so it doesn't read as jargon. Mitigation: the one-line 'freeze
+       the model, evolve the harness' gloss + the four-pillar framing." This is that mitigation.
+       Every element of the diagram is grounded — 7 surfaces ADR-075, 4 pillars ADR-076, 28.5% ADR-073. -->
+  <section class="depth card rail-prove" id="metaharness" aria-labelledby="mh-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-prove mono">the word nobody knows</span>
+        <h2 id="mh-h">So what <em>is</em> MetaHarness?</h2>
+        <p class="depth-sub">The console offers to turn it on. Fair question: on for what? Here is the
+        whole idea in one picture — you can't retrain the model, so evolve everything wrapped around it.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">☰</span>
+    </header>
+    <div class="depth-body">
+      <figure class="mh-figure">
+        <img src="assets/metaharness.svg" alt="MetaHarness: the model sits frozen at the centre while
+        seven policy surfaces around it — planner, contextBuilder, reviewer, retryPolicy, toolPolicy,
+        memoryPolicy and scorePolicy — are each mutated and measured. Four pillars run underneath:
+        route, evolve, orchestrate, verify. Measured result: 28.5% cheaper at 98.1% bar-compliance."
+        width="900" height="470" loading="lazy" />
+      </figure>
+      <p class="metaphor">The seven surfaces take turns changing. The model in the middle never moves —
+      that's the whole trick, and it's why this works on the Claude you already have.</p>
+      <p class="mh-cite mono">Grounded in rUv's own accepted ADRs — seven surfaces
+      <code>ADR-075</code> · four pillars <code>ADR-076</code> · the measured 28.5% <code>ADR-073</code>.
+      Nothing here is inferred.</p>
+    </div>
+  </section>
+
+  <!-- =================================================== GUIDE, NOT MIRROR -->
+  <section class="closer" aria-label="Where to see live state">
+    <p class="closer-line">This page is the guide. The console is the mirror — what's installed,
+    what your AI learned, what the gates caught: <b>live, on page one</b>.</p>
+    <a class="btn-console" href="./">Open the console <span aria-hidden="true">→</span></a>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <p class="foot-line">RuvNet Brain · How to use it — a static guide, served locally from
+    <code>127.0.0.1</code>. Nothing here reads your machine; the console does that.</p>
+  </div>
+</footer>
+
+<script defer src="tips.js"></script>
+</body>
+</html>

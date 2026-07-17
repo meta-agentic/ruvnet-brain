@@ -666,6 +666,19 @@ function renderStack(data) {
 
 const MECH_LABEL = { NPX: 'npx', GLOBAL_BINARY: 'global', PLUGIN: 'plugin', MCP: 'mcp' };
 
+/* Verdict icons — same 2px round-cap stroke language as the page's other spot icons. */
+const WV_ICON_CLEAN = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.6"/>
+    <path d="M8.3 12.4l2.5 2.5 4.9-5.4"/>
+  </svg>`;
+const WV_ICON_DRIFT = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 4.2 2.9 19.3h18.2z"/>
+    <path d="M12 10.2v4.2"/>
+    <path d="M12 17.1v.02"/>
+  </svg>`;
+
 function renderWiring(w) {
   const body = $('#body-wiring');
   if (!w) {
@@ -676,10 +689,27 @@ function renderWiring(w) {
   const s = w.summary || {};
   const sites = Array.isArray(w.sites) ? w.sites : [];
 
-  setChips('chips-wiring', [
-    chip(`${fmtInt(s.npx ?? 0)} npx`, 'cyan'),
-    chip(`${fmtInt(s.global ?? 0)} global`, 'grey'),
-  ]);
+  // The verdict this card exists for (Stuart 2026-07-17: "facts without purpose" — a census
+  // is not an answer). One question, answered up top: when a rUv tool launches here, does the
+  // version you installed actually run? Unpinned npx is the only lane that can lie — it keeps
+  // a private copy in ~/.npm/_npx that quietly ages while every command still "works" (the
+  // 3.25.6-vs-3.28.0 failure). Pinned npx (rUv's own style per his ruvector ADR, e.g.
+  // `npx -y ruvector@0.2.25`) cannot drift — the villain is UNPINNED npx, not npx.
+  // (renderGates answers "what stopped Claude"; this card answers "can what runs go stale".)
+  const npxSites = sites.filter((x) => x.mechanism === 'NPX');
+  const isPinned = (x) => /@\d+(\.\d+){0,2}([^\d.]|$)/.test(String(x.spec || ''));
+  const driftSites = npxSites.filter((x) => !isPinned(x));
+  // Summary counts npx but no rows arrived to inspect? Assume the worst, never the best.
+  const driftN = (!npxSites.length && (s.npx ?? 0) > 0) ? (s.npx ?? 0) : driftSites.length;
+  const pinnedN = npxSites.length - driftSites.length;
+  const total = (s.npx ?? 0) + (s.global ?? 0) + (s.mcp ?? 0) + (s.plugin ?? 0);
+  const projCount = new Set(sites.filter((x) => x.scope === 'project' && x.project).map((x) => x.project)).size;
+
+  setChips('chips-wiring', total
+    ? (driftN
+        ? [chip(`${fmtInt(driftN)} can drift stale`, 'warn'), chip(`${fmtInt(total - driftN)} pinned down`, 'green')]
+        : [chip('nothing can drift', 'green'), chip(`${fmtInt(total)} launch sites`, 'grey')])
+    : [chip('nothing wired yet', 'grey')]);
 
   found.npx = s.npx ?? 0;
   found.projects = s.projectsWithNpx ?? 0;
@@ -687,37 +717,63 @@ function renderWiring(w) {
   updateFoundStrip();
 
   const main = [];
-  // Visual first (Stuart 2026-07-16: "make this section visual — this just doesn't help"): the four
-  // NOTE (2026-07-17): see renderGates for the card that answers "what stopped Claude". This card
-  // answers only "where do tools launch from" — a census. Keep them distinct.
+  if (total) {
+    // ---- the verdict banner: the answer first, evidence below it ----
+    const title = driftN
+      ? `${fmtInt(driftN)} launch site${driftN === 1 ? '' : 's'} can silently run a stale copy`
+      : 'Every rUv tool here resolves to one known version';
+    const sub = [];
+    if (driftN) {
+      sub.push('Unpinned npx keeps a private copy in ', el('code', {}, '~/.npm/_npx'),
+        ' and runs that — every command still “works” while old code answers. Rewire ',
+        driftN === 1 ? 'it' : 'each one', ' to the global binary, or pin the exact version the way rUv does.');
+    } else {
+      const bits = [];
+      if (s.global) bits.push(el('span', {}, el('b', {}, fmtInt(s.global)), ' through your one global binary'));
+      if (s.mcp) bits.push(el('span', {}, el('b', {}, fmtInt(s.mcp)), ' through a running MCP server'));
+      if (s.plugin) bits.push(el('span', {}, el('b', {}, fmtInt(s.plugin)), ' inside Claude Code itself'));
+      if (pinnedN) bits.push(el('span', {}, el('b', {}, fmtInt(pinnedN)), ' via npx pinned to an exact version, which cannot age'));
+      const joined = [];
+      bits.forEach((b, i) => { if (i) joined.push(i === bits.length - 1 ? ' and ' : ', '); joined.push(b); });
+      sub.push('All ', el('b', {}, fmtInt(total)), ' launch sites',
+        projCount ? el('span', {}, ' across ', el('b', {}, fmtInt(projCount)), ` project${projCount === 1 ? '' : 's'}`) : '',
+        ' are accounted for: ', ...joined,
+        '. Zero unpinned npx — nothing can silently drift stale.');
+    }
+    main.push(el('div', { class: 'wire-verdict' + (driftN ? ' is-drift' : ' is-clean') },
+      el('span', { class: 'wv-icon', 'aria-hidden': 'true' }, frag(driftN ? WV_ICON_DRIFT : WV_ICON_CLEAN)),
+      el('div', { class: 'wv-text' },
+        el('p', { class: 'wv-title' }, title, infoBtn('How it’s wired', WIRING_INFO)),
+        el('p', { class: 'wv-sub' }, ...sub),
+        driftN && driftSites.length ? el('ul', { class: 'wv-sites' },
+          ...driftSites.slice(0, 8).map((x) => el('li', {},
+            el('span', { class: 'site-where' }, x.scope === 'project' ? (x.project || 'unknown project') : 'machine-wide'),
+            el('span', { class: 'cell-dim' }, x.file || '—'),
+            el('span', { class: 'site-spec' }, x.spec || ''))),
+          driftSites.length > 8 ? el('li', { class: 'cell-dim' },
+            `+ ${fmtInt(driftSites.length - 8)} more — the full map is in the peel-back below`) : null) : null)));
 
-  // wiring lanes as one proportional bar + stat doors, each lane carrying its one-line meaning.
-  // The prose wall is gone; the info popover keeps the full explanation for whoever wants it.
-  const lanes = [
-    { key: 'global', n: s.global ?? 0, label: 'global binary', tone: 'w-global', meaning: 'one path, one version — verifiable at a glance' },
-    { key: 'npx', n: s.npx ?? 0, label: 'npx', tone: 'w-npx', meaning: 'downloads a private copy per call — can drift stale' },
-    { key: 'mcp', n: s.mcp ?? 0, label: 'MCP server', tone: 'w-mcp', meaning: 'a running tool the AI calls directly' },
-    { key: 'plugin', n: s.plugin ?? 0, label: 'plugin', tone: 'w-plugin', meaning: 'ships inside Claude Code itself' },
-  ];
-  const totalSites = lanes.reduce((t, l) => t + l.n, 0) || 1;
-  main.push(el('p', { class: 'lead-stat' },
-    'Every rUv tool call on this machine launches through one of ', el('b', {}, '4 lanes'),
-    ' — the picture is ', el('b', {}, fmtInt(totalSites)), ' resolution sites across ',
-    el('b', {}, fmtInt(s.projectsWithNpx ?? 0)), ' projects:',
-    infoBtn('How it’s wired', WIRING_INFO)));
-  main.push(el('div', { class: 'wire-bar', role: 'img',
-    'aria-label': lanes.map((l) => `${l.label} ${l.n}`).join(', ') },
-    ...lanes.filter((l) => l.n > 0).map((l) => el('span', {
-      class: 'wire-seg ' + l.tone,
-      style: `flex-grow:${Math.max(l.n, totalSites * 0.02)}`,
-      title: `${l.label} — ${fmtInt(l.n)} (${Math.round((l.n / totalSites) * 100)}%)`,
-    }))));
-  main.push(el('div', { class: 'wire-lanes' },
-    ...lanes.map((l) => el('div', { class: 'wire-lane' + (l.n ? '' : ' is-empty') },
-      el('span', { class: 'wire-dot ' + l.tone, 'aria-hidden': 'true' }),
-      el('b', { class: 'wire-n' }, fmtInt(l.n)),
-      el('span', { class: 'wire-lab' }, l.label),
-      el('span', { class: 'wire-meaning cell-dim' }, l.meaning)))));
+    // ---- lane legend, subordinate to the verdict: one quiet line per lane in use.
+    // A lane at zero is omitted, not excused — a "0 plugin" row answers nothing.
+    const npxMeaning = driftN === 0
+      ? 'pinned to exact versions — deliberate, reproducible, cannot age'
+      : pinnedN > 0
+        ? `${fmtInt(driftN)} unpinned can drift stale · ${fmtInt(pinnedN)} pinned are safe`
+        : 'downloads a private copy per call — can silently drift stale';
+    const lanes = [
+      { n: s.global ?? 0, label: 'global binary', tone: 'w-global', meaning: 'one path, one version — what runs is what you installed' },
+      { n: s.mcp ?? 0, label: 'MCP server', tone: 'w-mcp', meaning: 'a running tool the AI calls directly — alive, not re-downloaded' },
+      { n: s.npx ?? 0, label: 'npx', tone: 'w-npx', meaning: npxMeaning },
+      { n: s.plugin ?? 0, label: 'plugin', tone: 'w-plugin', meaning: 'ships inside Claude Code itself' },
+    ].filter((l) => l.n > 0);
+    if (driftN) lanes.sort((a, b) => Number(b.label === 'npx') - Number(a.label === 'npx')); // risk leads
+    main.push(el('div', { class: 'wire-legend' },
+      ...lanes.map((l) => el('div', { class: 'wire-leg-row' },
+        el('span', { class: 'wire-dot ' + l.tone, 'aria-hidden': 'true' }),
+        el('b', { class: 'wire-leg-n' }, fmtInt(l.n)),
+        el('span', { class: 'wire-leg-lab' }, l.label),
+        el('span', { class: 'wire-leg-meaning cell-dim' }, l.meaning)))));
+  }
 
   if (sites.length) {
     const groups = new Map();
@@ -745,7 +801,9 @@ function renderWiring(w) {
                 ))))))))));
     main.push(outer);
   } else {
-    main.push(el('p', { class: 'muted' }, 'No resolution sites found — nothing is wired through hooks yet.'));
+    main.push(el('p', { class: 'muted' }, total
+      ? 'The site-by-site list didn’t arrive with this audit — the counts above are from the summary.'
+      : 'No resolution sites found — nothing is wired through hooks yet.'));
   }
 
   body.replaceChildren(withIllo('wiring', ...main));
@@ -1440,14 +1498,30 @@ function renderSavings(sv) {
       enableNote.textContent = 'Couldn’t save — turn it on under Settings.';
     }
   });
+  // Stuart: "If you haven't ever seen MetaHarness, you have no idea what the word means, and you have
+  // no idea what you should expect it to do. Saying 'do you want to use it or not' without any visual
+  // explaining what it does is a little challenging." He is right — this card asked for a decision
+  // before it earned understanding, and seven lines of prose is not how anyone learns a new word.
+  // rUv called this exact risk in ADR-076: define the term in the first screen or it reads as jargon;
+  // mitigation = the one-line gloss + the four-pillar framing. The diagram IS that mitigation, so the
+  // paragraph it replaces is gone rather than sitting above it saying the same thing more slowly.
   const pitch = el('div', { class: 'mh-pitch' },
     el('p', { class: 'mh-lead' },
-      el('b', {}, 'MetaHarness'),
-      ' is one of the most powerful pieces of the stack — and rUv leaves it ',
-      el('b', {}, 'off by default'),
-      ' on purpose: he’d rather you choose it than have it forced on you. One of the things it does is ',
-      el('b', {}, 'smart model routing'),
-      ' — sending each prompt, and every sub-agent Ruflo spins up, to the cheapest model that’s genuinely good enough (escalating only when the work needs it), learning which model wins from your real results, across the providers you already pay for. Most people never turn it on. Here it’s one click — and yours to switch off anytime.'),
+      el('b', {}, 'MetaHarness'), ' tunes everything wrapped around your model — the planning, the ',
+      'context, the retries, which model each task goes to — and keeps only the changes that ',
+      el('b', {}, 'measurably win'), '. The model itself never changes. rUv leaves it ',
+      el('b', {}, 'off by default'), ' on purpose: he’d rather you choose it than have it forced on you.'),
+    el('figure', { class: 'mh-diagram' },
+      el('img', {
+        // NOT lazy: at 6.5KB this saves nothing, and the card sits far enough down the page that the
+        // lazy threshold never fires — the diagram simply never appeared. Verified: no network
+        // request at all with loading="lazy", even after scrolling the card into view.
+        src: 'assets/metaharness.svg', width: '900', height: '470',
+        alt: 'MetaHarness: the model sits frozen at the centre while seven policy surfaces around it — '
+           + 'planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy — '
+           + 'are each mutated and measured. Four pillars run underneath: route, evolve, orchestrate, '
+           + 'verify. Measured: 28.5% cheaper at 98.1% bar-compliance.',
+      })),
     el('div', { class: 'mh-cta' }, enableBtn, enableNote));
 
   const blocks = [];

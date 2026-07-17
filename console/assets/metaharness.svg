@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-labelledby="mh-t mh-d">
+  <title id="mh-t">MetaHarness: freeze the model, evolve the harness</title>
+  <desc id="mh-d">The model sits frozen at the centre, unchanged. Around it are seven policy surfaces the harness mutates and measures: planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy. Four pillars run underneath: route (cheap to frontier per query), evolve (keep only what measurably improves), orchestrate (agents, swarms, MCP) and verify (provenance and safety gate). Measured result: 28.5 percent cheaper at 98.1 percent bar-compliance.</desc>
+
+  <style>
+    .ink   { fill: #0f1720; }
+    .muted { fill: #5b6b7c; }
+    .line  { stroke: #c8d3de; fill: none; }
+    .fill  { fill: #f4f7fa; }
+    .mono  { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .disp  { font-family: Georgia, 'Times New Roman', serif; }
+    .frozen-box { fill: #eaf2fb; stroke: #7aa7d2; }
+    .surf { fill: #ffffff; stroke: #d7e0ea; }
+    .pill-r { fill: #2f9e6e; } .pill-e { fill: #c98a1e; }
+    .pill-o { fill: #3d7fbf; } .pill-v { fill: #8b5cc7; }
+
+    /* The surfaces pulse in sequence: the harness is what MOVES, the model never does. */
+    .surf-anim { animation: surfPulse 7s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .s1 { animation-delay: 0s } .s2 { animation-delay: .5s } .s3 { animation-delay: 1s } .s4 { animation-delay: 1.5s }
+    .s5 { animation-delay: 2s } .s6 { animation-delay: 2.5s } .s7 { animation-delay: 3s }
+    @keyframes surfPulse {
+      0%, 55%, 100% { stroke: #d7e0ea; }
+      6%            { stroke: #2f9e6e; }
+      14%           { stroke: #d7e0ea; }
+    }
+    .pillar-anim { animation: pillarGlow 7s ease-in-out infinite; }
+    .p1 { animation-delay: 3.6s } .p2 { animation-delay: 4.0s } .p3 { animation-delay: 4.4s } .p4 { animation-delay: 4.8s }
+    @keyframes pillarGlow { 0%, 100% { opacity: .55 } 8%, 20% { opacity: 1 } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .surf-anim, .pillar-anim { animation: none; }
+      .pillar-anim { opacity: 1; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #e8eef5 } .muted { fill: #8fa3b8 }
+      .line { stroke: #2b3948 } .fill { fill: #131b24 }
+      .surf { fill: #18222d; stroke: #2b3948 }
+      .frozen-box { fill: #16283c; stroke: #4d7ba8 }
+      @keyframes surfPulse { 0%,55%,100% { stroke:#2b3948 } 6% { stroke:#49d69b } 14% { stroke:#2b3948 } }
+    }
+  </style>
+
+  <text x="450" y="26" class="mono ink" font-size="13" letter-spacing="2.4" text-anchor="middle">FREEZE THE MODEL · EVOLVE THE HARNESS</text>
+
+  <!-- the harness envelope -->
+  <rect x="24" y="46" width="852" height="248" rx="14" class="fill line"/>
+  <text x="44" y="70" class="mono muted" font-size="11" letter-spacing="1.2">THE HARNESS — seven policy surfaces, each mutated and measured</text>
+
+  <!-- top row of surfaces -->
+  <g class="mono" font-size="12">
+    <rect x="44"  y="86" width="180" height="34" rx="8" class="surf surf-anim s1"/><text x="134" y="108" class="ink" text-anchor="middle">planner</text>
+    <rect x="238" y="86" width="180" height="34" rx="8" class="surf surf-anim s2"/><text x="328" y="108" class="ink" text-anchor="middle">contextBuilder</text>
+    <rect x="482" y="86" width="180" height="34" rx="8" class="surf surf-anim s3"/><text x="572" y="108" class="ink" text-anchor="middle">reviewer</text>
+    <rect x="676" y="86" width="180" height="34" rx="8" class="surf surf-anim s4"/><text x="766" y="108" class="ink" text-anchor="middle">retryPolicy</text>
+  </g>
+
+  <!-- the frozen model — deliberately the ONLY thing that never animates -->
+  <rect x="318" y="142" width="264" height="88" rx="10" class="frozen-box"/>
+  <text x="450" y="172" class="disp ink" font-size="19" text-anchor="middle" font-weight="bold">MODEL</text>
+  <text x="450" y="192" class="mono" font-size="11" fill="#7aa7d2" text-anchor="middle" letter-spacing="1.6">🔒 FROZEN</text>
+  <text x="450" y="212" class="mono muted" font-size="10.5" text-anchor="middle">the same Claude you already have</text>
+
+  <!-- bottom row of surfaces -->
+  <g class="mono" font-size="12">
+    <rect x="44"  y="252" width="230" height="34" rx="8" class="surf surf-anim s5"/><text x="159" y="274" class="ink" text-anchor="middle">toolPolicy</text>
+    <rect x="336" y="252" width="230" height="34" rx="8" class="surf surf-anim s6"/><text x="451" y="274" class="ink" text-anchor="middle">memoryPolicy</text>
+    <rect x="626" y="252" width="230" height="34" rx="8" class="surf surf-anim s7"/><text x="741" y="274" class="ink" text-anchor="middle">scorePolicy</text>
+  </g>
+
+  <!-- four pillars -->
+  <g class="line" stroke-width="1.2">
+    <path d="M140 294 V 322"/><path d="M380 294 V 322"/><path d="M600 294 V 322"/><path d="M790 294 V 322"/>
+  </g>
+  <g class="pillar-anim p1"><circle cx="140" cy="332" r="4" class="pill-r"/>
+    <text x="140" y="356" class="mono ink" font-size="12" text-anchor="middle" letter-spacing="1.2">ROUTE</text>
+    <text x="140" y="374" class="mono muted" font-size="10" text-anchor="middle">cheap → frontier, per query</text></g>
+  <g class="pillar-anim p2"><circle cx="380" cy="332" r="4" class="pill-e"/>
+    <text x="380" y="356" class="mono ink" font-size="12" text-anchor="middle" letter-spacing="1.2">EVOLVE</text>
+    <text x="380" y="374" class="mono muted" font-size="10" text-anchor="middle">keep only what measurably improves</text></g>
+  <g class="pillar-anim p3"><circle cx="600" cy="332" r="4" class="pill-o"/>
+    <text x="600" y="356" class="mono ink" font-size="12" text-anchor="middle" letter-spacing="1.2">ORCHESTRATE</text>
+    <text x="600" y="374" class="mono muted" font-size="10" text-anchor="middle">agents, swarms, MCP</text></g>
+  <g class="pillar-anim p4"><circle cx="790" cy="332" r="4" class="pill-v"/>
+    <text x="790" y="356" class="mono ink" font-size="12" text-anchor="middle" letter-spacing="1.2">VERIFY</text>
+    <text x="790" y="374" class="mono muted" font-size="10" text-anchor="middle">provenance + safety gate</text></g>
+
+  <!-- the payoff -->
+  <line x1="24" y1="404" x2="876" y2="404" class="line"/>
+  <text x="450" y="430" class="disp ink" font-size="17" text-anchor="middle">A cheap model in a good harness ≈ a frontier model, for less.</text>
+  <text x="450" y="452" class="mono muted" font-size="10.5" text-anchor="middle">measured — 28.5% cheaper at 98.1% bar-compliance · ADR-073</text>
+</svg>
