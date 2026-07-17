@@ -1,10 +1,10 @@
 {
   "brainVersion": "3.3.0",
-  "generated": "2026-07-16T09:44:42.645Z",
-  "generatedHuman": "Thu, 16 Jul 2026 09:44:42 GMT",
+  "generated": "2026-07-17T13:40:00.285Z",
+  "generatedHuman": "Fri, 17 Jul 2026 13:40:00 GMT",
   "coverage": {
-    "built": 56,
-    "catalogued": 180,
+    "built": 57,
+    "catalogued": 181,
     "orgTotalApprox": 248,
     "pending": 124
   },
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "a0c1ac4b4ff84360cb85b577e1da81eb661a078f",
+      "builtFromSha": "61047df48467ce2c10b2c02d9cc522262ad6edc4",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -29,7 +29,7 @@
       "name": "RuVector",
       "tier": "T0",
       "stars": 4296,
-      "builtFromSha": "f3de1724fa5d8ff871ac24a528575f115b2a9df7",
+      "builtFromSha": "dc00c4425300e2d6fbb2e95514e98db1eb5e288c",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -213,7 +213,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "cddb89eeedb0f3699cedc48658a003a5b419e1f3",
+      "builtFromSha": "f2f7cf9f1dc5b4996bc7d13d2e667dcb33368fce",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -438,6 +438,13 @@
     },
     {
       "name": "ruv-gists",
+      "tier": "fresh",
+      "builtFromSha": "unknown",
+      "latestRemoteSha": null,
+      "status": "built"
+    },
+    {
+      "name": "ruv-meetings",
       "tier": "fresh",
       "builtFromSha": "unknown",
       "latestRemoteSha": null,
