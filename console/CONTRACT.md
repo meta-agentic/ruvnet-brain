@@ -12,6 +12,14 @@ A GET with a wrong/absent token still serves read-only state; a POST with a wron
 
 ## GET `/api/state` — fast sections (no network)
 
+Returns in well under a second. `memory.fleet` is **`null` here by design** — scanning every memory
+store on the machine costs ~90ms each and a real machine has 100+, which is far too slow to sit in
+front of the page's first paint. The fleet arrives separately from `GET /api/memory`.
+
+`GET /api/state?fast=1` replays the last good gather from disk (~3ms) so a repeat load paints
+instantly, then the live call replaces it. The cached copy never contains `token` — that is minted
+per server run and spliced in on read.
+
 ```jsonc
 {
   "token": "…",
@@ -74,6 +82,15 @@ A GET with a wrong/absent token still serves read-only state; a POST with a wron
   }
 }
 ```
+
+## GET `/api/memory` — the across-your-projects fleet scan (slow, ~7–10s)
+
+```jsonc
+{ "fleet": [ { "name": "ruvnet-brain", "total": 1023, "embedded": 1021, "coverPct": 99.8, … } ] }
+```
+
+Split out of `/api/state` so it cannot block first paint. The page renders memory health immediately
+and merges this list into the same card once it lands.
 
 ## GET `/api/stack` — the network audit (slow, ~5–20s; page loads a skeleton first)
 

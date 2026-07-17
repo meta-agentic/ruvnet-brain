@@ -187,7 +187,10 @@ function probeMemory(projectDir) {
   }
   return probes;
 }
-function gatherMemory(cwd) {
+// The fleet-wide scan opens and queries every memory store on the machine — ~90ms each, and a real
+// machine has 100+. That is far too slow to sit on the page's first paint, so it is its own endpoint
+// (/api/memory) and hydrates late, exactly like the stack audit does.
+function scanFleet() {
   const stores = findStores();
   const fleet = [];
   for (const db of stores) {
@@ -197,11 +200,14 @@ function gatherMemory(cwd) {
     fleet.push({ name: d.name, total: d.total, embedded: d.embedded, coverPct: +(d.cover * 100).toFixed(1), patterns: d.patterns ?? 0, learns: !!d.learns, findings: d.findings });
   }
   fleet.sort((a, b) => (b.total || 0) - (a.total || 0));
+  return fleet;
+}
+function gatherMemory(cwd, { fleet = true } = {}) {
   // health = for the project the console was launched from (fall back to this repo)
   const project = fs.existsSync(path.join(cwd, '.swarm/memory.db')) ? cwd : REPO;
   const projName = project.replace(HOME + '/Code/', '').replace(HOME + '/', '~/');
   const health = scoreMemoryHealth({ project: projName, probes: probeMemory(project) });
-  return { fleet, health };
+  return { fleet: fleet ? scanFleet() : null, health };
 }
 
 // ── Savings ledger (receipts only) ────────────────────────────────────────────────────────────────
@@ -283,7 +289,45 @@ function gatherConfig() {
 
 // ── Brain activity read-model (ADR-0018) — read-only, file reads + sqlite3 CLI only ──────────────
 // Fleet scan is cached for 10 min: ~50 stores × a CLI spawn each is fine once, not per poll.
+// 2026-07-17 (Stuart: "work faster" — measured 49s cold vs 1.8s warm): the cache now PERSISTS to
+// disk and hydrates at boot, so a fresh server paints real data instantly with its honest
+// "scanned at HH:MM" stamp; an expired cache is served stale while the re-scan runs BEHIND the
+// response (setImmediate), never on the request that triggered it. First-ever run (no disk cache
+// at all) still scans inline — there is nothing older to serve, and no number beats a fake one.
 let ACTIVITY_MACHINE_CACHE = null;
+let FLEET_REFRESHING = false;
+const CONSOLE_CACHE_PATH = path.join(HOME, '.cache/ruvnet-brain/console-cache.json');
+function loadConsoleCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(CONSOLE_CACHE_PATH, 'utf8'));
+    if (j.activity && j.activity.at) ACTIVITY_MACHINE_CACHE = j.activity;
+    if (j.trust && j.trust.at) TRUST_CACHE = j.trust;
+  } catch { /* no cache yet — first ever boot */ }
+}
+function saveConsoleCache() {
+  try {
+    fs.mkdirSync(path.dirname(CONSOLE_CACHE_PATH), { recursive: true });
+    fs.writeFileSync(CONSOLE_CACHE_PATH, JSON.stringify({ activity: ACTIVITY_MACHINE_CACHE, trust: TRUST_CACHE }));
+  } catch { /* cache persistence must never break a read */ }
+}
+function refreshFleetCache() {
+  const projects = [];
+  let total = 0;
+  for (const s of findMemoryStores(path.join(HOME, 'Code'))) {
+    const n = Number(robustRead(s.db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0);
+    if (n > 0) {
+      // MAX(updated_at) = when this project was last actively worked — the memory store doubles
+      // as the attention signal (relevance ordering, Stuart 2026-07-15).
+      const lastTouched = Number(robustRead(s.db, 'SELECT MAX(updated_at) FROM memory_entries').value || 0);
+      // rel = the ~/Code-relative path — the SAME key reconcile:<id> recommendations use.
+      projects.push({ name: path.basename(s.project), rel: path.relative(path.join(HOME, 'Code'), s.project), memories: n, lastTouched });
+      total += n;
+    }
+  }
+  projects.sort((a, b) => b.memories - a.memories);
+  ACTIVITY_MACHINE_CACHE = { at: Date.now(), projects, totalMemories: total };
+  saveConsoleCache();
+}
 function findMemoryStores(root) {
   const out = [];
   const walk = (dir, depth) => {
@@ -318,22 +362,14 @@ function gatherActivity(cwd) {
   out.recent = rows("SELECT key, namespace, type, datetime(updated_at/1000,'unixepoch','localtime') AS at FROM memory_entries WHERE status='active' ORDER BY updated_at DESC LIMIT 18");
   out.breakdown = rows("SELECT namespace, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY namespace ORDER BY n DESC");
   out.growth = rows("SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY 1 ORDER BY 1");
-  if (!ACTIVITY_MACHINE_CACHE || Date.now() - ACTIVITY_MACHINE_CACHE.at > 600000) {
-    const projects = [];
-    let total = 0;
-    for (const s of findMemoryStores(path.join(HOME, 'Code'))) {
-      const n = Number(robustRead(s.db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0);
-      if (n > 0) {
-        // MAX(updated_at) = when this project was last actively worked — the memory store doubles
-        // as the attention signal (relevance ordering, Stuart 2026-07-15).
-        const lastTouched = Number(robustRead(s.db, 'SELECT MAX(updated_at) FROM memory_entries').value || 0);
-        // rel = the ~/Code-relative path — the SAME key reconcile:<id> recommendations use.
-        projects.push({ name: path.basename(s.project), rel: path.relative(path.join(HOME, 'Code'), s.project), memories: n, lastTouched });
-        total += n;
-      }
-    }
-    projects.sort((a, b) => b.memories - a.memories);
-    ACTIVITY_MACHINE_CACHE = { at: Date.now(), projects, totalMemories: total };
+  if (!ACTIVITY_MACHINE_CACHE) {
+    refreshFleetCache(); // first-ever run: nothing older to serve honestly
+  } else if (Date.now() - ACTIVITY_MACHINE_CACHE.at > 600000 && !FLEET_REFRESHING) {
+    // Serve the stale-but-stamped cache NOW; re-scan behind the response. (Single-threaded server:
+    // the background scan can still delay a CONCURRENT request — same as before, but never again
+    // the request that asked.)
+    FLEET_REFRESHING = true;
+    setImmediate(() => { try { refreshFleetCache(); } finally { FLEET_REFRESHING = false; } });
   }
   out.machine = {
     projects: ACTIVITY_MACHINE_CACHE.projects,
@@ -459,14 +495,14 @@ async function gatherTrust() {
   try { release = await fetchReleaseDigest(); }
   catch (e) { release = { ok: false, error: String((e && e.message) || e) }; }
   const data = { generatedAt: new Date().toISOString(), release };
-  if (release.ok) TRUST_CACHE = { at: Date.now(), data };
+  if (release.ok) { TRUST_CACHE = { at: Date.now(), data }; saveConsoleCache(); }
   return { ...data, channel: readInstallChannel() };
 }
 
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
-function gatherState(cwd) {
+function gatherState(cwd, { fleet = true } = {}) {
   const wiring = wiringSurvey();
-  const memory = gatherMemory(cwd);
+  const memory = gatherMemory(cwd, { fleet });
   try { memory.learnings = learnings(); } catch { memory.learnings = null; }
   const savings = gatherSavings();
   const cfgNow = readJSON(CONFIG_PATH) || {};
@@ -495,13 +531,21 @@ function gatherState(cwd) {
   const preStateHash = crypto.createHash('sha1')
     .update(JSON.stringify({ recs: recommendations.map((r) => r.id).sort(), wiring: wiring.summary }))
     .digest('hex').slice(0, 16);
-  return {
+  const result = {
     token: TOKEN,
     generatedAt: new Date().toISOString(),
     preStateHash,
     host: { user: os.userInfo().username, platform: process.platform, node: process.version, npmPrefix: NPM_PREFIX.replace(HOME, '~') },
     sections: { wiring, memory, savings, config, recommendations },
   };
+  // Cache the last good state so repeat page-loads paint instantly, same as the stack audit does.
+  // TOKEN is per-server-run and must never touch disk — ?fast=1 splices the live one back in.
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    const { token, ...safe } = result;
+    fs.writeFileSync(path.join(CONFIG_DIR, 'state-cache.json'), JSON.stringify({ at: result.generatedAt, data: safe }));
+  } catch { /* cache is best-effort; the live gather is the product */ }
+  return result;
 }
 function gatherStack() {
   const a = auditModel();
@@ -626,6 +670,10 @@ function send(res, code, type, body) { res.writeHead(code, { 'content-type': typ
 function sendJSON(res, code, obj) { send(res, code, 'application/json', JSON.stringify(obj)); }
 function readBody(req) { return new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; if (b.length > 1e6) req.destroy(); }); req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } }); }); }
 
+function openBrowser(url) {
+  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  try { spawnSync(opener, [url], { stdio: 'ignore' }); } catch { /* headless is fine */ }
+}
 function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = false, cwd = process.cwd() } = {}) {
   const server = http.createServer(async (req, res) => {
     // DNS-rebinding guard: this server binds 127.0.0.1 only. Reject any request whose Host header
@@ -636,7 +684,12 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     }
     try {
       const url = req.url.split('?')[0];
-      if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd));
+      if (req.method === 'GET' && url === '/api/state' && /[?&]fast=1/.test(req.url)) {
+        const c = readJSON(path.join(CONFIG_DIR, 'state-cache.json'));
+        return sendJSON(res, 200, c && c.data ? { ...c.data, token: TOKEN, fromCache: true, cachedAt: c.at } : { fromCache: false });
+      }
+      if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd, { fleet: false }));
+      if (req.method === 'GET' && url === '/api/memory') return sendJSON(res, 200, { fleet: scanFleet() });
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
       if (req.method === 'GET' && url === '/api/trust') return sendJSON(res, 200, await gatherTrust());
       if (req.method === 'GET' && url === '/api/stack' && /[?&]fast=1/.test(req.url)) {
@@ -666,13 +719,12 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     console.log(`\n  🧠  RuvNet Brain — Onboarding Console`);
     console.log(`      ${url}`);
     console.log(`      read-only until you click · token-gated · ^C to stop\n`);
-    // Warm the fleet attention cache off the request path so the very first page load
-    // gets relevance-ordered recommendations (and an instant activity card).
+    // Cold-start fix (2026-07-17): hydrate last run's fleet/trust caches from disk FIRST — the
+    // first page load paints real, honestly-stamped data in ~2s instead of a 25–50s scan — then
+    // warm a fresh scan off the request path.
+    loadConsoleCache();
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
-    if (open) {
-      const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-      try { spawnSync(opener, [url], { stdio: 'ignore' }); } catch { /* headless is fine */ }
-    }
+    if (open) openBrowser(url);
   });
   return server;
 }
@@ -682,7 +734,26 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   const args = process.argv.slice(2);
   if (args.includes('--print-state')) { console.log(JSON.stringify(gatherState(process.cwd()), null, 2)); }
   else if (args.includes('--print-stack')) { console.log(JSON.stringify(gatherStack(), null, 2)); }
-  else if (args.includes('--serve') || args.length === 0) { startServer({ open: args.includes('--open'), cwd: process.cwd() }); }
+  else if (args.includes('--serve') || args.length === 0) {
+    // Hitting the command again should land on the console you already have, not spawn a second
+    // server on a random port and a second tab. If one is already up, just point the browser at it.
+    const port = Number(process.env.CONSOLE_PORT) || 7411;
+    const open = args.includes('--open');
+    const url = `http://127.0.0.1:${port}/`;
+    const alive = await new Promise((resolve) => {
+      const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 800 }, (res) => {
+        let b = ''; res.on('data', (c) => { b += c; if (b.length > 4096) res.destroy(); });
+        res.on('end', () => resolve(res.statusCode === 200 && /RuvNet Brain/.test(b)));
+        res.on('error', () => resolve(false));
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+    if (alive) {
+      console.log(`\n  🧠  RuvNet Brain — Onboarding Console (already running)\n      ${url}\n`);
+      if (open) openBrowser(url);
+    } else { startServer({ port, open, cwd: process.cwd() }); }
+  }
   else { console.log(`\n  onboarding-console — the RuvNet Brain configure page\n\n    --serve [--open]   start the local server (and open your browser)\n    --print-state      print the read-only state JSON and exit (for tests)\n    --print-stack      print the stack audit JSON and exit\n`); }
 }
 

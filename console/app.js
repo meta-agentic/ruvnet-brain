@@ -22,6 +22,7 @@ const TOKEN = (typeof window !== 'undefined' && typeof window.__CONSOLE_TOKEN__ 
 const MOCK = new URLSearchParams(location.search).has('mock'); // dev only, never default
 
 let preStateHash = null;          // echoed on /api/apply so the server can refuse a moved world
+let lastMemory = null;            // last rendered memory card, so the late fleet scan can merge into it
 const renderedRecIds = new Set();
 let stateRecsSettled = false;
 let stackRecsSettled = false;
@@ -247,16 +248,21 @@ function updateFoundStrip() {
 
 /* ------------------------------------------------------------- section 0: host */
 
+// Node reports the OS by its kernel codename — 'darwin' is the Unix core inside macOS. That is the
+// machine's word for itself, not a person's, and this page is meant to read in plain English.
+function osName(platform) {
+  return { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[platform] || platform || '—';
+}
 function renderHost(host, generatedAt) {
   if (host && host.user) {
-    found.host = `${host.user}@${host.platform || '?'}`;
+    found.host = `${host.user}@${osName(host.platform)}`;
     const hc = $('#host-chip');
     if (hc) { hc.textContent = found.host; hc.hidden = false; }
     const meta = $('#host-meta');
     if (meta) {
       meta.replaceChildren(
         el('span', {}, 'user ', el('b', {}, host.user)),
-        el('span', {}, 'platform ', el('b', {}, host.platform || '—')),
+        el('span', {}, 'platform ', el('b', {}, osName(host.platform))),
         el('span', {}, 'node ', el('b', {}, host.node || '—')),
         el('span', {}, 'npm prefix ', el('b', {}, host.npmPrefix || '—')),
       );
@@ -513,16 +519,24 @@ function familyRow(fam) {
   const tone = fam.attention ? 'warn' : 'green';
   const statusText = fam.attention ? `${fam.attention} need${fam.attention === 1 ? 's' : ''} a look` : 'current';
   const count = fam.items.length;
+  // Version on the row (Stuart 2026-07-17: "show the version numbers"). Healthy family → the
+  // flagship's version. Attention family → the problem AND its resolution on the same line:
+  // "installed → target" right beside the fix button.
+  const first = fam.attention ? fam.items.find((i) => i.state === 'BEHIND' || i.state === 'BROKEN') : null;
+  const verText = first
+    ? `${first.installed ?? '?'} → ${first.target ?? 'latest'}`
+    : (fam.items[0]?.installed ? `v${fam.items[0].installed}` : '');
   return el('details', { class: 'fam' },
     el('summary', { class: 'fam-sum' },
       el('span', { class: 'fam-name' }, fam.name),
       el('span', { class: 'fam-what' }, fam.what),
-      el('span', { class: 'fam-status' }, chip(statusText, tone),
+      el('span', { class: 'fam-status' },
+        verText ? el('span', { class: 'fam-ver' + (first ? ' is-behind' : '') }, verText) : null,
+        chip(statusText, tone),
         fam.attention ? el('button', {
           class: 'btn-fix', type: 'button', title: 'Jump to the one-click fix below (evidence, cost, and undo included)',
           onclick: (e) => {
             e.preventDefault(); e.stopPropagation();
-            const first = fam.items.find((i) => i.state === 'BEHIND' || i.state === 'BROKEN');
             if (first) jumpToRec(`${first.state === 'BROKEN' ? 'repair' : 'sync'}:${first.name}`);
           },
         }, 'fix ↓') : null,
@@ -596,23 +610,53 @@ function renderStack(data) {
               onclick: () => jumpToRec(attention[0].state === 'BROKEN' ? `repair:${attention[0].name}` : `sync:${attention[0].name}`),
             }, 'take me to the fix ↓'))
         : 'Nothing needs attention — every package matches its target, one copy each.'));
-    main.push(el('div', { class: 'fam-list' }, groupFamilies(pkgs).map(familyRow)));
+    // Attention families bubble to the top (Stuart 2026-07-17); the healthy remainder keeps the
+    // curated blast-radius order (never alphabetical). Stable sort preserves it within each group.
+    main.push(el('div', { class: 'fam-list' },
+      groupFamilies(pkgs).sort((a, b) => (b.attention || 0) - (a.attention || 0)).map(familyRow)));
   } else {
     main.push(el('p', { class: 'muted' }, 'No stack packages detected on this machine yet.'));
   }
 
   if (shadows.length) {
+    // Problems only (Stuart 2026-07-17: "just tell me the ones I need to deal with — never an
+    // issue without its resolution on the same line"). Stale rows carry their one-click fix
+    // (the purge:shadows recommendation — evidence, cost, undo); the in-sync majority collapses
+    // to a single verified line with a peel-back for whoever wants the full inventory.
+    const staleRows = shadows.filter((s) => s.stale);
+    const syncCount = shadows.length - staleRows.length;
     main.push(el('aside', { class: 'shadows' },
-      el('p', { class: 'shadows-title' }, 'Shadow copies in the npx cache', chip(`${shadows.length}`, 'cyan')),
-      el('p', { class: 'shadows-sub' },
+      el('p', { class: 'shadows-title' }, 'Shadow copies in the npx cache',
+        staleRows.length ? chip(`${staleRows.length} stale`, 'warn') : chip('all in sync', 'green')),
+      staleRows.length ? el('p', { class: 'shadows-sub' },
         'npx keeps private copies in ', el('code', {}, '~/.npm/_npx'),
-        '. A stale one can quietly answer instead of your newer global install — every command still “works”, which is exactly why it’s invisible.'),
-      shadows.map((s) => el('div', { class: 'shadow-row' },
+        '. A stale one quietly answers instead of your newer install — every command still “works”, which is exactly why it’s invisible. These need dealing with:') : null,
+      ...staleRows.map((s) => el('div', { class: 'shadow-row' },
         el('span', { class: 'shadow-name' }, s.name || '—'),
-        el('span', { class: 'shadow-vers' }, `${s.version ?? '?'} in cache · global `, el('b', {}, s.global ?? '?')),
-        s.stale ? chip('stale', 'warn') : chip('in sync', 'green'),
+        el('span', { class: 'shadow-vers' }, `cache ${s.version ?? '?'} · global `, el('b', {}, s.global ?? '?')),
+        chip('stale', 'warn'),
+        el('button', {
+          class: 'btn-fix', type: 'button',
+          title: 'Jump to the one-click removal below — evidence, cost, and undo included',
+          onclick: () => jumpToRec('purge:shadows'),
+        }, 'remove it ↓'),
         el('span', { class: 'shadow-dir' }, s.dir || ''),
-      ))));
+      )),
+      el('p', { class: 'shadows-ok' },
+        staleRows.length
+          ? `The other ${fmtInt(syncCount)} cached ${syncCount === 1 ? 'copy matches' : 'copies match'} your installs — re-checked on every audit.`
+          : shadows.length === 1
+            ? 'The 1 cached copy matches your install — re-checked on every audit; nothing is hiding stale.'
+            : `All ${fmtInt(shadows.length)} cached copies match your installs — re-checked on every audit; nothing is hiding stale.`),
+      el('details', { class: 'sub' },
+        el('summary', {}, `Peel it back — ${shadows.length === 1 ? 'the 1 cached copy' : `all ${fmtInt(shadows.length)} cached copies`}`),
+        el('div', { class: 'sub-body' },
+          shadows.map((s) => el('div', { class: 'shadow-row' },
+            el('span', { class: 'shadow-name' }, s.name || '—'),
+            el('span', { class: 'shadow-vers' }, `cache ${s.version ?? '?'} · global `, el('b', {}, s.global ?? '?')),
+            s.stale ? chip('stale', 'warn') : chip('in sync', 'green'),
+            el('span', { class: 'shadow-dir' }, s.dir || ''),
+          ))))));
   }
 
   body.replaceChildren(withIllo('stack', ...main));
@@ -1788,18 +1832,37 @@ async function loadTrust() {
 
 async function loadState() {
   try {
+    // Instant first paint from the last good gather, honestly stamped by renderHost's generatedAt —
+    // then the live gather replaces it. The fleet-wide memory scan makes the live call slow, so
+    // without this the page sits blank long enough to read as broken. Recommendations come from the
+    // live call only (same rule as loadStack) so nothing is added twice.
+    try {
+      const fast = await getJSON('/api/state?fast=1');
+      if (fast && fast.fromCache && fast.sections) {
+        const c = fast.sections;
+        renderHost(fast.host, fast.generatedAt);
+        renderWiring(c.wiring);
+        lastMemory = c.memory;
+        renderMemory(c.memory);
+        renderSavings(c.savings);
+        renderSettings(c.config);
+        dismissStandby();
+      }
+    } catch { /* no cache yet — the skeleton narration carries the wait */ }
     const state = await getJSON('/api/state');
     preStateHash = state.preStateHash ?? state.generatedAt ?? null;
     $('#global-error').hidden = true;
     renderHost(state.host, state.generatedAt);
     const s = state.sections || {};
     renderWiring(s.wiring);
+    lastMemory = s.memory;
     renderMemory(s.memory);
     renderSavings(s.savings);
     renderSettings(s.config);
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);
     dismissStandby(); // first cards are hydrated — the standby line has done its job
+    void loadMemoryFleet(); // 100+ stores at ~90ms each — lands after the page is already usable
   } catch (err) {
     dismissStandby(); // don't say "stand by" over an error banner
     showGlobalError(err);
@@ -1813,6 +1876,19 @@ async function loadState() {
     }
     recsSettled('state', false);
   }
+}
+
+// The across-your-projects fleet list opens every memory store on the machine. It is the single
+// slowest thing the console does, so it is fetched on its own and merged into the memory card once
+// it lands — the health score and everything else are already on screen by then.
+async function loadMemoryFleet() {
+  try {
+    const m = await getJSON('/api/memory');
+    if (m && Array.isArray(m.fleet) && lastMemory) {
+      lastMemory = { ...lastMemory, fleet: m.fleet };
+      renderMemory(lastMemory);
+    }
+  } catch { /* the fleet list is a bonus — memory health is already rendered */ }
 }
 
 async function loadStack({ skipCache = false } = {}) {

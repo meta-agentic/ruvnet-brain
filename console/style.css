@@ -1301,3 +1301,8 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   .trust-row { grid-template-columns: minmax(0, 1fr) auto; }
   .trust-val { grid-column: 1 / -1; order: 3; }
 }
+
+/* Stack card: version on the family row (problem rows show installed -> target inline). */
+.fam-ver { font-family: var(--mono, ui-monospace, monospace); font-size: 0.8rem; color: var(--muted, #9aa1ad); margin-right: 8px; }
+.fam-ver.is-behind { color: var(--amber, #f0a830); font-weight: 600; }
+.shadows-ok { font-size: 0.9rem; color: var(--muted, #9aa1ad); margin: 8px 0 4px; }
