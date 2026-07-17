@@ -88,6 +88,28 @@ function robustReadJSON(db, sql) {
 // sites the card warned about were his test fixtures rather than anything Stuart configured.
 const VENDOR = ['/clones/', '/node_modules/', '/vendor/', '/upstream/', '.claude-backup', '_snapshots',
   '/ruvnet-repos/', '/ruvnet_repos/'];
+
+// ── Candidate scan roots (issue #19) ────────────────────────────────────────────────────────────
+// A single hardcoded `~/Code` silently reports "0" on any machine that keeps projects somewhere
+// else (a reporter's `~/source`, `~/dev`, `~/work`, …) — a confident zero that just means "didn't
+// look in the right place". Scan every root that actually exists on THIS machine, plus a user
+// override in config.json (`scanRoots`, absolute paths or relative to $HOME) when present.
+const DEFAULT_SCAN_ROOTS = ['Code', 'code', 'src', 'source', 'projects', 'dev', 'work'];
+function candidateRoots() {
+  const cfg = readJSON(CONFIG_PATH) || {};
+  const configured = Array.isArray(cfg.scanRoots) && cfg.scanRoots.length > 0
+    ? cfg.scanRoots.map((r) => (path.isAbsolute(r) ? r : path.join(HOME, r)))
+    : DEFAULT_SCAN_ROOTS.map((d) => path.join(HOME, d));
+  const seen = new Set();
+  const roots = [];
+  for (const r of configured) {
+    const resolved = path.resolve(r);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    try { if (fs.statSync(resolved).isDirectory()) roots.push(resolved); } catch { /* doesn't exist on this machine — skip silently */ }
+  }
+  return roots;
+}
 function findProjects(root) {
   const out = new Set();
   const walk = (dir, depth) => {
@@ -121,9 +143,22 @@ function classifyCommand(cmd) {
 }
 function wiringSurvey() {
   const sites = [];
-  const projects = findProjects(path.join(HOME, 'Code'));
-  for (const proj of projects) {
-    const projName = proj.replace(HOME + '/Code/', '');
+  // Scan every candidate root (issue #19), de-duped by resolved path — a symlinked or nested root
+  // must never count the same project twice.
+  const seenProjects = new Set();
+  const projects = [];
+  for (const root of candidateRoots()) {
+    for (const proj of findProjects(root)) {
+      const resolved = path.resolve(proj);
+      if (seenProjects.has(resolved)) continue;
+      seenProjects.add(resolved);
+      projects.push({ proj, root });
+    }
+  }
+  for (const { proj, root } of projects) {
+    // Relative to the root it was actually found under, so "myproj" stays "myproj" instead of
+    // becoming an ugly full path when the machine only has one root (the common case).
+    const projName = path.relative(root, proj);
     for (const f of ['.claude/settings.json', '.claude/settings.local.json']) {
       const s = readJSON(path.join(proj, f));
       if (!s?.hooks) continue;
@@ -204,7 +239,19 @@ function probeMemory(projectDir) {
 // machine has 100+. That is far too slow to sit on the page's first paint, so it is its own endpoint
 // (/api/memory) and hydrates late, exactly like the stack audit does.
 function scanFleet() {
-  const stores = findStores();
+  // memory-doctor.mjs's findStores() defaults to ~/Code and cannot be edited here (issue #19) — so
+  // pass it every candidate root explicitly and de-dupe (it also always appends a couple of known
+  // extra paths regardless of root, which the Set below folds together instead of duplicating).
+  const seen = new Set();
+  const stores = [];
+  for (const root of candidateRoots()) {
+    for (const db of findStores(root)) {
+      const resolved = path.resolve(db);
+      if (seen.has(resolved)) continue;
+      seen.add(resolved);
+      stores.push(db);
+    }
+  }
   const fleet = [];
   for (const db of stores) {
     const d = diagnose(db);
@@ -367,15 +414,24 @@ function saveConsoleCache() {
 function refreshFleetCache() {
   const projects = [];
   let total = 0;
-  for (const s of findMemoryStores(path.join(HOME, 'Code'))) {
-    const n = Number(robustRead(s.db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0);
-    if (n > 0) {
-      // MAX(updated_at) = when this project was last actively worked — the memory store doubles
-      // as the attention signal (relevance ordering, Stuart 2026-07-15).
-      const lastTouched = Number(robustRead(s.db, 'SELECT MAX(updated_at) FROM memory_entries').value || 0);
-      // rel = the ~/Code-relative path — the SAME key reconcile:<id> recommendations use.
-      projects.push({ name: path.basename(s.project), rel: path.relative(path.join(HOME, 'Code'), s.project), memories: n, lastTouched });
-      total += n;
+  const seen = new Set();
+  // Scan every candidate root (issue #19) — this is what made machine-wide totals read 0 on a
+  // machine whose projects live under ~/source instead of ~/Code.
+  for (const root of candidateRoots()) {
+    for (const s of findMemoryStores(root)) {
+      const resolved = path.resolve(s.project);
+      if (seen.has(resolved)) continue; // a project visible under two roots (e.g. a symlink) counts once
+      seen.add(resolved);
+      const n = Number(robustRead(s.db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0);
+      if (n > 0) {
+        // MAX(updated_at) = when this project was last actively worked — the memory store doubles
+        // as the attention signal (relevance ordering, Stuart 2026-07-15).
+        const lastTouched = Number(robustRead(s.db, 'SELECT MAX(updated_at) FROM memory_entries').value || 0);
+        // rel = the root-relative path — the SAME key reconcile:<id> recommendations use (wiringSurvey
+        // computes projName the same way, relative to whichever root the project was found under).
+        projects.push({ name: path.basename(s.project), rel: path.relative(root, s.project), memories: n, lastTouched });
+        total += n;
+      }
     }
   }
   projects.sort((a, b) => b.memories - a.memories);
@@ -458,13 +514,20 @@ function gatherRouterEngine() {
       try { const d = JSON.parse(l); decisions.push({ ts: d.ts, model: d.model, tier: d.tier, routedBy: d.routedBy, reason: d.reason }); } catch { /* skip bad line */ }
     }
   } catch { /* no decisions yet */ }
+  const cfg = readJSON(CONFIG_PATH) || {};
   // User-constraint detection (Brain-side by design — a fact about THIS user, not routing logic):
   // an OpenRouter key decides whether metered cross-provider candidates are even reachable.
   let openrouterKey = !!process.env.OPENROUTER_API_KEY;
-  if (!openrouterKey) {
-    const cfg = readJSON(CONFIG_PATH) || {};
-    openrouterKey = !!(cfg.openrouterKey && String(cfg.openrouterKey).length > 8);
-  }
+  if (!openrouterKey) openrouterKey = !!(cfg.openrouterKey && String(cfg.openrouterKey).length > 8);
+  // House (issue #21): three mechanisms used to disagree — Settings wrote config.json's `provider`,
+  // but the chip strip derived "yours" from whichever pool candidate happened to be
+  // subscriptionCovered first, sourced from profile.json (a file nothing in the console writes). The
+  // user's Settings choice is now the single source of truth, via the SAME detectProvider() the
+  // savings.utilization frontier calc already uses (config → env → catalog default) — so this and
+  // the frontier calc can never disagree either.
+  let house;
+  try { house = detectProvider(loadCatalog(), { provider: cfg.provider }); }
+  catch { house = { provider: cfg.provider && cfg.provider !== 'auto' ? cfg.provider : 'anthropic', source: 'default' }; }
   return {
     engine: {
       package: '@metaharness/router', installed,
@@ -474,6 +537,7 @@ function gatherRouterEngine() {
     },
     keys: { openrouter: openrouterKey },
     profile: { present: !!profile, path: PROFILE_PATH.replace(os.homedir(), '~') },
+    house,
     pool: candidates
       .map((c) => ({
         id: c.id, provider: c.provider, tier: c.tier || null, harness: c.harness || [],
@@ -588,6 +652,9 @@ function gatherState(cwd, { fleet = true } = {}) {
   try { memory.learnings = learnings(); } catch { memory.learnings = null; }
   const savings = gatherSavings();
   const cfgNow = readJSON(CONFIG_PATH) || {};
+  // issue #20: the Savings card's "Turn on smart routing" CTA must reflect what was actually saved —
+  // same default rule gatherConfig() uses below, so this and the Settings tab never disagree.
+  savings.routing = cfgNow.routing === 'off' ? 'off' : 'auto';
   try { savings.routerEngine = gatherRouterEngine(); } catch { savings.routerEngine = null; }
   try {
     const cat = loadCatalog();
@@ -661,6 +728,16 @@ function runNode(scriptRelPath, args) {
   return { ok: r.status === 0, code: r.status, log: `${r.stdout || ''}${r.stderr || ''}`.trim().slice(-4000) };
 }
 
+// A wiring recommendation's `project` id is relative to whichever candidate root it was found under
+// (issue #19) — reconstruct the absolute path by checking each root, so reconcile/undo can act on a
+// project under ~/source just as well as one under ~/Code.
+function resolveProjectDir(project) {
+  for (const root of candidateRoots()) {
+    const p = path.join(root, project);
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(HOME, 'Code', project); // last-resort fallback: the previous fixed behavior
+}
 // Re-derive the currently-valid recommendation set, so apply can only ever act on something STILL true.
 function currentValidIds() {
   const ids = new Set();
@@ -685,7 +762,7 @@ function apply(ids) {
     } else if (id.startsWith('reconcile:')) {
       const project = id.slice('reconcile:'.length);
       const undoToken = journalUndo({ kind: 'restore-backup', project, id });
-      const res = runNode('scripts/reconcile-project.mjs', ['--apply', '--project', path.join(HOME, 'Code', project)]);
+      const res = runNode('scripts/reconcile-project.mjs', ['--apply', '--project', resolveProjectDir(project)]);
       results.push({ id, ...res, undoToken });
     } else {
       results.push({ id, ok: false, log: `Unknown recommendation id: ${id}` });
@@ -724,7 +801,7 @@ function undo(undoToken) {
     return { ok: r.status === 0, log: r.status === 0 ? `reinstalled ${entry.pkg}@${entry.prevVersion}` : (r.stderr || '').slice(-800) };
   }
   if (entry.kind === 'restore-backup' && entry.project) {
-    const dir = path.join(HOME, 'Code', entry.project);
+    const dir = resolveProjectDir(entry.project);
     let restored = 0;
     for (const f of ['.claude/settings.json', '.claude/settings.local.json', '.mcp.json']) {
       const target = path.join(dir, f);

@@ -70,7 +70,14 @@ const WORKTREE_ROOT = process.env.ISSUE_FIX_WORKTREE_DIR
 const LOCK_PATH = process.env.ISSUE_FIX_LOCK
   || path.join(os.homedir(), '.claude', 'ruvnet-brain', 'issue-fix.lock');
 
-const COOLDOWN_HOURS = Number(process.env.ISSUE_FIX_COOLDOWN_HOURS || 24); // one attempt per issue per 24h
+const COOLDOWN_HOURS = Number(process.env.ISSUE_FIX_COOLDOWN_HOURS || 24); // one SUCCESSFUL attempt per issue per 24h
+// A FAILED attempt (no branch, no comment — the fixer produced nothing) must NOT hide behind the
+// 24h cooldown. It retries within the hour and, until it succeeds, keeps alerting loudly. Silent
+// burial of a failed fix under a long cooldown is exactly how 6 real bugs read as "board is clean".
+const FAILED_RETRY_HOURS = Number(process.env.ISSUE_FIX_FAILED_RETRY_HOURS || 1);
+// The ONLY outcomes that count as a real fix — a verifiable artifact exists. Anything else is a
+// failure, recorded as one, retried soon, and alerted. "completed" is never asserted; it is derived.
+const SUCCESS_OUTCOMES = new Set(['branch-pushed', 'triage-comment']);
 const TIMEOUT_MS = Number(process.env.ISSUE_FIX_TIMEOUT_MS || 15 * 60_000); // 15 min wall-clock
 const GRACE_MS = Number(process.env.ISSUE_FIX_GRACE_MS || 20_000); // SIGTERM -> SIGKILL grace
 const MAX_TURNS = Number(process.env.ISSUE_FIX_MAX_TURNS || 30);
@@ -322,7 +329,13 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
     const rec = fixState[String(issue.number)];
     if (!rec) return true;
     const last = Date.parse(rec.attemptedAt);
-    return !Number.isFinite(last) || (now - last) / 3_600_000 >= COOLDOWN_HOURS;
+    if (!Number.isFinite(last)) return true;
+    // A real success gets the full 24h cooldown; a FAILED (or legacy hardcoded-'completed' with a
+    // non-success outcome) attempt retries within the hour. This is what stops a broken fix from
+    // being buried — an unfixed issue comes back around fast, loudly, until an artifact exists.
+    const isRealSuccess = rec.status === 'completed' && SUCCESS_OUTCOMES.has(rec.outcome);
+    const cooldown = isRealSuccess ? COOLDOWN_HOURS : FAILED_RETRY_HOURS;
+    return (now - last) / 3_600_000 >= cooldown;
   });
 
   const queue = dryRun ? candidates : candidates.slice(0, MAX_PER_RUN);
@@ -371,11 +384,17 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
       CURRENT.wtPath = null;
     }
 
+    // status is DERIVED from a verifiable artifact, never asserted. verifyOutcome() already checked
+    // reality (does origin/issue-fix/<N> exist? did a new comment post?). If neither, this attempt
+    // FAILED — say so, so the cooldown retries it soon and the alert screams instead of whispering.
+    // (2026-07-17: this line used to hardcode 'completed' regardless of outcome — it marked 6 issues
+    // done while producing zero branches/comments/logs. That is faking, not fixing. Never again.)
+    const succeeded = SUCCESS_OUTCOMES.has(outcome.outcome);
     fixState[String(issue.number)] = {
       attemptedAt: new Date(now).toISOString(),
-      status: 'completed',
+      status: succeeded ? 'completed' : 'failed',
       outcome: outcome.outcome,
-      branch: outcome.branch || null,
+      branch: succeeded ? (outcome.branch || null) : null,
       logPath,
     };
     state[FIX_NS] = fixState;
