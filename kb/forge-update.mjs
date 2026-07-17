@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const KB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.join(KB_DIR, 'SOURCE.json');
@@ -162,7 +162,32 @@ async function main() {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `forge-update-${local.kbName}-`));
     const zipPath = path.join(tmp, 'bundle.zip'), extractDir = path.join(tmp, 'extracted');
     fs.writeFileSync(zipPath, buf); fs.mkdirSync(extractDir, { recursive: true });
-    console.log(`  downloaded ${(buf.length / 1e6).toFixed(1)} MB; extracting...`);
+    console.log(`  downloaded ${(buf.length / 1e6).toFixed(1)} MB.`);
+
+    // ── SIGNED AUTO-APPLY (SEC-0010 #6) — verify BEFORE extracting executable code ────────────────
+    // Trust root = the Ed25519 public key ALREADY on disk from the last good install (KB_DIR/keys/…),
+    // NOT a key riding inside this download. So a tampered bundle cannot supply its own key: we check
+    // the new zip against the key we already trusted. Fail-closed — any doubt, refuse, local untouched.
+    const verifierPath = path.join(KB_DIR, 'verify-bundle.mjs');
+    const keyPath = path.join(KB_DIR, 'keys', 'ruvnet-brain-signing.pub.pem');
+    if (fs.existsSync(verifierPath) && fs.existsSync(keyPath)) {
+      let sigBuf;
+      try { sigBuf = await fetchBuffer(`${bundleUrl}.sig`); }
+      catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] cannot fetch the signature (${bundleUrl}.sig): ${e.message}\n  REFUSING to apply an unverifiable bundle — your current brain is untouched.`, 3); }
+      const sigPath = path.join(tmp, 'bundle.zip.sig');
+      fs.writeFileSync(sigPath, sigBuf);
+      const { verifyBundle } = await import(pathToFileURL(verifierPath).href);
+      const v = verifyBundle(zipPath, sigPath, keyPath);
+      if (!v.ok) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] ✗ SIGNATURE VERIFICATION FAILED: ${v.reason}\n  REFUSING to apply — the download may be tampered. Your current brain is untouched.`, 4); }
+      console.log(`  ✓ signature verified — ${v.reason}`);
+    } else {
+      // Bootstrap: a bundle from before signed auto-apply has no verifier/key on disk yet. It can't
+      // check a signature it never shipped the means to check. Apply this once (the new bundle INSTALLS
+      // the verifier + key), so every auto-update AFTER this one is signature-checked. Installer-driven
+      // updates (`npx ruvnet-brain@latest --update`) verify via the npm package's own key regardless.
+      console.log(`  ⚠ this brain predates signed auto-apply — applying UNVERIFIED once to install the verifier; every auto-update after this is signature-checked.`);
+    }
+    console.log(`  extracting...`);
     try { execFileSync('unzip', ['-q', '-o', zipPath, '-d', extractDir], { stdio: 'inherit' }); }
     catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] unzip failed: ${e.message} — local files untouched.`); }
     const backup = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);

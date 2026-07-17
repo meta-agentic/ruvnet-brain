@@ -207,6 +207,28 @@ for (const t of tools) cp(t, OUT, { required: true });
 // without it simply ships a brain whose `forge-update.mjs --check` reports "self-update not configured".
 cp('SOURCE.json', OUT);
 
+// releaseTag stamp (2026-07-17). Without this SOURCE.json carries NO version, so every install's
+// telemetry ping sent v:"unknown" and the admin page could never show who is stale — the whole point
+// of the counter. Stamp the product version here so installs report a real number; a release workflow
+// that knows the exact git tag may overwrite this with the bundle's own Release tag.
+try {
+  const sj = path.join(OUT, 'SOURCE.json');
+  const doc = JSON.parse(fs.readFileSync(sj, 'utf8'));
+  doc.releaseTag = getVersionTag(); // e.g. "v3.4.1-dev" — real, never "unknown"
+  fs.writeFileSync(sj, JSON.stringify(doc, null, 2));
+} catch (e) { console.error(`[build-bundle] WARN: could not stamp releaseTag into SOURCE.json (${e.message}) — installs will report 'unknown' until fixed.`); }
+
+// SIGNED AUTO-APPLY trust root (SEC-0010 #6, 2026-07-17). The self-updater must VERIFY a downloaded
+// bundle's Ed25519 signature before extracting executable code over the user's install. For that it
+// needs the verifier AND the public key ON DISK — placed here by a trusted install, so the key the
+// updater trusts is the one from the LAST good bundle, never one riding inside the (possibly tampered)
+// download. verify-bundle.mjs lives in scripts/ and the key in keys/ — both outside kb/, so copy by
+// absolute path. Required: shipping a bundle that can't verify its own successor re-opens the exact
+// hole this closes.
+cp(path.join(ROOT, 'scripts', 'verify-bundle.mjs'), OUT, { required: true });
+fs.mkdirSync(path.join(OUT, 'keys'), { recursive: true });
+cp(path.join(ROOT, 'keys', 'ruvnet-brain-signing.pub.pem'), path.join(OUT, 'keys'), { required: true });
+
 // ---- manifest ----------------------------------------------------------------------------------
 const builtLower = new Set(built.map((b) => b.toLowerCase()));
 const pendingRepos = regFlat.filter((r) => !builtLower.has(r.name.toLowerCase())).map((r) => ({ name: r.name, tier: r.tier }));

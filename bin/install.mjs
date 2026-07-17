@@ -68,6 +68,7 @@ const FLAG_DEMO = argv.includes('--demo'); // guided, real (non-fabricated) walk
 const FLAG_FEEDBACK = argv.includes('--feedback'); // prefill a GitHub Discussion (version + health, nothing private) and open it
 // ── freshness flags — invoke/schedule the SELF-UPDATER the bundle already ships (kb/forge-update.mjs) ──
 const FLAG_UPDATE = argv.includes('--update'); // one-shot: pull the latest Release bundle into the installed brain now
+const FLAG_AUTO = argv.includes('--auto'); // with --update: also enroll in Evergreen auto-update, so it's never run by hand again
 const FLAG_ENABLE_NIGHTLY = argv.includes('--enable-nightly'); // schedule that update nightly (macOS LaunchAgent)
 const FLAG_DISABLE_NIGHTLY = argv.includes('--disable-nightly'); // remove the nightly schedule
 const FLAG_NO_NIGHTLY_PROMPT = argv.includes('--no-nightly-prompt'); // don't offer nightly auto-updates at the end of an install
@@ -78,6 +79,8 @@ const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVe
 const FLAG_NO_STACK = argv.includes('--no-stack'); // skip the toolkit offer entirely
 const FLAG_ENHANCE_CLAUDE_MD = argv.includes('--enhance-claude-md'); // add the CLAUDE.md section without prompting
 const FLAG_NO_ENHANCE = argv.includes('--no-enhance'); // skip the CLAUDE.md offer entirely
+const FLAG_STATUSLINE = argv.includes('--statusline'); // opt in to the status-bar version segment, non-interactively
+const FLAG_NO_STATUSLINE = argv.includes('--no-statusline'); // decline the status-bar offer without prompting
 // --version <tag> forces a specific Release tag (e.g. --version v0.5.0-dev)
 const versionIdx = argv.indexOf('--version');
 const FORCED_VERSION =
@@ -916,7 +919,15 @@ function runUpdate() {
     console.error(`\n${c.red('✗ update failed to launch:')} ${r.error.message}`);
     process.exit(1);
   }
-  process.exit(r.status === null ? 1 : r.status); // exit with the updater's own verdict
+  const updateStatus = r.status === null ? 1 : r.status;
+  // `--update --auto` = update now AND enroll in Evergreen, so this is the LAST time it's ever run by
+  // hand. Only enroll if the update itself succeeded — never promise "you're set forever" on a failed
+  // update. enableNightly() prints its own real verification (plist path + launchctl result).
+  if (updateStatus === 0 && FLAG_AUTO) {
+    info(c.dim("\n--auto set: enrolling in Evergreen auto-update so you never run this again…\n"));
+    enableNightly(); // exits on its own with verified output; if it returns, fall through to the update verdict
+  }
+  process.exit(updateStatus); // exit with the updater's own verdict
 }
 
 function enableNightly() {
@@ -1532,6 +1543,180 @@ async function offerClaudeMd() {
   }
 }
 
+// ── step: OPT-IN status-bar version segment — "which RuvNet Brain am I on?" at a glance ───────────
+// Claude Code renders its status bar from `statusLine.command` in ~/.claude/settings.json (verified
+// live: code.claude.com/docs/en/statusline — `{ type: "command", command: "<script>", padding? }`;
+// Claude Code pipes JSON session data to the command's stdin, and whatever it prints to stdout
+// becomes the line). Users often already have a rich statusline (git branch, context %, other tool
+// versions) — silently replacing it would be exactly the clobber this installer refuses to do
+// anywhere else. So: detect first, and only ADD a statusLine when NONE exists. If one is already
+// wired, settings.json is never touched — we hand back the helper's path so it can be folded into
+// their own script instead. Asked once ever (pref file, same contract as .telemetry-consent): a
+// "no", or a silent non-interactive run with no explicit flag, never gets re-asked or half-applied.
+// .cjs (CommonJS), not .mjs: measured live on this machine (Node 22) — the ESM loader costs the
+// statusline ~4-5ms extra per invocation versus a plain `require()` script (median 50.4ms vs
+// 46.7ms across 30 interleaved runs of otherwise-identical logic), which is the difference between
+// sitting under the <50ms budget and blowing past it on every single prompt. `.cjs` forces
+// CommonJS unambiguously regardless of any stray package.json a user's HOME might contain.
+const STATUSLINE_HELPER_NAME = 'ruvnet-brain-statusline.cjs';
+const statuslineHelperPath = () => path.join(telemetryStateDir(), STATUSLINE_HELPER_NAME);
+const statuslinePrefPath = () => path.join(telemetryStateDir(), '.statusline-pref');
+const settingsJsonPath = () => path.join(os.homedir(), '.claude', 'settings.json');
+
+// Self-contained, dependency-free script Claude Code's statusLine command runs on EVERY prompt — it
+// must stay well under budget, so it's a single sync read with no imports beyond node builtins.
+// Reads the version LIVE from the installed bundle's SOURCE.json (releaseTag) — never hardcoded, so
+// it always matches whatever is actually on disk. Degrades to silent empty output on ANY failure
+// (brain not installed, file unreadable, malformed JSON) — a missing/broken brain must never break
+// the rest of the user's statusline.
+const STATUSLINE_HELPER_SRC = `#!/usr/bin/env node
+// ruvnet-brain-statusline.cjs — one segment for Claude Code's statusLine command.
+// See https://code.claude.com/docs/en/statusline. Written by the installer's --statusline offer.
+// Prints "RuvNet Brain v<version>" read LIVE from the installed bundle's SOURCE.json — never
+// hardcoded. Any failure (brain missing, unreadable, malformed JSON) degrades to empty output so
+// a broken or missing brain can never break the rest of the status line. CommonJS on purpose —
+// measurably faster to start than ESM for a script this runs on every single prompt.
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+try {
+  const kbDir = process.env.RUVNET_BRAIN_KB || path.join(os.homedir(), '.cache', 'ruvnet-brain', 'kb');
+  const j = JSON.parse(fs.readFileSync(path.join(kbDir, 'SOURCE.json'), 'utf8'));
+  const raw = String(j.releaseTag || '');
+  if (/^[A-Za-z0-9._-]{1,32}$/.test(raw)) {
+    process.stdout.write('RuvNet Brain ' + (raw.startsWith('v') ? raw : 'v' + raw));
+  }
+} catch { /* not installed / unreadable — print nothing, never break the statusline */ }
+`;
+
+function writeStatuslineHelper() {
+  const dst = statuslineHelperPath();
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.writeFileSync(dst, STATUSLINE_HELPER_SRC, { mode: 0o755 });
+  return dst;
+}
+
+// Pure read — NEVER writes. Exported so detection is independently testable
+// (RUVNET_BRAIN_IMPORT_ONLY=1) with zero risk of mutating a real settings.json.
+export function detectStatusLine(settingsPath = settingsJsonPath()) {
+  let raw;
+  try {
+    raw = fs.readFileSync(settingsPath, 'utf8');
+  } catch {
+    return { path: settingsPath, exists: false, hasStatusLine: false, command: null, parseError: false, json: {} };
+  }
+  try {
+    const j = raw.trim() ? JSON.parse(raw) : {};
+    const sl = j && typeof j === 'object' ? j.statusLine : null;
+    const command = sl && typeof sl.command === 'string' ? sl.command : null;
+    return { path: settingsPath, exists: true, hasStatusLine: Boolean(command), command, parseError: false, json: j };
+  } catch {
+    return { path: settingsPath, exists: true, hasStatusLine: false, command: null, parseError: true, json: null };
+  }
+}
+
+// Same `.bak-<ISO timestamp>` convention used elsewhere in this project (see onboarding-console.mjs's
+// config backup) — always taken before an EXISTING file is touched, never before a brand-new one.
+function backupSettingsJson(settingsPath) {
+  const backup = `${settingsPath}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  fs.copyFileSync(settingsPath, backup);
+  return backup;
+}
+
+function writeSettingsStatusLine(detected, command) {
+  const backup = detected.exists ? backupSettingsJson(detected.path) : null;
+  const next = { ...(detected.json || {}), statusLine: { type: 'command', command } };
+  fs.mkdirSync(path.dirname(detected.path), { recursive: true });
+  fs.writeFileSync(detected.path, JSON.stringify(next, null, 2) + '\n');
+  return backup;
+}
+
+// Only called after explicit consent. NEVER overwrites an existing statusLine — detectStatusLine()
+// is the single source of truth for "is one already there", checked fresh right before any write.
+function applyStatusline() {
+  const helperPath = writeStatuslineHelper();
+  ok(`installed the version-segment script → ${c.bold(helperPath)}`);
+  const command = `node "${helperPath}"`;
+
+  const detected = detectStatusLine();
+
+  if (detected.parseError) {
+    warn(`${detected.path} isn't valid JSON — leaving it untouched (never merging into a file I can't parse).`);
+    info(`Add this to it yourself once it's fixed:`);
+    info(`  ${c.bold(`"statusLine": { "type": "command", "command": "${command}" }`)}`);
+    return 'manual-parse-error';
+  }
+
+  if (detected.hasStatusLine) {
+    ok(`you already have a status line (${c.dim(detected.command)}) — leaving it exactly as is.`);
+    info(`To fold the brain version in, have your own script also run this and print the result:`);
+    info(`  ${c.bold(command)}`);
+    return 'existing-preserved';
+  }
+
+  try {
+    const backup = writeSettingsStatusLine(detected, command);
+    if (backup) ok(`backed up your settings to ${c.bold(backup)} before editing`);
+    ok(`status line set in ${c.bold(detected.path)} — restart Claude Code to see it`);
+    return 'set';
+  } catch (e) {
+    warn(`couldn't write ${detected.path} (${e.message}) — add it yourself:`);
+    info(`  ${c.bold(`"statusLine": { "type": "command", "command": "${command}" }`)}`);
+    return 'write-error';
+  }
+}
+
+// Exported (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerTelemetry). Never throws — the
+// caller also guards, because a finished install must never be broken by an optional offer.
+export async function offerStatusline() {
+  if (TEST_MODE) return 'suppressed'; // tests: never prompt, never write, never touch settings.json
+  const prefPath = statuslinePrefPath();
+  if (fs.existsSync(prefPath)) {
+    // asked once ever — respect the answer, never re-ask. (Delete the file to be asked again.)
+    let pref = '';
+    try { pref = fs.readFileSync(prefPath, 'utf8').trim().toLowerCase(); } catch { /* treat as declined */ }
+    return pref === 'yes' ? 'already-on' : 'already-set';
+  }
+
+  if (FLAG_NO_STATUSLINE) {
+    try { fs.mkdirSync(telemetryStateDir(), { recursive: true }); fs.writeFileSync(prefPath, 'no\n'); } catch { /* best-effort */ }
+    return 'declined-flag';
+  }
+
+  step(
+    'Optional: show the brain version in your status bar',
+    "so you can always tell at a glance which RuvNet Brain version you're on",
+  );
+  info(`Adds a small ${c.bold('"RuvNet Brain vX.Y.Z"')} segment, read live from your installed brain — it`);
+  info(`updates itself the moment the brain updates. ${c.bold('Never overwrites an existing status line.')}`);
+
+  const interactive = process.stdin.isTTY || FLAG_YES || FLAG_STATUSLINE;
+  if (!interactive) {
+    // No terminal to ask on, and no explicit flag either — skip WITHOUT recording an answer, so a
+    // future interactive (or flagged) run still gets a real chance to ask.
+    info(`No interactive terminal here, so I won't assume — skipping for now.`);
+    info(`Add it any time:  ${c.bold('npx ruvnet-brain --statusline')}`);
+    return 'not-asked';
+  }
+
+  const yes = FLAG_STATUSLINE || (await ask('Add a RuvNet Brain version segment to your Claude Code status bar?', false));
+
+  try {
+    fs.mkdirSync(telemetryStateDir(), { recursive: true });
+    fs.writeFileSync(prefPath, yes ? 'yes\n' : 'no\n');
+  } catch (e) {
+    warn(`couldn't record the answer (${e.message})`);
+  }
+
+  if (!yes) {
+    info(`No problem — add it any time:  ${c.bold('npx ruvnet-brain --statusline')}`);
+    return 'declined';
+  }
+
+  return applyStatusline();
+}
+
 // ── final success block ──────────────────────────────────────────────────────────────────────────
 function success({ cacheDir, isCustom, plugin, env, nightly }) {
   const line = '─'.repeat(64);
@@ -1646,6 +1831,10 @@ Usage:
   node bin/install.mjs --no-stack          Don't offer to add Ruflo / RuVector
   node bin/install.mjs --enhance-claude-md Add a RuvNet-Brain section to ~/.claude/CLAUDE.md (no prompt)
   node bin/install.mjs --no-enhance        Don't offer the CLAUDE.md section
+  node bin/install.mjs --statusline        Add a "RuvNet Brain vX.Y.Z" segment to your Claude Code
+                              status bar (no prompt). Never overwrites an existing status line — if
+                              you already have one, this only prints a snippet to fold it into yours.
+  node bin/install.mjs --no-statusline     Don't offer the status-bar segment
   node bin/install.mjs --yes, -y           Accept every optional offer (good for scripted installs)
 
 Env:
@@ -1755,6 +1944,9 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // Anonymous usage counts — OPT-IN, asked once ever, right after the nightly offer. Same rule:
   // an optional offer can never break a finished install.
   try { await offerTelemetry(cacheDir); } catch { /* fail-private: unanswered = OFF */ }
+  // Status-bar version segment — OPT-IN, asked once ever, never clobbers an existing statusline.
+  // Same rule: an optional offer can never break a finished install.
+  try { await offerStatusline(); } catch { /* non-fatal — a status-bar nicety must never break the install */ }
 
   success({ cacheDir, isCustom, plugin, env, nightly });
 })().catch((e) => {
