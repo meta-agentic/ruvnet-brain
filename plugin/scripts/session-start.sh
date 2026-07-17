@@ -85,6 +85,34 @@ if [ ! -f "$CONSOLE_OFFERED" ]; then
   echo "If NO: one gracious line — \"any time: /rvbc\" — and never offer again."
 fi
 
+# ── Open-issue surfacer (2026-07-17): issues stacked to 29h unseen because the only alert channel
+# was ntfy (a phone push, easy to miss). The session banner is the one channel the maintainer cannot
+# miss. issue-watch.mjs writes ~/.cache/ruvnet-brain/open-issues.json each hourly run; this reads it
+# and surfaces breaching issues at session start. Best-effort and fail-silent — a jq/read failure
+# emits nothing. Only lights up for whoever RUNS the watcher (the maintainer); downloaders have no
+# such job, so the file never exists for them and this stays quiet.
+ISSUE_STATUS="$HOME/.cache/ruvnet-brain/open-issues.json"
+if [ -f "$ISSUE_STATUS" ] && command -v node >/dev/null 2>&1; then
+  ISSUE_LINE=$(node -e '
+    try {
+      const fs=require("fs");
+      const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      // stale guard: ignore a snapshot older than 6h (the watcher runs hourly; 6h means it stopped)
+      if (!s.at || (Date.now()-new Date(s.at).getTime()) > 6*3600*1000) process.exit(0);
+      const breaches=(s.issues||[]).filter(i=>i.breach);
+      if (!breaches.length) process.exit(0);
+      breaches.sort((a,b)=>b.ageHours-a.ageHours);
+      const top=breaches.slice(0,4).map(i=>`#${i.number} (${i.ageHours}h) ${String(i.title).slice(0,64)}`).join(" · ");
+      console.log(`${breaches.length} open issue(s) past SLA on ${s.repo}: ${top}${breaches.length>4?" · +"+(breaches.length-4)+" more":""}`);
+    } catch { /* fail-silent */ }
+  ' "$ISSUE_STATUS" 2>/dev/null)
+  if [ -n "$ISSUE_LINE" ]; then
+    echo "[RuvNet Brain — OPEN ISSUES need attention (surface this to the maintainer, once, near the top)]"
+    echo "$ISSUE_LINE"
+    echo "These are real user-filed bugs sitting past the response SLA. Mention them plainly so they do not stack unseen; offer to fix them (gh issue list --state open for detail)."
+  fi
+fi
+
 # ── MetaHarness router: the ONE-LINER OFFER (Stuart's exact UX, 2026-07-12): offer yes/no → on
 # yes, ask two questions → then SHOW the user their recommended path (zero-cost options + what the
 # router uses when work must go out to a paid API). Offered at most once ever per machine; without

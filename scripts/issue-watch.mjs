@@ -31,6 +31,10 @@ const OWNER_LOGIN = 'stuinfla';
 const SLA_HOURS = 4;
 const STATE_PATH = process.env.ISSUE_WATCH_STATE
   || path.join(os.homedir(), '.claude', 'ruvnet-brain', 'issue-watch-state.json');
+// A compact, always-current snapshot the SessionStart hook surfaces (2026-07-17). ntfy alerts are
+// easy to miss — issues stacked unseen for 29h precisely because the only channel was the phone.
+// The session banner is a channel the maintainer cannot miss; this file is how it learns the count.
+const STATUS_PATH = path.join(os.homedir(), '.cache', 'ruvnet-brain', 'open-issues.json');
 const GH_BIN = process.env.GH_BIN || 'gh';
 
 function ghJson(args) {
@@ -166,6 +170,22 @@ async function main() {
       ? `${breaches} of ${output.results.length} open issue(s) are in SLA breach.`
       : `All ${output.results.length} open issue(s) are within the ${SLA_HOURS}h SLA.`);
     if (dryRun) console.log('(dry-run: no ntfy pushed, no state file written)');
+  }
+
+  // Write the snapshot the SessionStart hook reads. Best-effort — a status-file failure must never
+  // fail the watcher (whose real job, alerting, already succeeded above).
+  if (!dryRun) {
+    try {
+      const issues = output.results.map((r) => ({
+        number: r.number, title: r.title, ageHours: Math.round(r.ageHours),
+        breach: !!r.breach, url: `https://github.com/${REPO}/issues/${r.number}`,
+      }));
+      fs.mkdirSync(path.dirname(STATUS_PATH), { recursive: true });
+      fs.writeFileSync(STATUS_PATH, JSON.stringify({
+        at: new Date().toISOString(), repo: REPO,
+        open: issues.length, breaches: issues.filter((i) => i.breach).length, issues,
+      }, null, 2));
+    } catch { /* status file is best-effort; never break the watcher */ }
   }
 
   // Finding a breach is the watcher doing its job — exit 0. Only a real execution error is a failure
