@@ -24,7 +24,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawnSync, execFileSync, spawn } from 'node:child_process';
 
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
@@ -310,6 +310,47 @@ function gatherConfig() {
 let ACTIVITY_MACHINE_CACHE = null;
 let FLEET_REFRESHING = false;
 const CONSOLE_CACHE_PATH = path.join(HOME, '.cache/ruvnet-brain/console-cache.json');
+
+// ── Warm-cache serving (2026-07-17, the demo-hang fix) ─────────────────────────────────────────────
+// Every read-model here does multi-second synchronous work: gatherState ~13s, gatherStack ~22s,
+// scanFleet ~40s+ (each opens 100+ SQLite stores or walks ~/Code). Node is single-threaded, so a
+// SINGLE inline compute freezes the WHOLE server — which is exactly why fresh loads returned nothing
+// (curl saw 000) roughly one request in three while a scan held the event loop. setImmediate does
+// NOT help: deferring synchronous work still blocks the loop when it finally runs.
+// The fix: the request handler NEVER computes inline once a cache exists. It serves the last cache
+// (instant, a file read) and kicks a DETACHED CHILD PROCESS (`--refresh-cache`) to recompute off the
+// server's event loop entirely. A truly cold machine (no cache at all) eats ONE inline compute to
+// seed the cache, then is warm forever. Caches persist across restarts, so cold is rare.
+const STATE_CACHE  = path.join(CONFIG_DIR, 'state-cache.json');
+const STACK_CACHE  = path.join(CONFIG_DIR, 'stack-audit-cache.json');
+const MEMORY_CACHE = path.join(CONFIG_DIR, 'memory-cache.json');
+const SELF = fileURLToPath(import.meta.url);
+let LAST_REFRESH_KICK = 0;
+function writeCache(file, at, data) {
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ at, data })); }
+  catch { /* a cache write must never break a response */ }
+}
+function kickRefresh() {
+  const now = Date.now();
+  if (now - LAST_REFRESH_KICK < 15000) return;   // debounce: at most one background refresh / 15s
+  LAST_REFRESH_KICK = now;
+  try {
+    const child = spawn(process.execPath, [SELF, '--refresh-cache'], { detached: true, stdio: 'ignore', cwd: REPO });
+    child.unref();   // let it outlive this request; it writes the caches and exits on its own
+  } catch { /* best-effort: a failed spawn just means the cache ages until the next kick */ }
+}
+// Serve <file>'s cached data instantly; on a cold miss, compute once via <compute>, seed the cache,
+// and serve that. Always kicks a background refresh so the next reader gets fresher data.
+function serveCached(res, file, compute, decorate = (d) => d) {
+  let c = readJSON(file);
+  if (!c || !c.data) {
+    try { const { at, data } = compute(); writeCache(file, at, data); c = { at, data }; }
+    catch (e) { return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) })); }
+  } else {
+    kickRefresh();
+  }
+  return sendJSON(res, 200, { ...decorate(c.data), fromCache: true, cachedAt: c.at });
+}
 function loadConsoleCache() {
   try {
     const j = JSON.parse(fs.readFileSync(CONSOLE_CACHE_PATH, 'utf8'));
@@ -727,19 +768,23 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     }
     try {
       const url = req.url.split('?')[0];
-      if (req.method === 'GET' && url === '/api/state' && /[?&]fast=1/.test(req.url)) {
-        const c = readJSON(path.join(CONFIG_DIR, 'state-cache.json'));
-        return sendJSON(res, 200, c && c.data ? { ...c.data, token: TOKEN, fromCache: true, cachedAt: c.at } : { fromCache: false });
+      // Heavy read-models: ALWAYS cache-first (fast=1 or not — both land here now). The handler
+      // never blocks the event loop; kickRefresh() recomputes in a detached child. See writeCache/
+      // serveCached above and the --refresh-cache CLI mode. TOKEN is injected at serve time so it
+      // never has to live in the on-disk cache.
+      if (req.method === 'GET' && url === '/api/state') {
+        return serveCached(res, STATE_CACHE,
+          () => { const st = gatherState(cwd, { fleet: false }); const { token, ...safe } = st; return { at: st.generatedAt, data: safe }; },
+          (d) => ({ ...d, token: TOKEN }));
       }
-      if (req.method === 'GET' && url === '/api/state') return sendJSON(res, 200, gatherState(cwd, { fleet: false }));
-      if (req.method === 'GET' && url === '/api/memory') return sendJSON(res, 200, { fleet: scanFleet() });
+      if (req.method === 'GET' && url === '/api/memory') {
+        return serveCached(res, MEMORY_CACHE, () => ({ at: new Date().toISOString(), data: { fleet: scanFleet() } }));
+      }
+      if (req.method === 'GET' && url === '/api/stack') {
+        return serveCached(res, STACK_CACHE, () => ({ at: new Date().toISOString(), data: gatherStack() }));
+      }
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
       if (req.method === 'GET' && url === '/api/trust') return sendJSON(res, 200, await gatherTrust());
-      if (req.method === 'GET' && url === '/api/stack' && /[?&]fast=1/.test(req.url)) {
-        const c = readJSON(path.join(CONFIG_DIR, 'stack-audit-cache.json'));
-        return sendJSON(res, 200, c && c.data ? { ...c.data, fromCache: true, cachedAt: c.at } : { fromCache: false });
-      }
-      if (req.method === 'GET' && url === '/api/stack') return sendJSON(res, 200, gatherStack());
       if (req.method === 'GET' && url === '/tips') { req.url = '/tips.html'; return serveStatic(req, res); }
       if (req.method === 'POST') {
         const body = await readBody(req);
@@ -767,6 +812,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // first page load paints real, honestly-stamped data in ~2s instead of a 25–50s scan — then
     // warm a fresh scan off the request path.
     loadConsoleCache();
+    kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
     if (open) openBrowser(url);
   });
@@ -778,6 +824,15 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   const args = process.argv.slice(2);
   if (args.includes('--print-state')) { console.log(JSON.stringify(gatherState(process.cwd()), null, 2)); }
   else if (args.includes('--print-stack')) { console.log(JSON.stringify(gatherStack(), null, 2)); }
+  else if (args.includes('--refresh-cache')) {
+    // Runs as a DETACHED CHILD of the server (kickRefresh) — or standalone to pre-warm. Computes the
+    // heavy read-models HERE, in a separate process, so the server's event loop is never blocked, and
+    // writes each cache the moment it is ready (state first — it is what the page paints first).
+    try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe); } catch { /* leave the old cache in place */ }
+    try { writeCache(STACK_CACHE, new Date().toISOString(), gatherStack()); } catch { /* keep prior */ }
+    try { writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet: scanFleet() }); } catch { /* keep prior */ }
+    process.exit(0);
+  }
   else if (args.includes('--serve') || args.length === 0) {
     // Hitting the command again should land on the console you already have, not spawn a second
     // server on a random port and a second tab. If one is already up, just point the browser at it.
