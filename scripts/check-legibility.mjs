@@ -95,7 +95,15 @@ for (const width of widths) {
         for (const t of svg.querySelectorAll('text')) {
           const txt = (t.textContent || '').trim();
           if (!txt) continue;
-          const declared = parseFloat(getComputedStyle(t).fontSize);
+          const cs = getComputedStyle(t);
+          // Hidden text is not a legibility problem — skip display:none / visibility:hidden /
+          // opacity:0, and anything a parent hid. A label a responsive breakpoint deliberately
+          // hides (e.g. the hero rings' labels on phones, where a legend carries them instead)
+          // must not be flagged as "3px and unreadable" when it renders zero pixels.
+          if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue;
+          let box; try { box = t.getBoundingClientRect(); } catch { box = null; }
+          if (box && (box.width === 0 || box.height === 0)) continue;   // clipped/collapsed → not visible
+          const declared = parseFloat(cs.fontSize);
           if (!declared) continue;
           // ctm.a is the real horizontal scale the browser applies, transforms included.
           const effective = +(declared * ctm.a).toFixed(1);
