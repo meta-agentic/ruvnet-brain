@@ -1,0 +1,228 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "serialNumber": "urn:uuid:69aec721-c8cd-4895-abd5-fa47a4af4ff7",
+  "metadata": {
+    "timestamp": "2026-07-17T04:56:49.688Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "npm",
+          "version": "10.9.2"
+        },
+        {
+          "type": "application",
+          "name": "cyclonedx-npm",
+          "group": "@cyclonedx",
+          "version": "6.0.0",
+          "author": "Jan Kowalleck",
+          "description": "Create CycloneDX Software Bill of Materials (SBOM) from NPM projects.",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/CycloneDX/cyclonedx-node-npm.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-node-npm#readme",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-node-npm/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "name": "cyclonedx-library",
+          "group": "@cyclonedx",
+          "version": "10.1.0",
+          "author": "Jan Kowalleck",
+          "description": "Core functionality of CycloneDX for JavaScript (Node.js or WebBrowser).",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/CycloneDX/cyclonedx-javascript-library.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-javascript-library#readme",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-javascript-library/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            }
+          ]
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "name": "ruvnet-brain",
+      "version": "3.2.13",
+      "bom-ref": "ruvnet-brain@3.2.13",
+      "author": "Stuart Kerr",
+      "description": "One-command installer for RuvNet Brain — a portable, source-grounded brain over rUv's RuvNet building blocks, delivered as a Claude Code plugin so Claude uses the stack instead of fighting it.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ruvnet-brain@3.2.13?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2Fstuinfla%2Fruvnet-brain.git",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/stuinfla/ruvnet-brain.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/stuinfla/ruvnet-brain#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/stuinfla/ruvnet-brain/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": ""
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "flywheel",
+      "group": "@metaharness",
+      "version": "0.1.7",
+      "bom-ref": "ruvnet-brain@3.2.13|@metaharness/flywheel@0.1.7",
+      "description": "A verifiable self-improvement loop for agent harnesses. Freeze the model. Evolve the harness. Promote only what proves lift.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40metaharness/flywheel@0.1.7",
+      "externalReferences": [
+        {
+          "url": "https://registry.npmjs.org/@metaharness/flywheel/-/flywheel-0.1.7.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6a6edd44e923c92d59926b374ce727d8b5478f030b4173c9e8fbb568fe79ab8d2f5892d138d19d1af9eb7012ff561305aa342b541e7b9664a7d84face42499c0"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@metaharness/flywheel"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "router",
+      "group": "@metaharness",
+      "version": "0.3.2",
+      "bom-ref": "ruvnet-brain@3.2.13|@metaharness/router@0.3.2",
+      "author": "rUv",
+      "description": "Cost-optimal model router for AI agent harnesses — route each query to the cheapest model that's good enough (k-NN over labelled embeddings). The productized DRACO Phase-2 finding.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40metaharness/router@0.3.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/ruvnet/agent-harness-generator.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/ruvnet/agent-harness-generator",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/ruvnet/agent-harness-generator/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@metaharness/router/-/router-0.3.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "2d012553a994ad67777df2796f0a289c4220c3ba05419a7065a7a17dfca5fcf83e8a8ce94632013c45dd6f8b933819ca1fec8f89311629cfa1f40899afd3acf7"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@metaharness/router"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "ruvnet-brain@3.2.13",
+      "dependsOn": [
+        "ruvnet-brain@3.2.13|@metaharness/flywheel@0.1.7",
+        "ruvnet-brain@3.2.13|@metaharness/router@0.3.2"
+      ]
+    },
+    {
+      "ref": "ruvnet-brain@3.2.13|@metaharness/flywheel@0.1.7"
+    },
+    {
+      "ref": "ruvnet-brain@3.2.13|@metaharness/router@0.3.2"
+    }
+  ]
+}

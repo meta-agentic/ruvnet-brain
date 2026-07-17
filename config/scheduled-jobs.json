@@ -102,6 +102,12 @@
       "schedule": "every 10 min",
       "maxAgeHours": 1,
       "required": true
+    },
+    {
+      "label": "com.ruvnet.routing-flywheel",
+      "schedule": "nightly 04:45",
+      "maxAgeHours": 26,
+      "what": "nightly bounded live flywheel over routing policy (candidate+receipt only, never live routing)"
     }
   ]
 }

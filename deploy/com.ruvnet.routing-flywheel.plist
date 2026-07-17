@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Comment</key>
+	<string>NIGHTLY routing-flywheel live run (Stuart, 2026-07-17: "go live with this"). Runs
+	scripts/routing-flywheel.mjs --live once per night: rUv's @metaharness/flywheel engine evolves
+	the routing executor policy against the accumulated labelled outcomes, under HARD caps the
+	script itself clamps (proposer spend ≤ $0.50, wall clock ≤ 10 min, ≤ 6 generations — the
+	self-DDoS lesson encoded). A promotion NEVER touches live routing: it writes
+	~/.claude/model-router/policy.candidate.mjs with a signed Ed25519 receipt chain for HUMAN
+	review (frozen gate, anchor suite — ADR-226: no advisor, promote only proven changes).
+	OPENROUTER_API_KEY is sourced from the repo .env at run time, never stored here. Nightly, not
+	more often: the gate only has something new to judge as labelled outcomes accumulate.
+	Wrapped in job-heartbeat.sh per the house positive-confirmation pattern (config/
+	scheduled-jobs.json + nightly-watchdog.mjs) — silence is not health.</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/stuartkerr</string>
+		<key>PATH</key>
+		<string>/Users/stuartkerr/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.ruvnet.routing-flywheel</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>/Users/stuartkerr/Code/ruvnet-brain/scripts/job-heartbeat.sh</string>
+		<string>com.ruvnet.routing-flywheel</string>
+		<string>--</string>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>set -a; . /Users/stuartkerr/Code/ruvnet-brain/.env 2>/dev/null; set +a; exec /Users/stuartkerr/.npm-global/bin/node /Users/stuartkerr/Code/ruvnet-brain/scripts/routing-flywheel.mjs --live</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain</string>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/routing-flywheel.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/stuartkerr/Code/ruvnet-brain/logs/routing-flywheel.out.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>4</integer>
+		<key>Minute</key>
+		<integer>45</integer>
+	</dict>
+</dict>
+</plist>
