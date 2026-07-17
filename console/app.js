@@ -1450,10 +1450,13 @@ function renderDistribution(u) {
 function renderProviders(sv) {
   const re = sv && sv.routerEngine;
   if (!re) return null;
-  // House = the provider whose models this user's subscription covers (from the engine's own pool).
-  const covered = (re.pool || []).find((p) => p.subscriptionCovered);
+  // House = the user's Settings choice (config.json `provider`, "Your model house"), the single
+  // source of truth (issue #21) — previously this derived "yours" from whichever pool candidate
+  // happened to be subscriptionCovered first (a profile.json guess Settings never wrote to), so
+  // picking ChatGPT in Settings never moved this strip. re.house comes from onboarding-console.mjs's
+  // gatherRouterEngine(), which now reads config.json first, same as the savings baseline does.
   const HOUSE_NAME = { anthropic: 'Claude Max', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' };
-  const house = { provider: covered ? covered.provider : null };
+  const house = { provider: re.house && re.house.provider };
   const houseName = HOUSE_NAME[house.provider] || 'Your stack';
   const chipBtn = (on, boldPart, rest, target, tip) => el('button', {
     class: `prov-chip ${on ? 'on' : 'dim'}`, type: 'button', title: tip,
@@ -1485,19 +1488,47 @@ function renderSavings(sv) {
   const util = sv && sv.utilization && sv.utilization.tasks ? sv.utilization : null;
   const receipts = sv && Array.isArray(sv.receipts) ? sv.receipts : [];
 
-  // The pitch is the action — always shown, whether or not routing is on yet.
-  const enableNote = el('span', { class: 'mh-enable-note', 'aria-live': 'polite' }, '');
-  const enableBtn = el('button', { class: 'mh-enable', type: 'button' }, 'Turn on smart routing');
-  enableBtn.addEventListener('click', async () => {
-    enableBtn.disabled = true; enableNote.textContent = 'saving…';
-    try {
-      const { data } = await postJSON('/api/save-config', { values: { routing: 'auto' } });
-      enableNote.textContent = data && data.ok ? 'On — MetaHarness now routes each task to the right model automatically.' : 'Saved.';
-    } catch (e) {
-      enableBtn.disabled = false;
-      enableNote.textContent = 'Couldn’t save — turn it on under Settings.';
+  // The pitch is the action — always shown, whether or not routing is on yet. issue #20: the CTA
+  // must reflect the SAVED config (sv.routing), not a fresh pristine "Turn on" pitch on every render
+  // — otherwise a successful click reads as a lie the moment the page reloads. ctaSlot is a stable
+  // container; paintCta(on) repaints it for the current state and is called again after a successful
+  // save, so the toggle is visibly live, not just correct after a reload.
+  const ctaSlot = el('div', { class: 'mh-cta' });
+  function paintCta(on) {
+    const note = el('span', { class: 'mh-enable-note', 'aria-live': 'polite' }, '');
+    if (on) {
+      const offBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Turn off');
+      offBtn.addEventListener('click', async () => {
+        offBtn.disabled = true; note.textContent = 'saving…';
+        try {
+          const { data } = await postJSON('/api/save-config', { values: { routing: 'off' } });
+          if (data && data.ok) paintCta(false);
+          else { offBtn.disabled = false; note.textContent = 'Saved.'; }
+        } catch (e) {
+          offBtn.disabled = false;
+          note.textContent = 'Couldn’t save — change it under Settings.';
+        }
+      });
+      ctaSlot.replaceChildren(
+        chip('✓ Smart routing: ON', 'green', 'Cheap, mechanical tasks route to smaller models automatically'),
+        offBtn, note);
+    } else {
+      const enableBtn = el('button', { class: 'mh-enable', type: 'button' }, 'Turn on smart routing');
+      enableBtn.addEventListener('click', async () => {
+        enableBtn.disabled = true; note.textContent = 'saving…';
+        try {
+          const { data } = await postJSON('/api/save-config', { values: { routing: 'auto' } });
+          if (data && data.ok) paintCta(true);
+          else { enableBtn.disabled = false; note.textContent = 'Saved.'; }
+        } catch (e) {
+          enableBtn.disabled = false;
+          note.textContent = 'Couldn’t save — turn it on under Settings.';
+        }
+      });
+      ctaSlot.replaceChildren(enableBtn, note);
     }
-  });
+  }
+  paintCta(sv && sv.routing === 'auto');
   // Stuart: "If you haven't ever seen MetaHarness, you have no idea what the word means, and you have
   // no idea what you should expect it to do. Saying 'do you want to use it or not' without any visual
   // explaining what it does is a little challenging." He is right — this card asked for a decision
@@ -1522,7 +1553,7 @@ function renderSavings(sv) {
            + 'are each mutated and measured. Four pillars run underneath: route, evolve, orchestrate, '
            + 'verify. Measured: 28.5% cheaper at 98.1% bar-compliance.',
       })),
-    el('div', { class: 'mh-cta' }, enableBtn, enableNote));
+    ctaSlot);
 
   const blocks = [];
   const prov = renderProviders(sv);
