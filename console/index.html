@@ -46,7 +46,9 @@
       <span class="brand-text">RuvNet Brain <span class="brand-sub">Onboarding Console</span></span>
     </div>
     <div class="head-right">
-      <a class="host-chip mono" href="tips.html" title="How to actually use the Brain — three depths, one visual page">how to use it →</a>
+      <!-- Its own class on purpose: this is a DOOR, not machine chrome. It once borrowed
+           .host-chip and vanished with the readout on phones (see THE TIPS DOOR in style.css). -->
+      <a class="tips-link mono" href="tips.html" title="How to actually use the Brain — three depths, one visual page"><span class="tl-long">how to use it</span><span class="tl-short">tips</span> →</a>
       <span class="host-chip mono" id="host-chip" hidden></span>
       <button class="theme-toggle" id="recheck-btn" type="button" aria-label="Re-check my machine now"
         title="Re-check my machine — refresh every card from live state (runs automatically after every fix)">↻</button>
@@ -81,8 +83,40 @@
         <p class="motto mono" aria-label="How this console works, in order">
           <span class="m m-mirror">Mirror</span><span class="sep">→</span><span class="m m-mirror">Explain</span><span class="sep">→</span><span class="m m-rec">Recommend</span><span class="sep">→</span><span class="m m-rec">Apply</span><span class="m-note">with your consent</span><span class="sep">→</span><span class="m m-undo">Undo</span>
         </p>
-        <div class="meta-row mono" id="host-meta" hidden></div>
       </div>
+
+      <!-- Machine meta (user · platform · node · npm) is a grid sibling of the copy, not part
+           of it: on desktop it keeps its old seat under the motto; on phones it yields its
+           rows to the tips door and follows the hero instead (style.css places it). -->
+      <div class="meta-row mono" id="host-meta" hidden></div>
+
+      <!-- The right column: the door first, then the art. The tips CTA lives HERE — in the dead
+           space above the hero art — because the only link to tips.html was dressed as header
+           chrome and nobody saw it. The glyph is the tips page's own metaphor, inside out:
+           solid cyan always-on · dashed amber say-it · dotted green name-it, your prompt's
+           caret at the center. -->
+      <div class="intro-side">
+      <a class="tips-cta" href="tips.html">
+        <span class="tc-glyph" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <circle class="tc-r1" cx="32" cy="32" r="9"/>
+            <circle class="tc-r2" cx="32" cy="32" r="18"/>
+            <circle class="tc-r3" cx="32" cy="32" r="27"/>
+            <rect class="tc-caret" x="30.9" y="28.6" width="2.2" height="6.8" rx="1.1"/>
+          </svg>
+        </span>
+        <span class="tc-text">
+          <span class="tc-kicker mono">new here? start with this</span>
+          <span class="tc-title">Go to the usage tips page <span class="tc-arrow" aria-hidden="true">→</span></span>
+          <span class="tc-sub">How to actually use the Brain — three depths on one visual page.
+          The first depth is doing nothing: it's already working.</span>
+          <span class="tc-depths mono">
+            <span class="td"><span class="td-dot dd-1"></span>1 · do nothing</span>
+            <span class="td"><span class="td-dot dd-2"></span>2 · say it plain</span>
+            <span class="td"><span class="td-dot dd-3"></span>3 · name the tool</span>
+          </span>
+        </span>
+      </a>
 
       <!-- Hero art: assets/hero.webp when present; the authored constellation
            beneath it means the frame is never empty or broken. -->
@@ -125,6 +159,7 @@
         <img class="hero-img" src="assets/hero.webp" alt="" onerror="this.remove()" />
         <figcaption class="hero-cap mono">read locally · written never (until you say)</figcaption>
       </figure>
+      </div><!-- /intro-side -->
     </div>
 
     <!-- "We looked at your computer and found…" — filled from live state -->

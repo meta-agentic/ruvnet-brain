@@ -66,8 +66,14 @@
         skills. Here's the whole trick: it arranges itself around the way you already work.
         There are three depths of use, and the first one is <b>doing nothing</b>.</p>
 
+        <!-- Verbatim from the hackerspace transcript, with ONE correction. The transcript is
+             machine speech-to-text and mis-renders the spoken product name "Ruflo" four
+             different ways in one document — "root flow", "rooflow", "RootFlow", "Root Flow".
+             That inconsistency is the ASR guessing at an unfamiliar proper noun. rUv said
+             Ruflo; printing the transcript's guess would put a word in his mouth he never
+             said. Source: docs/Ruv_advice/Ruv hackerspace Transcript.txt (Thu, Jul 16, 2026). -->
         <blockquote class="ruv-quote">
-          <p>“I don't have to load 350 skills in RootFlow that 99% of which I never use.
+          <p>“I don't have to load 350 skills in Ruflo that 99% of which I never use.
           I can specifically learn and say that, for this particular task, I need a particular
           plugin or skill. And the system is smart enough to be able to say, okay, I've seen
           this before, therefore, I know that I need this particular skill to do this
@@ -80,57 +86,52 @@
            around your prompt. Ring 1 is solid — it's always on. The outer rings
            are dotted — they exist only when you reach for them. -->
       <figure class="hero-art">
-        <svg class="hero-scene" viewBox="0 0 640 420" role="img"
-             aria-label="Three concentric rings around a chat prompt: ring one, always on — grounding, memory and gates; ring two, plain-English asks; ring three, tools you name directly.">
-          <defs>
-            <radialGradient id="tgA" cx="16%" cy="10%" r="65%">
-              <stop offset="0" stop-color="#f0a830" stop-opacity="0.30"/><stop offset="1" stop-color="#f0a830" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="tgB" cx="90%" cy="26%" r="60%">
-              <stop offset="0" stop-color="#5ad6ff" stop-opacity="0.24"/><stop offset="1" stop-color="#5ad6ff" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="tgC" cx="40%" cy="100%" r="60%">
-              <stop offset="0" stop-color="#5fd38a" stop-opacity="0.18"/><stop offset="1" stop-color="#5fd38a" stop-opacity="0"/>
-            </radialGradient>
-          </defs>
-          <rect width="640" height="420" fill="#0b0d12"/>
-          <rect width="640" height="420" fill="url(#tgA)"/>
-          <rect width="640" height="420" fill="url(#tgB)"/>
-          <rect width="640" height="420" fill="url(#tgC)"/>
+        <!-- REBUILT 2026-07-17 (twice — both lessons kept). Lesson 1: the old
+             640-unit viewBox rendered into a ~453px column, downscaling every
+             label to ~8px; the viewBox is now ~1:1 with the render (460 units).
+             Lesson 2: labeling each ring on its own top arc crowded all seven
+             text nodes into the rings' converging crowns and halo-punched the
+             strokes — so this is the ORIGINAL composition (rings left, label
+             column right, leader lines), which has no collisions by
+             construction: ring 3's right edge peaks at x=226, the label column
+             starts at x=235. Color/type/motion all live in tips.css under
+             `.hero-scene` so both themes and reduced-motion are honored. -->
+        <svg class="hero-scene" viewBox="0 0 460 300" role="img"
+             aria-label="Three concentric depth rings around a chat prompt reading 'just type'. Ring one, always on — grounding, memory and gates wrap every prompt; you do nothing. Ring two, say it — plain-English asks. Ring three, name it — commands, skills and tools you call directly. Most work never leaves ring one.">
 
-          <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green) -->
-          <circle cx="225" cy="212" r="62"  fill="none" stroke="#5ad6ff" stroke-width="9" stroke-opacity="0.14" class="ring-halo"/>
-          <circle cx="225" cy="212" r="62"  fill="none" stroke="#5ad6ff" stroke-width="2.2"/>
-          <circle cx="225" cy="212" r="112" fill="none" stroke="#f0a830" stroke-width="2" stroke-dasharray="7 8" stroke-linecap="round" opacity="0.85"/>
-          <circle cx="225" cy="212" r="162" fill="none" stroke="#5fd38a" stroke-width="2" stroke-dasharray="2 11" stroke-linecap="round" opacity="0.8"/>
+          <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green).
+               hs-pulse + hs-r1-halo are the animation: a prompt leaves the center, ring 1 catches it. -->
+          <circle class="hs-ring3"   cx="105" cy="146" r="120"/>
+          <circle class="hs-ring2"   cx="105" cy="146" r="90"/>
+          <circle class="hs-r1-halo" cx="105" cy="146" r="60"/>
+          <circle class="hs-pulse"   cx="105" cy="146" r="60"/>
+          <circle class="hs-ring1"   cx="105" cy="146" r="60"/>
 
           <!-- the center: you, typing normally -->
-          <rect x="163" y="196" width="124" height="32" rx="9" fill="#12161d" stroke="#3a4152" stroke-width="1.5"/>
-          <text x="176" y="217" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#f0a830">&gt;</text>
-          <text x="190" y="217" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#c0c7d6">just type</text>
-          <rect class="caret" x="258" y="203" width="2" height="17" fill="#f0a830"/>
+          <rect class="hs-box" x="49" y="133" width="112" height="26" rx="8"/>
+          <text class="hs-prompt" x="105" y="150"><tspan class="hs-pmark">&gt;</tspan> just type<tspan class="hs-caret">▍</tspan></text>
 
-          <!-- leader lines out to the labels -->
-          <g font-family="ui-monospace,Menlo,monospace">
-            <circle cx="336" cy="92" r="2.6" fill="#5fd38a"/>
-            <line x1="336" y1="92" x2="404" y2="92" stroke="#5fd38a" stroke-width="1" stroke-opacity="0.5"/>
-            <text x="414" y="88"  font-size="11.5" fill="#5fd38a" letter-spacing="2">03 · NAME IT</text>
-            <text x="414" y="105" font-size="11.5" fill="#8f94a1">commands · skills · tools</text>
+          <!-- leader lines: a dot on each ring, a line out to its label -->
+          <circle class="hs-dot l3" cx="180" cy="52"  r="2.6"/>
+          <line   class="hs-lead l3" x1="180" y1="52"  x2="226" y2="52"/>
+          <circle class="hs-dot l2" cx="190" cy="118" r="2.6"/>
+          <line   class="hs-lead l2" x1="190" y1="118" x2="226" y2="118"/>
+          <circle class="hs-dot l1" cx="151" cy="184" r="2.6"/>
+          <line   class="hs-lead l1" x1="151" y1="184" x2="226" y2="184"/>
 
-            <circle cx="333" cy="176" r="2.6" fill="#f0a830"/>
-            <line x1="333" y1="176" x2="404" y2="176" stroke="#f0a830" stroke-width="1" stroke-opacity="0.5"/>
-            <text x="414" y="172" font-size="11.5" fill="#f4b13a" letter-spacing="2">02 · SAY IT</text>
-            <text x="414" y="189" font-size="11.5" fill="#8f94a1">plain-English asks</text>
+          <!-- label column, outermost ring first, punchline last.
+               Baseline rhythm is bbox-derived (mechanically asserted): main→sub 21,
+               sub→sub 20 — enough clearance even with the ≤29em main-label bump. -->
+          <text class="hs-main hs-l3" x="235" y="56">03 · NAME IT</text>
+          <text class="hs-sub"        x="235" y="77">commands · skills · tools</text>
+          <text class="hs-main hs-l2" x="235" y="122">02 · SAY IT</text>
+          <text class="hs-sub"        x="235" y="143">plain-English asks</text>
+          <text class="hs-main hs-l1" x="235" y="188">01 · ALWAYS ON</text>
+          <text class="hs-sub"        x="235" y="209">grounding · memory · gates</text>
+          <text class="hs-sub"        x="235" y="229">you do nothing</text>
 
-            <circle cx="252" cy="268" r="2.6" fill="#5ad6ff"/>
-            <line x1="252" y1="268" x2="404" y2="268" stroke="#5ad6ff" stroke-width="1" stroke-opacity="0.5"/>
-            <text x="414" y="264" font-size="11.5" fill="#5ad6ff" letter-spacing="2">01 · ALWAYS ON</text>
-            <text x="414" y="281" font-size="11.5" fill="#8f94a1">grounding · memory · gates</text>
-            <text x="414" y="297" font-size="11.5" fill="#8f94a1">you do nothing</text>
-          </g>
-
-          <text x="26" y="38" font-family="ui-monospace,Menlo,monospace"
-                font-size="11" font-style="italic" fill="#8f94a1">most work never leaves ring 1</text>
+          <!-- the punchline — the last thing the column says -->
+          <text class="hs-punch" x="235" y="253">most work never leaves ring 1</text>
         </svg>
         <figcaption class="hero-cap mono">three depths · depth 1 wraps every prompt</figcaption>
       </figure>
@@ -144,8 +145,45 @@
     </p>
   </section>
 
+  <!-- =============================================== THE ARGUMENT
+       The page's thesis, drawn: the SAME prompt into plain Claude Code vs the same model
+       wrapped in the harness. This is architecture, not atmosphere — it exists to show how
+       the pieces hook together, which no amount of pretty art can do.
+       Scroll-wrapped: see .diagram-scroll in tips.css for why compressing it is not an option. -->
+  <section class="depth card rail-act" id="why" aria-labelledby="why-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-rec">the whole argument, in one picture</span>
+        <h2 id="why-h">Same model. Same prompt. <em>Everything around it.</em></h2>
+        <p class="q">rUv's lever isn't a smarter model — it's what wraps the one you already
+        have. Plain Claude Code sends your prompt straight at an expensive model and takes
+        whatever comes back. The harness grounds it, routes it to the cheapest model that can
+        actually do the job, hands back what your project already decided, inspects the write
+        before it lands, and checks it on the way out. You type the same thing either way.</p>
+      </div>
+    </header>
+    <div class="depth-body">
+      <figure class="diagram-scroll" style="--dmin: 780px">
+        <img src="assets/harness-vs-plain.svg" width="1000" height="652"
+             alt="The same prompt sent two ways. Left, plain Claude Code: a bare wire to one
+             frontier model that costs the most on every task, with no grounding, no memory and
+             no gates, producing an unchecked answer. Right, the same model wrapped in the RuvNet
+             harness: the prompt passes through GROUND (cited, not guessed), ROUTE (cheapest
+             capable model, with the frontier model mostly idle), RECALL (prior decisions
+             return), GATE (inspects the write and can refuse it), and VERIFY (provenance and
+             safety gate), producing an answer that is grounded, cited and checked. Measured:
+             28.5% cheaper at 98.1% bar-compliance." decoding="async">
+        <figcaption class="mono">the left lane finishes first — and that's the problem</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <!-- ================================================ DEPTH 1 · AMBIENT -->
   <section class="depth card rail-mirror" id="depth-1" aria-labelledby="d1-h">
+    <figure class="depth-art" aria-hidden="true">
+      <img src="assets/depth-1.webp" alt="" width="1584" height="672"
+           decoding="async" fetchpriority="low">
+    </figure>
     <header class="depth-head">
       <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
         <circle cx="38" cy="38" r="28" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="2 8" stroke-linecap="round"/>
@@ -194,6 +232,10 @@
 
   <!-- ================================================= DEPTH 2 · ASKED -->
   <section class="depth card rail-act" id="depth-2" aria-labelledby="d2-h">
+    <figure class="depth-art" aria-hidden="true">
+      <img src="assets/depth-2.webp" alt="" width="1584" height="672"
+           decoding="async" fetchpriority="low">
+    </figure>
     <header class="depth-head">
       <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
         <circle cx="38" cy="38" r="28" fill="none" stroke="var(--illo-faint)" stroke-width="1.6" stroke-dasharray="2 8" stroke-linecap="round"/>
@@ -249,6 +291,10 @@
 
   <!-- ================================================= DEPTH 3 · NAMED -->
   <section class="depth card rail-prove" id="depth-3" aria-labelledby="d3-h">
+    <figure class="depth-art" aria-hidden="true">
+      <img src="assets/depth-3.webp" alt="" width="1584" height="672"
+           decoding="async" fetchpriority="low">
+    </figure>
     <header class="depth-head">
       <svg class="locator" viewBox="0 0 76 76" aria-hidden="true">
         <circle cx="38" cy="38" r="28" fill="none" stroke="var(--green)" stroke-width="2.6" stroke-dasharray="2 8" stroke-linecap="round"/>
@@ -320,12 +366,20 @@
       <span class="depth-num mono" aria-hidden="true">☰</span>
     </header>
     <div class="depth-body">
-      <figure class="mh-figure">
+      <!-- --dmin 900px is MEASURED, not guessed: at a 900-unit viewBox the smallest label hits
+           exactly 12px effective there. Below it the labels drop under the floor (629px -> 8.4px,
+           261px -> 3.5px), which is how this shipped unreadable on a phone. 831px would carry the
+           primary structure but leaves fine print at 11.1px — not worth shaving a swipe for.
+           height is 560 (the REAL viewBox height); it was 470, a wrong aspect that caused layout
+           shift. loading="lazy" removed: a lazy image on this page already shipped once and never
+           fetched at all. -->
+      <figure class="diagram-scroll mh-figure" style="--dmin: 900px">
         <img src="assets/metaharness.svg" alt="MetaHarness: the model sits frozen at the centre while
         seven policy surfaces around it — planner, contextBuilder, reviewer, retryPolicy, toolPolicy,
         memoryPolicy and scorePolicy — are each mutated and measured. Four pillars run underneath:
         route, evolve, orchestrate, verify. Measured result: 28.5% cheaper at 98.1% bar-compliance."
-        width="900" height="470" loading="lazy" />
+        width="900" height="560" decoding="async" />
+        <figcaption class="mono">the model never moves — everything around it does</figcaption>
       </figure>
       <p class="metaphor">The seven surfaces take turns changing. The model in the middle never moves —
       that's the whole trick, and it's why this works on the Claude you already have.</p>

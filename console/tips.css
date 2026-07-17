@@ -254,27 +254,112 @@ h1 em {
 }
 .ruv-quote footer { font-size: 11.5px; letter-spacing: 0.05em; color: var(--muted); }
 
-/* hero art — a dark art plate in BOTH themes (same idiom as the console hero) */
+/* ── hero art — the three-depths diagram (REBUILT 2026-07-17, twice) ────────
+   Root cause of the old unreadable hero: a 640-unit viewBox rendered into a
+   ~453px grid column, so every 11.5-unit label collapsed to ~8px effective.
+   The viewBox is now 460×300 — user units ≈ CSS px at desktop widths (scale
+   0.94–1.0) — and label sizes below are chosen so every line is ≥12px
+   EFFECTIVE at a 1024 viewport (431px render → ×0.937). Measured, not eyeballed.
+   Second lesson (same day): labeling each ring on its own top arc crowded all
+   the text into the rings' converging crowns and the paint-order halos punched
+   gaps in the strokes. So the layout is the original composition — rings left,
+   label column right, leader lines — which cannot collide by construction
+   (ring 3 peaks at x=226; the column starts at x=235), and needs no halos, so
+   the rings always render continuous.
+   Fully token-driven so the light theme works: label fills ride the *-text
+   ramps (light mode darkens them for contrast); the plate is --surface with
+   color-mix washes instead of a hardcoded dark fill.
+   All motion sits under prefers-reduced-motion: no-preference. At rest the
+   pulse is stroke-opacity 0 (invisible), the halo is a static soft glow, and
+   the caret is a steady block — a complete, fully-labeled diagram. */
 .hero-art {
-  margin: 0; position: relative; overflow: hidden;
+  margin: 0 auto; position: relative; overflow: hidden;
+  width: 100%; max-width: 560px;   /* keeps the plate sane when the grid collapses to one column */
   border-radius: var(--radius); border: 1px solid var(--ridge);
-  background: #0b0d12; box-shadow: var(--shadow-deep);
-  aspect-ratio: 640 / 420;
+  box-shadow: var(--shadow-deep);
+  aspect-ratio: 460 / 300;         /* matches the viewBox exactly — the SVG fills edge to edge */
+  background:
+    radial-gradient(120% 85% at 12% 6%,   color-mix(in srgb, var(--amber) 9%, transparent), transparent 60%),
+    radial-gradient(110% 85% at 90% 18%,  color-mix(in srgb, var(--cyan) 8%, transparent), transparent 58%),
+    radial-gradient(130% 90% at 45% 108%, color-mix(in srgb, var(--green) 7%, transparent), transparent 60%),
+    var(--surface);
 }
 .hero-art .hero-scene { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hero-cap {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   margin: 0; padding: 7px 14px;
   font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: #c0c7d6; background: rgba(8, 10, 14, 0.72);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  border-top: 1px solid rgba(90, 214, 255, 0.14);
+  border-top: 1px solid color-mix(in srgb, var(--cyan) 16%, transparent);
 }
 
-.ring-halo { animation: halo-pulse 3.4s var(--ease) infinite; }
-.caret     { animation: caret-blink 1.1s steps(1) infinite; }
-@keyframes halo-pulse  { 0%, 100% { stroke-opacity: 0.14; } 50% { stroke-opacity: 0.04; } }
-@keyframes caret-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+/* rings — solid = always on; dashed/dotted = only there when you reach for them */
+.hero-scene .hs-ring1   { fill: none; stroke: var(--cyan);  stroke-width: 2.4; }
+.hero-scene .hs-ring2   { fill: none; stroke: var(--amber); stroke-width: 2; stroke-dasharray: 7 8;  stroke-linecap: round; opacity: 0.85; }
+.hero-scene .hs-ring3   { fill: none; stroke: var(--green); stroke-width: 2; stroke-dasharray: 2 10; stroke-linecap: round; opacity: 0.8; }
+.hero-scene .hs-r1-halo { fill: none; stroke: var(--cyan);  stroke-width: 10;  stroke-opacity: 0.10; }
+.hero-scene .hs-pulse   { fill: none; stroke: var(--cyan);  stroke-width: 2.5; stroke-opacity: 0;
+                          transform-box: fill-box; transform-origin: center; }
+
+/* leader lines — a dot on each ring, a thin line out to its label */
+.hero-scene .hs-lead    { stroke-width: 1; stroke-opacity: 0.5; }
+.hero-scene .hs-lead.l1 { stroke: var(--cyan); }
+.hero-scene .hs-lead.l2 { stroke: var(--amber); }
+.hero-scene .hs-lead.l3 { stroke: var(--green); }
+.hero-scene .hs-dot.l1  { fill: var(--cyan); }
+.hero-scene .hs-dot.l2  { fill: var(--amber); }
+.hero-scene .hs-dot.l3  { fill: var(--green); }
+
+/* label column — left-anchored at x=235, clear of ring 3 (peaks at x=226) */
+.hero-scene .hs-main, .hero-scene .hs-sub { font-family: var(--mono); text-anchor: start; }
+.hero-scene .hs-main  { font-size: 14.5px; letter-spacing: 1.5px; }
+.hero-scene .hs-sub   { font-size: 13.5px; fill: var(--muted); }
+.hero-scene .hs-l1    { fill: var(--cyan-text); }
+.hero-scene .hs-l2    { fill: var(--amber-text); }
+.hero-scene .hs-l3    { fill: var(--green-text); }
+.hero-scene .hs-punch { font-family: var(--display); font-style: italic; font-size: 14.5px;
+                        fill: var(--cyan-text); text-anchor: start; }
+
+/* the center prompt */
+.hero-scene .hs-box    { fill: var(--surface-2); stroke: var(--ridge); stroke-width: 1.5; }
+.hero-scene .hs-prompt { font-family: var(--mono); font-size: 13.5px; text-anchor: middle;
+                         fill: var(--ink-2); }
+.hero-scene .hs-pmark, .hero-scene .hs-caret { fill: var(--amber-text); }
+
+/* small phones (scale bottoms out ≈0.71 at 360): bump only what cannot
+   overflow the fixed x=235 column — the depth names and the punchline.
+   The long sub-labels CANNOT step up without hitting the canvas edge; at
+   these widths the stage-legend just below the hero repeats their content. */
+@media (max-width: 29em) {
+  .hero-scene .hs-main  { font-size: 16px; letter-spacing: 1px; }
+  .hero-scene .hs-punch { font-size: 15px; }
+  .hero-cap { font-size: 10px; letter-spacing: 0.08em; } /* single line — a wrap eats the diagram */
+}
+
+/* motion — only when the user allows it. The pulse is a prompt leaving the
+   center; ring 1's halo brightens as it lands (same 3.2s clock, so they stay
+   in phase); rings 2 and 3 never stir. That IS the lesson: depth 1 works
+   without you, the outer rings only wake when reached for. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-scene .hs-caret   { animation: hs-caret 1.1s steps(1) infinite; }
+  .hero-scene .hs-pulse   { animation: hs-pulse 3.2s cubic-bezier(0.25, 0.55, 0.4, 1) infinite; }
+  .hero-scene .hs-r1-halo { animation: hs-catch 3.2s linear infinite; }
+}
+@keyframes hs-caret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@keyframes hs-pulse {
+  0%   { transform: scale(0.24); stroke-opacity: 0; }
+  10%  { transform: scale(0.32); stroke-opacity: 0.55; }
+  60%  { transform: scale(1);    stroke-opacity: 0.30; }
+  74%  { transform: scale(1);    stroke-opacity: 0; }
+  100% { transform: scale(1);    stroke-opacity: 0; }
+}
+@keyframes hs-catch {
+  0%, 55%   { stroke-opacity: 0.10; }
+  66%       { stroke-opacity: 0.34; }
+  88%, 100% { stroke-opacity: 0.10; }
+}
 
 /* the three-depths legend (same idiom as the console's color legend) */
 .stage-legend {
@@ -330,6 +415,73 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 .st-mirror { color: var(--cyan-text);  border-color: color-mix(in srgb, var(--cyan) 30%, transparent);  background: color-mix(in srgb, var(--cyan) 8%, transparent); }
 .st-rec    { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent); }
 .st-prove  { color: var(--green-text); border-color: color-mix(in srgb, var(--green) 30%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+
+/* Wide architecture diagrams — the honest answer to a bug measured on 2026-07-17.
+   A 900-unit diagram squeezed into a 261px phone column renders its labels at 3px: present,
+   unclipped, xmllint-clean, and completely invisible. The tempting fix — shrink the type to
+   fit — is what CAUSED the bug (the hero shipped at 8.1px the same way). A dense diagram
+   cannot honestly compress; below a certain width it simply stops being readable.
+   So we give it a floor and let the narrow viewport scroll to it. Each figure declares its
+   own --dmin (the width at which its smallest label clears 12px effective — MEASURE it,
+   don't guess: scripts/check-legibility.mjs computes declared x renderedWidth/viewBoxWidth
+   against the REAL page, not the asset in isolation). Swiping a legible diagram beats
+   squinting at a crushed one. */
+.diagram-scroll {
+  margin: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-s);
+}
+.diagram-scroll img {
+  display: block;
+  width: 100%;
+  min-width: var(--dmin, 780px);   /* the legibility floor, per diagram */
+  height: auto;
+}
+.diagram-scroll figcaption {
+  margin: 10px 2px 0;
+  font-size: var(--fs--2);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  position: sticky; left: 0;       /* stays put while the diagram scrolls under it */
+}
+/* Below the floor the figure scrolls, so say so — an unannounced scroll region is a trap. */
+@media (max-width: 52em) {
+  .diagram-scroll::after {
+    content: "swipe the diagram →";
+    display: block;
+    margin-top: 8px;
+    font-family: var(--mono); font-size: var(--fs--2);
+    letter-spacing: 0.08em; color: var(--faint);
+    position: sticky; left: 0;
+  }
+}
+
+/* Section art — one still per depth, all three in ONE material language: a dark-glass
+   corridor, an amber prompt, cyan/green refraction. Each carries its depth's IDEA rather
+   than decorating it — 01 light travelling on its own · 02 light being answered · 03 one
+   panel deliberately lit among many. Generated (gemini-3-pro-image) from the console's own
+   token palette, which is why they match the page instead of sitting on top of it.
+   Full-bleed: the card's own overflow:hidden + radius do the clipping, no negative margins.
+   Cropped to a band via aspect-ratio — the source stills are 16:9 with dead sky/floor the
+   composition doesn't need. NOT loading="lazy": a lazy image inside this page already
+   shipped once that never fetched at all. */
+.depth-art {
+  margin: 0;
+  aspect-ratio: 1584 / 640;
+  background: #0a0c10;
+  border-bottom: 1px solid var(--ridge);
+}
+.depth-art img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+}
+@media (max-width: 40em) {
+  .depth-art { aspect-ratio: 1584 / 900; }
+}
 
 .depth-head {
   display: flex; align-items: flex-start; gap: clamp(14px, 2.4vw, 22px);

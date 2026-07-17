@@ -1,0 +1,259 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 652" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="hvp-t hvp-d">
+  <title id="hvp-t">Plain Claude Code vs Claude Code inside the RuvNet harness</title>
+  <desc id="hvp-d">The same prompt enters two pipelines side by side. Left, plain: the prompt goes straight
+  through one expensive frontier model to an unchecked, uncited answer — nothing in between. Right, the
+  RuvNet harness: the same prompt is grounded against real sources and cited, routed to the cheapest
+  capable model while the frontier model sits mostly idle, enriched with prior decisions recalled from
+  project memory, inspected by a gate that can refuse a bad write, then verified for provenance and
+  safety before the answer lands — grounded, cited, checked. Payoff: a cheap model in a good harness
+  approximately equals a frontier model, for less. Measured: 28.5 percent cheaper at 98.1 percent
+  bar-compliance (ADR-073, cited in ADR-076).</desc>
+
+  <style>
+    :root {
+      --ink:#1a1d24; --ink2:#40454f; --muted:#6b7078; --faint:#a4a89f;
+      --ridge:#d9d3c3; --surface:#fbf9f2; --track:#c6c0ae;
+      --amber:#c8890f; --cyan:#1489b8; --green:#2e9e5b; --red:#d8402c;
+      --amT:#8a5d00; --cyT:#0b6a8f; --grT:#1a7a44; --rdT:#b3321f;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink:#ece8dc; --ink2:#c3c2b6; --muted:#8f94a1; --faint:#5a5f6e;
+        --ridge:#2a3140; --surface:#13171e; --track:#2a3140;
+        --amber:#f0a830; --cyan:#5ad6ff; --green:#5fd38a; --red:#ff6b5e;
+        --amT:#f0a830; --cyT:#5ad6ff; --grT:#5fd38a; --rdT:#ff6b5e;
+      }
+    }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .serif { font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+    .b { font-weight: 700; }
+    .ink { fill: var(--ink); }   .ink2 { fill: var(--ink2); }
+    .muted { fill: var(--muted); } .faint { fill: var(--faint); }
+    .amT { fill: var(--amT); } .cyT { fill: var(--cyT); }
+    .grT { fill: var(--grT); } .rdT { fill: var(--rdT); }
+    .trk { stroke: var(--track); stroke-width: 2; fill: none; }
+    .cor { stroke: var(--track); stroke-width: 1.5; fill: none; stroke-dasharray: 3 5; }
+    .node { fill: var(--surface); stroke-width: 2.2; }
+    .sAm { stroke: var(--amber); } .sCy { stroke: var(--cyan); }
+    .sGr { stroke: var(--green); } .sRd { stroke: var(--red); }
+    .sRg { stroke: var(--ridge); }
+    .fx { opacity: 0; }            /* motion-only overlays: hidden at rest */
+    .refuse { opacity: .9; }       /* informative at rest, flashes in motion */
+    .burnHalo { opacity: .14; }
+    .comet { display: none; }      /* comets exist only when motion is allowed */
+
+    @media (prefers-reduced-motion: no-preference) {
+      .comet { display: inline; fill: none; stroke-linecap: round; }
+      .cC { stroke-width: 4.5; }
+      .cH { stroke-width: 11; opacity: .16; }
+      .cometL { stroke: var(--amber); stroke-dasharray: 26 1700; animation: kL 12s linear infinite; }
+      .cometR { stroke-dasharray: 26 1700; animation: kR 12s linear infinite; }
+      .cometG { stroke: var(--cyan); stroke-width: 3.5; stroke-dasharray: 18 900; animation: kG 12s linear infinite; }
+      .cometRt { stroke-width: 3.5; stroke-dasharray: 18 900; animation: kRt 12s linear infinite; }
+      .cometM { stroke: var(--cyan); stroke-width: 3.5; stroke-dasharray: 18 900; animation: kM 12s linear infinite; }
+      .fx.ping { animation: ping 12s linear infinite; transform-box: fill-box; transform-origin: center; }
+      .fx.pop { animation: pop 12s linear infinite; }
+      .fx.popL { animation: popL 12s linear infinite; }
+      .refuse { animation: refuse 12s linear infinite; }
+      .burnHalo { animation: burn 12s ease-in-out infinite; }
+      .chipL { animation: kChipL 12s linear infinite; }
+      .chipR { animation: kChipR 12s linear infinite; }
+      .tick { animation: tick 12s linear infinite; }
+
+      /* left lane: fast, done by 2.5s, then inert */
+      @keyframes kL {
+        0%,3% { stroke-dashoffset: 26; }
+        12%   { stroke-dashoffset: -543; }
+        15%   { stroke-dashoffset: -543; }
+        20%   { stroke-dashoffset: -773; }
+        22%,100% { stroke-dashoffset: -812; }
+      }
+      /* right lane: the packet walks the pipeline, pauses at each stage,
+         is refused once at the gate (bounce), passes green */
+      @keyframes kR {
+        0%,3% { stroke-dashoffset: 26; stroke: var(--amber); }
+        12%   { stroke-dashoffset: -177; }
+        20%   { stroke-dashoffset: -177; }
+        26%   { stroke-dashoffset: -253; }
+        33%   { stroke-dashoffset: -253; }
+        39%   { stroke-dashoffset: -329; }
+        46%   { stroke-dashoffset: -329; }
+        50%   { stroke: var(--amber); }
+        52%   { stroke-dashoffset: -405; }
+        53%   { stroke: var(--red); }
+        54.5% { stroke-dashoffset: -375; }
+        58%   { stroke-dashoffset: -375; stroke: var(--red); }
+        61%   { stroke-dashoffset: -423; }
+        62%   { stroke: var(--green); }
+        65%   { stroke-dashoffset: -471; }
+        70%   { stroke-dashoffset: -471; }
+        76%   { stroke-dashoffset: -533; }
+        80%,100% { stroke-dashoffset: -572; stroke: var(--green); }
+      }
+      /* side excursions: out to the apparatus, then the result comes back */
+      @keyframes kG  { 0%,13% { stroke-dashoffset: 18; } 17% { stroke-dashoffset: -340; }
+                       21% { stroke-dashoffset: -340; } 25%,100% { stroke-dashoffset: 18; } }
+      @keyframes kRt { 0%,27% { stroke-dashoffset: 18; stroke: var(--amber); }
+                       31% { stroke-dashoffset: -368; } 33% { stroke: var(--amber); }
+                       34% { stroke-dashoffset: -368; } 35% { stroke: var(--green); }
+                       38.5%,100% { stroke-dashoffset: 18; stroke: var(--green); } }
+      @keyframes kM  { 0%,40% { stroke-dashoffset: 18; } 44% { stroke-dashoffset: -340; }
+                       47.5% { stroke-dashoffset: -340; } 52%,100% { stroke-dashoffset: 18; } }
+      @keyframes ping {
+        0% { opacity: 0; transform: scale(.5); }
+        1% { opacity: .9; transform: scale(.8); }
+        6%,100% { opacity: 0; transform: scale(1.6); }
+      }
+      @keyframes pop  { 0% { opacity: 0; } 1% { opacity: .95; } 4% { opacity: .7; } 9%,100% { opacity: 0; } }
+      @keyframes popL { 0% { opacity: 0; } 1% { opacity: .95; } 10% { opacity: .85; } 16%,100% { opacity: 0; } }
+      @keyframes refuse { 0% { opacity: 0; } 1% { opacity: 1; } 7% { opacity: 1; } 11%,100% { opacity: 0; } }
+      @keyframes burn {
+        0%,10% { opacity: .06; } 12.5% { opacity: .55; } 18% { opacity: .24; }
+        30% { opacity: .34; } 42% { opacity: .18; } 54% { opacity: .32; }
+        66% { opacity: .18; } 78% { opacity: .3; } 92% { opacity: .12; } 100% { opacity: .06; }
+      }
+      @keyframes kChipL { 0%,18% { opacity: .3; } 22% { opacity: 1; } 32% { opacity: .8; }
+                          88% { opacity: .8; } 97%,100% { opacity: .3; } }
+      @keyframes kChipR { 0%,72% { opacity: .35; } 77% { opacity: 1; } 94% { opacity: 1; } 100% { opacity: .35; } }
+      @keyframes tick   { 0% { opacity: .2; } 2% { opacity: 1; } 88% { opacity: 1; } 96%,100% { opacity: .2; } }
+    }
+  </style>
+
+  <!-- ============ the harness enclosure: the right lane HAS a housing; the left is a bare wire -->
+  <rect x="318" y="112" width="664" height="460" rx="18" fill="var(--surface)" stroke="var(--ridge)" stroke-width="1.5"/>
+  <text x="344" y="138" class="mono b muted" font-size="18" letter-spacing="2">THE HARNESS</text>
+  <text x="956" y="138" class="mono faint" font-size="18" text-anchor="end">invisible from the outside</text>
+
+  <!-- ============ lane headers -->
+  <text x="28" y="42" class="mono b ink" font-size="26" letter-spacing="1">PLAIN CLAUDE CODE</text>
+  <text x="28" y="66" class="mono muted" font-size="19">nothing in between</text>
+  <text x="972" y="42" class="mono b ink" font-size="26" text-anchor="end" letter-spacing="1">+ THE RUVNET HARNESS</text>
+  <text x="972" y="66" class="mono muted" font-size="19" text-anchor="end">the same model, wrapped</text>
+
+  <!-- ============ one prompt, split into both worlds -->
+  <rect x="392" y="16" width="216" height="44" rx="12" fill="var(--surface)" stroke="var(--ridge)" stroke-width="1.5"/>
+  <rect x="392" y="16" width="216" height="44" rx="12" fill="none" class="fx ping sAm" stroke-width="3" style="animation-delay:-11.85s"/>
+  <text x="500" y="45" class="mono b ink" font-size="22" text-anchor="middle">&gt;_ same prompt</text>
+
+  <!-- ============ LEFT LANE: prompt -> model -> answer. one thin line, lots of nothing -->
+  <path class="trk" d="M500,60 C500,96 150,96 150,132 L150,372"/>
+  <path class="trk" d="M150,486 L150,502"/>
+  <polygon points="150,241 144,231 156,231" fill="var(--track)"/>
+  <polygon points="150,505 144,495 156,495" fill="var(--track)"/>
+
+  <!-- the one big expensive node, burning the whole session -->
+  <circle cx="150" cy="300" r="63" fill="none" class="burnHalo" stroke="var(--amber)" stroke-width="9"/>
+  <circle cx="150" cy="300" r="56" class="node sAm" stroke-width="2.5"/>
+  <text x="150" y="296" class="mono b ink" font-size="21" text-anchor="middle">FRONTIER</text>
+  <text x="150" y="321" class="mono b ink" font-size="21" text-anchor="middle">MODEL</text>
+  <text x="150" y="392" class="mono amT" font-size="20" text-anchor="middle">$$$ &#183; every task</text>
+
+  <!-- the void, named -->
+  <text x="150" y="424" class="mono muted" font-size="18" text-anchor="middle">no grounding</text>
+  <text x="150" y="447" class="mono muted" font-size="18" text-anchor="middle">no memory</text>
+  <text x="150" y="470" class="mono muted" font-size="18" text-anchor="middle">no gates</text>
+
+  <g class="chipL">
+    <rect x="44" y="510" width="212" height="50" rx="10" fill="var(--surface)" stroke="var(--ridge)" stroke-width="2"/>
+    <text x="150" y="531" class="mono b ink2" font-size="22" text-anchor="middle">an answer</text>
+    <text x="150" y="551" class="mono muted" font-size="18" text-anchor="middle">unchecked &#183; $$$</text>
+  </g>
+
+  <!-- ============ RIGHT LANE: the same prompt, walked through the machinery -->
+  <path class="trk" d="M500,60 C500,96 400,96 400,132 L400,502"/>
+  <polygon points="400,505 394,495 406,495" fill="var(--track)"/>
+
+  <!-- side corridors (dashed: consultations, not the main line) -->
+  <path class="cor" d="M400,161 Q400,146 416,146 L744,146 Q756,146 756,152"/>
+  <path class="cor" d="M400,237 Q400,222 416,222 L764,222 Q776,222 776,234 L776,240"/>
+  <path class="cor" d="M400,313 Q400,298 416,298 L744,298 Q756,298 756,304"/>
+
+  <!-- 1 GROUND -->
+  <circle cx="400" cy="174" r="20" fill="none" class="fx ping sCy" stroke-width="5" style="animation-delay:-10.56s"/>
+  <circle cx="400" cy="174" r="13" class="node sCy"/>
+  <text x="428" y="184" class="mono b ink" font-size="30">GROUND</text>
+  <text x="428" y="210" class="mono muted" font-size="20">cited, not guessed</text>
+  <rect x="756" y="152" width="192" height="46" rx="9" fill="var(--surface)" stroke="var(--cyan)" stroke-width="1.6"/>
+  <rect x="756" y="152" width="192" height="46" rx="9" fill="none" class="fx pop sCy" stroke-width="3" style="animation-delay:-9.8s"/>
+  <g fill="none" class="sCy" stroke-width="1.8">
+    <ellipse cx="782" cy="166" rx="11" ry="4.5"/>
+    <path d="M771,166 v13 a11,4.5 0 0 0 22,0 v-13"/>
+  </g>
+  <text x="866" y="182" class="mono b ink" font-size="19" text-anchor="middle">THE BRAIN</text>
+
+  <!-- 2 ROUTE -->
+  <circle cx="400" cy="250" r="20" fill="none" class="fx ping sAm" stroke-width="5" style="animation-delay:-8.88s"/>
+  <circle cx="400" cy="250" r="13" class="node sAm"/>
+  <text x="428" y="260" class="mono b ink" font-size="30">ROUTE</text>
+  <text x="428" y="286" class="mono muted" font-size="20">cheapest capable model</text>
+  <circle cx="776" cy="250" r="8" class="node sGr"/>
+  <circle cx="776" cy="250" r="8" fill="var(--green)" class="fx popL" style="animation-delay:-8.15s"/>
+  <circle cx="848" cy="250" r="12" class="node sRg"/>
+  <circle cx="920" cy="250" r="17" class="node sRg"/>
+  <text x="776" y="284" class="mono b grT" font-size="19" text-anchor="middle">$</text>
+  <text x="848" y="284" class="mono muted" font-size="19" text-anchor="middle">$$</text>
+  <text x="920" y="284" class="mono muted" font-size="19" text-anchor="middle">$$$</text>
+  <text x="920" y="224" class="mono faint" font-size="16" text-anchor="middle">mostly idle</text>
+
+  <!-- 3 RECALL -->
+  <circle cx="400" cy="326" r="20" fill="none" class="fx ping sCy" stroke-width="5" style="animation-delay:-7.32s"/>
+  <circle cx="400" cy="326" r="13" class="node sCy"/>
+  <text x="428" y="336" class="mono b ink" font-size="30">RECALL</text>
+  <text x="428" y="362" class="mono muted" font-size="20">prior decisions return</text>
+  <rect x="756" y="304" width="192" height="46" rx="9" fill="var(--surface)" stroke="var(--cyan)" stroke-width="1.6"/>
+  <rect x="756" y="304" width="192" height="46" rx="9" fill="none" class="fx pop sCy" stroke-width="3" style="animation-delay:-6.6s"/>
+  <text x="782" y="335" class="cyT" font-size="26" text-anchor="middle">&#8634;</text>
+  <text x="870" y="334" class="mono b ink" font-size="19" text-anchor="middle">MEMORY</text>
+
+  <!-- 4 GATE: the only stage that can say no -->
+  <circle cx="400" cy="402" r="22" fill="none" class="fx ping sRd" stroke-width="5" style="animation-delay:-5.76s"/>
+  <rect x="386" y="388" width="9" height="28" rx="4" fill="var(--ink2)"/>
+  <rect x="405" y="388" width="9" height="28" rx="4" fill="var(--ink2)"/>
+  <g class="fx pop" style="animation-delay:-5.76s">
+    <rect x="386" y="388" width="9" height="28" rx="4" fill="var(--red)"/>
+    <rect x="405" y="388" width="9" height="28" rx="4" fill="var(--red)"/>
+  </g>
+  <g class="fx pop" style="animation-delay:-4.65s">
+    <rect x="386" y="388" width="9" height="28" rx="4" fill="var(--green)"/>
+    <rect x="405" y="388" width="9" height="28" rx="4" fill="var(--green)"/>
+  </g>
+  <text x="428" y="412" class="mono b ink" font-size="30">GATE</text>
+  <text x="545" y="411" class="mono b rdT refuse" font-size="20" style="animation-delay:-5.76s">&#10005; refused the write</text>
+  <text x="428" y="438" class="mono muted" font-size="20">inspects the write &#183; can refuse</text>
+
+  <!-- 5 VERIFY -->
+  <circle cx="400" cy="466" r="22" fill="none" class="fx ping sGr" stroke-width="5" style="animation-delay:-4.2s"/>
+  <path d="M400,448 l16,7 v9 c0,10 -7,16 -16,21 c-9,-5 -16,-11 -16,-21 v-9 z" class="node sGr"/>
+  <path d="M400,448 l16,7 v9 c0,10 -7,16 -16,21 c-9,-5 -16,-11 -16,-21 v-9 z" fill="none" class="fx pop sGr" stroke-width="3.5" style="animation-delay:-4.2s"/>
+  <path d="M392,466 l6,7 l11,-13" fill="none" stroke="var(--grT)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="428" y="474" class="mono b ink" font-size="30">VERIFY</text>
+  <text x="428" y="500" class="mono muted" font-size="20">provenance + safety gate</text>
+
+  <!-- the answer that earned its badges -->
+  <g class="chipR">
+    <rect x="326" y="510" width="340" height="50" rx="10" fill="var(--surface)" class="sGr" stroke-width="2"/>
+    <rect x="326" y="510" width="340" height="50" rx="10" fill="none" class="fx pop sGr" stroke-width="3.5" style="animation-delay:-2.85s"/>
+    <text x="496" y="531" class="mono b ink" font-size="22" text-anchor="middle">answer</text>
+    <text x="344" y="551" class="mono grT tick" font-size="18" style="animation-delay:-2.6s">&#10003; grounded</text>
+    <text x="472" y="551" class="mono grT tick" font-size="18" style="animation-delay:-2.2s">&#10003; cited</text>
+    <text x="556" y="551" class="mono grT tick" font-size="18" style="animation-delay:-1.8s">&#10003; checked</text>
+  </g>
+
+  <!-- ============ payoff
+       Sits BELOW the harness panel (which ends at y=572), not under it. The serif line's
+       ascenders reach ~34u above its baseline, so a baseline of 596 put its bbox top at 562 —
+       10u inside the panel, which rendered the line as if it were behind the box. Baseline 620
+       clears the panel by 14u; the viewBox grew 620->652 to hold both lines. Measured with
+       getBBox(), not eyeballed. -->
+  <text x="500" y="620" class="serif ink" font-size="33" text-anchor="middle">A cheap model in a good harness &#8776; a frontier model, for less.</text>
+  <text x="500" y="643" class="mono muted" font-size="19" text-anchor="middle">measured: 28.5% cheaper at 98.1% bar-compliance &#8212; ADR-073, cited in ADR-076</text>
+
+  <!-- ============ the moving parts (motion only; hidden under reduced motion) -->
+  <path class="comet cometL cH" d="M500,60 C500,96 150,96 150,132 L150,530"/>
+  <path class="comet cometL cC" d="M500,60 C500,96 150,96 150,132 L150,530"/>
+  <path class="comet cometG" d="M400,161 Q400,146 416,146 L744,146 Q756,146 756,152"/>
+  <path class="comet cometRt" d="M400,237 Q400,222 416,222 L764,222 Q776,222 776,234 L776,240"/>
+  <path class="comet cometM" d="M400,313 Q400,298 416,298 L744,298 Q756,298 756,304"/>
+  <path class="comet cometR cH" d="M500,60 C500,96 400,96 400,132 L400,530"/>
+  <path class="comet cometR cC" d="M500,60 C500,96 400,96 400,132 L400,530"/>
+</svg>
