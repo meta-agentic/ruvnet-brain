@@ -76,3 +76,10 @@ kb/.ruv-gists.cache.json
 
 # RVF store advisory locks (transient, created by any query)
 *.rvf.lock
+.vercel
+
+# rUv advice videos/transcripts — watched & ingested into the brain, never committed (1GB+ media)
+docs/Ruv_advice/
+
+# meeting-transcript KB store — semi-private community calls, LOCAL brain only (also fenced in kb/PRIVATE-STORES.json)
+kb/ruv-meetings.*

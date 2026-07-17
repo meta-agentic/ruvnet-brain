@@ -3,12 +3,14 @@
   "privateStores": [
     "cognitum-seed",
     "cognitum-v0-appliance",
-    "cognitum-platform-docs"
+    "cognitum-platform-docs",
+    "ruv-meetings"
   ],
   "details": {
     "cognitum-seed": { "repo": "cognitum-one/seed", "visibility": "private" },
     "cognitum-v0-appliance": { "repo": "cognitum-one/v0-appliance", "visibility": "private" },
-    "cognitum-platform-docs": { "repo": "cognitum-one/platform-docs", "visibility": "private" }
+    "cognitum-platform-docs": { "repo": "cognitum-one/platform-docs", "visibility": "private" },
+    "ruv-meetings": { "repo": "(none — Read.ai transcripts of semi-private community calls; participants did not consent to public redistribution)", "visibility": "private" }
   },
   "publicNote": "cognitum-cogs (cognitum-one/cogs) and cognitum-support (cognitum-one/support) are PUBLIC and bundle-safe."
 }
