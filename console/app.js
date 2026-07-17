@@ -688,6 +688,9 @@ function renderWiring(w) {
 
   const main = [];
   // Visual first (Stuart 2026-07-16: "make this section visual — this just doesn't help"): the four
+  // NOTE (2026-07-17): see renderGates for the card that answers "what stopped Claude". This card
+  // answers only "where do tools launch from" — a census. Keep them distinct.
+
   // wiring lanes as one proportional bar + stat doors, each lane carrying its one-line meaning.
   // The prose wall is gone; the info popover keeps the full explanation for whoever wants it.
   const lanes = [
@@ -1716,11 +1719,14 @@ function renderTrust(t) {
   const body = $('#body-trust');
   const rel = t.release || {};
   const ch = t.channel || {};
+  const sb = t.sbom || {};
+  const liveCount = (rel.ok ? 1 : 0) + (sb.present ? 1 : 0);
 
   setChips('chips-trust', [
     rel.ok ? chip('sha256 published ✓', 'green', 'The release bundle’s fingerprint is published and was read live this session')
            : chip('digest unreachable', 'warn', 'Couldn’t read the published digest this session'),
-    chip('SBOM — v3.3', 'coming', 'A CycloneDX SBOM ships with every release from v3.3'),
+    sb.present ? chip(`SBOM · ${sb.componentCount} component${sb.componentCount === 1 ? '' : 's'} ✓`, 'green', 'A local CycloneDX SBOM was found and read live this session')
+                : chip('SBOM — v3.3', 'coming', 'A CycloneDX SBOM ships with every release from v3.3'),
     ch.installed ? chip(ch.channel === 'pinned' ? 'pinned' : 'latest channel', 'cyan') : chip('no plugin install', 'grey'),
   ]);
 
@@ -1747,14 +1753,25 @@ function renderTrust(t) {
     ],
   }));
 
-  /* 2 · SBOM — honest empty state */
+  /* 2 · SBOM — real once `npm run sbom` has been run locally; honest empty state until then */
   rows.push(trustRow({
-    name: 'SBOM', info: TRUST_INFO.sbom, coming: true,
-    status: chip('coming · v3.3', 'coming'),
-    value: [
-      el('p', {}, 'Not published yet — nothing to show, so nothing is shown. From ', el('b', {}, 'v3.3'),
-        ' every release carries a ', el('b', {}, 'CycloneDX SBOM'),
-        '; this row will then report its package count and digest, measured from the published asset itself.'),
+    name: 'SBOM', info: TRUST_INFO.sbom, coming: !sb.present,
+    status: sb.present ? chip(`${sb.componentCount} component${sb.componentCount === 1 ? '' : 's'}`, 'green') : chip('coming · v3.3', 'coming'),
+    value: sb.present ? [
+      el('p', {}, 'A ', el('b', {}, `CycloneDX ${sb.specVersion || ''}`.trim()), ' SBOM exists on this machine: ',
+        el('b', {}, `${sb.componentCount} component${sb.componentCount === 1 ? '' : 's'}`),
+        sb.mainComponent ? ` for ${sb.mainComponent}${sb.mainVersion ? `@${sb.mainVersion}` : ''}` : '',
+        sb.generatedAt ? ` · generated ${fmtDate(sb.generatedAt)}` : ''),
+      el('p', {}, 'This is the production dependency tree only (', el('code', {}, '--omit dev'),
+        ') — the plugin and installer ship no other packages. Regenerate any time: ', el('code', {}, 'npm run sbom')),
+      el('span', { class: 'trust-src' }, sb.path || 'sbom/ruvnet-brain.cdx.json'),
+    ] : [
+      el('p', {}, sb.error
+        ? `Found sbom/ruvnet-brain.cdx.json but couldn’t read it (${sb.error}).`
+        : 'Not generated yet on this machine — nothing to show, so nothing is shown.'),
+      el('p', {}, 'Run ', el('code', {}, 'npm run sbom'),
+        ' to produce a CycloneDX SBOM of the shipped dependency tree right now. From ', el('b', {}, 'v3.3'),
+        ' every published release carries one too, measured from the release asset itself.'),
     ],
   }));
 
@@ -1804,8 +1821,8 @@ function renderTrust(t) {
 
   body.replaceChildren(
     el('p', { class: 'lead-stat' },
-      'Provenance you can check, not take on faith — ', el('b', {}, '1'),
-      ' measurement is live today; the rest of this card names exactly what v3.3 will measure.'),
+      'Provenance you can check, not take on faith — ', el('b', {}, String(liveCount)),
+      ` measurement${liveCount === 1 ? ' is' : 's are'} live today; the rest of this card names exactly what v3.3 will measure.`),
     el('div', { class: 'trust-list', 'data-trust-ready': '1' }, ...rows),
   );
 }
@@ -1846,6 +1863,7 @@ async function loadState() {
         renderMemory(c.memory);
         renderSavings(c.savings);
         renderSettings(c.config);
+        renderGates(c.gates);
         dismissStandby();
       }
     } catch { /* no cache yet — the skeleton narration carries the wait */ }
@@ -1859,6 +1877,7 @@ async function loadState() {
     renderMemory(s.memory);
     renderSavings(s.savings);
     renderSettings(s.config);
+    renderGates(s.gates);
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);
     dismissStandby(); // first cards are hydrated — the standby line has done its job
@@ -1881,6 +1900,57 @@ async function loadState() {
 // The across-your-projects fleet list opens every memory store on the machine. It is the single
 // slowest thing the console does, so it is fetched on its own and merged into the memory card once
 // it lands — the health score and everything else are already on screen by then.
+/* ------------------------------------------------- what caught Claude (the gates + their receipts) */
+
+// The verdict is the headline, never the inventory. "21 hooks are configured" is a census; "6 of them
+// can stop a tool call, and here is what they stopped" is the point. An empty ledger says so plainly —
+// it is the one number on this page that must never be guessed, because the whole claim rests on it.
+function renderGates(g) {
+  const body = $('#body-gates');
+  if (!g || !g.summary) {
+    setChips('chips-gates', [chip('no data', 'grey')]);
+    body.replaceChildren(el('p', { class: 'muted' }, 'No gate data received.'));
+    return;
+  }
+  const s = g.summary;
+  const caught = s.caughtTotal || 0;
+  setChips('chips-gates', [
+    chip(`${s.blocking} can block`, caught ? 'green' : 'cyan'),
+    chip(caught ? `${caught} caught` : 'nothing caught yet', caught ? 'green' : 'grey'),
+  ]);
+
+  const main = [];
+  main.push(el('p', { class: 'lead-stat' },
+    'Every move your AI makes here is read first. ', el('b', {}, String(s.armed)),
+    ' gates are armed — ', el('b', {}, String(s.blocking)),
+    ' of them can stop a tool call before it touches your machine. The other ',
+    el('b', {}, String(s.advisory)), ' add context without ever blocking.'));
+
+  if (caught) {
+    main.push(el('div', { class: 'wire-lanes' },
+      ...g.catches.map((c) => el('div', { class: 'wire-lane' },
+        el('span', { class: 'wire-dot w-npx', 'aria-hidden': 'true' }),
+        el('b', { class: 'wire-n' }, c.gate || 'gate'),
+        el('span', { class: 'wire-lab' }, c.subject || ''),
+        el('span', { class: 'wire-meaning cell-dim' }, c.reason || '')))));
+  } else {
+    // Honest empty state. The gates only started writing receipts on 2026-07-17; saying "0 blocks"
+    // as though it were a measured safety record would be a lie of omission.
+    main.push(el('p', { class: 'cell-dim' },
+      'Nothing caught yet. The gates began recording every refusal on 17 Jul — from here on, each ',
+      'time one stops your AI, the reason lands on this card. Silence here means silence, not proof.'));
+  }
+
+  if (Array.isArray(s.duplicated) && s.duplicated.length) {
+    main.push(el('p', { class: 'cell-dim' },
+      '⚠ ', el('b', {}, s.duplicated.join(', ')),
+      s.duplicated.length > 1 ? ' are wired twice' : ' is wired twice',
+      ' — once machine-wide and once by the plugin, so they run twice on every matching call. ',
+      'Harmless, but it is duplicated work.'));
+  }
+  body.replaceChildren(...main);
+}
+
 async function loadMemoryFleet() {
   try {
     const m = await getJSON('/api/memory');

@@ -119,5 +119,6 @@ Then log the receipt when it returns, so the saving is visible instead of assert
 
 Deliberate exception (rare — and say WHY out loud): RUVNET_ALLOW_INHERITED_MODEL=1
 EOF
+bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" route-dispatch "subagent" "would inherit the session model instead of routing to a cheaper one" 2>/dev/null || true
 printf '%s\n' "$BLOCK_MSG" >&2
 exit 2

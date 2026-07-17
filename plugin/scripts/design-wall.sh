@@ -62,6 +62,9 @@ for s in "${need[@]}"; do
     [ "$agemin" -le 45 ] && ok=1
   fi
   if [ "$ok" != "1" ]; then
+    # Record the catch BEFORE refusing. The block is the evidence — without this line the ledger
+    # shows only the passing grade that came after the fix, and the wall cannot prove it ever held.
+    bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" design-wall "$s" "no fresh passing grade — ungraded visual surface" 2>/dev/null || true
     cat >&2 <<EOF
 ⛔ DESIGN WALL — no fresh passing grade for surface '$s'.
 Nothing visual ships, commits, or opens for the user until it has been LOOKED AT as an end user

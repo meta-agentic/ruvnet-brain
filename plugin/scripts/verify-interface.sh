@@ -179,5 +179,6 @@ EFFECTIVE BEATS EFFICIENT. Skipping this step has never once saved time.
 stdin and never executes, so exporting the variable in your shell first does nothing:
     RUVNET_SKIP_INTERFACE_CHECK=1 ${TOOL} ${SUB} ...)
 EOF
+bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" verify-interface "${TOOL:-} ${SUB:-}" "CLI interface not verified before use" 2>/dev/null || true
 printf '%s\n' "$MSG" >&2
 exit 2

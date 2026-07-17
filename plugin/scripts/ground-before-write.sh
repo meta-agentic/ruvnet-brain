@@ -92,5 +92,6 @@ Reading real source stamps the term for 24h and this gate opens. rUv's own rule 
 prompts are advisory; the gate is not. EFFECTIVE BEATS EFFICIENT.
 (Deliberate override, say why out loud: RUVNET_SKIP_GROUNDING_CHECK=1)
 EOF
+bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" ground-before-write "${MISSING%% *}" "rUv-product code without a fresh search_ruvnet stamp" 2>/dev/null || true
 printf '%s\n' "$MSG" >&2
 exit 2
