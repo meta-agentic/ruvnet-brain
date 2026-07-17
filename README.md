@@ -36,7 +36,20 @@
 
 ---
 
-## What's new in 3.3 — it stopped reciting facts and started making a point
+## What's new in 3.4 — the invisible work, made visible (and readable)
+
+**Shipped 2026-07-17.** 3.3 made every card lead with a point. Then Stuart looked at the two pages meant to *teach* the stack and scored them 55/100: the graphics were mediocre, the one page that should show how the pieces fit was a wall of text, and two diagrams were literally unreadable. 3.4 is the fix — the harness's invisible work, finally drawn, and drawn so you can actually read it.
+
+- **The animation that shows the whole argument** — one prompt, sent two ways. Plain Claude Code: a bare wire to one expensive model, no grounding, no memory, no gates. The same model **wrapped in the harness**: it grounds the prompt, routes it to the cheapest model that can do the job, hands back what your project already decided, **inspects the write and can refuse it**, and checks it on the way out. The left lane finishes first — and that's the problem.
+- **MetaHarness, as a picture** — the old card was rectangles with words in them. It's now the thesis at a glance: the model a **frozen** cyan crystal that never moves, seven policy surfaces evolving in a warm orbit around it, the kept branch merging back and the pruned one dying mid-air. *Freeze the model, evolve the harness.* Every number traces to an accepted ADR (28.5% cheaper at 98.1% bar-compliance — ADR-073/075/076).
+- **Diagrams you can actually read** — two of them shipped with labels rendering at **8px and 3px**: present, un-clipped, and invisible. An SVG sized in one coordinate system, crushed into a narrower column, silently shrinks its own text and no error ever fires. There's now a gate for exactly that (`scripts/check-legibility.mjs`) — it measures the *effective* pixel size in the live page, proven to catch the known-bad case before it was trusted. Every diagram label now clears 12px on a phone.
+- **The tips page has a door** — its only link wore the same style as a status readout beside it, and on a phone was hidden entirely — the page was **unreachable under 640px**. There's now an unmissable button where it belongs.
+- **Real generated imagery** — three commissioned stills built from the console's own palette, so they belong to the page instead of sitting on top of it.
+
+<details>
+<summary><b>Earlier &#8212; what 3.3 proved</b> &#183; it stopped reciting facts and started making a point. <i>Expand for the receipts.</i></summary>
+
+## 3.3 — it stopped reciting facts and started making a point
 
 **Shipped 2026-07-17.** 3.2 made the stack visible. Visible turned out not to be the same as *useful*: the console could tell you 21 things and leave you no smarter. Stuart, looking at his own product: *"I have no idea what message it's supposed to tell me… it seems to be facts without purpose."* 3.3 is the answer to that — every card now leads with a **verdict**, not a census.
 
@@ -46,6 +59,8 @@
 - **The money leads** — the router card buried *$15.17 saved* as the dimmest text on the row while `FRONTIER — 0` read like missing data. It's the punchline: the expensive model never had to fire. Now it says that, in that order.
 - **What caught Claude** — a new card. 21 gates read every move before it lands; 6 can stop one. The walls now record what they *catch*, not just what they pass — because the ledger held 13 receipts, 13 passing, while the design wall had refused a commit minutes earlier and written nothing down.
 - **The console loads in 0.2s** (was ~14s) — a fleet-wide scan of 107 memory stores sat on the critical path of first paint. It hydrates late now.
+
+</details>
 
 <details>
 <summary><b>Earlier &#8212; what 3.2 proved</b> &#183; the invisible stack, made visible. <i>Expand for the receipts.</i></summary>
