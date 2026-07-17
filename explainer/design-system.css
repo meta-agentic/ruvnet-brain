@@ -320,10 +320,14 @@ pre.code-block .s { color: var(--accent-2); }              /* string/flag   */
   letter-spacing: var(--display-tracking); text-transform: var(--display-case); color: var(--ink);
 }
 .brand .logo, .brand svg { width: 28px; height: 28px; flex: none; }
-.nav-links { display: none; gap: 4px; }
+.nav-links { display: none; gap: 2px; }
 .nav-links a {
   font-family: var(--mono); font-size: var(--step--2); letter-spacing: 0.04em;
-  color: var(--muted); padding: 7px 11px; border-radius: 7px;
+  color: var(--muted); padding: 6px 8px; border-radius: 7px;
+  /* A nav label that wraps gets sliced by the header's height — the words disappear mid-air with no
+     scrollbar to hint at it. Ten links only fit the 1120px container as single short words; nowrap
+     makes that a rule the layout enforces rather than a coincidence of the current strings. */
+  white-space: nowrap;
   transition: color 0.18s var(--ease), background 0.18s var(--ease);
 }
 .nav-links a:hover { color: var(--ink); background: var(--fill); }

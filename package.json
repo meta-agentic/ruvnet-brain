@@ -30,7 +30,8 @@
     "substitution:check": "node scripts/no-silent-substitution.mjs",
     "catalog:verify": "node scripts/verify-model-catalog.mjs",
     "catalog:refresh": "node scripts/refresh-model-catalog.mjs",
-    "falsify": "node scripts/falsify.mjs"
+    "falsify": "node scripts/falsify.mjs",
+    "sbom": "npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file sbom/ruvnet-brain.cdx.json --mc-type application --validate"
   },
   "files": [
     "bin/install.mjs",
@@ -81,6 +82,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@metaharness/flywheel": "^0.1.7",
     "@metaharness/router": "^0.3.2"
   }
 }
