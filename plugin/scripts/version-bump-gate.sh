@@ -76,5 +76,6 @@ Before pushing:
 (Stuart, 2026-07-13: "that's not negotiable." Deliberate override, say why out loud:
 RUVNET_SKIP_VERSION_GATE=1)
 EOF
+bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" version-bump-gate "push" "commits carried no version bump — an update nothing can see" 2>/dev/null || true
 printf '%s\n' "$MSG" >&2
 exit 2

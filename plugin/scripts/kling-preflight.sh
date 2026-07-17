@@ -130,5 +130,6 @@ Full technique: ~/.claude/docs/KLING-OPERATOR-GUIDE.md (§0 pre-flight · §4 fo
 LATENT KNOWLEDGE IS NOT KNOWLEDGE. Research is not a deliverable — an applied result is.
 (Deliberate override, say why out loud: RUVNET_SKIP_KLING_PREFLIGHT=1)
 EOF
+bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" kling-preflight "paid generation" "no applied pre-flight — latent knowledge is not knowledge" 2>/dev/null || true
 printf '%s\n' "$MSG" >&2
 exit 2
