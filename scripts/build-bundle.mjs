@@ -214,7 +214,7 @@ cp('SOURCE.json', OUT);
 try {
   const sj = path.join(OUT, 'SOURCE.json');
   const doc = JSON.parse(fs.readFileSync(sj, 'utf8'));
-  doc.releaseTag = getVersionTag(); // e.g. "v3.4.1-dev" — real, never "unknown"
+  doc.releaseTag = getVersionTag(); // the real product version tag — never the literal "unknown"
   fs.writeFileSync(sj, JSON.stringify(doc, null, 2));
 } catch (e) { console.error(`[build-bundle] WARN: could not stamp releaseTag into SOURCE.json (${e.message}) — installs will report 'unknown' until fixed.`); }
 
