@@ -31,6 +31,25 @@ field() { local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""; [[ $INPUT =~ $
 CMD=$(field command)
 [ -n "$CMD" ] || exit 0
 
+# ── Repo identity gate (2026-07-17, issue #17) ───────────────────────────────────────────────────
+# BUG: this hook never checked WHICH repo it was running in, so a plain `git commit` touching a
+# README.md in ANY unrelated project on this machine (any repo where the plugin happens to be
+# installed) got blocked demanding a ruvnet-brain design-grade ritual for someone else's CLI tool.
+# The whole point of this wall is to guard ruvnet-brain's OWN surfaces — its stamp path lives under
+# ~/.cache/ruvnet-brain, and explainer/ + console/ only exist in ruvnet-brain's own checkout — so it
+# has no business firing anywhere else. Identify the repo via the plugin manifest's own name field
+# first (authoritative — a renamed clone/fork can't fake it just by matching a directory name), and
+# fall back to the console/+explainer/+design-grade.mjs trio only if the manifest is missing.
+ROOT=$(git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --show-toplevel 2>/dev/null)
+[ -n "$ROOT" ] || exit 0
+IS_RUVNET_BRAIN=0
+if [ -f "$ROOT/plugin/.claude-plugin/plugin.json" ]; then
+  grep -Eq '"name"[[:space:]]*:[[:space:]]*"ruvnet-brain"' "$ROOT/plugin/.claude-plugin/plugin.json" 2>/dev/null && IS_RUVNET_BRAIN=1
+elif [ -d "$ROOT/console" ] && [ -d "$ROOT/explainer" ] && [ -f "$ROOT/scripts/design-grade.mjs" ]; then
+  IS_RUVNET_BRAIN=1
+fi
+[ "$IS_RUVNET_BRAIN" = "1" ] || exit 0
+
 # ── The escape hatch, made reachable (2026-07-17) ────────────────────────────────────────────────
 # BUG: this check read RUVNET_SKIP_DESIGN_WALL from the HOOK's own environment. But a PreToolUse
 # hook runs in its own process, spawned BEFORE the command exists — so `RUVNET_SKIP_DESIGN_WALL=1

@@ -38,8 +38,35 @@ import os from 'node:os';
 import path from 'node:path';
 
 const HOME = os.homedir();
-const PREFIX = path.join(HOME, '.npm-global');
-const GLOBAL_LIB = path.join(PREFIX, 'lib/node_modules');
+
+// ISSUE #18 (Henrik Pettersen): PREFIX used to be hardcoded to ~/.npm-global. That path is Stuart's
+// own convention, not an npm default — on any machine managing Node via mise/nvm/volta/fnm, npm's
+// real global prefix lives somewhere else entirely (e.g. ~/.local/share/mise/installs/node/24.14.1),
+// so the hardcoded path never existed there and this tool reported "0 packages on your global
+// stack" with the full stack actually installed under the real prefix — reporting health while
+// blind, the exact failure ADR-0013 (Onboarding Console) exists to kill.
+// Fix: ask npm itself where its prefix is, at runtime, and resolve it ONCE at module load (not per
+// call — `npm config get prefix` is a subprocess spawn, not free). Fall back to ~/.npm-global only
+// if npm can't tell us anything usable.
+function resolveNpmPrefix() {
+  const r = spawnSync('npm', ['config', 'get', 'prefix'], { encoding: 'utf8', timeout: 10000 });
+  const out = r.status === 0 && r.stdout ? r.stdout.trim() : '';
+  return out || path.join(HOME, '.npm-global');
+}
+
+// npm's on-disk layout for global packages differs by platform: macOS/Linux nest an extra `lib/`
+// segment (<prefix>/lib/node_modules), Windows does not (<prefix>/node_modules). Rather than assume
+// either, prefer whichever actually exists on disk so one code path works on both.
+function resolveGlobalLib(prefix) {
+  const withLib = path.join(prefix, 'lib', 'node_modules');
+  const withoutLib = path.join(prefix, 'node_modules');
+  if (fs.existsSync(withLib)) return withLib;
+  if (fs.existsSync(withoutLib)) return withoutLib;
+  return withLib; // neither exists yet (e.g. a fresh/empty prefix) — keep the more common shape
+}
+
+const PREFIX = resolveNpmPrefix();
+const GLOBAL_LIB = resolveGlobalLib(PREFIX);
 const NPX_CACHE = path.join(HOME, '.npm/_npx');
 const RECEIPT = path.join(HOME, '.cache/ruvnet-brain/stack-sync-receipt.json');
 
