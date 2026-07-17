@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.4.4-dev",
+    "softwareVersion": "3.4.5-dev",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-16",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 56 indexed repos — and pre-implements two of rUv's hardest tools so you can run them in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and an Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.4.4-dev</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.4.5-dev</p>
     </div>
   </div>
 
@@ -444,7 +444,37 @@
           .v34-once strong{color:var(--ink)}
           .v34-alt{margin:0;max-width:none;font-size:var(--step--1);color:var(--muted)}
           .v34-alt code{white-space:nowrap} /* never split "--update" across lines */
-          @media (max-width:940px){.v34-duo{grid-template-columns:1fr}}
+          /* right column stacks the update command ON TOP of the console→tips sweep (the console image
+             is crucial — it's how people discover the console page; the command sits ABOVE it). */
+          .v34-right{display:flex;flex-direction:column;gap:22px}
+          .v34-sweep{margin:0}
+          .sweep-stage{position:relative;border-radius:14px 14px 0 0;overflow:hidden;aspect-ratio:1040/1500;
+            max-height:560px;border:1px solid rgba(94,214,255,.22);border-bottom:none;
+            box-shadow:0 24px 60px -28px rgba(0,0,0,.8);background:#0b0d12}
+          .sweep-stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+          .sweep-base{z-index:1}
+          /* tips layer hidden by default (reduced-motion base = the console, unchanged); the wipe reveals it */
+          .sweep-top{z-index:2;clip-path:inset(0 0 0 100%)}
+          .sweep-tag{position:absolute;left:12px;bottom:12px;z-index:3;font-family:var(--mono,ui-monospace,monospace);
+            font-size:12px;letter-spacing:.06em;padding:5px 10px;border-radius:8px;color:#eaf6ff;
+            background:rgba(8,10,14,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+          .sweep-tag code{color:#8fe0ff;background:none;border:none;padding:0}
+          .sweep-tag-b{opacity:0}
+          .v34-sweep figcaption{margin:10px 2px 0;font-size:var(--step--1);color:var(--muted);text-wrap:balance}
+          @media (prefers-reduced-motion:no-preference){
+            .sweep-top{animation:v34sweep 11s cubic-bezier(.65,0,.35,1) infinite}
+            .sweep-tag-a{animation:v34tagA 11s linear infinite}
+            .sweep-tag-b{animation:v34tagB 11s linear infinite}
+          }
+          /* console holds → tips wipes in from the right → holds → wipes back. One page sweeping into the next. */
+          @keyframes v34sweep{
+            0%,18%{clip-path:inset(0 0 0 100%)}
+            38%,68%{clip-path:inset(0 0 0 0)}
+            88%,100%{clip-path:inset(0 0 0 100%)}
+          }
+          @keyframes v34tagA{0%,22%{opacity:1}34%,84%{opacity:0}96%,100%{opacity:1}}
+          @keyframes v34tagB{0%,26%{opacity:0}40%,66%{opacity:1}80%,100%{opacity:0}}
+          @media (max-width:940px){.v34-duo{grid-template-columns:1fr}.sweep-stage{max-height:640px}}
           /* narrow screens: the command WRAPS at spaces (copy still yields one line) — never clipped.
              The flags stay pre (unbreakable) so "--update" can never split at its hyphens. */
           @media (max-width:600px){
@@ -479,16 +509,33 @@
                 then on, verifying each bundle&rsquo;s signature before applying<span class="spear-src">run once, stay current</span></p>
             </div>
           </div>
-          <div class="v34-update">
-            <p class="v34-kicker">On an old version? <strong>One line makes you current.</strong></p>
-            <div class="install-block">
-              <pre class="code-block"><code><span class="c"># one line: update now, stay current forever</span>
+          <div class="v34-right">
+            <div class="v34-update">
+              <p class="v34-kicker">On an old version? <strong>One line makes you current.</strong></p>
+              <div class="install-block">
+                <pre class="code-block"><code><span class="c"># one line: update now, stay current forever</span>
 npx ruvnet-brain@latest <span class="s">--update --auto</span></code></pre>
-              <p class="v34-once"><strong>Run it once &mdash; it auto-updates from then on.</strong> You never have to
-                run it again: every future bundle is fetched, signature-verified, and applied for you.</p>
-              <p class="v34-alt">Prefer a one-time update without auto-enroll?
-                <code>npx ruvnet-brain@latest --update</code></p>
+                <p class="v34-once"><strong>Run it once &mdash; it auto-updates from then on.</strong> You never have to
+                  run it again: every future bundle is fetched, signature-verified, and applied for you.</p>
+                <p class="v34-alt">Prefer a one-time update without auto-enroll?
+                  <code>npx ruvnet-brain@latest --update</code></p>
+              </div>
             </div>
+            <!-- The two companion pages, and the animation that shows they flow into each other: the
+                 CONSOLE ("your stack, made visible") sweeps into its HOW-TO-USE-IT page. Both are real
+                 screenshots (1040x1500), the sweep is a pure-CSS clip-path wipe, reduced-motion-safe. -->
+            <figure class="v34-sweep">
+              <div class="sweep-stage" role="img"
+                   aria-label="The RuvNet Brain console page sweeping into its how-to-use-it companion page — two pages that flow into one another.">
+                <img class="sweep-base" src="assets/console-v3.png" width="1040" height="1500" loading="lazy" decoding="async"
+                     alt="The RuvNet Brain console — your invisible AI stack, made visible" />
+                <img class="sweep-top" src="assets/tips-v3.png" width="1040" height="1500" loading="lazy" decoding="async" aria-hidden="true" alt="" />
+                <span class="sweep-tag sweep-tag-a">the console &middot; <code>/rvbc</code></span>
+                <span class="sweep-tag sweep-tag-b">&hellip; and how to use it</span>
+              </div>
+              <figcaption>two pages, one flow &mdash; the live console, and its <b>how-to-use-it</b> companion.
+                Type <strong><code>/rvbc</code></strong> to open both.</figcaption>
+            </figure>
           </div>
         </div>
 
