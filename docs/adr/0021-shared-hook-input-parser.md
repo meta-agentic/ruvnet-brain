@@ -49,5 +49,10 @@ file, regenerated in the sibling. JSON string escaping is not a regular language
   re-litigated per file. A future gate imports the parser; it does not invent a fourth regex.
 - design-wall.sh is now *stricter* (correct): commands it used to miss on a quote it now evaluates. That
   is the intended behavior — the wall exists to catch exactly those deploys/opens.
-- Follow-up (not blocking): `ground-before-write.sh` still reads its payload independently; port it to
-  hook-input.mjs when next touched.
+- `ground-before-write.sh` deliberately does NOT adopt the shared node parser and stays pure-bash
+  (BASH_REMATCH), enforced by its own test: it is the critical BLOCKING wall, so it must depend on
+  nothing fragile and can never fail-open because a tool went missing. Its #13 exposure is negligible
+  (the product-term scan runs over the raw payload; only file_path parsing is affected, and a truncated
+  path just fails the extension check → harmless fail-open). It did get the real fix it needed — an
+  exemption so it stops firing on the guidance hooks (`ground-ruvnet.sh` / `session-start.sh`) whose
+  job is to enumerate the very rUv product names it scans for.

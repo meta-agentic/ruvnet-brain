@@ -39,7 +39,7 @@ const PLUGIN_VERSION = JSON.parse(
 const PLAYBOOK = 'APPLY THE PLAYBOOK'; // Gate 3 (build)
 const GROUND = 'ground before you assert'; // Gate 1 (ruvnet topic)
 const DRIFT = 'reaching for a classical default'; // Gate 2 (hijack/substitution)
-const HARNESS = 'MetaHarness + QE are standard'; // Gate 4 (quality intent)
+const HARNESS = 'offer MetaHarness + QE'; // Gate 4 (quality intent)
 const FOOTER = 'RuvNet Brain — engaged on this prompt'; // conditional status footer
 
 let tmp; // fake project cwd for every hook fire

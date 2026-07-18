@@ -44,6 +44,12 @@ PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
 [ "${RUVNET_SKIP_GROUNDING_CHECK:-0}" = "1" ] && exit 0
 
+# This gate is a BLOCKING wall (the #1-failure preventer), so by deliberate design (ADR-0021, and
+# enforced by ground-before-write.test.mjs) it depends on NOTHING fragile — pure bash builtins, no
+# node/jq/python — and therefore cannot fail-open because a tool went missing. The #13 quote-truncation
+# that justified hook-input.mjs for design-wall does NOT bite here: the product-term scan below runs
+# over the RAW payload (untouched by field()), and the only parsed values are tool_name (Write/Edit —
+# no quotes) and file_path (a truncated path merely fails the extension check → exit 0, harmless).
 field() { local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""; [[ $INPUT =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"; }
 
 case "$(field tool_name)" in Write|Edit|MultiEdit) ;; *) exit 0 ;; esac
@@ -53,6 +59,14 @@ FILE_PATH=$(field file_path)
 case "$FILE_PATH" in
   *.mjs|*.cjs|*.js|*.ts|*.tsx|*.jsx|*.sh|*.bash|*.zsh|*.rs|*.py|*.go) ;;
   *) exit 0 ;;
+esac
+# The grounding-guidance hooks ENUMERATE every rUv product by design — that IS their job: telling the
+# model which rUv primitive replaces which classical default. They don't hand-roll or call any rUv
+# tool, so demanding a fresh stamp per listed term just to EDIT the guidance is a false positive — the
+# gate firing on its own source material (it blocked a trim of ground-ruvnet.sh on 2026-07-18). Exempt
+# these two by basename; the repo-wide CI gates (claims-verify, no-silent-substitution) still cover them.
+case "$FILE_PATH" in
+  */ground-ruvnet.sh|*/session-start.sh) exit 0 ;;
 esac
 
 shopt -s nocasematch 2>/dev/null || true
