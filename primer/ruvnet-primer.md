@@ -1,6 +1,6 @@
 # The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v3.4.7-dev · Built: 2026-07-17 · Covers: 57/181 repos built @ pinned SHAs (see data/manifest.json)`
+`Brain version: v3.4.8-dev · Built: 2026-07-17 · Covers: 57/181 repos built @ pinned SHAs (see data/manifest.json)`
 
 > **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
 > **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
@@ -11,7 +11,7 @@
 
 ## What the brain is
 
-- A **portable brain** over **32 RuvNet building-block repos**, embedded and indexed at pinned SHAs.
+- A **portable brain** over **57 RuvNet building-block repos**, embedded and indexed at pinned SHAs.
 - Delivered as a **Claude Code plugin**: **one tool (`search_ruvnet`)** + **one enforcement hook** (a
   UserPromptSubmit grounding directive, so the model can't silently drift) + **one skill**.
 - **Installed once at user scope**, then active in **any** repo you open — not tied to one project.
@@ -98,7 +98,7 @@ target is named (47/48) or only described (26/28)**, with the two residuals abov
    ```
 2. **Open any repo and ask.** The hook grounds the turn; the model calls `search_ruvnet` and answers from
    cited source. Example: *"How does ruflo persist agent memory, and what implements it?"*
-3. **Pull in an uncovered repo on demand** (any of the 173 catalogued, or any rUv repo):
+3. **Pull in an uncovered repo on demand** (any of the 181 catalogued, or any rUv repo):
    ```
    node scripts/ingest-repo.mjs --name <repo>
    ```

@@ -94,6 +94,18 @@ export function applyProfile(candidates, profile) {
   }));
 }
 
+// Honest provenance of the catalog the engine is actually using, so no surface can pass the
+// built-in stub off as a real personal catalog (trust rule: never present a fallback as the thing).
+// Returns 'catalog' when a real ~/.claude/model-router/catalog.json is present + valid, else
+// 'built-in-fallback'. Same check loadCatalog() uses — kept in lockstep.
+export function catalogSource() {
+  try {
+    const j = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
+    if (Array.isArray(j.candidates) && j.candidates.length) return 'catalog';
+  } catch { /* fall through */ }
+  return 'built-in-fallback';
+}
+
 export function loadCatalog() {
   try {
     const j = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));

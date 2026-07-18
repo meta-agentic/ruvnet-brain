@@ -6,8 +6,8 @@
   capable model while the frontier model sits mostly idle, enriched with prior decisions recalled from
   project memory, inspected by a gate that can refuse a bad write, then verified for provenance and
   safety before the answer lands — grounded, cited, checked. Payoff: a cheap model in a good harness
-  approximately equals a frontier model, for less. Measured: 28.5 percent cheaper at 98.1 percent
-  bar-compliance (ADR-073, cited in ADR-076).</desc>
+  approximately equals a frontier model, for less. Per agentic-flow's ADR-076: 28.5 percent cheaper at
+  98.1 percent bar-compliance.</desc>
 
   <style>
     :root {
@@ -246,7 +246,7 @@
        clears the panel by 14u; the viewBox grew 620->652 to hold both lines. Measured with
        getBBox(), not eyeballed. -->
   <text x="500" y="620" class="serif ink" font-size="33" text-anchor="middle">A cheap model in a good harness &#8776; a frontier model, for less.</text>
-  <text x="500" y="643" class="mono muted" font-size="19" text-anchor="middle">measured: 28.5% cheaper at 98.1% bar-compliance &#8212; ADR-073, cited in ADR-076</text>
+  <text x="500" y="643" class="mono muted" font-size="19" text-anchor="middle">per ADR-076 &#8212; 28.5% cheaper at 98.1% bar-compliance</text>
 
   <!-- ============ the moving parts (motion only; hidden under reduced motion) -->
   <path class="comet cometL cH" d="M500,60 C500,96 150,96 150,132 L150,530"/>

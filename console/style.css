@@ -621,6 +621,10 @@ table.tb { width: 100%; border-collapse: collapse; font-size: var(--fs--1); }
 .tb td.cell-mono { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tb td.cell-dim  { color: var(--muted); }
 .tb .num { font-variant-numeric: tabular-nums; }
+/* ISSUE #22 — a small pill marking a tool installed via the Claude Code plugin marketplace. */
+.tb .src-tag { margin-left: .4em; padding: .04em .4em; border-radius: 4px; font-size: .68rem;
+  font-family: var(--sans, inherit); letter-spacing: .02em; text-transform: uppercase;
+  color: var(--muted); background: var(--chip-bg, rgba(127,127,127,.14)); vertical-align: middle; }
 
 /* ============================== 8 · SKELETON ============================== */
 

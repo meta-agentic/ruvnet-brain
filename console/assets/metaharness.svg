@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="mh-t mh-d">
   <title id="mh-t">MetaHarness: freeze the model, evolve the harness</title>
-  <desc id="mh-d">A frozen crystalline core labeled MODEL sits motionless at the centre — the same Claude you already have, never retrained, never swapped. Around it orbits a living amber harness ring carrying seven policy surfaces: planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy. A comet of activity sweeps the ring, visiting one surface at a time — the Darwin loop mutates one surface, sandboxes it, and keeps only what measurably improves. A green variant branch merges back into the harness (kept); a red one fades (pruned). The harness stands on four pillars: route (cost-optimal model selection), evolve (self-improving harness), orchestrate (agents, swarms, MCP) and verify (provenance plus safety gate). Payoff: a cheap model in a good harness approximately equals a frontier model, for less — measured 28.5 percent cheaper at 98.1 percent bar-compliance, ADR-073.</desc>
+  <desc id="mh-d">A frozen crystalline core labeled MODEL sits motionless at the centre — the same Claude you already have, never retrained, never swapped. Around it orbits a living amber harness ring carrying seven policy surfaces: planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy. A comet of activity sweeps the ring, visiting one surface at a time — the Darwin loop mutates one surface, sandboxes it, and keeps only what measurably improves. A green variant branch merges back into the harness (kept); a red one fades (pruned). The harness stands on four pillars: route (cost-optimal model selection), evolve (self-improving harness), orchestrate (agents, swarms, MCP) and verify (provenance plus safety gate). Payoff: a cheap model in a good harness approximately equals a frontier model, for less — per agentic-flow's ADR-076, 28.5 percent cheaper at 98.1 percent bar-compliance.</desc>
 
   <!-- Grounded in agentic-flow ADR-075 (seven surfaces, freeze/evolve) and ADR-076 (four pillars); 28.5% / 98.1% from ADR-073 cited in ADR-076. -->
 
@@ -243,5 +243,5 @@
   <!-- payoff -->
   <line x1="90" y1="497" x2="810" y2="497" stroke="var(--ridge)" stroke-width="1"/>
   <text x="450" y="527" class="serif" font-size="19" font-style="italic" text-anchor="middle" fill="var(--ink)">A cheap model in a good harness ≈ a frontier model, for less.</text>
-  <text x="450" y="548" class="mono" font-size="12" text-anchor="middle" fill="var(--muted)">measured — 28.5% cheaper at 98.1% bar-compliance · ADR-073</text>
+  <text x="450" y="548" class="mono" font-size="12" text-anchor="middle" fill="var(--muted)">per ADR-076 — 28.5% cheaper at 98.1% bar-compliance</text>
 </svg>

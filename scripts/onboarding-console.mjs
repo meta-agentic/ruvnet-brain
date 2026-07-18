@@ -29,7 +29,7 @@ import { spawnSync, execFileSync, spawn } from 'node:child_process';
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth } from './console-engine.mjs';
-import { loadCatalog as engineCatalog, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
+import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
 import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
@@ -537,6 +537,7 @@ function gatherRouterEngine() {
     },
     keys: { openrouter: openrouterKey },
     profile: { present: !!profile, path: PROFILE_PATH.replace(os.homedir(), '~') },
+    catalogSource: engineCatalogSource(),   // 'catalog' | 'built-in-fallback' — so the UI never calls the stub a real catalog
     house,
     pool: candidates
       .map((c) => ({
@@ -700,7 +701,9 @@ function gatherState(cwd, { fleet = true } = {}) {
 }
 function gatherStack() {
   const a = auditModel();
-  const rows = a.rows.map((r) => ({ name: r.name, installed: r.installed, target: r.target, tag: r.tag, state: r.state }));
+  // ISSUE #22 — carry `source` ('npm-global' | 'plugin') + marketplace through so the console can show
+  // (and count) tools installed via the Claude Code plugin marketplace, not just `npm install -g` ones.
+  const rows = a.rows.map((r) => ({ name: r.name, installed: r.installed, target: r.target, tag: r.tag, state: r.state, source: r.source ?? 'npm-global', marketplace: r.marketplace ?? null }));
   const shadows = a.shadows.map((s) => ({ name: s.name, version: s.version, global: s.global, dir: String(s.dir).replace(HOME, '~'), stale: !!(s.global && s.version !== s.global) }));
   const by = (st) => rows.filter((r) => r.state === st).length;
   const summary = { total: rows.length, behind: by('BEHIND'), broken: by('BROKEN'), ahead: by('AHEAD'), current: by('CURRENT'), unresolved: by('UNRESOLVED'), shadows: shadows.length, stale: a.stale.length };

@@ -308,8 +308,12 @@ function stackSkeleton() {
 
 function pkgRow(p) {
   const st = STATE_ORDER[p.state] != null ? p.state : 'UNRESOLVED';
+  // ISSUE #22 — a tool installed via the Claude Code plugin marketplace is first-class here; mark it
+  // so its "plugin" tag column isn't the only tell that it tracks a marketplace cadence, not npm.
+  const plugin = p.source === 'plugin';
   return el('tr', {},
-    el('td', { class: 'cell-name' }, p.name || '—'),
+    el('td', { class: 'cell-name' }, p.name || '—',
+      plugin ? el('span', { class: 'src-tag', title: `installed via the ${p.marketplace || 'Claude Code'} plugin marketplace` }, ' plugin') : null),
     el('td', { class: 'cell-mono' },
       p.installed != null ? p.installed : el('span', { style: 'color:var(--red-text)' }, 'unreadable')),
     el('td', { class: 'cell-mono' }, p.target ?? '—'),
@@ -1280,7 +1284,9 @@ function renderRouterEngine(re) {
     lensTable(prodRows, (p) => money(p.listPerMTok), 'API price'));
   const lensGrid = el('div', { class: 'rp-grid' }, devBlock, prodBlock);
   const poolFoot = el('p', { class: 'fineprint' },
-    `Best pick per bucket shown; the engine weighs all ${pool.length} candidates in its catalog on every call — nothing is retired by being off this summary.`);
+    re.catalogSource === 'built-in-fallback'
+      ? `No personal catalog found — showing a minimal built-in set of ${pool.length}. Run \`node scripts/model-router-setup.mjs\` to build your real catalog, then the engine weighs yours on every call.`
+      : `Best pick per bucket shown; the engine weighs all ${pool.length} candidates in its catalog on every call — nothing is retired by being off this summary.`);
 
   // Decisions: dedupe consecutive identical picks, keep 3, humanize the reason head. The full
   // append-only log stays on disk — this is a pulse, not a table of record.
@@ -1551,7 +1557,7 @@ function renderSavings(sv) {
         alt: 'MetaHarness: the model sits frozen at the centre while seven policy surfaces around it — '
            + 'planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy — '
            + 'are each mutated and measured. Four pillars run underneath: route, evolve, orchestrate, '
-           + 'verify. Measured: 28.5% cheaper at 98.1% bar-compliance.',
+           + 'verify. Per agentic-flow ADR-076: 28.5% cheaper at 98.1% bar-compliance.',
       })),
     ctaSlot);
 

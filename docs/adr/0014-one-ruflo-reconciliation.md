@@ -3,7 +3,7 @@ id: ADR-014
 title: The One-Ruflo Reconciliation — target architecture for the whole machine, and the phased plan to get there
 status: Proposed (awaiting Stuart's approval; NOTHING in Phases 1–5 executes without an explicit per-phase go)
 date: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-18
 authors: [Stuart Kerr, Claude Code]
 related: [ADR-0012 (grounding gate), ADR-0013 (onboarding console), ruvnet/ruflo#2677 (doctor existence-only — acknowledged upstream in v3.30.0 release notes, same day)]
 ---
@@ -12,7 +12,12 @@ related: [ADR-0012 (grounding gate), ADR-0013 (onboarding console), ruvnet/ruflo
 
 **Status**: Proposed
 **Date**: 2026-07-14
-**Updated**: 2026-07-14
+**Updated**: 2026-07-18
+
+> **2026-07-18 (ISSUE #22)** — A third install mechanism is now recognized: RuvNet tools installed
+> via the **Claude Code plugin marketplace** (not `npm install -g`). `stack-sync.mjs` now also scans
+> the plugin cache (authoritatively, via `~/.claude/plugins/installed_plugins.json`) so plugin-only
+> users get a fully-counted "Your stack" card. See the new row below.
 
 # Context — the 30,000-foot picture, measured, not recalled
 
@@ -24,7 +29,8 @@ correct in its month, now fight each other. Every number below was measured toda
 
 | Layer | Measured state |
 |---|---|
-| **Packages** | ONE global install per package (ruvector 0.2.34 = latest; ruflo 3.28.0 vs registry **3.30.1** — rUv shipped 3× today). `stack-sync.mjs` built as the single auditor/updater (uncommitted). |
+| **Packages (npm global)** | ONE global install per package (ruvector 0.2.34 = latest; ruflo 3.28.0 vs registry **3.30.1** — rUv shipped 3× today). `stack-sync.mjs` built as the single auditor/updater (uncommitted). |
+| **Plugins (Claude Code marketplace)** | A THIRD install mechanism (ISSUE #22): rUv tools installed through the plugin marketplace (`ruflo`, `ruview`, `ruvnet-brain`, `cognitum`), NOT `npm install -g`. These track **their marketplace's own update cadence, separate from npm semver** — there is no npm dist-tag to compare against, so stack-sync reports them present/CURRENT and never nags them as "behind". `stack-sync.mjs` now scans the plugin cache via `installed_plugins.json` (source-tagged `source:'plugin'`), so a plugin-only user is no longer reported with an undercounted stack. |
 | **npx producers** | **FIVE families** across ~54 projects: `@claude-flow/cli@latest` hooks · `claude-flow@alpha` hooks (old name) · `npx ruvector` hooks · `npx ruflo` hooks · **12 live `.mcp.json` files launching a second MCP server via `npx -y ruflo@latest`**. Only family 1 was migrated (7 projects). |
 | **Duplicate ruflo, proven** | Sessions in those 12 projects run **TWO full ruflo MCP servers at once** (ps receipt: `~/.npm-global/bin/ruflo mcp` AND `npm exec ruflo@latest mcp start`, same session). |
 | **The planter** | `ruflo init --force` — rUv's own current tool — **writes the npx `.mcp.json` form** (XrAy-I rewritten today 15:05 by init itself). Hand-fixing the 12 files without an upstream fix regresses on the next init. |

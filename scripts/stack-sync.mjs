@@ -69,6 +69,13 @@ const PREFIX = resolveNpmPrefix();
 const GLOBAL_LIB = resolveGlobalLib(PREFIX);
 const NPX_CACHE = path.join(HOME, '.npm/_npx');
 const RECEIPT = path.join(HOME, '.cache/ruvnet-brain/stack-sync-receipt.json');
+// ISSUE #22: rUv tools installed through the Claude Code plugin MARKETPLACE (not `npm install -g`)
+// live here, and were invisible to this auditor — so plugin-only users saw a permanently undercounted
+// stack, and any plugin they DID have could never be reported "installed". Claude Code writes the
+// authoritative install list (which plugin, which marketplace, which cached version dir is active) to
+// installed_plugins.json under this dir; we read THAT rather than guessing among the dozens of stale
+// version folders the cache keeps around.
+const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins');
 
 // The tag policy. ONE table — the single source of truth for "what SHOULD be installed".
 // The orchestration core tracks alpha (rUv ships fast: 3.26 -> 3.28 inside one 18-hour window).
@@ -79,6 +86,17 @@ export const DEFAULT_TAG = 'latest';
 // What counts as "the stack": an explicit allow-list pattern, not a loose scope match, so a stray
 // package can never be swept into a global install by accident.
 export const FAMILY = /^(ruflo|ruvector|ruvector-extensions|ruvi|ruvbot|qudag|flow-nexus|agent-browser|agent-browser-mcp|agentic-flow|agentic-qe|agentic-robotics|agentic-payments|ruv-swarm|@ruvector\/|@claude-flow\/|@metaharness\/|@agentic-robotics\/)/;
+
+// The plugin side of the same allow-list intent (ISSUE #22). Plugin identifiers are marketplace
+// names (`ruflo-core`, `ruvnet-brain`, `cog-beehive-monitor`), NOT npm package names, so FAMILY
+// alone cannot classify them — `ruvnet-brain` and cognitum's plugins never match it. The reliable
+// signal is the MARKETPLACE a plugin came from: these four are rUv/ruvnet marketplaces (verified in
+// ~/.claude/plugins/known_marketplaces.json → ruvnet/ruflo, ruvnet/RuView, stuinfla/ruvnet-brain,
+// cognitum.one). An explicit set, mirroring FAMILY's "allow-list, never a loose scope match" so a
+// stray third-party plugin can never be swept into the RuvNet stack by accident. FAMILY is still
+// applied as a secondary matcher, so a future rUv plugin shipped through a different marketplace is
+// still counted.
+export const PLUGIN_MARKETPLACES = new Set(['ruflo', 'ruview', 'ruvnet-brain', 'cognitum']);
 
 const log = (m) => console.log(m);
 const die = (m) => { console.error(`\n  FAILED: ${m}`); process.exit(1); };
@@ -119,7 +137,49 @@ export function installedVersion(pkg, lib = GLOBAL_LIB) {
   try { return JSON.parse(fs.readFileSync(pj, 'utf8')).version || null; } catch { return null; }
 }
 
-function listInstalled() {
+// ISSUE #22 — the version of an installed Claude Code plugin is its plugin.json `version`, read from
+// the exact cached version dir Claude Code marked active (installPath). Injectable exactly like
+// installedVersion(pkg, lib) so it is unit-testable against a temp dir.
+export function pluginVersion(installPath) {
+  const pj = path.join(installPath, '.claude-plugin', 'plugin.json');
+  try { return JSON.parse(fs.readFileSync(pj, 'utf8')).version || null; } catch { return null; }
+}
+
+// ISSUE #22 — scan the Claude Code plugin cache for rUv-family plugins. Source of truth is
+// installed_plugins.json (Claude Code's own record of what is installed, its marketplace, and which
+// cached version dir is active) — NOT a raw walk of the cache, which keeps dozens of stale version
+// folders per plugin. `pluginsDir` is injectable, mirroring the lib=GLOBAL_LIB pattern, so tests can
+// point it at a fixture. Returns the same {name, installed} shape as the npm scan, tagged source:'plugin'.
+export function listInstalledPlugins(pluginsDir = PLUGINS_DIR) {
+  const manifest = path.join(pluginsDir, 'installed_plugins.json');
+  if (!fs.existsSync(manifest)) return [];
+  let data;
+  try { data = JSON.parse(fs.readFileSync(manifest, 'utf8')); } catch { return []; }
+  const plugins = data && typeof data.plugins === 'object' ? data.plugins : {};
+  const out = [];
+  for (const [key, records] of Object.entries(plugins)) {
+    // key = "<plugin>@<marketplace>"; the marketplace is the last @-segment.
+    const at = key.lastIndexOf('@');
+    const name = at > 0 ? key.slice(0, at) : key;
+    const marketplace = at > 0 ? key.slice(at + 1) : '';
+    if (!(PLUGIN_MARKETPLACES.has(marketplace) || FAMILY.test(name))) continue;
+    // A plugin can have several install records (user + per-project scope). Pick the highest readable
+    // version so a stale project-scoped copy can never mask a newer user-scoped one — same "ordering,
+    // not equality" discipline as the rest of this file. Fall back to the manifest's own version field
+    // if the on-disk plugin.json is unreadable, so a present plugin is NEVER reported "not installed".
+    let installed = null;
+    for (const rec of Array.isArray(records) ? records : []) {
+      const v = (rec && rec.installPath ? pluginVersion(rec.installPath) : null)
+        || (rec && rec.version && rec.version !== 'unknown' ? rec.version : null);
+      if (!v) continue;
+      if (installed === null || cmpVersion(v, installed) > 0) installed = v;
+    }
+    out.push({ name, installed, source: 'plugin', marketplace });
+  }
+  return out;
+}
+
+function listInstalled({ lib = GLOBAL_LIB, pluginsDir = PLUGINS_DIR } = {}) {
   const out = [];
   const scan = (dir, scope = '') => {
     if (!fs.existsSync(dir)) return;
@@ -127,10 +187,19 @@ function listInstalled() {
       if (e.startsWith('.')) continue;
       if (e.startsWith('@') && !scope) { scan(path.join(dir, e), e + '/'); continue; }
       const name = scope + e;
-      if (FAMILY.test(name)) out.push({ name, installed: installedVersion(name) });
+      if (FAMILY.test(name)) out.push({ name, installed: installedVersion(name, lib), source: 'npm-global' });
     }
   };
-  scan(GLOBAL_LIB);
+  scan(lib);
+  // Merge in plugin-sourced tools (ISSUE #22). Dedup by name: a tool present BOTH globally and as a
+  // plugin appears once, and the global-npm copy wins — it is the one classify() can compare against
+  // npm dist-tags. A plugin-only tool is added, so it can never be reported "not installed".
+  const seen = new Set(out.map((r) => r.name));
+  for (const p of listInstalledPlugins(pluginsDir)) {
+    if (seen.has(p.name)) continue;
+    seen.add(p.name);
+    out.push(p);
+  }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -171,6 +240,15 @@ export function findShadows(npxCache = NPX_CACHE, lib = GLOBAL_LIB) {
 // exits) share ONE classification, never two that can drift.
 export function classify(pkgs) {
   return pkgs.map((p) => {
+    // ISSUE #22 — a Claude Code plugin tracks ITS MARKETPLACE's update cadence, not npm semver. There
+    // is no npm dist-tag oracle for it (querying `npm view <plugin>` would compare against an unrelated
+    // package or 404), so we do not manufacture a drift signal. It is present and installed ⇒ CURRENT;
+    // a plugin is only BROKEN if we could not read any version at all. Either way it is COUNTED and is
+    // never reported "not installed". This also keeps the npm-registry "blind tool" guard scoped to
+    // real npm rows (see audit()/auditModel()).
+    if (p.source === 'plugin') {
+      return { ...p, tag: 'plugin', target: p.installed, state: p.installed ? 'CURRENT' : 'BROKEN' };
+    }
     const want = TAG_POLICY[p.name] || DEFAULT_TAG;
     const tags = registryTags(p.name);
     // A package may legitimately have no alpha tag: fall back to latest rather than invent one.
@@ -197,8 +275,12 @@ function audit() {
   // inside the fix for it. Silence is not health.
   const rows = classify(pkgs);
   const unresolved = rows.filter((r) => r.state === 'UNRESOLVED');
-  if (unresolved.length === rows.length) {
-    die(`could not reach the npm registry for ANY of ${rows.length} packages.\n` +
+  // Guard scoped to npm rows (ISSUE #22): plugin rows are CURRENT by construction, so counting them
+  // here would let a fully-unreachable registry hide behind a couple of installed plugins — the exact
+  // "blind tool reports health" bug this guard exists to kill, reintroduced. Denominator = npm rows.
+  const npmRows = rows.filter((r) => r.source !== 'plugin');
+  if (npmRows.length && unresolved.length === npmRows.length) {
+    die(`could not reach the npm registry for ANY of ${npmRows.length} npm packages.\n` +
         `   This tool refuses to report on a stack it could not measure. Check the network and re-run.`);
   }
 
@@ -217,19 +299,24 @@ export function auditModel() {
   const unresolved = rows.filter((r) => r.state === 'UNRESOLVED');
   const shadows = findShadows();
   const stale = shadows.filter((s) => s.global && s.version !== s.global);
-  const error = unresolved.length === rows.length
-    ? `could not reach the npm registry for any of ${rows.length} packages` : null;
+  // Same npm-scoped guard as audit() (ISSUE #22): plugin rows never count toward "registry unreachable".
+  const npmRows = rows.filter((r) => r.source !== 'plugin');
+  const error = npmRows.length && unresolved.length === npmRows.length
+    ? `could not reach the npm registry for any of ${npmRows.length} npm packages` : null;
   return { rows, unresolved, shadows, stale, error };
 }
 
 function report({ rows, shadows, stale }) {
   const w = Math.max(...rows.map((r) => r.name.length));
-  log(`\n  RuvNet stack — ${rows.length} packages in ${GLOBAL_LIB}\n`);
+  const nPlugin = rows.filter((r) => r.source === 'plugin').length;
+  const nNpm = rows.length - nPlugin;
+  log(`\n  RuvNet stack — ${rows.length} packages (${nNpm} npm-global, ${nPlugin} Claude Code plugin)\n`);
   for (const r of rows) {
     const mark = { CURRENT: '  ok  ', BEHIND: 'BEHIND', AHEAD: ' ahead', BROKEN: 'BROKEN', UNRESOLVED: '  ??  ' }[r.state];
     const detail = r.state === 'BEHIND' ? `${r.installed} -> ${r.target}  (@${r.tag})`
       : r.state === 'AHEAD' ? `${r.installed}  (ahead of @${r.tag} ${r.target} — alpha track; left alone)`
       : r.state === 'BROKEN' ? `no readable version on disk; registry has ${r.target ?? '?'}`
+      : r.source === 'plugin' ? `${r.installed}  (plugin · ${r.marketplace} marketplace)`
       : r.installed;
     log(`  [${mark}] ${r.name.padEnd(w)}  ${detail}`);
   }

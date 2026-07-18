@@ -228,7 +228,7 @@
             <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
           </span>
           <b>Gates on every move</b>
-          <p>On this machine, 21 gates read each move before it lands — and 6 of them can stop a bad one.</p>
+          <p>A wired install runs a stack of gates that read each move before it lands — several can stop a bad one outright. Your console shows <em>your</em> real count, live.</p>
         </li>
       </ul>
       <p class="metaphor">Like a good spotter at the gym: silent on every rep, loud only when
@@ -503,26 +503,24 @@
         </div>
       </div>
 
-      <!-- PART 3 · the momentum proof. Built ONLY from live-verified npm figures (2026-07-17):
+      <!-- PART 3 · the momentum proof. A DATED SNAPSHOT of real npm figures (2026-07-17) — NOT live,
+           and honestly labelled as such (nothing on this page fetches). No trend/"climbing"/"compounding"
+           claim: we have no verified month-by-month points, so we assert none.
            ~1.48M downloads/month across the RuvNet ecosystem (9 packages); the five largest,
            to scale, are agentdb 660K · agentic-flow 372K · @ruvector/rvf 340K · claude-flow 91K
            · ruv-swarm 12K (they sum to ~1.475M — nearly the whole total). Bars are scaled to the
-           per-package number (widest = agentdb at 100%) and draw in; the ~1.48M is the hero stat.
-           NO fabricated historical series — we don't have verified month-by-month points, so the
-           only time-claim here is the honest run-rate + a tasteful "and climbing" accent. -->
+           per-package number (widest = agentdb at 100%). To make this genuinely live, fetch
+           api.npmjs.org/downloads/point/last-month/<pkg> at load — a documented follow-up. -->
       <div class="momentum">
         <div class="mo-head">
           <div class="mo-hero">
             <span class="mo-hero-num">~1.48M</span>
             <span class="mo-hero-unit">downloads / month</span>
           </div>
-          <span class="mo-climb">
-            <svg viewBox="0 0 24 18" aria-hidden="true"><path d="M2 15l6-6 4 3 7-8"/><path d="M15 4h5v5"/></svg>
-            and climbing
-          </span>
+          <span class="mo-climb">npm · snapshot 2026-07-17</span>
         </div>
         <p class="mo-cap">Across the RuvNet ecosystem — the tools this Brain grounds you in — nine packages
-        pull ~1.5M installs a month, and it's compounding. The Brain is how you actually use all of it
+        pull ~1.5M installs a month. The Brain is how you actually use all of it
         without becoming an expert in each.</p>
 
         <ul class="mo-bars" aria-label="Monthly npm downloads, the five largest RuvNet packages">
@@ -552,7 +550,7 @@
             <span class="mo-bar-val">12K</span>
           </li>
         </ul>
-        <p class="mo-source mono">the five largest of nine packages · verified live · npm downloads · 2026-07-17</p>
+        <p class="mo-source mono">the five largest of nine packages · npm downloads · snapshot 2026-07-17 (not live)</p>
       </div>
 
       <p class="capstone-close">This is why the ecosystem is compounding — and why leaning in pays off

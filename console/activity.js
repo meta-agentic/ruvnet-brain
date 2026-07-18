@@ -90,9 +90,7 @@
     /* vocabulary + receipt */
     '#card-activity .ab-vocab{font-size:13px;color:var(--ink-2);margin:9px 2px 0}',
     '#card-activity .ab-vocab b{color:var(--ink);font-weight:600}',
-    '#card-activity .ab-receipt{font-size:13px;color:var(--amber-text);margin:8px 2px 2px}',
-    '#card-activity .ab-receipt .mono{font-size:13px}',
-    '#card-activity .ab-receipt sup{font-size:12px;color:var(--muted);margin-left:6px;font-style:italic;letter-spacing:0}',
+    '#card-activity .ab-empty-note{font-size:13px;color:var(--muted);margin:8px 2px 2px;font-style:italic}',
     /* roster strip */
     '#card-activity .ab-roster{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 8px}',
     '#card-activity .ab-roster .ab-who{font-size:13px;color:var(--muted);margin-right:2px}',
@@ -336,7 +334,7 @@
         '<div class="ab-flow-narr"><span class="ab-fn-text" id="ab-fnText"></span><span class="ab-fn-steps" id="ab-fnSteps" aria-hidden="true"></span></div>' +
       '</div>' +
       '<div class="ab-vocab"><b>memories</b> = everything your AI captures automatically&ensp;·&ensp;<b>lessons</b> = what survives distillation (task → what failed → what works)</div>' +
-      '<div class="ab-receipt">last compact: <span class="mono">47 msgs → 6 lessons</span> · nothing lost<sup>illustrative — every other number is live</sup></div>' +
+      (nLes ? '' : '<div class="ab-empty-note">0 lessons recorded — auto-distill into lessons is a planned next layer (<code>ADR-0017</code>). Capture one now: <code>record-lesson</code>.</div>') +
       '<div class="ab-roster" id="ab-roster">' +
         '<span class="ab-who">written by</span>' +
         '<span class="ab-rchip" data-tool="memory">AgentDB<span class="ab-cs">via ruflo memory</span><span class="ab-k">✦</span></span>' +
@@ -410,7 +408,7 @@
       ? LESSONS.map(function (L) {
           return '<div class="ab-dl-title"><span class="ab-g">✦</span>' + esc(lessonTitle(L.key)) + '</div>' + lessonCardHTML(L);
         }).join('')
-      : '<p class="ab-fallback">no distilled lessons yet — they appear once distillation has run</p>';
+      : '<p class="ab-fallback">0 lessons recorded — auto-distill into lessons is a planned next layer (<code>ADR-0017</code>). Capture one now: <code>record-lesson</code>.</p>';
 
     (function () {
       var GLOSS = {
@@ -532,7 +530,8 @@
       var dots = Array.from({ length: 76 }, function () {
         return { fx: .025 + Math.random() * .375, fy: .14 + Math.random() * .56, r: .8 + Math.random() * .9, a: .3 + Math.random() * .4, ph: Math.random() * 6.283 };
       });
-      var nStars = Math.max(1, Math.min(7, nLes || 5));
+      /* honest: zero lessons means zero keeper-stars, never a decorative placeholder count */
+      var nStars = nLes > 0 ? Math.max(1, Math.min(7, nLes)) : 0;
       var stars = Array.from({ length: nStars }, function (_, i) {
         return { fx: .665 + i * (.31 / Math.max(nStars, 2)), ph: Math.random() * 6.283, pulse: -9999 };
       });
@@ -558,13 +557,14 @@
       var motes = [], lastSpawn = 0, nextGap = 1200, seq = 0, cueLine = 0;
       function spawn(now, forcePass) {
         var d0 = dots[(Math.random() * dots.length) | 0];
-        var pass = forcePass !== undefined ? forcePass : (cueLine === 2 ? false : (seq++ % 4) === 2);
+        /* honest: with zero real lessons there are zero keepers — never let a mote pass through */
+        var pass = nStars > 0 && (forcePass !== undefined ? forcePass : (cueLine === 2 ? false : (seq++ % 4) === 2));
         motes.push({ sfx: d0.fx, sfy: d0.fy, t0: now, dur: 2400 + Math.random() * 700, pass: pass, star: (Math.random() * nStars) | 0, phase: 0, t1: 0 });
       }
-      /* narration sync (best-effort): line 2 → motes dissolve at the gate; line 3 → send one keeper through */
+      /* narration sync (best-effort): line 2 → motes dissolve at the gate; line 3 → send one keeper through (only if any exist) */
       window.__abFlowCue = function (line) {
         cueLine = line;
-        if (line === 3 && !reduce && !document.hidden) { spawn(performance.now(), true); lastSpawn = performance.now(); }
+        if (line === 3 && nStars > 0 && !reduce && !document.hidden) { spawn(performance.now(), true); lastSpawn = performance.now(); }
       };
 
       function drawScene(now, still) {
@@ -721,11 +721,17 @@
 
     /* ---------------- rolling narration — the takeaway in plain English ---------------- */
     (function () {
-      var LINES = [
+      var LINES = nLes > 0 ? [
         'Your AI captures everything as it works — ' + fmt(nMem) + ' memories in this project so far.',
         "Most of that stays raw. Only what's proven survives distillation.",
         fmt(nLes) + ' lessons have earned permanence — the task, what failed, what actually works.',
         "These survive compaction, restarts, and reboots. Your AI doesn't start over tomorrow.",
+        'Click any number above to see exactly what it knows.'
+      ] : [
+        'Your AI captures everything as it works — ' + fmt(nMem) + ' memories in this project so far.',
+        "Most of that stays raw. Only what's proven survives distillation.",
+        '0 lessons distilled yet — auto-distill is a planned next layer (ADR-0017).',
+        'Capture one manually any time: run record-lesson from this project.',
         'Click any number above to see exactly what it knows.'
       ];
       var txt = document.getElementById('ab-fnText');

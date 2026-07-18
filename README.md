@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.4.7-dev — updated 2026-07-17 09:40 EDT](https://img.shields.io/badge/version_3.4.7--dev-updated_2026--07--17_09:40_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.4.8-dev — updated 2026-07-17 09:40 EDT](https://img.shields.io/badge/version_3.4.8--dev-updated_2026--07--17_09:40_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -45,7 +45,7 @@
 **Shipped 2026-07-17.** 3.3 made every card lead with a point. Then Stuart looked at the two pages meant to *teach* the stack and scored them 55/100: the graphics were mediocre, the one page that should show how the pieces fit was a wall of text, and two diagrams were literally unreadable. 3.4 is the fix — the harness's invisible work, finally drawn, and drawn so you can actually read it.
 
 - **The animation that shows the whole argument** — one prompt, sent two ways. Plain Claude Code: a bare wire to one expensive model, no grounding, no memory, no gates. The same model **wrapped in the harness**: it grounds the prompt, routes it to the cheapest model that can do the job, hands back what your project already decided, **inspects the write and can refuse it**, and checks it on the way out. The left lane finishes first — and that's the problem.
-- **MetaHarness, as a picture** — the old card was rectangles with words in them. It's now the thesis at a glance: the model a **frozen** cyan crystal that never moves, seven policy surfaces evolving in a warm orbit around it, the kept branch merging back and the pruned one dying mid-air. *Freeze the model, evolve the harness.* Every number traces to an accepted ADR (28.5% cheaper at 98.1% bar-compliance — ADR-073/075/076).
+- **MetaHarness, as a picture** — the old card was rectangles with words in them. It's now the thesis at a glance: the model a **frozen** cyan crystal that never moves, seven policy surfaces evolving in a warm orbit around it, the kept branch merging back and the pruned one dying mid-air. *Freeze the model, evolve the harness.* Per agentic-flow's ADR-076: 28.5% cheaper at 98.1% bar-compliance.
 - **Diagrams you can actually read** — two of them shipped with labels rendering at **8px and 3px**: present, un-clipped, and invisible. An SVG sized in one coordinate system, crushed into a narrower column, silently shrinks its own text and no error ever fires. There's now a gate for exactly that (`scripts/check-legibility.mjs`) — it measures the *effective* pixel size in the live page, proven to catch the known-bad case before it was trusted. Every diagram label now clears 12px on a phone.
 - **The tips page has a door** — its only link wore the same style as a status readout beside it, and on a phone was hidden entirely — the page was **unreachable under 640px**. There's now an unmissable button where it belongs.
 - **Real generated imagery** — three commissioned stills built from the console's own palette, so they belong to the page instead of sitting on top of it.
@@ -125,7 +125,7 @@ So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any 
 </details>
 
 <details>
-<summary><b>Earlier &#8212; what 2.0 proved</b> &#183; the release where the brain stopped taking its own word for anything: 32 verified repos, a 120-question fail-closed eval gate, ~90% cheaper per-turn injection, and an 8-dimension evidence-backed scorecard (55 &#8594; 83 in two days). <i>Expand for the receipts.</i></summary>
+<summary><b>Earlier &#8212; what 2.0 proved</b> &#183; the release where the brain stopped taking its own word for anything: 57 verified repos, a 120-question fail-closed eval gate, ~90% cheaper per-turn injection, and an 8-dimension evidence-backed scorecard (55 &#8594; 83 in two days). <i>Expand for the receipts.</i></summary>
 
 ### 2.0 — the receipts
 
@@ -133,7 +133,7 @@ So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any 
 
 | | v1 (0.x–1.x) | v2.0 |
 |---|---|---|
-| **Corpus** | 24 repos built | **36 repos** built (of 197 live ruvnet repos), each verified by a live retrieval query |
+| **Corpus** | 24 repos built | **57 repos** built (of 248 in the org), each verified by a live retrieval query |
 | **Depth** (flagship `ruvector`) | 18,491 passages · **0** full source bodies | **28,018 passages · 2,996 full bodies** — depth also restored to `agent-harness-generator` (8,896/715), `ruview` (7,434/765), `open-claude-code` (195/69) |
 | **Corpus QA gate** | none | every store must prove *embeds correctly + reads correctly* — vector count == passage count, depth floors, a 3-passage self-retrieval round-trip per store — **72/72 store-variants PASS**, wired fail-closed into the nightly publish |
 | **Retrieval eval** | 12 frozen questions | **120 frozen, hash-pinned questions** across 5 strata; promotion gated on Wilson lower bounds, fail-closed — it blocked a real release this morning, which is the feature working |
@@ -151,7 +151,7 @@ The depth jump wasn't tuning — it was two pipeline root-causes fixed for good:
 | Dimension | v1 (2026-07-09) | v2.0 (2026-07-10) | Δ | What moved it |
 |---|---:|---:|---:|---|
 | End-user experience | 54 | 83 | +29 | One-command install now offers nightly self-updates (default yes); the page lives on isovision.ai; publishing renews itself |
-| Knowledge corpus | 71 | 88 | +17 | 24→32 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored — flagship went 0→2,996 source bodies |
+| Knowledge corpus | 71 | 88 | +17 | 24→57 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored — flagship went 0→2,996 source bodies |
 | Effectiveness (eval-proven retrieval) | 58 | 88 | +30 | 120-question Wilson-bound gate — it blocked a bad release, then passed the fix *above* the old baseline |
 | Acting like rUv | 38 | 72 | +34 | Memory layer root-caused and fixed with proofs; 6 exact patches queued upstream; real multi-agent swarm operations |
 | Developer smarter | 62 | 84 | +22 | `/brain-score` runs this same scorecard on any repo; honest tool announcements; per-answer source receipts |
@@ -271,7 +271,7 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **132,131 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **132,135 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
@@ -305,7 +305,7 @@ The brain answers **both** kinds of questions. **Name the repo or ask something 
 
 ## What it covers
 
-36 of rUv's repos in the [ruvnet](https://github.com/ruvnet) org — the reusable **building blocks** you'd actually compose into a system — each deep-walked and embedded in both variants. The core blocks below also carry symbol indexes and capability cards (the 8 newest repos are findable by name; their capability cards are coming).
+57 of rUv's repos in the [ruvnet](https://github.com/ruvnet) org — the reusable **building blocks** you'd actually compose into a system — each deep-walked and embedded in both variants. The core blocks below also carry symbol indexes and capability cards (the 8 newest repos are findable by name; their capability cards are coming).
 
 ![The RuvNet stack the brain covers](primer/assets/diagrams/ruvnet-stack.svg)
 
@@ -381,7 +381,7 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 36 repos, 132,131 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 57 repos, 132,135 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
