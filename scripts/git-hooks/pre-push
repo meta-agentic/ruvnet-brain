@@ -1,0 +1,25 @@
+#!/bin/sh
+# RuvNet Brain — pre-push gate. NON-OPTIONAL. Runs on every `git push`.
+#
+# WHY (2026-07-17): a real client (Jan) hit npx ruvnet-brain@latest with a stale package whose
+# self-update manifest 404'd. The root cause wasn't the bug — it was that the CHECK was optional
+# and I skipped it. This hook removes the discretion: it refuses the push if the version surfaces
+# disagree or the self-update manifest 404s. It does not care whether I remembered, or was in a
+# hurry, or "was pretty sure it was fine." Pass or the push does not happen.
+#
+# It blocks ONLY on what is knowable before a push. npm-latest and the live explainer are verified
+# post-publish by `node scripts/release.mjs --publish` (the only sanctioned ship path).
+#
+# Escape hatch is `git push --no-verify` — but if you use it, you are consciously overriding a gate
+# that exists because of a specific failure that cost real user trust. Own that out loud.
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+node "$ROOT/scripts/verify-channels.mjs" --pre-push
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo ""
+  echo "  ⛔ pre-push gate refused this push. A user on some path would get a broken build."
+  echo "     Fix the channel(s) above, then push again. Do not route around this."
+  exit 1
+fi
+exit 0

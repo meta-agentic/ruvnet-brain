@@ -32,6 +32,7 @@ import { execFileSync } from 'node:child_process';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const JSON_OUT = process.argv.includes('--json');
+const PRE_PUSH = process.argv.includes('--pre-push'); // git pre-push hook mode: block only on what is KNOWABLE before the push
 const REPO = 'stuinfla/ruvnet-brain';
 const NPM_PKG = 'ruvnet-brain';
 const EXPLAINER = 'https://isovision.ai/ruvnet-brain/';
@@ -51,6 +52,32 @@ const check = (name, pass, detail) => { results.push({ name, pass: !!pass, detai
 
 async function run() {
   const V = pluginVersion();
+
+  // ── PRE-PUSH MODE ──────────────────────────────────────────────────────────
+  // Runs from the git pre-push hook. It can ONLY block on things knowable BEFORE the push —
+  // i.e. what I am about to ship. npm-latest and the live explainer are DOWNSTREAM of a push
+  // (publish + Vercel deploy happen after), so blocking on them here would refuse every honest
+  // push. The two things that stranded Jan and are 100% knowable now: (a) the version surfaces
+  // disagree, (b) the self-update manifest in the SOURCE.json I'm shipping 404s. Block on those.
+  if (PRE_PUSH) {
+    // a) version single-source-of-truth
+    const sv = execFileSync(process.execPath, [path.join(ROOT, 'scripts/sync-version.mjs'), '--check'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    check('version surfaces agree', /agree|✓/i.test(sv), sv.trim().split('\n').pop());
+    // b) the self-update manifest URL in the bundle SOURCE.json resolves (the exact 404 that broke --update)
+    let manifestUrl = null;
+    try { const sj = JSON.parse(fs.readFileSync(path.join(ROOT, 'kb/SOURCE.json'), 'utf8'));
+      const find = (o) => { if (!o || typeof o !== 'object') return null; if (o.canonicalManifestUrl) return o.canonicalManifestUrl; for (const k of Object.keys(o)) { const r = find(o[k]); if (r) return r; } return null; };
+      manifestUrl = find(sj); } catch { /* */ }
+    if (!manifestUrl) check('self-update manifest URL present', false, 'no canonicalManifestUrl in kb/SOURCE.json');
+    else { const h = await head(manifestUrl); check('self-update manifest resolves (no 404)', h.ok, `${manifestUrl} → HTTP ${h.status}${h.ok ? '' : '  ← would strand every --update user, exactly like Jan'}`); }
+
+    const failed = results.filter((r) => !r.pass);
+    console.log(`\n  ${c.b('pre-push gate')} ${c.dim('· shipping ' + V + ' · (npm/explainer are verified post-publish by `release.mjs --publish`)')}`);
+    for (const r of results) console.log(`   ${r.pass ? c.g('✓') : c.r('✗')} ${r.name}  ${c.dim(r.detail || '')}`);
+    if (failed.length) { console.log(`\n  ${c.r('✗ pre-push gate FAILED — push refused. Fix the above; do not --no-verify around it.')}\n`); process.exit(1); }
+    console.log(`\n  ${c.g('✓ pre-push gate passed — nothing in this push strands a user.')}\n`);
+    process.exit(0);
+  }
 
   // 1) npm registry latest == shipping version
   try {
