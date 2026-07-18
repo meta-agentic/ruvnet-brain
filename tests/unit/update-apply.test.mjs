@@ -25,7 +25,9 @@ function makePayload(version, { badScript = false } = {}) {
   fs.mkdirSync(path.join(dir, '.claude-plugin'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'scripts', 'ok.sh'), '#!/bin/bash\necho ok\n');
   fs.writeFileSync(path.join(dir, 'scripts', 'ok.mjs'), 'console.log("ok");\n');
-  if (badScript) fs.writeFileSync(path.join(dir, 'scripts', 'broken.sh'), '#!/bin/bash\nif [ ; then fi\n');
+  // The broken fixture is a .mjs, not a .sh: node --check gates on EVERY platform, so the
+  // gate-refusal test proves refusal on Windows too (bash -n only runs where /bin/bash exists).
+  if (badScript) fs.writeFileSync(path.join(dir, 'scripts', 'broken.mjs'), 'const = broken syntax here(\n');
   fs.writeFileSync(path.join(dir, 'hooks', 'hooks.json'), '{"hooks":{}}\n');
   fs.writeFileSync(path.join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'ruvnet-brain', version }));
   return dir;
@@ -59,7 +61,7 @@ describe('update-apply.mjs — the single writer of the spine', () => {
     const r = run('--from-dir', bad);
     expect(r.status).not.toBe(0);
     expect(r.stderr + r.stdout).toMatch(/FAILED the gate/);
-    expect(r.stderr + r.stdout).toMatch(/broken\.sh/); // the failure is NAMED, not generic
+    expect(r.stderr + r.stdout).toMatch(/broken\.mjs/); // the failure is NAMED, not generic
     expect(active().version).toBe(before.version);     // old world intact
     fs.rmSync(good, { recursive: true, force: true }); fs.rmSync(bad, { recursive: true, force: true });
   });

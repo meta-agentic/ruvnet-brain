@@ -105,9 +105,14 @@ function gateCandidate(dir) {
   if (fs.existsSync(hooksJson)) {
     try { JSON.parse(fs.readFileSync(hooksJson, 'utf8')); } catch (e) { problems.push(`hooks.json unparseable: ${e.message}`); }
   }
+  // Interpreter-true, platform-honest: bash-check .sh only where /bin/bash exists (the hooks are
+  // "_platform":"posix"-declared — on Windows they never execute, so a bash syntax check there
+  // would be checking with an interpreter the machine doesn't have). node --check gates everywhere.
+  const haveBash = fs.existsSync('/bin/bash');
   for (const f of fs.existsSync(scripts) ? fs.readdirSync(scripts) : []) {
     const p = path.join(scripts, f);
     if (f.endsWith('.sh')) {
+      if (!haveBash) continue;
       const r = spawnSync('/bin/bash', ['-n', p], { encoding: 'utf8' });
       if (r.status !== 0) problems.push(`bash -n ${f}: ${(r.stderr || '').trim()}`);
     } else if (f.endsWith('.mjs') || f.endsWith('.js')) {
