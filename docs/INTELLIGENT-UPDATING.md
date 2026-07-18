@@ -107,11 +107,15 @@ preserving JSON-RPC id continuity is a protocol minefield, not a 15-line patch. 
 - `plugin/mcp/server.mjs` becomes a **real, minimal MCP stdio server** (frozen shell): it owns the
   protocol — `initialize`, `tools/list`, `tools/call` — and declares `search_ruvnet` itself, with a
   **fixed tool schema**. The client connection is never proxied, never replayed, never dropped.
-- On each `tools/call`, it reads `active.json` (cheap), and `await import(codeRoot/…/query-engine
-  ?gen=N)` — the implementation for the **current generation**. Module-scope warm state (loaded
-  models, open indexes) is keyed by generation: reload cost is paid once per update, not per call.
-  The server takes a **lease** on the generation it's serving so GC can't pull it out from under an
-  in-flight call.
+- Delegation, **as built** (the brain has no importable query library — it ships a stdio server,
+  so a dynamic-import design would have meant forking it): the stable server supervises a **warm
+  child worker** (the KB's own `forge-mcp-all.mjs`, unchanged) over a **private handshake** — the
+  parent sends its OWN `initialize` with parent-allocated ids and forwards `tools/call` with id
+  remapping in both directions. The client's handshake is never replayed to anyone. On a generation
+  change (`active.json`) or a KB-track code change (the worker file's mtime), the child is
+  respawned **between requests only** (pending-count drain gate); warm model state costs one reload
+  per update, not per call. The server takes a **lease** on the generation it's serving so GC can't
+  pull it out from under an in-flight call.
 - A call already in flight completes on its generation; the next call gets the new one. No swap
   logic, no id remapping, no child supervision — the entire class of findings 7–9 evaporates.
 - If a new generation's import or first query fails → serve the previous generation, write a loud

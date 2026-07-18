@@ -1,5 +1,5 @@
 {
-  "_note": "Three hooks. SessionStart (session-start.sh) is the CONFIDENCE SIGNAL \u2014 on a new/resumed session it tells the model to surface a brief 'brain active, user-level, here's how to use it' confirmation so the user KNOWS it's on. UserPromptSubmit (ground-ruvnet.sh) intercepts at the INTENT level \u2014 grounding directive on rUv-stack prompts, a drift gate on classical defaults (fires even with no RuvNet mention), and a TAKE-THE-WHEEL directive on build requests (propose the architecture + why \u2192 one go/no-go \u2192 orchestrate end-to-end with SPARC/Ruflo/parallel agents/AgentDB). PreToolUse (hijack-ruvnet.sh) intercepts at the ACTION level \u2014 when Claude is about to Write/Edit/Bash a classical default it injects the rUv replacement via additionalContext WITHOUT blocking. stdout from these hooks is how the brain makes grounding + orchestration non-optional. The first three scripts exit 0 and are guarded with `|| true` so they can never block a turn. route-dispatch.sh (PreToolUse on Task) is the DELIBERATE EXCEPTION: it exits 2 to BLOCK a subagent dispatch that declares no `model`, because such an agent silently INHERITS the session model (10 agents on a Fable session = 10 agents at $10/$50 per Mtok). Inheritance-by-omission was the biggest cost leak in the harness; an advisory rule did not fix it, so this is a wall, not advice. It is NOT guarded with `|| true` \u2014 swallowing its exit code would restore the bug.",
+  "_note": "STABLE SPINE (ADR-023): every hook routes through hook-shim.mjs, which resolves the ACTIVE generation from ~/.cache/ruvnet-brain/active.json per invocation and executes the hook BODY from that immutable tree — so hook behavior updates the moment update-apply.mjs flips the pointer, with NO Claude Code restart. This file itself is boot-frozen (CC reads it once at startup): its matchers/timeouts and the shim's dispatch table are the near-frozen SHELL — changing them is rare and honestly flagged requiresRestart by the release classifier. Advisory hooks keep `|| true` (they can never block a turn). The THREE blocking hooks (route-dispatch, verify-interface, design-wall) have NO `|| true` — the shim propagates their exact exit codes by typed contract (mode:'blocking' in its table); route-dispatch's deliberate exit-2 wall against model-inheriting subagent fan-outs survives the indirection. Hook semantics themselves are unchanged from the pre-spine file: SessionStart = confidence signal, UserPromptSubmit = intent-level grounding/drift/take-the-wheel, PreToolUse = action-level interception, PostToolUse/SessionEnd = learning capture/flush.",
   "_platform": "posix",
   "hooks": {
     "SessionStart": [
@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" session-start || true",
             "timeout": 5
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" session-start || true",
             "timeout": 5
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/ground-ruvnet.sh\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" ground-ruvnet || true",
             "timeout": 5
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hijack-ruvnet.sh\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" hijack-ruvnet || true",
             "timeout": 5
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/route-dispatch.sh\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" route-dispatch",
             "timeout": 5
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/verify-interface.sh\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" verify-interface",
             "timeout": 5
           }
         ]
@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/design-wall.sh\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" design-wall",
             "timeout": 5
           }
         ]
@@ -84,7 +84,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/bash \"${CLAUDE_PLUGIN_ROOT}/scripts/learn-capture.sh\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" learn-capture || true",
             "timeout": 5
           }
         ]
@@ -96,7 +96,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/learn-flush.mjs\" || true",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" learn-flush || true",
             "timeout": 30
           }
         ]
