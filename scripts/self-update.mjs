@@ -240,9 +240,21 @@ console.log('self-update done. (Deep-source refreshed + bundle re-assembled. Pri
 // log; nothing is half-published silently (release create is atomic per-tag; the version-bump
 // commit only pushes after the Release exists).
 if (has('--publish')) {
-  if (todo.length === 0) {
-    console.log('[publish] nothing was rebuilt — no new Release needed. Done.');
+  // Packaging gap (issue #29, found by Jan Lafko): the bundle carries EXECUTABLE reader scripts
+  // (kb/*.mjs) — so a reader fix could exist in git while releases/latest kept shipping the stale
+  // copy FOREVER whenever no corpus rebuild happened to come along (he caught the #27 fix present
+  // in source but absent from his installed plugin). A Release is now ALSO cut when any shipped
+  // script drifted vs the last release tag, even with zero corpus changes.
+  let scriptDrift = [];
+  try {
+    const lastTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    const out = execFileSync('git', ['diff', '--name-only', `${lastTag}..HEAD`, '--', 'kb/*.mjs', 'kb/package.json', 'bin/install.mjs'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    scriptDrift = out ? out.split('\n') : [];
+  } catch { scriptDrift = ['(no release tag baseline — treating shipped scripts as drifted)']; }
+  if (todo.length === 0 && scriptDrift.length === 0) {
+    console.log('[publish] nothing was rebuilt and no shipped script changed since the last Release — no new Release needed. Done.');
   } else {
+    if (todo.length === 0) console.log(`[publish] no corpus rebuild, but ${scriptDrift.length} shipped script(s) drifted since the last Release (issue #29 class) — cutting a Release so reader fixes actually reach users:\n${scriptDrift.map((f) => '    · ' + f).join('\n')}`);
     const PLUGIN_JSON = path.join(ROOT, 'plugin', '.claude-plugin', 'plugin.json');
     const pj = JSON.parse(fs.readFileSync(PLUGIN_JSON, 'utf8'));
     const m = pj.version.match(/^(\d+)\.(\d+)\.(\d+)(-dev)?$/);
@@ -294,14 +306,14 @@ if (has('--publish')) {
     console.log(`[publish] creating GitHub Release ${tag} + uploading bundle (~this can take minutes)`);
     execFileSync(GH, ['release', 'create', tag, zipPath, ...sigAssets,
       '--title', `${tag} — nightly brain refresh`,
-      '--notes', `Automated nightly: re-ingested upstream changes in: ${todo.map((p) => p.name).join(', ')}. One product version — plugin ${next} + this knowledge bundle ship together; user installs pick both up automatically.`,
+      '--notes', `Automated nightly: ${todo.length ? `re-ingested upstream changes in: ${todo.map((p) => p.name).join(', ')}` : `shipped reader-script fixes (no corpus change — issue #29 class)`}. One product version — plugin ${next} + this knowledge bundle ship together; user installs pick both up automatically.`,
     ], { cwd: ROOT, stdio: 'inherit' });
 
     console.log('[publish] committing version bump + stamped manifests, pushing');
     execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'data/manifest.json', 'primer/ruvnet-primer.md'], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['push', 'origin', 'main'], { cwd: ROOT, stdio: 'inherit' });
-    NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest — rebuilt: ${todo.map((p) => p.name).join(', ')}`);
+    NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest — ${todo.length ? `rebuilt: ${todo.map((p) => p.name).join(', ')}` : `reader-script fixes only`}`);
     console.log(`[publish] DONE — ${tag} live. Users' heartbeats will pick up plugin + brain automatically.`);
   }
 }

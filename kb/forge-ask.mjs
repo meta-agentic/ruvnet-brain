@@ -111,7 +111,9 @@ async function getEmbedder(model) {
   //   2. BACKSTOP: the model load itself is raced against a hard deadline (remote downloads get 180s
   //      — real downloads on slow links are legitimate; local loads get 60s) so no failure mode below
   //      us can hang the reader indefinitely again.
-  if (T.env.allowRemoteModels) {
+  const modelDir = path.join(modelCache, model);
+  const preflight = async () => {
+    if (!T.env.allowRemoteModels) return;
     const host = (T.env.remoteHost || 'https://huggingface.co').replace(/\/+$/, '');
     try {
       const probe = await fetch(host, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(5000) });
@@ -126,16 +128,39 @@ async function getEmbedder(model) {
         `The reader refuses to hang on connections that never complete.`,
       );
     }
+  };
+  const attemptLoad = async () => {
+    const loadBudgetMs = T.env.allowRemoteModels ? 180000 : 60000;
+    let budgetTimer;
+    return Promise.race([
+      T.pipeline('feature-extraction', model, { quantized: true, revision }),
+      new Promise((_, rej) => { budgetTimer = setTimeout(() => rej(new Error(
+        `embedding model "${model}" failed to load within ${loadBudgetMs / 1000}s (${T.env.allowRemoteModels ? 'remote download' : 'local cache read'}). ` +
+        `Refusing to hang. If this is a slow-but-working network, retry; if it recurs, pre-seed KB_MODEL_CACHE (see issue #27).`,
+      )), loadBudgetMs); }),
+    ]).finally(() => clearTimeout(budgetTimer));
+  };
+
+  await preflight();
+  let fe;
+  try {
+    fe = await attemptLoad();
+  } catch (e) {
+    // Bug B (issue #29, found+fixed by Jan Lafko): allowRemoteModels was gated purely on the model
+    // DIRECTORY existing — but a directory proves a download STARTED, not that it finished. A
+    // truncated .onnx (an interrupted download — the exact #27 failure mode) locked the loader into
+    // "local, offline" forever: silent degradation on the first query, a futex-wedged DEADLOCK on the
+    // second. Self-heal ONCE: wipe the suspect local copy, flip to remote, re-enter the #27 network
+    // guards (preflight + budget), and retry. Jan verified this end-to-end by re-truncating the
+    // files and watching it detect, wipe, refetch, and complete with no hang.
+    if (!T.env.allowRemoteModels && fs.existsSync(modelDir)) {
+      console.error(`[forge-ask] local model "${model}" failed to load (${String(e.message).slice(0, 120)}) — treating the local copy as corrupted: wiping and re-fetching once (issue #29)`);
+      fs.rmSync(modelDir, { recursive: true, force: true });
+      T.env.allowRemoteModels = true;
+      await preflight();
+      fe = await attemptLoad();
+    } else throw e;
   }
-  const loadBudgetMs = T.env.allowRemoteModels ? 180000 : 60000;
-  let budgetTimer;
-  const fe = await Promise.race([
-    T.pipeline('feature-extraction', model, { quantized: true, revision }),
-    new Promise((_, rej) => { budgetTimer = setTimeout(() => rej(new Error(
-      `embedding model "${model}" failed to load within ${loadBudgetMs / 1000}s (${T.env.allowRemoteModels ? 'remote download' : 'local cache read'}). ` +
-      `Refusing to hang. If this is a slow-but-working network, retry; if it recurs, pre-seed KB_MODEL_CACHE (see issue #27).`,
-    )), loadBudgetMs); }),
-  ]).finally(() => clearTimeout(budgetTimer));
   _feCache.set(model, fe);
   return fe;
 }

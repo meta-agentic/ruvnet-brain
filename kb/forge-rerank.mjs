@@ -6,6 +6,7 @@
 //
 //   import { rerankKb } from './forge-rerank.mjs'
 //   node forge-rerank.mjs --dir . --name ruflo --variant big --q "..."   # CLI smoke
+import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -35,12 +36,34 @@ const CE_REVISION = CE_MODEL === DEFAULT_CE_MODEL ? 'a09144355adeed5f58c8ed011d2
 let _ce = null;
 async function loadCE() {
   if (_ce) return _ce;
-  const { T } = await loadTransformers();   // same resolver as forge-ask (KB node_modules / XENOVA_PATH), not a bare import
-  if (process.env.KB_MODEL_CACHE) { T.env.cacheDir = process.env.KB_MODEL_CACHE; T.env.localModelPath = process.env.KB_MODEL_CACHE; }
+  const { T, modelCache } = await loadTransformers();   // same resolver as forge-ask (KB node_modules / XENOVA_PATH), not a bare import
+  // Bug A (issue #29, found+fixed by Jan Lafko): the cache dir was only wired up when KB_MODEL_CACHE
+  // was explicitly exported — otherwise the loader had no idea where the pre-cached models lived and
+  // tried (and in restricted networks, HUNG) fetching fresh on every call. Resolve it UNCONDITIONALLY
+  // via the same chooseModelCache() path getEmbedder() already used correctly. His verification:
+  // rerankPairs() with KB_MODEL_CACHE unset went from hang/timeout to 710ms, zero network.
+  T.env.cacheDir = modelCache;
+  T.env.localModelPath = modelCache;
   T.env.allowRemoteModels = true;
-  const tok = await T.AutoTokenizer.from_pretrained(CE_MODEL, { revision: CE_REVISION });
-  const model = await T.AutoModelForSequenceClassification.from_pretrained(CE_MODEL, { quantized: true, revision: CE_REVISION });
-  _ce = { T, tok, model };
+  const ceDir = path.join(modelCache, CE_MODEL);
+  const attempt = async () => {
+    const tok = await T.AutoTokenizer.from_pretrained(CE_MODEL, { revision: CE_REVISION });
+    const model = await T.AutoModelForSequenceClassification.from_pretrained(CE_MODEL, { quantized: true, revision: CE_REVISION });
+    return { T, tok, model };
+  };
+  try {
+    _ce = await attempt();
+  } catch (e) {
+    // Bug B (issue #29, Jan Lafko): a directory on disk proves a download STARTED, not that it
+    // finished. A truncated .onnx (interrupted download — the exact #27 failure mode) silently
+    // disabled reranking on every query and DEADLOCKED the process on the second query (ORT's wasm
+    // fallback wedges in futex_wait). Self-heal ONCE: wipe the suspect copy, refetch, retry.
+    if (fs.existsSync(ceDir)) {
+      console.error(`[forge-rerank] cross-encoder failed to load (${String(e.message).slice(0, 120)}) — treating the local copy as corrupted: wiping ${ceDir} and re-fetching once (issue #29)`);
+      fs.rmSync(ceDir, { recursive: true, force: true });
+      _ce = await attempt();
+    } else throw e;
+  }
   return _ce;
 }
 
