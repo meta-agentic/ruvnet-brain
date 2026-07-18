@@ -558,6 +558,45 @@
     </div>
   </section>
 
+  <!-- ================================================= SETUP · INSTALL PATHS -->
+  <section class="depth card rail-mirror" id="install" aria-labelledby="inst-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-mirror">setup · the question people keep asking</span>
+        <h2 id="inst-h">Plugin, global, or both? <em>You want both — and they aren't rivals.</em></h2>
+        <p class="q">RuvNet Brain is two layers, not two competing install methods. One command sets up both,
+        and you run it once.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">◎</span>
+    </header>
+    <div class="depth-body">
+      <p><b>The surface — the Claude Code plugin.</b> The <code>search_ruvnet</code> tool, the grounding
+      hooks, and the <code>/configure</code> console. Installed once at <b>user scope</b>, so it works in
+      <em>every</em> project. This is what makes Claude actually <em>use</em> the stack instead of drifting
+      back to the classical defaults it was trained on.</p>
+      <p><b>The knowledge — the brain bundle.</b> rUv's real source, indexed, at
+      <code>~/.cache/ruvnet-brain/kb</code>. Downloaded once from the latest Release; the
+      <code>search_ruvnet</code> tool reads it locally — no cloud, no API key. Refreshed when a new Release
+      ships, never re-fetched per query.</p>
+      <p><b>One command wires both.</b> <code>npx ruvnet-brain</code> installs the plugin <em>and</em>
+      downloads the bundle, narrating each step — that's the whole setup. Prefer to do it by hand?
+      <code>claude plugin marketplace add stuinfla/ruvnet-brain</code>, then
+      <code>claude plugin install ruvnet-brain@ruvnet-brain --scope user</code>.</p>
+      <p class="metaphor">Running both layers is <b>not</b> wasted resources — they do different jobs: the
+      npm package <em>installs and updates</em>; the plugin is the <em>runtime surface</em> Claude loads
+      each session.</p>
+      <p>Bare <code>npx …@latest --update</code> is for a one-off update, <em>not</em> a persistent install
+      — the always-on grounding lives in the plugin's hooks, which a throwaway npx copy never wires. Keep
+      the plugin installed at user scope; reach for npx only to install or update.</p>
+      <p>Which am I actually running? The console shows your real stack — every rUv piece it finds and
+      whether each one is current. Want something it didn't find, like <code>ruflo</code> or
+      <code>agentic-flow</code>? You have three ways to add it, and none is forced on you: the plugin
+      marketplace, <code>npm&nbsp;i&nbsp;-g&nbsp;&lt;tool&gt;</code>, or <code>npx&nbsp;&lt;tool&gt;</code>
+      for a one-off. The Brain works with any of them.</p>
+      <a class="btn-console" href="./">Open the console — see your real setup <span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+
   <!-- =================================================== GUIDE, NOT MIRROR -->
   <section class="closer" aria-label="Where to see live state">
     <p class="closer-line">This page is the guide. The console is the mirror — what's installed,
