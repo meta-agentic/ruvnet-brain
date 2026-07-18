@@ -280,7 +280,7 @@ if [ "$HARNESS_QE" -eq 1 ]; then
 Two machine-wide RuvNet capabilities apply here — offer them, don't hide them:
 • MetaHarness ("freeze the model, evolve the harness") — free READ layer metaharness_score / oia_audit; headline payoff is COST (cheap→frontier cascade). WRITE layer metaharness_evolve needs OPENROUTER_API_KEY.
 • Agentic-QE — on-demand test/coverage/security/a11y fleet. (qe_qx_analyze hallucinates on remote URLs — verify against the real artifact before relaying a score.)
-Surface the plain-English triggers the user can just type: "score my harness" · "evolve my harness" · "do this cheaper" · "QE this" / "check coverage" · "score this repo".
+Surface the plain-English triggers the user can just type: "score my harness" · "evolve my harness" · "do this cheaper" · "QE this" / "check coverage" · "score this repo" (→ the brain-score skill: 8 dims /100, every deduction evidence-cited).
 FIRST time this session: one plain line + "want the one-paragraph explainer, or just run it?" — then respect the answer. When you route cheap, print ONE receipt line — real numbers only, never faked.
 EOF
 fi

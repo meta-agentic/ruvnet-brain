@@ -20,6 +20,7 @@
 //   A. version single-source-of-truth agrees (sync-version --check)
 //   B. full test suite green (npm test — the 60/60)
 //   C. narrative + unit gates (vitest) incl. the tag/entity-aware "What's new" check
+//   C+. [--publish only] push to origin/main — ONLY now that A–C are green (a red tree can't reach GitHub)
 //   D. [--publish only] npm publish + force `latest` to the shipping version
 //   E. verify-channels — the LIVE walk of npm / self-update manifest / release bundle+sig / explainer / git
 
@@ -56,6 +57,25 @@ runOrDie('npm test', 'npm', ['test']);
 // C. unit gates — narrative-version (tag/entity aware), claims, etc.
 step('C', 'unit gates (vitest) — narrative version, claims, guards');
 runOrDie('vitest unit', 'npx', ['vitest', 'run', 'tests/unit']);
+
+// C+. PUSH — only now that A–C are green (publish only). Pushing AFTER the local gates is the fix
+// for the drift that bit on 2026-07-18: a commit was pushed FIRST, then release.mjs's gate B caught a
+// failing plugin-battery test, leaving GitHub at 3.4.10-dev while npm sat at 3.4.9-dev — the exact
+// "pushed but didn't finish" split. The pre-push git hook only checks version/manifest (fast, always),
+// so tests must gate the push HERE. A red tree can no longer reach origin ahead of npm.
+if (PUBLISH) {
+  step('C+', 'push to origin/main — safe now that A–C passed');
+  const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
+  if (dirty) {
+    console.error(`\n${c.r('✗ GATE FAILED: working tree not clean')} ${c.dim('— commit (or stash) everything before publishing; we ship exactly what is committed + pushed.')}`);
+    console.error(dirty.split('\n').slice(0, 10).map((l) => '    ' + l).join('\n'));
+    process.exit(1);
+  }
+  let ahead = '0';
+  try { ahead = execFileSync('git', ['-C', ROOT, 'rev-list', '--count', 'origin/main..HEAD'], { encoding: 'utf8' }).trim(); } catch { /* origin/main ref missing — push will resolve */ ahead = '?'; }
+  if (ahead === '0') console.log(c.dim('  nothing to push — HEAD already on origin/main'));
+  else runOrDie('git push', 'git', ['-C', ROOT, 'push', 'origin', 'main']);
+}
 
 // D. publish to npm (only with --publish) so `npx ruvnet-brain@latest` is never stale
 if (PUBLISH) {
