@@ -171,21 +171,20 @@ onPosix('nightly-gists.sh — FATAL guards (verified against a patched-PATH copy
     expect(out.calls).toContain('forge-big ingest --dir kb --name ruv-gists');
   });
 
-  // LIVE BUG (found while auditing this file, not the "error-paths" set the file name promises):
-  // the 8 embed shards run backgrounded (`&`) then joined with a bare `wait` (script's own lines
-  // 52-57). Reproduced directly in a bare `sh` script before writing this test: `set -eu` does not
-  // apply to backgrounded commands, and POSIX `wait` with no PID list always returns exit status 0
-  // regardless of what any backgrounded job did — so a genuinely failed shard (OOM, a corrupt .rvf
-  // shard, a killed ONNX process) is silently swallowed. The script proceeds to the final `ingest`
-  // call and logs "done — store rebuilt" even though 1/8 of the corpus never got re-embedded, with
-  // no non-zero exit and no distinguishing log line — the same "success that measured nothing" bug
-  // class this suite has already found 3 other times (brain-grade-groundtruth.mjs, eval-brain.mjs,
-  // behavioral-l1-l4.mjs). Not fixed here (flag-don't-touch norm) — the fix is trivial once flagged:
-  // capture each backgrounded PID and `wait "$pid" || failed=1` per shard instead of a bare `wait`.
-  it('LIVE BUG: a failing embed shard is silently swallowed — script still logs "done" and exits 0', () => {
+  // FIXED (F6, 2026-07-18 — was "LIVE BUG: a failing embed shard is silently swallowed"): the 8
+  // embed shards ran backgrounded (`&`) joined by a bare `wait`, which under POSIX ALWAYS returns 0
+  // regardless of what any backgrounded job did — so a genuinely failed shard (OOM, corrupt .rvf,
+  // killed ONNX) was silently swallowed and the script logged "done — store rebuilt" over a corpus
+  // that was 1/8 missing. This test documented that live bug red-first (flag-don't-touch norm); the
+  // fix landed exactly as prescribed here (per-PID `wait "$p" || FAILED_SHARDS+=1`, abort BEFORE
+  // ingest). Now the test asserts the FIXED contract: a failing shard fails the run LOUDLY, never
+  // claims "done", and never ingests a half-embedded corpus.
+  it('a failing embed shard fails the run LOUDLY — exit 1, no "done" claim, no ingest', () => {
     const out = run({ INGEST_MODE: 'changed', FAIL_SHARD: '3' });
-    expect(out.status).toBe(0); // should be 1 — a real shard failure went undetected
-    expect(out.log).toMatch(/done — ruv-gists store rebuilt/); // claims success anyway
-    expect(out.calls.filter((c) => c.startsWith('forge-big embed'))).toHaveLength(8); // shard 3 DID run and DID fail — just never checked
+    expect(out.status).toBe(1); // shard failure is a run failure — the wrapper/watchdog see it
+    expect(out.log).toMatch(/EMBED FAILED — 1 of 8 shards/); // names the damage
+    expect(out.log).not.toMatch(/done — ruv-gists store rebuilt/); // success is never claimed
+    expect(out.calls.filter((c) => c.startsWith('forge-big embed'))).toHaveLength(8); // all shards ran
+    expect(out.calls).not.toContain('forge-big ingest --dir kb --name ruv-gists'); // half-embedded corpus never ingested
   });
 });

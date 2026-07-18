@@ -16,12 +16,18 @@ const HB_SH = path.join(ROOT, 'scripts', 'job-heartbeat.sh');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'derived-status-'));
 afterAll(() => fs.rmSync(TMP, { recursive: true, force: true }));
 
+// NTFY_TOPIC:'' = the wrapper's explicit alert opt-out — these deliberately-failing fixtures were
+// paging Stuart's REAL phone on every test run (the wrapper fell through to the machine's topic file).
 const runHb = (label, cmd) => spawnSync('/bin/sh', [HB_SH, label, '--', '/bin/sh', '-c', cmd], {
-  encoding: 'utf8', env: { ...process.env, JOB_HEARTBEAT_DIR: TMP }, timeout: 15000,
+  encoding: 'utf8', env: { ...process.env, JOB_HEARTBEAT_DIR: TMP, NTFY_TOPIC: '' }, timeout: 15000,
 });
 const receipt = (label) => JSON.parse(fs.readFileSync(path.join(TMP, `${label}.json`), 'utf8'));
 
-describe('job-heartbeat.sh — the receipt can NEVER disagree with the real exit code', () => {
+// The wrapper is a POSIX-sh launchd artifact — /bin/sh does not exist on a native Windows runner
+// (spawnSync returns null status; the fixtures ENOENT). It only ever RUNS on macOS/Linux, so the
+// honest scope for these execution fixtures is skipIf(win32); the scanner suite below is pure JS
+// and runs everywhere.
+describe.skipIf(process.platform === 'win32')('job-heartbeat.sh — the receipt can NEVER disagree with the real exit code', () => {
   it('a failing command (exit 7) is recorded state:"failed", exit_code:7 — and the wrapper exits 7', () => {
     const r = runHb('t-fail', 'exit 7');
     expect(r.status).toBe(7);

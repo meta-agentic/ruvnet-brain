@@ -47,6 +47,12 @@ cat > "$HB" <<EOF
 EOF
 
 notify() { # notify <title> <body> <priority>
+  # NTFY_TOPIC set-but-EMPTY is an explicit opt-out (2026-07-18): unit tests wrap this script around
+  # deliberately-failing fixture commands (t-fail, t.bad, exit 7), and the topic-file fallback below
+  # meant every test run PAGED Stuart's real phone — 16+ fixture pages in one morning, indistinguishable
+  # from real job failures. Tests set NTFY_TOPIC="" and stay silent; production (unset) still falls
+  # through to the topic file.
+  if [ "${NTFY_TOPIC+set}" = "set" ] && [ -z "$NTFY_TOPIC" ]; then return 0; fi
   topic="${NTFY_TOPIC:-}"
   [ -z "$topic" ] && [ -f "$HOME/.cache/ruvnet-brain/ntfy-topic" ] && topic="$(cat "$HOME/.cache/ruvnet-brain/ntfy-topic")"
   [ -z "$topic" ] && return 0
