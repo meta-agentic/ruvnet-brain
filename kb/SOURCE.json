@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-14T23:44:03.100Z",
-  "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
+  "builtUtc": "2026-07-17T10:19:36.486Z",
+  "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "metaharness": {
-      "kbName": "metaharness",
-      "sourceRepo": "https://github.com/ruvnet/metaharness",
-      "sourceCommit": "c86bc12a10b53b1f3e4afee03f69609802236eb3",
-      "sourceDescribe": "c86bc12",
-      "builtUtc": "2026-07-14T23:44:03.100Z",
+    "ruvector": {
+      "kbName": "ruvector",
+      "sourceRepo": "https://github.com/ruvnet/RuVector",
+      "sourceCommit": "dc00c4425300e2d6fbb2e95514e98db1eb5e288c",
+      "sourceDescribe": "dc00c44",
+      "builtUtc": "2026-07-17T10:19:36.486Z",
       "builder": "rvf-kb-forge",
-      "canonicalManifestUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/.last-built.json",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/metaharness-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs metaharness"
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/latest/download/ruvnet-brain.zip",
+      "selfUpdate": "node forge-update.mjs ruvector"
     }
   }
 }

@@ -907,19 +907,26 @@ function runUpdate() {
   printBanner('update');
   const kbDir = resolvedKbDir();
   info(`brain dir: ${c.bold(kbDir)}`);
-  if (!fs.existsSync(path.join(kbDir, 'forge-update.mjs'))) {
-    missingUpdaterHelp(kbDir);
-    process.exit(1);
+  let updateStatus = 1;
+  if (fs.existsSync(path.join(kbDir, 'forge-update.mjs'))) {
+    info(c.dim("running the bundle's own self-updater (backs up first, re-verifies, never half-applies)…\n"));
+    // Relative filename + matching cwd — same launch convention as smokeQuery(); stdio:'inherit'
+    // streams the updater's narration live and unedited.
+    const r = spawnSync(process.execPath, ['forge-update.mjs', '--apply'], { cwd: kbDir, stdio: 'inherit' });
+    updateStatus = r.error ? 1 : (r.status === null ? 1 : r.status);
   }
-  info(c.dim("running the bundle's own self-updater (backs up first, re-verifies, never half-applies)…\n"));
-  // Relative filename + matching cwd — same launch convention as smokeQuery(); stdio:'inherit'
-  // streams the updater's narration live and unedited.
-  const r = spawnSync(process.execPath, ['forge-update.mjs', '--apply'], { cwd: kbDir, stdio: 'inherit' });
-  if (r.error) {
-    console.error(`\n${c.red('✗ update failed to launch:')} ${r.error.message}`);
-    process.exit(1);
+  // FALLBACK (2026-07-17). The bundle's self-updater is missing OR failed — e.g. an OLDER bundle whose
+  // canonicalManifestUrl points at the dead main/kb/.last-built.json path and 404s (the exact break a
+  // real user, Jan Lafko, hit). NEVER leave the user stranded at a 404: re-run THIS installer as a
+  // fresh install, which pulls the latest Release DIRECTLY (releases/latest) and never touches the
+  // manifest — so --update always succeeds and self-heals the stale SOURCE.json in one shot.
+  if (updateStatus !== 0 && !process.env.RUVNET_BRAIN_NO_UPDATE_FALLBACK) {
+    warn("\nthe bundle's own updater couldn't complete — falling back to a fresh install of the latest Release (this always works)…\n");
+    const self = fileURLToPath(import.meta.url);
+    const fr = spawnSync(process.execPath, [self, '--force'], { stdio: 'inherit',
+      env: { ...process.env, RUVNET_BRAIN_NO_UPDATE_FALLBACK: '1' } });
+    updateStatus = fr.error ? 1 : (fr.status === null ? 1 : fr.status);
   }
-  const updateStatus = r.status === null ? 1 : r.status;
   // `--update --auto` = update now AND enroll in Evergreen, so this is the LAST time it's ever run by
   // hand. Only enroll if the update itself succeeded — never promise "you're set forever" on a failed
   // update. enableNightly() prints its own real verification (plist path + launchctl result).

@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+// scripts/verify-channels.mjs — the release-channel protocol. WALK EVERY PATH A USER WALKS.
+//
+// WHY (2026-07-17, Stuart, after a real client hit a broken install): "whenever you push it, you are
+// verifying all the aspects — the explainer page, the GitHub repo, the npm, the npx — all are working
+// flawlessly. Having people find out the experience is lousy because you didn't track it is 100%
+// unacceptable." He is right. The root failure was assuming the repo state equals the user experience
+// (see AgentDB lesson: YOUR ASSUMPTIONS = FAILURE). CI green != it works; committed != shipped;
+// pushed != the npm package is current.
+//
+// This script asserts, against the LIVE endpoints (never the repo, never a guess), that every channel
+// is current AND reachable. Exit 0 = all channels good. Exit 1 = at least one is broken/stale — and
+// the word "shipped" MUST NOT be uttered until this passes.
+//
+// Usage:
+//   node scripts/verify-channels.mjs            # check all channels against the local plugin version
+//   node scripts/verify-channels.mjs --json     # machine-readable
+//
+// Checks (each hits the real thing):
+//   1. npm registry     — `ruvnet-brain` latest dist-tag == the shipping plugin version (not stale)
+//   2. self-update path — the bundle's canonicalManifestUrl actually resolves (no 404 — Jan's bug)
+//   3. release bundle   — releases/latest/download/ruvnet-brain.zip is downloadable (HTTP 200)
+//   4. release signature— the .sig asset exists next to the bundle (auto-apply needs it)
+//   5. explainer (live) — isovision.ai serves the current major.minor AND the update one-liner
+//   6. git remote       — local HEAD is pushed to origin/main (no unpushed shipped code)
+
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const JSON_OUT = process.argv.includes('--json');
+const REPO = 'stuinfla/ruvnet-brain';
+const NPM_PKG = 'ruvnet-brain';
+const EXPLAINER = 'https://isovision.ai/ruvnet-brain/';
+
+const c = { g: (s) => `\x1b[32m${s}\x1b[0m`, r: (s) => `\x1b[31m${s}\x1b[0m`, dim: (s) => `\x1b[2m${s}\x1b[0m`, b: (s) => `\x1b[1m${s}\x1b[0m` };
+const pluginVersion = () => JSON.parse(fs.readFileSync(path.join(ROOT, 'plugin/.claude-plugin/plugin.json'), 'utf8')).version;
+const mm = (v) => (String(v).match(/^(\d+\.\d+)/) || [, '?'])[1];
+
+async function head(url, timeout = 20000) {
+  const ctl = AbortSignal.timeout(timeout);
+  try { const r = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctl, headers: { 'user-agent': 'ruvnet-brain-verify' } }); return { ok: r.ok, status: r.status, r }; }
+  catch (e) { return { ok: false, status: 0, error: e.message }; }
+}
+
+const results = [];
+const check = (name, pass, detail) => { results.push({ name, pass: !!pass, detail }); };
+
+async function run() {
+  const V = pluginVersion();
+
+  // 1) npm registry latest == shipping version
+  try {
+    const latest = execFileSync('npm', ['view', NPM_PKG, 'dist-tags.latest'], { encoding: 'utf8', timeout: 30000 }).trim();
+    check('npm latest matches shipping version', latest === V,
+      `npm latest=${latest} · shipping=${V}${latest === V ? '' : '  ← STALE: run `npm publish` + `npm dist-tag add ' + NPM_PKG + '@' + V + ' latest`'}`);
+  } catch (e) { check('npm latest matches shipping version', false, `npm view failed: ${e.message.split('\n')[0]}`); }
+
+  // 2) the self-update manifest URL actually resolves (the 404 that stranded users)
+  let manifestUrl = null;
+  try {
+    const sj = JSON.parse(fs.readFileSync(path.join(ROOT, 'kb/SOURCE.json'), 'utf8'));
+    const find = (o) => { if (!o || typeof o !== 'object') return null; if (o.canonicalManifestUrl) return o.canonicalManifestUrl; for (const k of Object.keys(o)) { const r = find(o[k]); if (r) return r; } return null; };
+    manifestUrl = find(sj);
+  } catch { /* */ }
+  if (!manifestUrl) check('self-update manifest URL present', false, 'no canonicalManifestUrl in kb/SOURCE.json');
+  else { const h = await head(manifestUrl); check('self-update manifest resolves (no 404)', h.ok, `${manifestUrl} → HTTP ${h.status}${h.ok ? '' : '  ← the exact 404 that broke --update'}`); }
+
+  // 3) release bundle downloadable
+  const bundleUrl = `https://github.com/${REPO}/releases/latest/download/ruvnet-brain.zip`;
+  { const h = await head(bundleUrl); check('release bundle downloads', h.ok, `releases/latest/…/ruvnet-brain.zip → HTTP ${h.status}`); }
+
+  // 4) release signature present (auto-apply verifies against it)
+  { const h = await head(`${bundleUrl}.sig`); check('release signature present', h.ok, `ruvnet-brain.zip.sig → HTTP ${h.status}`); }
+
+  // 5) explainer live shows current major.minor AND the update command
+  { const h = await head(EXPLAINER);
+    if (!h.ok) check('explainer live + current', false, `${EXPLAINER} → HTTP ${h.status}`);
+    else { const html = await h.r.text().catch(() => '');
+      const bare = html.replace(/<[^>]+>/g, '').replace(/&(?:rsquo|apos|#8217|#39);/gi, "'");
+      const newIn = [...bare.matchAll(/what[’']?s new in (\d+\.\d+)/gi)].map((m) => m[1]);
+      const stale = newIn.filter((x) => x !== mm(V));
+      const hasCmd = /ruvnet-brain@latest --update --auto/.test(bare);
+      check('explainer live shows current version', stale.length === 0, stale.length ? `live still says "What's new in ${stale.join(', ')}" while ${mm(V)} ships` : `"What's new in ${mm(V)}" ✓`);
+      check('explainer live shows the update command', hasCmd, hasCmd ? 'update one-liner present' : 'the --update --auto command is MISSING from the live page');
+    }
+  }
+
+  // 6) local HEAD pushed to origin/main (no unpushed shipped code)
+  try {
+    const local = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const remote = execFileSync('git', ['-C', ROOT, 'ls-remote', 'origin', 'main'], { encoding: 'utf8' }).trim().split(/\s+/)[0];
+    check('local HEAD pushed to origin/main', local === remote, local === remote ? 'in sync' : `local ${local.slice(0, 7)} != origin ${(remote || '').slice(0, 7)} — unpushed commits`);
+  } catch (e) { check('local HEAD pushed to origin/main', false, `git check failed: ${e.message.split('\n')[0]}`); }
+
+  const failed = results.filter((r) => !r.pass);
+  if (JSON_OUT) { console.log(JSON.stringify({ version: V, ok: failed.length === 0, results }, null, 2)); process.exit(failed.length ? 1 : 0); }
+
+  console.log(`\n  ${c.b('RuvNet Brain — channel verification')} ${c.dim('· shipping ' + V)}\n`);
+  for (const r of results) console.log(`   ${r.pass ? c.g('✓') : c.r('✗')} ${r.name}\n      ${c.dim(r.detail || '')}`);
+  if (failed.length) { console.log(`\n  ${c.r('✗ ' + failed.length + ' channel(s) BROKEN or STALE — this is NOT shipped. Fix, then re-run.')}\n`); process.exit(1); }
+  console.log(`\n  ${c.g('✓ every channel is current and reachable — a user on any path gets the working, current build.')}\n`);
+  process.exit(0);
+}
+run();
