@@ -101,7 +101,41 @@ async function getEmbedder(model) {
   T.env.allowRemoteModels = !fs.existsSync(path.join(modelCache, model));
   const revision = PINNED_REVISIONS[model] || 'main';
   if (process.env.KB_DEBUG) console.error(`[forge-ask] transformers via: ${via} | model ${model}@${revision} | cache: ${modelCache} (${T.env.allowRemoteModels ? 'remote' : 'local'})`);
-  const fe = await T.pipeline('feature-extraction', model, { quantized: true, revision });
+
+  // ISSUE #27 (Jan Lafko, 2026-07-18): in a network-restricted sandbox (turbo-flow devcontainer) a
+  // cold model cache sent transformers fanning out 53 connections to a host that never answers — and
+  // the reader HUNG FOREVER, four different entry points in a row. A hang is the worst failure mode:
+  // it looks like work, tells the user nothing, and blocks every retry. Two honest guards:
+  //   1. PREFLIGHT (only when a remote fetch would actually happen): one HEAD to the model host with
+  //      a hard 5s cap. Unreachable ⇒ throw NOW, naming the exact host and the two offline remedies.
+  //   2. BACKSTOP: the model load itself is raced against a hard deadline (remote downloads get 180s
+  //      — real downloads on slow links are legitimate; local loads get 60s) so no failure mode below
+  //      us can hang the reader indefinitely again.
+  if (T.env.allowRemoteModels) {
+    const host = (T.env.remoteHost || 'https://huggingface.co').replace(/\/+$/, '');
+    try {
+      const probe = await fetch(host, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(5000) });
+      if (!probe.ok && probe.status >= 500) throw new Error(`HTTP ${probe.status}`);
+    } catch (e) {
+      throw new Error(
+        `cannot reach the embedding-model host ${host} (${e.name === 'TimeoutError' ? 'timed out after 5s' : e.message}) ` +
+        `and the model "${model}" is not in the local cache (${modelCache}). ` +
+        `This environment looks network-restricted (sandbox/container?). Fix without network: ` +
+        `(a) copy a warmed model cache from another machine and point KB_MODEL_CACHE at it, or ` +
+        `(b) run once on an unrestricted network to populate ${modelCache}. ` +
+        `The reader refuses to hang on connections that never complete.`,
+      );
+    }
+  }
+  const loadBudgetMs = T.env.allowRemoteModels ? 180000 : 60000;
+  let budgetTimer;
+  const fe = await Promise.race([
+    T.pipeline('feature-extraction', model, { quantized: true, revision }),
+    new Promise((_, rej) => { budgetTimer = setTimeout(() => rej(new Error(
+      `embedding model "${model}" failed to load within ${loadBudgetMs / 1000}s (${T.env.allowRemoteModels ? 'remote download' : 'local cache read'}). ` +
+      `Refusing to hang. If this is a slow-but-working network, retry; if it recurs, pre-seed KB_MODEL_CACHE (see issue #27).`,
+    )), loadBudgetMs); }),
+  ]).finally(() => clearTimeout(budgetTimer));
   _feCache.set(model, fe);
   return fe;
 }
