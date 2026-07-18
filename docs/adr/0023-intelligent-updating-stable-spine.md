@@ -1,17 +1,25 @@
 ---
-id: ADR-0023
+id: ADR-023
 title: Intelligent Updating — the Stable Spine (auto-update every piece; restart only for declarations)
-status: Accepted
+status: Proposed
 date: 2026-07-18
 authors: [Stuart Kerr, Claude Code]
-tags: [updating, self-update, plugin, hot-reload, symlink, rollback, mcp, hooks]
-relates: [ADR-0020, ADR-0021, ADR-0022]
-references: [cognitum-v0-appliance ADR-248 (the house self-update pattern this mirrors)]
+tags: [updating, self-update, plugin, hot-reload, rollback, mcp, hooks]
+supersedes: []
+relates: [ADR-020, ADR-021, ADR-022]
 ---
 
 # ADR-0023 — Intelligent Updating: the Stable Spine
 
-**Status**: Accepted 2026-07-18. Implementation in the same change-set (see `docs/INTELLIGENT-UPDATING.md` for the full mechanism doc, `docs/ddd/0003-update-context.md` for the bounded context).
+**Status**: Proposed (design under adversarial two-model review; flips on the implementing change-set)
+
+**Design provenance**: mirrors the house self-update pattern in cognitum-v0-appliance's ADR-248
+(manifest → verify → atomic swap → health-gate → retained-prev rollback). A GPT-5.6 adversarial
+review (`docs/reviews/0023-gpt56-redteam.md`, 30 findings) drove a major revision: the active-version pointer is
+an atomically-rewritten `active.json` (portable, no symlink privileges), the hook shim is a Node
+dispatch table (typed advisory/blocking modes), and the MCP layer is a stable server delegating
+per-call to the active generation — not a handshake-replaying child proxy. Full doc:
+`docs/INTELLIGENT-UPDATING.md`; bounded context: `docs/ddd/0003-update-context.md`.
 
 ## Context — the failure this kills
 
