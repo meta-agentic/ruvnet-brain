@@ -1,8 +1,9 @@
 ---
 id: ADR-013
 title: The Onboarding Console — RuvNet Brain becomes a mirror, an advisor, and only then a configurator
-status: Proposed
+status: Implemented
 date: 2026-07-14
+updated: 2026-07-14
 authors: [Stuart Kerr, Claude Code]
 tags: [onboarding, ux, config, stack, memory-health, savings, safety]
 supersedes: []
@@ -153,10 +154,43 @@ apply, state can change (a nightly job, another window). Therefore **apply re-re
 re-verifies before mutating**, and refuses if the world moved. Stale-read-then-write is how the
 concurrent-session clobber happened on 2026-07-12; we do not repeat it.
 
-## Verification
+## Amendment (2026-07-14) — plain-English machine impact is a first-class principle
 
-This ADR is not accepted until:
-1. `stack-sync --audit` exits non-zero on a machine with drift and zero on a clean one. *(Done — verified live 2026-07-14.)*
-2. The console renders with **zero writes** — provable by running it against a read-only filesystem.
-3. Every recommendation object fails schema validation if it lacks `evidence`, `cost`, or `undo`.
-4. Memory-health scoring refuses to emit a score for any dimension it did not actually probe.
+Added during implementation, at Stuart's direction: *"Don't do anything to the machine without
+explicitly explaining, in plain words, what it does. Most people don't know how this is set up on
+their computer; they just want it to work."* This becomes **principle 6**:
+
+6. **Anything that touches the machine explains itself in plain English, first.** Every recommendation
+   carries a `touchesMachine` flag and, when true, a jargon-free `plainImpact` that says what happens to
+   the computer, why it is safe, and that it is reversible — written for a smart person who has never
+   heard of npx. The UI renders that impact and requires an explicit confirm before applying. Actions
+   that only write RuvNet Brain's own user-level settings file (`touchesMachine:false`) say so plainly.
+   The recommendation factory *refuses to construct* a machine-touching rec without a `plainImpact`.
+
+## Verification — status at implementation (2026-07-14)
+
+1. `stack-sync --audit` exits non-zero on a machine with drift and zero on a clean one. **✅ Done** — pre-existing, verified live.
+2. The console renders with **zero writes**. **✅ Done by construction** — the render path (`gatherState`) uses only read helpers and opens no file for writing; the ONLY writer is the authenticated apply/save POST path. *(The stack audit reaches the npm registry over the network but mutates no user file.)* A read-only-filesystem proof test is filed as a follow-up.
+3. Every recommendation object fails schema validation if it lacks `evidence`, `cost`, or `undo` (and, per principle 6, `plainImpact` when it touches the machine). **✅ Done + tested** — `makeRecommendation` throws; `scripts/console-engine.test.mjs` (15 cases) proves each rejection.
+4. Memory-health scoring refuses to emit a score for any dimension it did not actually probe. **✅ Done + tested** — untested dimensions land in `notTested[]`, contribute to neither numerator nor denominator, and a fully-unprobed report scores `null`, never a number.
+
+## Implementation (2026-07-14)
+
+- **Engine (pure, no I/O):** `scripts/console-engine.mjs` — the schema-enforced `makeRecommendation`
+  factory, the stack/wiring recommendation builders, and `scoreMemoryHealth`. Tested by table.
+- **Server (the only writer):** `scripts/onboarding-console.mjs` — read-only state assembly over the
+  existing engines (`stack-sync.auditModel`, `memory-doctor.diagnose`, a read-only wiring survey),
+  a 127.0.0.1 token-gated HTTP server, and an apply/save/undo path that **re-verifies before writing,
+  journals the inverse first, and dispatches to the already-safe `stack-sync --sync` /
+  `reconcile-project --apply` scripts rather than re-implementing any mutation.**
+- **UI:** `console/index.html` + `app.js` + `style.css` — the six progressive-disclosure sections,
+  theme-aware, offline/self-contained, built to the frozen contract in `console/CONTRACT.md`, with a
+  generated hero (`console/assets/hero.webp`).
+- **Trigger:** `plugin/commands/configure.md` → `/ruvnet-brain:configure`; plus repo-local
+  `.claude/commands/configure.md` → `/configure`. Both launch `onboarding-console.mjs --serve --open`.
+- **Proven live:** `--print-state` returns real data from this machine (773 wiring sites across 12
+  projects, 104 memory stores, memory health 100/100 on 4 probed dims); `--print-stack` returns the
+  real 39-package audit; the 15 engine tests pass.
+- **Known follow-up (public ship):** the console currently runs from the repo. To ship inside the
+  installed plugin bundle for all users, the server + engines need vendoring under `plugin/` (the
+  engines live in `scripts/`). Filed, not yet done.

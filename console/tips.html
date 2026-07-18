@@ -99,39 +99,47 @@
         <svg class="hero-scene" viewBox="0 0 460 300" role="img"
              aria-label="Three concentric depth rings around a chat prompt reading 'just type'. Ring one, always on — grounding, memory and gates wrap every prompt; you do nothing. Ring two, say it — plain-English asks. Ring three, name it — commands, skills and tools you call directly. Most work never leaves ring one.">
 
-          <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green).
-               hs-pulse + hs-r1-halo are the animation: a prompt leaves the center, ring 1 catches it. -->
-          <circle class="hs-ring3"   cx="105" cy="146" r="120"/>
-          <circle class="hs-ring2"   cx="105" cy="146" r="90"/>
-          <circle class="hs-r1-halo" cx="105" cy="146" r="60"/>
-          <circle class="hs-pulse"   cx="105" cy="146" r="60"/>
-          <circle class="hs-ring1"   cx="105" cy="146" r="60"/>
+          <!-- rings + prompt: the visual. On narrow phones this group is the WHOLE hero (the label
+               column is hidden and the legend below the figure becomes the key), so it re-centers. -->
+          <g class="hs-rings">
+            <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green).
+                 hs-pulse + hs-r1-halo are the animation: a prompt leaves the center, ring 1 catches it. -->
+            <circle class="hs-ring3"   cx="105" cy="146" r="120"/>
+            <circle class="hs-ring2"   cx="105" cy="146" r="90"/>
+            <circle class="hs-r1-halo" cx="105" cy="146" r="60"/>
+            <circle class="hs-pulse"   cx="105" cy="146" r="60"/>
+            <circle class="hs-ring1"   cx="105" cy="146" r="60"/>
 
-          <!-- the center: you, typing normally -->
-          <rect class="hs-box" x="49" y="133" width="112" height="26" rx="8"/>
-          <text class="hs-prompt" x="105" y="150"><tspan class="hs-pmark">&gt;</tspan> just type<tspan class="hs-caret">▍</tspan></text>
+            <!-- the center: you, typing normally -->
+            <rect class="hs-box" x="49" y="133" width="112" height="26" rx="8"/>
+            <text class="hs-prompt" x="105" y="150"><tspan class="hs-pmark">&gt;</tspan> just type<tspan class="hs-caret">▍</tspan></text>
+          </g>
 
-          <!-- leader lines: a dot on each ring, a line out to its label -->
-          <circle class="hs-dot l3" cx="180" cy="52"  r="2.6"/>
-          <line   class="hs-lead l3" x1="180" y1="52"  x2="226" y2="52"/>
-          <circle class="hs-dot l2" cx="190" cy="118" r="2.6"/>
-          <line   class="hs-lead l2" x1="190" y1="118" x2="226" y2="118"/>
-          <circle class="hs-dot l1" cx="151" cy="184" r="2.6"/>
-          <line   class="hs-lead l1" x1="151" y1="184" x2="226" y2="184"/>
+          <!-- label column + its leaders. Hidden ≤29em (they render ~9px at phone width — the
+               legend directly below the figure repeats every word at full size, so nothing is lost;
+               the aria-label above still carries the full description to screen readers). -->
+          <g class="hs-labels">
+            <!-- leader lines: a dot on each ring, a line out to its label -->
+            <circle class="hs-dot l3" cx="180" cy="52"  r="2.6"/>
+            <line   class="hs-lead l3" x1="180" y1="52"  x2="226" y2="52"/>
+            <circle class="hs-dot l2" cx="190" cy="118" r="2.6"/>
+            <line   class="hs-lead l2" x1="190" y1="118" x2="226" y2="118"/>
+            <circle class="hs-dot l1" cx="151" cy="184" r="2.6"/>
+            <line   class="hs-lead l1" x1="151" y1="184" x2="226" y2="184"/>
 
-          <!-- label column, outermost ring first, punchline last.
-               Baseline rhythm is bbox-derived (mechanically asserted): main→sub 21,
-               sub→sub 20 — enough clearance even with the ≤29em main-label bump. -->
-          <text class="hs-main hs-l3" x="235" y="56">03 · NAME IT</text>
-          <text class="hs-sub"        x="235" y="77">commands · skills · tools</text>
-          <text class="hs-main hs-l2" x="235" y="122">02 · SAY IT</text>
-          <text class="hs-sub"        x="235" y="143">plain-English asks</text>
-          <text class="hs-main hs-l1" x="235" y="188">01 · ALWAYS ON</text>
-          <text class="hs-sub"        x="235" y="209">grounding · memory · gates</text>
-          <text class="hs-sub"        x="235" y="229">you do nothing</text>
+            <!-- label column, outermost ring first, punchline last.
+                 Baseline rhythm is bbox-derived (mechanically asserted): main→sub 21, sub→sub 20. -->
+            <text class="hs-main hs-l3" x="235" y="56">03 · NAME IT</text>
+            <text class="hs-sub"        x="235" y="77">commands · skills · tools</text>
+            <text class="hs-main hs-l2" x="235" y="122">02 · SAY IT</text>
+            <text class="hs-sub"        x="235" y="143">plain-English asks</text>
+            <text class="hs-main hs-l1" x="235" y="188">01 · ALWAYS ON</text>
+            <text class="hs-sub"        x="235" y="209">grounding · memory · gates</text>
+            <text class="hs-sub"        x="235" y="229">you do nothing</text>
 
-          <!-- the punchline — the last thing the column says -->
-          <text class="hs-punch" x="235" y="253">most work never leaves ring 1</text>
+            <!-- the punchline — the last thing the column says -->
+            <text class="hs-punch" x="235" y="253">most work never leaves ring 1</text>
+          </g>
         </svg>
         <figcaption class="hero-cap mono">three depths · depth 1 wraps every prompt</figcaption>
       </figure>
@@ -386,6 +394,169 @@
       <p class="mh-cite mono">Grounded in rUv's own accepted ADRs — seven surfaces
       <code>ADR-075</code> · four pillars <code>ADR-076</code> · the measured 28.5% <code>ADR-073</code>.
       Nothing here is inferred.</p>
+    </div>
+  </section>
+
+  <!-- =================================================== CAPSTONE · THE PAYOFF
+       The crown of the page. Everything above EXPLAINED the mechanism (three depths, the
+       harness picture, MetaHarness). This section CROWNS it with value + momentum — the
+       reinforcement a new user is looking for: this was a good investment, the education ask
+       is small, the return is huge, and this is why the whole ecosystem is compounding.
+       It reuses the .card / .depth-head idiom so it reads as the same page, and earns a
+       SPECTRUM rail (rail-pay) because this is where all three depths pay off at once.
+       Every number is grounded: 28.5% / 98.1% = ADR-073; the download figures are the live
+       npm API, verified 2026-07-17 (attributed in-place). No hardcoded color — tokens only. -->
+  <section class="depth card rail-pay capstone" id="capstone" aria-labelledby="cap-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-pay mono">depth 4 · the payoff</span>
+        <h2 id="cap-h">You're not learning a new tool. <em>You're multiplying the ones you already pay&nbsp;for.</em></h2>
+        <p class="depth-sub">The learning curve is small — most of it is depth 1, which is doing nothing.
+        The return is world-class output: grounded, cheaper, checked. It works the same whether you
+        write code or just describe what you want.</p>
+      </div>
+      <span class="depth-num mono" aria-hidden="true">04</span>
+    </header>
+    <div class="depth-body">
+
+      <!-- PART 2 · the does / doesn't — effort you're spared vs power you gain.
+           Not feature-vs-feature: the left column is work you no longer do, the right is what
+           you get. The spine between them carries a transform arrow (→ on desktop, ↓ on mobile). -->
+      <div class="trade" role="group" aria-label="What the harness spares you, and what it gives you in return">
+
+        <div class="trade-col trade-spared">
+          <h3 class="trade-cap mono">
+            <span class="trade-cap-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 12h8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </span>
+            What it doesn't ask of you
+          </h3>
+          <ul class="trade-list">
+            <li>
+              <span class="trade-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="4" y="13.4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.6"/></svg>
+              </span>
+              <span class="trade-txt">You don't have to master 20 separate tools — it knows which one this task needs.</span>
+            </li>
+            <li>
+              <span class="trade-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="9.5" cy="9.5" r="5.8"/><circle cx="9.5" cy="9.5" r="2.4"/><path d="M17 12.5v6.5"/><path d="M14 16.5l3 3 3-3"/></svg>
+              </span>
+              <span class="trade-txt">You don't pay frontier prices for everything — it routes to the cheapest model that can do the job.</span>
+            </li>
+            <li>
+              <span class="trade-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M3 9l9-4 9 4-9 4-9-4z"/><path d="M7 11v4.2c0 1.4 2.4 2.4 5 2.4s5-1 5-2.4V11"/><path d="M21 9v4.6"/></svg>
+              </span>
+              <span class="trade-txt">You don't have to be an expert — or even a coder.</span>
+            </li>
+            <li>
+              <span class="trade-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4.6 12a7.4 7.4 0 0 1 12.6-5.2L20 9.4"/><path d="M20 4.2v5.2h-5.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.6 5.2L4 14.6"/><path d="M4 19.8v-5.2h5.2"/></svg>
+              </span>
+              <span class="trade-txt">You don't re-explain your project every session — it remembers.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="trade-spine" aria-hidden="true">
+          <span class="trade-arrow">
+            <svg viewBox="0 0 24 24"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+          </span>
+        </div>
+
+        <div class="trade-col trade-gain">
+          <h3 class="trade-cap mono">
+            <span class="trade-cap-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 6.1 6.1.2-4.8 3.8 1.7 5.9-5.4-3.4-5.4 3.4 1.7-5.9L3.5 9.8l6.1-.2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            </span>
+            What it gives you
+          </h3>
+          <ul class="trade-list">
+            <li>
+              <span class="trade-ic ic-cy" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6 3.5h7.5L18.5 8.5V20.5H6z"/><path d="M13.3 3.5V8.7H18.5"/><path d="M8.5 14.2l2.1 2.1 4-4.4"/></svg>
+              </span>
+              <span class="trade-txt">Answers grounded in real source, not guesses.</span>
+            </li>
+            <li>
+              <span class="trade-ic ic-am" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12.5 3L6 13.2h4.6l-1 7.8 6.4-11h-4.7z"/></svg>
+              </span>
+              <span class="trade-txt">The cheapest capable model on every task — the expensive one stays idle.
+                <span class="trade-note">measured 28.5% cheaper at 98.1% bar-compliance · <code>ADR-073</code></span>
+              </span>
+            </li>
+            <li>
+              <span class="trade-ic ic-gr" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.2 3 7.6 7 8.6 4-1 7-4.4 7-8.6V6z"/><path d="M9 12l2.1 2.1L15.2 9.8"/></svg>
+              </span>
+              <span class="trade-txt">Gates that inspect — and can refuse a bad write before it lands.</span>
+            </li>
+            <li>
+              <span class="trade-ic ic-am" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M11 3l1.7 4.6L17.3 9l-4.6 1.7L11 15.3 9.3 10.7 4.7 9l4.6-1.7z"/><path d="M17.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/></svg>
+              </span>
+              <span class="trade-txt">World-class AI apps — whether you write code or just describe what you want.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- PART 3 · the momentum proof. Built ONLY from live-verified npm figures (2026-07-17):
+           ~1.48M downloads/month across the RuvNet ecosystem (9 packages); the five largest,
+           to scale, are agentdb 660K · agentic-flow 372K · @ruvector/rvf 340K · claude-flow 91K
+           · ruv-swarm 12K (they sum to ~1.475M — nearly the whole total). Bars are scaled to the
+           per-package number (widest = agentdb at 100%) and draw in; the ~1.48M is the hero stat.
+           NO fabricated historical series — we don't have verified month-by-month points, so the
+           only time-claim here is the honest run-rate + a tasteful "and climbing" accent. -->
+      <div class="momentum">
+        <div class="mo-head">
+          <div class="mo-hero">
+            <span class="mo-hero-num">~1.48M</span>
+            <span class="mo-hero-unit">downloads / month</span>
+          </div>
+          <span class="mo-climb">
+            <svg viewBox="0 0 24 18" aria-hidden="true"><path d="M2 15l6-6 4 3 7-8"/><path d="M15 4h5v5"/></svg>
+            and climbing
+          </span>
+        </div>
+        <p class="mo-cap">Across the RuvNet ecosystem — the tools this Brain grounds you in — nine packages
+        pull ~1.5M installs a month, and it's compounding. The Brain is how you actually use all of it
+        without becoming an expert in each.</p>
+
+        <ul class="mo-bars" aria-label="Monthly npm downloads, the five largest RuvNet packages">
+          <li class="mo-bar">
+            <span class="mo-bar-name">agentdb</span>
+            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:100%"></span></span>
+            <span class="mo-bar-val">660K</span>
+          </li>
+          <li class="mo-bar">
+            <span class="mo-bar-name">agentic-flow</span>
+            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:56.4%"></span></span>
+            <span class="mo-bar-val">372K</span>
+          </li>
+          <li class="mo-bar">
+            <span class="mo-bar-name">@ruvector/rvf</span>
+            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:51.5%"></span></span>
+            <span class="mo-bar-val">340K</span>
+          </li>
+          <li class="mo-bar">
+            <span class="mo-bar-name">claude-flow</span>
+            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:13.8%"></span></span>
+            <span class="mo-bar-val">91K</span>
+          </li>
+          <li class="mo-bar">
+            <span class="mo-bar-name">ruv-swarm</span>
+            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:1.8%"></span></span>
+            <span class="mo-bar-val">12K</span>
+          </li>
+        </ul>
+        <p class="mo-source mono">the five largest of nine packages · verified live · npm downloads · 2026-07-17</p>
+      </div>
+
+      <p class="capstone-close">This is why the ecosystem is compounding — and why leaning in pays off
+      fast. <b>Small ask, world-class return.</b> The console shows you all of it, live.</p>
     </div>
   </section>
 

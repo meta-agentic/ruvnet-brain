@@ -5,10 +5,14 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_440 gists · refreshed 2026-07-16_
+_444 gists · refreshed 2026-07-18_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-17 | [META_PROXY_V0_4.md](https://gist.github.com/ruvnet/f6fee134339afd1b3eaf7105557ec934) | Meta Proxy v0.4.0 — signed routing sidecar for MetaHarness and Ruflo |
+| 2026-07-17 | [metaharness-v0.3.2-meta-proxy.md](https://gist.github.com/ruvnet/192766132e1e42ee3ec4d670f38c7fb1) | MetaHarness v0.3.2 optional signed Meta-Proxy sidecar |
+| 2026-07-17 | [gistfile0.txt](https://gist.github.com/ruvnet/2b37060362af57bbffd421aa09e4db50) | Ruflo v3.32.2 stable Codex integration, recovery, and validation guide |
+| 2026-07-17 | [ruflo-v3.32.1-codex-integration.md](https://gist.github.com/ruvnet/532079b6e06e3d87e6bc9a6e30d1bb26) | Ruflo v3.32.1: stable Windows-safe Codex integration, upgrade guide, root causes, and verification |
 | 2026-07-16 | [meta-wrapper.md](https://gist.github.com/ruvnet/e1008e2a4aa13bf2a991e6aca4028d03) | Always-running MetaHarness coding service on GCP |
 | 2026-07-15 | [*specification.md](https://gist.github.com/ruvnet/6217ea3bd75cc0c27522965965e7383b) | TikTok-like recommender Algorithm |
 | 2026-07-15 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |

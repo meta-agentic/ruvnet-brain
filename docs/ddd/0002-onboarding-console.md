@@ -1,5 +1,13 @@
 # DDD — The Onboarding Console
 
+> **Status: Implemented (2026-07-14).** Contexts 1 (Stack Inventory), 2 (Wiring Survey), 4
+> (Recommendation — pure, schema-enforced), 5 (Change Plan — the only writer, re-reads before write),
+> 6 (Memory Health — `notTested[]` excluded from the score) and 8 (Presentation) ship in
+> `scripts/console-engine.mjs`, `scripts/onboarding-console.mjs`, and `console/`. Amendment from
+> implementation: every machine-touching Recommendation also carries a plain-English `plainImpact`
+> (ADR-013 principle 6). Contexts 3 (Operator Profile) and 7 (Savings Ledger) ship in their thin form
+> (config + receipts-only) and grow as more is measured.
+
 Companion to **ADR-0013**. Where the ADR states the policy, this states the *structure* that makes
 the policy unbreakable. Anywhere below that a rule is enforced by an invariant rather than by a
 convention, that is deliberate: **we have already proven that advisory rules do not hold** — the
