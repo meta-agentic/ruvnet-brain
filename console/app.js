@@ -526,10 +526,16 @@ function familyRow(fam) {
   // Version on the row (Stuart 2026-07-17: "show the version numbers"). Healthy family → the
   // flagship's version. Attention family → the problem AND its resolution on the same line:
   // "installed → target" right beside the fix button.
+  // Exception (issue #23): "More RuvNet tools" is an explicit heterogeneous catch-all — its members
+  // are unrelated packages on independent version lines, so items[0]'s version does NOT represent the
+  // group yet reads as if it did. Suppress the flagship-version shorthand there (each package's real
+  // version is still shown in the expanded table below). A specific "installed → target" for ONE
+  // flagged package stays — it sits beside THAT package's fix button and is about it, not the group.
+  const isCatchAll = fam.name === STACK_MORE.name;
   const first = fam.attention ? fam.items.find((i) => i.state === 'BEHIND' || i.state === 'BROKEN') : null;
   const verText = first
     ? `${first.installed ?? '?'} → ${first.target ?? 'latest'}`
-    : (fam.items[0]?.installed ? `v${fam.items[0].installed}` : '');
+    : (!isCatchAll && fam.items[0]?.installed ? `v${fam.items[0].installed}` : '');
   return el('details', { class: 'fam' },
     el('summary', { class: 'fam-sum' },
       el('span', { class: 'fam-name' }, fam.name),
