@@ -5,6 +5,8 @@
     "cognitum-v0-appliance",
     "cognitum-platform-docs",
     "cognitum-spoton",
+    "cognitum-trader",
+    "cognitum-trader-jackishim",
     "ruv-meetings"
   ],
   "details": {
@@ -12,6 +14,8 @@
     "cognitum-v0-appliance": { "repo": "cognitum-one/v0-appliance", "visibility": "private" },
     "cognitum-platform-docs": { "repo": "cognitum-one/platform-docs", "visibility": "private" },
     "cognitum-spoton": { "repo": "cognitum-one/spoton", "visibility": "private", "note": "fence entry added BEFORE first ingest (2026-07-18) so no bundle-build window ever saw the store unfenced" },
+    "cognitum-trader": { "repo": "stuinfla/cognitum-trader", "visibility": "private", "note": "Stuart's own private trading project; fenced BEFORE first ingest (2026-07-18)" },
+    "cognitum-trader-jackishim": { "repo": "jackishim/cognitum-trader", "visibility": "private", "note": "a COLLABORATOR's private repo (third-party IP) — local store only, fenced BEFORE first ingest (2026-07-18); distinct store name avoids collision with stuinfla/cognitum-trader" },
     "ruv-meetings": { "repo": "(none — Read.ai transcripts of semi-private community calls; participants did not consent to public redistribution)", "visibility": "private" }
   },
   "publicNote": "cognitum-cogs (cognitum-one/cogs) and cognitum-support (cognitum-one/support) are PUBLIC and bundle-safe."
