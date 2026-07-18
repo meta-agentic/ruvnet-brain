@@ -25,8 +25,6 @@ jobs:
           if [ -n "$big" ]; then echo "Tracked file(s) exceed 5MB — ship via Release assets instead:"; echo "$big"; exit 1; fi
       - name: Version single-source-of-truth (fails on any drift / stray literal)
         run: npm run version:check
-      - name: Claims ledger (every advertised number must regenerate)
-        run: npm run claims:verify
       - name: No silent substitution (never hand-roll a tool rUv already ships, and NEVER wear his name)
         # Added 2026-07-13 after the worst failure of this project: I hand-rolled a 216-line model
         # router with a "placeholder policy", called it "the MetaHarness router engine" in SKILL.md,
@@ -54,6 +52,8 @@ jobs:
         run: |
           npm i --no-audit --no-fund --loglevel=error
           npm run test:cov
+      - name: Claims ledger (every advertised number regenerates — coverage badge re-derived from the fresh coverage-summary.json above, not string-matched)
+        run: npm run claims:verify
       - name: Installer smoke test
         # drive-to-98 #6: bin/install.mjs is the highest-risk untested path (a stranger's first
         # contact). Runs the REAL installer in its safe, offline, non-mutating modes (--help,

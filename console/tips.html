@@ -179,7 +179,7 @@
              harness: the prompt passes through GROUND (cited, not guessed), ROUTE (cheapest
              capable model, with the frontier model mostly idle), RECALL (prior decisions
              return), GATE (inspects the write and can refuse it), and VERIFY (provenance and
-             safety gate), producing an answer that is grounded, cited and checked. Measured:
+             safety gate), producing an answer that is grounded, cited and checked. Per agentic-flow ADR-076:
              28.5% cheaper at 98.1% bar-compliance." decoding="async">
         <figcaption class="mono">the left lane finishes first — and that's the problem</figcaption>
       </figure>
@@ -362,7 +362,7 @@
        rUv wrote the same risk into ADR-076 himself: "'Meta-harness' is a newer term; the README must
        define it in the first screen so it doesn't read as jargon. Mitigation: the one-line 'freeze
        the model, evolve the harness' gloss + the four-pillar framing." This is that mitigation.
-       Every element of the diagram is grounded — 7 surfaces ADR-075, 4 pillars ADR-076, 28.5% ADR-073. -->
+       Every element of the diagram is grounded — 7 surfaces ADR-075, 4 pillars ADR-076, 28.5% ADR-076. -->
   <section class="depth card rail-prove" id="metaharness" aria-labelledby="mh-h">
     <header class="depth-head">
       <div class="depth-title">
@@ -385,14 +385,14 @@
         <img src="assets/metaharness.svg" alt="MetaHarness: the model sits frozen at the centre while
         seven policy surfaces around it — planner, contextBuilder, reviewer, retryPolicy, toolPolicy,
         memoryPolicy and scorePolicy — are each mutated and measured. Four pillars run underneath:
-        route, evolve, orchestrate, verify. Measured result: 28.5% cheaper at 98.1% bar-compliance."
+        route, evolve, orchestrate, verify. Per agentic-flow ADR-076: 28.5% cheaper at 98.1% bar-compliance."
         width="900" height="560" decoding="async" />
         <figcaption class="mono">the model never moves — everything around it does</figcaption>
       </figure>
       <p class="metaphor">The seven surfaces take turns changing. The model in the middle never moves —
       that's the whole trick, and it's why this works on the Claude you already have.</p>
       <p class="mh-cite mono">Grounded in rUv's own accepted ADRs — seven surfaces
-      <code>ADR-075</code> · four pillars <code>ADR-076</code> · the measured 28.5% <code>ADR-073</code>.
+      <code>ADR-075</code> · four pillars <code>ADR-076</code> · the 28.5% figure <code>ADR-076</code>.
       Nothing here is inferred.</p>
     </div>
   </section>
@@ -404,7 +404,7 @@
        is small, the return is huge, and this is why the whole ecosystem is compounding.
        It reuses the .card / .depth-head idiom so it reads as the same page, and earns a
        SPECTRUM rail (rail-pay) because this is where all three depths pay off at once.
-       Every number is grounded: 28.5% / 98.1% = ADR-073; the download figures are the live
+       Every number is grounded: 28.5% / 98.1% = ADR-076; the download figures are the live
        npm API, verified 2026-07-17 (attributed in-place). No hardcoded color — tokens only. -->
   <section class="depth card rail-pay capstone" id="capstone" aria-labelledby="cap-h">
     <header class="depth-head">
@@ -484,7 +484,7 @@
                 <svg viewBox="0 0 24 24"><path d="M12.5 3L6 13.2h4.6l-1 7.8 6.4-11h-4.7z"/></svg>
               </span>
               <span class="trade-txt">The cheapest capable model on every task — the expensive one stays idle.
-                <span class="trade-note">measured 28.5% cheaper at 98.1% bar-compliance · <code>ADR-073</code></span>
+                <span class="trade-note">28.5% cheaper at 98.1% bar-compliance · <code>ADR-076</code></span>
               </span>
             </li>
             <li>

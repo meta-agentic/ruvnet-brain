@@ -20,7 +20,10 @@ export default defineConfig({
       // code, not source — excluded from the denominator like tests/.
       include: ['scripts/**/*.mjs', 'kb/*.mjs', 'bin/*.mjs', 'plugin/mcp/*.mjs'],
       exclude: ['kb/node_modules/**', 'kb/clones/**', 'kb/test-guard-injection.mjs'],
-      reporter: ['text-summary', 'lcov'],
+      // json-summary writes coverage/coverage-summary.json, which scripts/claims-verify.mjs's
+      // verifyCoverageBadge RE-DERIVES the README badge % from (it no longer string-matches a
+      // hardcoded "10%" needle — a gate that can't fail isn't a gate). ADR-0020.
+      reporter: ['text-summary', 'lcov', 'json-summary'],
       // Regression floor: CI fails below these. Set to the measured value ROUNDED DOWN (see the
       // commit that changed this line for the measured values). Raise as coverage grows; never
       // lower silently.

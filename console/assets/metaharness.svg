@@ -2,7 +2,7 @@
   <title id="mh-t">MetaHarness: freeze the model, evolve the harness</title>
   <desc id="mh-d">A frozen crystalline core labeled MODEL sits motionless at the centre — the same Claude you already have, never retrained, never swapped. Around it orbits a living amber harness ring carrying seven policy surfaces: planner, contextBuilder, reviewer, retryPolicy, toolPolicy, memoryPolicy and scorePolicy. A comet of activity sweeps the ring, visiting one surface at a time — the Darwin loop mutates one surface, sandboxes it, and keeps only what measurably improves. A green variant branch merges back into the harness (kept); a red one fades (pruned). The harness stands on four pillars: route (cost-optimal model selection), evolve (self-improving harness), orchestrate (agents, swarms, MCP) and verify (provenance plus safety gate). Payoff: a cheap model in a good harness approximately equals a frontier model, for less — per agentic-flow's ADR-076, 28.5 percent cheaper at 98.1 percent bar-compliance.</desc>
 
-  <!-- Grounded in agentic-flow ADR-075 (seven surfaces, freeze/evolve) and ADR-076 (four pillars); 28.5% / 98.1% from ADR-073 cited in ADR-076. -->
+  <!-- Grounded in agentic-flow ADR-075 (seven surfaces, freeze/evolve) and ADR-076 (four pillars); 28.5% / 98.1% per agentic-flow ADR-076 (Accepted). -->
 
   <style>
     :root{

@@ -14,7 +14,17 @@ const ROOT = process.cwd();
 const coverage = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/manifest.json'), 'utf8')).coverage;
 const ALLOWED = new Set([coverage.built, coverage.catalogued, coverage.orgTotalApprox]);
 
-const SURFACES = ['README.md', 'plugin/skills/ruvnet-brain/SKILL.md', 'primer/ruvnet-primer.md'];
+// explainer/index.html and explainer/llms.txt added 2026-07-18 (issues B4/B5): the LIVE public
+// marketing page hardcoded "56 repos" in ~8 places and llms.txt contradicted itself ("36 indexed
+// repos" on line 3 vs "57 RuvNet repos" on line 18) — neither was watched because they weren't in
+// SURFACES. The detector already does the right thing; it just wasn't pointed at them.
+const SURFACES = [
+  'README.md',
+  'plugin/skills/ruvnet-brain/SKILL.md',
+  'primer/ruvnet-primer.md',
+  'explainer/index.html',
+  'explainer/llms.txt',
+];
 
 // Below this magnitude a "N repos" mention is never a corpus-size claim in these docs — e.g.
 // "the 8 newest repos are findable by name" names a small named subset, not the corpus total.
@@ -89,6 +99,11 @@ describe(`repo-count literals match data/manifest.json coverage (built=${coverag
       'across the full 32-repo corpus, not just the 3-4 names that come to mind first',
       'a portable brain over **32 RuvNet building-block repos**, embedded and indexed at pinned SHAs',
       'any of the 173 catalogued, or any rUv repo',
+      // explainer B4/B5 — the exact live markup that shipped, pre-fix
+      "<b>56 repos &middot; rUv's real source, indexed</b>",
+      '<span data-count="56" data-decimals="0">56</span> repos',
+      '56 repos indexed in total. Together they show the reassuring breadth',
+      'SPARC and 36 indexed repos',
     ];
     for (const src of known_bad) {
       const bad = staleLiterals('synthetic', src);
@@ -107,6 +122,10 @@ describe(`repo-count literals match data/manifest.json coverage (built=${coverag
       "or any of rUv's 20+ repos", // deliberately open lower-bound, not a precise count
       'This is a 20+-repo ecosystem, not just the 2-3 most commonly cited',
       'any of the 181 catalogued, or any rUv repo',
+      // explainer B4/B5 — the fixed forms
+      '<span data-count="57" data-decimals="0">57</span> repos',
+      '57 repos indexed in total. Together they show the reassuring breadth',
+      'SPARC and 57 indexed repos',
     ];
     for (const src of known_good) {
       expect(staleLiterals('README.md', src), `unexpected stale hit in: ${src}`).toEqual([]);

@@ -132,14 +132,25 @@ export async function verifyCheaperFactor(file = path.join(ROOT, 'kb', 'metaharn
   return pass(`"$0.267" and "51.33" found in corpus; 15 / 0.267 = ${factor.toFixed(1)} ≈ 56×`);
 }
 
-// ── claim 4: "coverage badge says 10% of ALL source" ────────────────────────────────────────────
-// The README badge and vitest.config.mjs must agree: the badge advertises 10% measured over ALL
-// shipped source, which is only honest while `all: true` is set. If either drifts, the fix is to
-// re-run coverage and update both together.
-export const BADGE_NEEDLE = 'coverage-10%25%20of%20ALL%20source';
+// ── claim 4: "coverage badge says N% of ALL source" — the % is RE-DERIVED, never string-matched ──
+// (2026-07-18) The old check only asserted the literal string `coverage-10%25%20of%20ALL%20source`
+// was PRESENT and that vitest set `all:true`. It never re-derived the real percentage — so the
+// badge sat at "10%" while the true floor was ~14.55% and this gate reported PASS. A gate that
+// cannot fail on the number it guards is not a gate; it launders a false assurance. The badge now
+// advertises floor(min of the four v8 metrics) over ALL shipped source; this re-reads the real
+// coverage-summary.json produced by `npm run test:cov` and fails if the badge drifts >1pt from it.
+// Mirrors verifyChunkCountSurfaces (re-derive from artifact) rather than string-matching. ADR-0020.
+export const BADGE_RE = /coverage-(\d+)%25%20of%20ALL%20source/;
+
+/** Extract the integer % the README coverage badge advertises, or null if the badge is gone/malformed. */
+export function readBadgePct(readme) {
+  const m = readme.match(BADGE_RE);
+  return m ? Number(m[1]) : null;
+}
 
 export function verifyCoverageBadge(
   readmeFile = path.join(ROOT, 'README.md'),
+  summaryFile = path.join(ROOT, 'coverage', 'coverage-summary.json'),
   vitestFile = path.join(ROOT, 'vitest.config.mjs'),
 ) {
   let readme, vitestCfg;
@@ -150,16 +161,40 @@ export function verifyCoverageBadge(
     return fail(`cannot read artifact: ${e.message}`);
   }
 
-  const badgeOk = readme.includes(BADGE_NEEDLE);
-  const allTrue = /\ball\s*:\s*true\b/.test(vitestCfg);
-  if (!badgeOk || !allTrue) {
-    const what = [
-      badgeOk ? null : `README badge no longer contains "${BADGE_NEEDLE}"`,
-      allTrue ? null : 'vitest.config.mjs no longer sets coverage `all: true`',
-    ].filter(Boolean).join(' AND ');
-    return fail(`${what} — re-run \`npm run test:cov\` and update BOTH the README badge and vitest.config.mjs so the advertised number stays honest`);
+  const advertised = readBadgePct(readme);
+  if (advertised === null) {
+    return fail('README no longer carries a "coverage-N%25%20of%20ALL%20source" badge — the number that must stay honest is missing');
   }
-  return pass('README badge advertises 10% of ALL source and vitest.config.mjs has all: true');
+  // "ALL source" is only an honest claim while every shipped file is in the denominator.
+  const allTrue = /\ball\s*:\s*true\b/.test(vitestCfg);
+  if (!allTrue) {
+    return fail('vitest.config.mjs no longer sets coverage `all: true` — the badge advertises "ALL source", so the denominator must be every shipped file, not a flattering subset');
+  }
+
+  // The number is re-derived from the real coverage run. If it hasn't been run, SKIP LOUDLY —
+  // never a silent pass. CI runs `npm run test:cov` immediately before this gate.
+  if (!fs.existsSync(summaryFile)) {
+    return skip(`coverage/coverage-summary.json absent — run \`npm run test:cov\` first (CI does, right before this gate), then this re-derives the real % and checks the badge's "${advertised}%" claim`);
+  }
+  let summary;
+  try {
+    summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+  } catch (e) {
+    return fail(`cannot parse ${path.relative(ROOT, summaryFile)}: ${e.message}`);
+  }
+  const t = summary.total;
+  const metrics = ['statements', 'branches', 'functions', 'lines'];
+  for (const k of metrics) {
+    if (!t?.[k] || typeof t[k].pct !== 'number') return fail(`coverage summary malformed: missing total.${k}.pct`);
+  }
+  const min = Math.min(...metrics.map((k) => t[k].pct));
+  const realFloor = Math.floor(min);
+  const TOL = 1; // floor(min) is stable across a whole integer band; ±1 absorbs boundary jitter.
+  const detail = metrics.map((k) => `${k} ${t[k].pct}%`).join(', ');
+  if (Math.abs(advertised - realFloor) > TOL) {
+    return fail(`coverage badge advertises ${advertised}% but the re-derived floor is ${realFloor}% (${detail}). Update the README badge AND prose to ${realFloor}% — re-derive from \`npm run test:cov\`, never hand-type it.`);
+  }
+  return pass(`badge ${advertised}% within ${TOL}pt of re-derived floor ${realFloor}% (min metric ${min.toFixed(2)}%; all:true; ${detail})`);
 }
 
 // ── claim 6: "32 repos · N source chunks" — the advertised chunk count regenerates ──────────────
@@ -239,8 +274,8 @@ export const ledger = [
     verify: verifyCheaperFactor,
   },
   {
-    claim: 'coverage badge says 10% of ALL source',
-    source: 'README.md + vitest.config.mjs',
+    claim: 'coverage badge % re-derives from the real coverage run (ALL source)',
+    source: 'README.md + coverage/coverage-summary.json + vitest.config.mjs',
     verify: verifyCoverageBadge,
   },
   {

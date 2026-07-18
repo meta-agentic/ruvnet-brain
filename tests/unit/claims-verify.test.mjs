@@ -21,7 +21,7 @@ import {
   computePublicChunkTotal,
   CHUNK_SURFACES,
   EXPECTED_STRATA,
-  BADGE_NEEDLE,
+  readBadgePct,
 } from '../../scripts/claims-verify.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -146,22 +146,60 @@ describe('verifyCheaperFactor — ~56× regenerates from the corpus, or skips LO
   });
 });
 
-describe('verifyCoverageBadge — README and vitest.config must drift together or not at all', () => {
-  it('passes on the real repo artifacts', () => {
-    expect(verifyCoverageBadge().status).toBe('PASS');
+describe('verifyCoverageBadge — the badge % is RE-DERIVED from the real coverage run, never string-matched', () => {
+  // v8 json-summary shape: { total: { statements:{pct}, branches:{pct}, functions:{pct}, lines:{pct} } }
+  let seq = 0;
+  const summary = (pcts) => writeTmp(`cov-summary-${seq++}.json`, {
+    total: {
+      statements: { pct: pcts.statements },
+      branches: { pct: pcts.branches },
+      functions: { pct: pcts.functions },
+      lines: { pct: pcts.lines },
+    },
+  });
+  const realVitest = path.join(ROOT, 'vitest.config.mjs');
+  const realReadme = path.join(ROOT, 'README.md');
+  // The four live metrics measured 2026-07-18 (min = branches 14.55 → floor 14, the shipped badge).
+  const liveIsh = { statements: 16.21, branches: 14.55, functions: 19.69, lines: 17.38 };
+
+  it('readBadgePct parses the advertised integer from the real README, null when the badge is gone', () => {
+    const n = readBadgePct(fs.readFileSync(realReadme, 'utf8'));
+    expect(typeof n).toBe('number');
+    expect(n).toBeGreaterThan(0);
+    expect(readBadgePct('no badge here')).toBeNull();
   });
 
-  it('fails when the badge string is absent from the README', () => {
-    const readme = writeTmp('README-no-badge.md', '# RuvNet Brain\n\nNo badge here.\n');
-    const res = verifyCoverageBadge(readme, path.join(ROOT, 'vitest.config.mjs'));
+  it('passes: a badge that matches floor(min of the four metrics) within 1pt', () => {
+    const readme15 = writeTmp('README-15.md', '# X\n[![coverage](https://img.shields.io/badge/coverage-15%25%20of%20ALL%20source%20·%20honest-b58900)](#)\n');
+    const res = verifyCoverageBadge(readme15, summary({ statements: 17, branches: 15.4, functions: 20, lines: 18 }), realVitest);
+    expect(res.status).toBe('PASS');
+    expect(res.evidence).toContain('15');
+  });
+
+  it('KNOWN-BAD (the exact live lie just fixed): badge says 10% while the real floor is 14% → FAIL naming both', () => {
+    const lyingReadme = writeTmp('README-10.md', '# X\n[![coverage](https://img.shields.io/badge/coverage-10%25%20of%20ALL%20source%20·%20honest-b58900)](#)\n');
+    const res = verifyCoverageBadge(lyingReadme, summary(liveIsh), realVitest);
     expect(res.status).toBe('FAIL');
-    expect(res.evidence).toContain(BADGE_NEEDLE);
-    expect(res.evidence).toContain('re-run');
+    expect(res.evidence).toContain('10%'); // the false claim
+    expect(res.evidence).toContain('14%'); // the re-derived truth
+  });
+
+  it('SKIPs LOUDLY (never a silent pass) when the coverage summary has not been generated', () => {
+    const res = verifyCoverageBadge(realReadme, path.join(TMP, 'no-such-summary.json'), realVitest);
+    expect(res.status).toBe('SKIP');
+    expect(res.evidence).toContain('test:cov');
+  });
+
+  it('fails when the coverage badge is gone from the README entirely', () => {
+    const noBadge = writeTmp('README-no-badge.md', '# RuvNet Brain\n\nNo badge here.\n');
+    const res = verifyCoverageBadge(noBadge, summary(liveIsh), realVitest);
+    expect(res.status).toBe('FAIL');
+    expect(res.evidence).toContain('badge');
   });
 
   it('fails when vitest.config no longer sets all: true, even with the badge intact', () => {
     const vitestCfg = writeTmp('vitest-no-all.config.mjs', 'export default { test: { coverage: { all: false } } };\n');
-    const res = verifyCoverageBadge(path.join(ROOT, 'README.md'), vitestCfg);
+    const res = verifyCoverageBadge(realReadme, summary(liveIsh), vitestCfg);
     expect(res.status).toBe('FAIL');
     expect(res.evidence).toContain('all: true');
   });
