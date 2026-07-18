@@ -448,14 +448,29 @@ console.log('rvf size:', fs.statSync(OUT_RVF).size, 'bytes');
 
 // ---- EVERGREEN: write SOURCE.json (embedded provenance + canonical URLs) ----
 // Ships in the bundle alongside forge-update.mjs so a copied KB can self-update later.
+//
+// The self-update manifest URL must RESOLVE and return JSON that forge-update.mjs can parse. The old
+// `${base}/.last-built.json` form pointed at a file that was never published — it 404'd, silently
+// re-breaking self-update on EVERY rebuild (Jan's bug; commit 0d2c1ec fixed the shipped SOURCE.json
+// artifact but NOT this generator, so the nightly regressed it right back). The GitHub releases API for
+// the repo IS a valid manifest — it always resolves and returns the latest Release JSON (bundle asset
+// included), which is exactly what forge-update.mjs fetches. Derive owner/repo from the raw
+// canonical base; if it isn't a github raw URL, emit null (forge-update then says "not configured",
+// an honest error, never a 404). verify-channels + the pre-push gate assert this resolves.
+function releasesApiUrl(canonicalBase) {
+  if (!canonicalBase) return null;
+  const m = canonicalBase.match(/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\//);
+  return m ? `https://api.github.com/repos/${m[1]}/${m[2]}/releases/latest` : null;
+}
 {
   const builtUtc = new Date().toISOString();
   const g = gitInfo(R);
   const base = CANONICAL_URL || null;
+  const manifestUrl = releasesApiUrl(base);
   const source = {
     builder: 'rvf-kb-forge',
     builtUtc,
-    canonicalManifestUrl: base ? `${base}/.last-built.json` : null,
+    canonicalManifestUrl: manifestUrl,
     selfUpdate: 'node forge-update.mjs',
     stores: {
       [NAME]: {
@@ -465,7 +480,7 @@ console.log('rvf size:', fs.statSync(OUT_RVF).size, 'bytes');
         sourceDescribe: g.describe || null,
         builtUtc,
         builder: 'rvf-kb-forge',
-        canonicalManifestUrl: base ? `${base}/.last-built.json` : null,
+        canonicalManifestUrl: manifestUrl,
         canonicalBundleUrl: base ? `${base}/${NAME}-kb-bundle.zip` : null,
         selfUpdate: `node forge-update.mjs ${NAME}`,
       },

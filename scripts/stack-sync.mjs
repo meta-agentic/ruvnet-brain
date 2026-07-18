@@ -83,6 +83,24 @@ const PLUGINS_DIR = path.join(HOME, '.claude', 'plugins');
 export const TAG_POLICY = { ruflo: 'alpha', '@claude-flow/cli': 'alpha' };
 export const DEFAULT_TAG = 'latest';
 
+// Resolve a package's TARGET version to the NEWEST of its candidate tags — the policy tag AND latest —
+// not blindly the policy tag. TAG_POLICY names the tag the orchestration core USUALLY leads on (@alpha,
+// because rUv ships fast). But the reverse happens: on 2026-07-18 the core's @latest was 3.32.7 while
+// its @alpha sat at 3.32.0, so "track @alpha" alone pinned the install 7 releases behind the newest
+// published build — and the nightly reported SUCCESS doing it (installed 3.32.2 read as AHEAD of the
+// 3.32.0 @alpha target, so it correctly refused to downgrade and never chased 3.32.7). Considering both
+// tags and taking the higher version fixes that in EITHER direction: alpha-leads → track alpha;
+// latest-leads → track latest. You are never left behind the newest thing rUv actually published.
+export function pickTargetTag(tags, want, defaultTag = DEFAULT_TAG) {
+  if (!tags) return { tag: null, target: null };
+  const candidates = [...new Set([want, defaultTag])].filter((t) => tags[t]);
+  let tag = null, target = null;
+  for (const t of candidates) {
+    if (target === null || cmpVersion(tags[t], target) > 0) { tag = t; target = tags[t]; }
+  }
+  return { tag, target };
+}
+
 // What counts as "the stack": an explicit allow-list pattern, not a loose scope match, so a stray
 // package can never be swept into a global install by accident.
 export const FAMILY = /^(ruflo|ruvector|ruvector-extensions|ruvi|ruvbot|qudag|flow-nexus|agent-browser|agent-browser-mcp|agentic-flow|agentic-qe|agentic-robotics|agentic-payments|ruv-swarm|@ruvector\/|@claude-flow\/|@metaharness\/|@agentic-robotics\/)/;
@@ -251,9 +269,9 @@ export function classify(pkgs) {
     }
     const want = TAG_POLICY[p.name] || DEFAULT_TAG;
     const tags = registryTags(p.name);
-    // A package may legitimately have no alpha tag: fall back to latest rather than invent one.
-    const tag = tags && tags[want] ? want : DEFAULT_TAG;
-    const target = tags ? (tags[tag] ?? null) : null;
+    // Newest of {policy tag, latest} — see pickTargetTag: "track @alpha" alone pinned the core behind
+    // @latest on 2026-07-18. A package with no alpha tag falls through to latest.
+    const { tag, target } = pickTargetTag(tags, want);
     let state;
     if (!p.installed) state = 'BROKEN';
     else if (!target) state = 'UNRESOLVED';

@@ -12,7 +12,27 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 
-import { listInstalledPlugins, pluginVersion, classify, PLUGIN_MARKETPLACES } from '../../scripts/stack-sync.mjs';
+import { listInstalledPlugins, pluginVersion, classify, PLUGIN_MARKETPLACES, pickTargetTag } from '../../scripts/stack-sync.mjs';
+
+describe('pickTargetTag — track the NEWEST of {policy tag, latest}, never behind the newest published', () => {
+  it('latest leads (the real 2026-07-18 ruflo case): @alpha 3.32.0 < @latest 3.32.7 → target latest', () => {
+    // "track @alpha" alone pinned the core at 3.32.2 (AHEAD of the 3.32.0 alpha target) while 3.32.7
+    // shipped to latest — the nightly reported success doing nothing. Newest-of-both fixes it.
+    expect(pickTargetTag({ alpha: '3.32.0', latest: '3.32.7' }, 'alpha')).toEqual({ tag: 'latest', target: '3.32.7' });
+  });
+  it('alpha leads (the normal case — alpha is ahead): → target alpha', () => {
+    expect(pickTargetTag({ alpha: '3.33.0', latest: '3.32.7' }, 'alpha')).toEqual({ tag: 'alpha', target: '3.33.0' });
+  });
+  it('no alpha tag published → falls through to latest, never invents one', () => {
+    expect(pickTargetTag({ latest: '1.0.0' }, 'alpha')).toEqual({ tag: 'latest', target: '1.0.0' });
+  });
+  it('a latest-policy package does NOT jump to a higher alpha — only core tracks alpha', () => {
+    expect(pickTargetTag({ latest: '2.0.0', alpha: '2.1.0' }, 'latest')).toEqual({ tag: 'latest', target: '2.0.0' });
+  });
+  it('registry unreachable (null tags) → unresolved, never a guessed target', () => {
+    expect(pickTargetTag(null, 'alpha')).toEqual({ tag: null, target: null });
+  });
+});
 
 // Build a throwaway ~/.claude/plugins fixture: an installed_plugins.json whose records point at cached
 // version dirs that each carry a real .claude-plugin/plugin.json — mirroring the machine's true layout.
