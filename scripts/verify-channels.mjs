@@ -79,12 +79,26 @@ async function run() {
     process.exit(0);
   }
 
-  // 1) npm registry latest == shipping version
-  try {
-    const latest = execFileSync('npm', ['view', NPM_PKG, 'dist-tags.latest'], { encoding: 'utf8', timeout: 30000 }).trim();
-    check('npm latest matches shipping version', latest === V,
-      `npm latest=${latest} · shipping=${V}${latest === V ? '' : '  ← STALE: run `npm publish` + `npm dist-tag add ' + NPM_PKG + '@' + V + ' latest`'}`);
-  } catch (e) { check('npm latest matches shipping version', false, `npm view failed: ${e.message.split('\n')[0]}`); }
+  // 1) npm registry latest == shipping version. npm's read replicas lag a few seconds behind a fresh
+  // publish, so a single immediate `npm view` right after `release.mjs` publishes can still return the
+  // PRIOR version — a false STALE that fails an otherwise-perfect ship (hit exactly this 2026-07-18:
+  // publish succeeded, `+ ruvnet-brain@3.4.9-dev`, yet the immediate view read 3.4.8-dev). Retry with a
+  // short backoff so propagation lag is absorbed, while a publish that genuinely never landed still
+  // fails after the window. A gate that false-fails teaches you to distrust the gate — the worst outcome.
+  {
+    let latest = '', ok = false, lastErr = '';
+    const ATTEMPTS = 6; // up to ~6×5s = 30s of propagation tolerance
+    for (let i = 0; i < ATTEMPTS; i++) {
+      try {
+        latest = execFileSync('npm', ['view', NPM_PKG, 'dist-tags.latest'], { encoding: 'utf8', timeout: 30000 }).trim();
+        if (latest === V) { ok = true; break; }
+      } catch (e) { lastErr = e.message.split('\n')[0]; }
+      if (i < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 5000));
+    }
+    check('npm latest matches shipping version', ok,
+      ok ? `npm latest=${latest} · shipping=${V}`
+        : `npm latest=${latest || '(view failed: ' + lastErr + ')'} · shipping=${V}${latest && latest !== V ? '  ← STILL STALE after ~' + (ATTEMPTS * 5) + 's: run `npm publish` + `npm dist-tag add ' + NPM_PKG + '@' + V + ' latest`' : ''}`);
+  }
 
   // 2) the self-update manifest URL actually resolves (the 404 that stranded users)
   let manifestUrl = null;

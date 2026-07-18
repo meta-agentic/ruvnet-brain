@@ -26,9 +26,14 @@ INPUT=""
 while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
 [ -n "$INPUT" ] || exit 0
 
-field() { local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""; [[ $INPUT =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"; }
-[ "$(field tool_name)" = "Bash" ] || exit 0
-CMD=$(field command)
+# Parse the payload with the shared JSON parser (hook-input.mjs), NOT a bash regex. The old
+# field() { …"([^"]*)"… } truncated any command containing a quote at the first one — the exact
+# #13 fail-open verify-interface.sh already fixed, silently reintroduced here (design-wall.sh was
+# written after). node is present in Claude Code's environment; fail open (exit 0) if it isn't. ADR-0021.
+NODE_BIN=$(command -v node) || exit 0
+HOOK_INPUT="$(dirname "${BASH_SOURCE[0]}")/hook-input.mjs"
+[ "$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" tool_name 2>/dev/null)" = "Bash" ] || exit 0
+CMD=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" command 2>/dev/null)
 [ -n "$CMD" ] || exit 0
 
 # ── Repo identity gate (2026-07-17, issue #17) ───────────────────────────────────────────────────

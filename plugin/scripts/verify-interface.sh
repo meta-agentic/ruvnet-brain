@@ -75,38 +75,16 @@ PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 # Claude Code). Different from — and not a substitute for — the per-command override checked below.
 [ "${RUVNET_SKIP_INTERFACE_CHECK:-0}" = "1" ] && exit 0
 
-# Real JSON parsing, not a regex (issue #13). `([^"]*)`-style bash regexes cannot cross a `"`, and a
-# JSON-escaped `\"` still contains a literal `"` byte — any command with an embedded quote used to be
-# silently truncated. node is guaranteed present in Claude Code's environment; fail open if it isn't.
+# Real JSON parsing via the shared parser (hook-input.mjs), not a regex (issue #13, now ADR-0021):
+# `([^"]*)`-style bash regexes cannot cross a `"`, and a JSON-escaped `\"` is still a literal `"`
+# byte — any command with an embedded quote used to be silently truncated. ONE tested parser, shared
+# by every gate. node is guaranteed present in Claude Code's environment; fail open if it isn't.
 NODE_BIN=$(command -v node) || exit 0
-
-TOOL_NAME=$(printf '%s' "$INPUT" | "$NODE_BIN" -e '
-  let s = "";
-  process.stdin.on("data", (d) => { s += d; });
-  process.stdin.on("end", () => {
-    try {
-      const j = JSON.parse(s);
-      process.stdout.write(typeof j.tool_name === "string" ? j.tool_name : "");
-    } catch (e) {
-      process.exit(1);
-    }
-  });
-' 2>/dev/null) || exit 0   # parse failure -> FAIL OPEN
+HOOK_INPUT="$(dirname "${BASH_SOURCE[0]}")/hook-input.mjs"
+TOOL_NAME=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" tool_name 2>/dev/null) || exit 0
 [ "$TOOL_NAME" = "Bash" ] || exit 0
 
-CMD=$(printf '%s' "$INPUT" | "$NODE_BIN" -e '
-  let s = "";
-  process.stdin.on("data", (d) => { s += d; });
-  process.stdin.on("end", () => {
-    try {
-      const j = JSON.parse(s);
-      const c = (j.tool_input && j.tool_input.command) || j.command || "";
-      process.stdout.write(typeof c === "string" ? c : "");
-    } catch (e) {
-      process.exit(1);
-    }
-  });
-' 2>/dev/null) || exit 0   # parse failure -> FAIL OPEN
+CMD=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" command 2>/dev/null) || exit 0
 [ -n "$CMD" ] || exit 0
 
 # Per-command override (issue #12, defect 2). The block message tells the caller to set this ON THE
