@@ -24,6 +24,10 @@ const SURFACES = [
   'primer/ruvnet-primer.md',
   'explainer/index.html',
   'explainer/llms.txt',
+  // plugin/.claude-plugin/plugin.json — its `description` is shown in the Claude Code plugin
+  // MARKETPLACE (user-facing); it shipped "across 32 rUv repositories" while the truth was 57
+  // (2026-07-18). Not caught because it wasn't watched. Now it is.
+  'plugin/.claude-plugin/plugin.json',
 ];
 
 // Below this magnitude a "N repos" mention is never a corpus-size claim in these docs — e.g.
