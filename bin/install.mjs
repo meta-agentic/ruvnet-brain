@@ -740,6 +740,25 @@ async function doctor() {
   env.ruvector
     ? ok('RuVector present — vector CLI / MCP available')
     : warn('RuVector not found — answers still work. To add: claude mcp add ruvector --scope user -- npx -y ruvector mcp start');
+  // Network probe (issue #27, Jan Lafko): in a network-restricted sandbox the cold-cache embedder
+  // pull used to hang FOREVER. Diagnose the condition here, explicitly and in 3 seconds flat: if the
+  // model host is unreachable AND no local model cache exists, the first query needs the network and
+  // will fail loud (bounded by RUVNET_BRAIN_FETCH_TIMEOUT_MS) — tell the user BEFORE they hit it.
+  const modelCacheDir = process.env.KB_MODEL_CACHE || path.join(cacheDir, 'models-cache');
+  const haveLocalModel = fs.existsSync(path.join(modelCacheDir, 'Xenova', 'all-MiniLM-L6-v2'))
+    || fs.existsSync(path.join(modelCacheDir, 'Xenova/all-MiniLM-L6-v2'));
+  try {
+    await fetch('https://huggingface.co', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+    ok('model host reachable (huggingface.co) — cold-cache model download would work');
+  } catch {
+    if (haveLocalModel) {
+      ok(`model host UNREACHABLE, but the embedder is already cached locally (${modelCacheDir}) — queries work offline`);
+    } else {
+      warn('network-restricted environment detected: huggingface.co unreachable (3s probe) AND no local model cache.');
+      warn(`  The first query needs the embedder model once. Fix: on a networked machine run one query, then copy`);
+      warn(`  its model cache to this machine and set KB_MODEL_CACHE to that path. (Queries fail loud, not hang.)`);
+    }
+  }
   const v = verifyInstall(cacheDir);
   const smoke = await smokeQuery(cacheDir);
   const allGreen = v.repos > 0 && v.reader && v.mcp;

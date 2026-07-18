@@ -60,11 +60,59 @@ export function loadRvf() {
 }
 
 /**
+ * Network guard for the reader path (issue #27, reported by Jan Lafko): in a network-restricted
+ * sandbox the cold-cache embedder pull opened 53 connections to an unreachable host and hung
+ * FOREVER — no timeout, no error, a killed session. transformers.js fetches model files with the
+ * global fetch, so this wraps globalThis.fetch ONCE (idempotent) with:
+ *   • a hard per-attempt abort budget — RUVNET_BRAIN_FETCH_TIMEOUT_MS, default 120000. Generous on
+ *     purpose: it must never kill a slow-but-real ~90MB model download, only convert "hangs
+ *     forever" into "fails, loudly, in bounded time". Sandboxed environments can set it to 3000.
+ *   • one bounded retry (2 attempts total), then
+ *   • an HONEST error naming the exact unreachable host + the offline alternative (pre-seeded
+ *     KB_MODEL_CACHE), never a silent hang.
+ * Scope: only http(s) requests, only in processes that call loadTransformers() — the reader path.
+ */
+const FETCH_TIMEOUT_MS = Math.max(1000, Number(process.env.RUVNET_BRAIN_FETCH_TIMEOUT_MS || 120000));
+const FETCH_ATTEMPTS = 2;
+let _fetchGuarded = false;
+export function guardNetwork() {
+  if (_fetchGuarded || typeof globalThis.fetch !== 'function') return;
+  _fetchGuarded = true;
+  const rawFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (!/^https?:/i.test(url)) return rawFetch(input, init);
+    let lastErr;
+    for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+      // Honor a caller-provided signal alongside ours: abort when EITHER fires.
+      const signals = [AbortSignal.timeout(FETCH_TIMEOUT_MS), init.signal].filter(Boolean);
+      const signal = signals.length > 1 && typeof AbortSignal.any === 'function' ? AbortSignal.any(signals) : signals[0];
+      try {
+        return await rawFetch(input, { ...init, signal });
+      } catch (e) {
+        lastErr = e;
+        if (init.signal && init.signal.aborted) throw e; // the CALLER cancelled — not ours to retry
+      }
+    }
+    const host = (() => { try { return new URL(url).host; } catch { return url.slice(0, 80); } })();
+    throw new Error(
+      `network unreachable: could not fetch from ${host} `
+      + `(${FETCH_ATTEMPTS} attempts × ${Math.round(FETCH_TIMEOUT_MS / 1000)}s timeout; last: ${lastErr && lastErr.name || 'error'}). `
+      + `This machine may be network-restricted (sandbox/devcontainer). The query-side embedder model is needed `
+      + `once per machine: on a networked machine, run one query, then copy the model cache here and point `
+      + `KB_MODEL_CACHE at it. Diagnose with: npx ruvnet-brain --doctor  (RUVNET_BRAIN_FETCH_TIMEOUT_MS tunes this timeout.)`
+    );
+  };
+}
+
+/**
  * Resolve and dynamically import @xenova/transformers.
  * Order: KB node_modules -> XENOVA_PATH env -> Mac build.
  * Returns { T, modelCache, via } where T is the imported module namespace.
+ * Applies guardNetwork() — the reader path must fail loud, never hang (issue #27).
  */
 export async function loadTransformers() {
+  guardNetwork();
   // 1. node_modules — resolve the package entry, import via file:// URL.
   try {
     const resolved = localRequire.resolve('@xenova/transformers');
