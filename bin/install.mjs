@@ -908,14 +908,25 @@ function runUpdate() {
   const kbDir = resolvedKbDir();
   info(`brain dir: ${c.bold(kbDir)}`);
   let updateStatus = 1;
-  if (fs.existsSync(path.join(kbDir, 'forge-update.mjs'))) {
-    info(c.dim("running the bundle's own self-updater (backs up first, re-verifies, never half-applies)…\n"));
-    // Relative filename + matching cwd — same launch convention as smokeQuery(); stdio:'inherit'
-    // streams the updater's narration live and unedited.
-    const r = spawnSync(process.execPath, ['forge-update.mjs', '--apply'], { cwd: kbDir, stdio: 'inherit' });
-    updateStatus = r.error ? 1 : (r.status === null ? 1 : r.status);
+  // NO updater at all = no brain installed here (or a pre-self-updater bundle). That is a USER
+  // message, not a fallback trigger: fail LOUD with the re-run-installer help and exit — never
+  // surprise the user with a full fresh install as a side effect of `--update` on an empty dir.
+  // (Restored 2026-07-18: the 2026-07-17 fallback below accidentally swallowed this branch too,
+  // turning `--update` on an empty dir into a silent 512MB re-install — it hung CI's 60s smoke
+  // test on both platforms, mutated a dir the contract promises untouched, and on a machine with
+  // private KB stores a surprise fresh PUBLIC install is exactly the store-stripping hazard the
+  // project docs warn about. The fallback's own comment scopes it to an updater that EXISTS but
+  // is broken — this branch enforces that scope.)
+  if (!fs.existsSync(path.join(kbDir, 'forge-update.mjs'))) {
+    missingUpdaterHelp(kbDir);
+    process.exit(1);
   }
-  // FALLBACK (2026-07-17). The bundle's self-updater is missing OR failed — e.g. an OLDER bundle whose
+  info(c.dim("running the bundle's own self-updater (backs up first, re-verifies, never half-applies)…\n"));
+  // Relative filename + matching cwd — same launch convention as smokeQuery(); stdio:'inherit'
+  // streams the updater's narration live and unedited.
+  const r = spawnSync(process.execPath, ['forge-update.mjs', '--apply'], { cwd: kbDir, stdio: 'inherit' });
+  updateStatus = r.error ? 1 : (r.status === null ? 1 : r.status);
+  // FALLBACK (2026-07-17), scoped 2026-07-18 to exists-but-FAILED only. An OLDER bundle whose
   // canonicalManifestUrl points at the dead main/kb/.last-built.json path and 404s (the exact break a
   // real user, Jan Lafko, hit). NEVER leave the user stranded at a 404: re-run THIS installer as a
   // fresh install, which pulls the latest Release DIRECTLY (releases/latest) and never touches the
