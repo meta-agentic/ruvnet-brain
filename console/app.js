@@ -1880,12 +1880,12 @@ const TRUST_INFO = {
   channel: [
     { k: 'What is this?', t: 'How your plugin updates: riding the latest release, or pinned to a version you chose.' },
     { k: 'Why does it matter?', t: 'This stack ships fast — latest keeps you current. Pinning holds a known-good release when you need repeatable builds.' },
-    { k: 'How does it help me?', t: 'Read from your plugin cache on disk, never assumed. Version pinning ships in v3.3 — both choices will live on this row.' },
+    { k: 'How does it help me?', t: 'Read from your plugin cache on disk, never assumed. Version pinning is planned — both choices will live on this row.' },
   ],
   advisor: [
     { k: 'What is this?', t: 'A coming mode switch. Full lets the console apply consent-gated, undoable fixes; Advisor makes every Apply button read-only — it shows the exact command and steps aside.' },
     { k: 'Why does it matter?', t: 'Some machines want eyes-only — work laptops, shared rigs, cautious first weeks. The right choice should be easy in both directions.' },
-    { k: 'How does it help me?', t: 'Ships in v3.3. Today the switch is a preview — it changes nothing, and says so.' },
+    { k: 'How does it help me?', t: 'Planned. Today the switch is a preview — it changes nothing, and says so.' },
   ],
 };
 
@@ -1925,7 +1925,7 @@ function renderTrust(t) {
       el('p', {}, 'Check your download against it: ', el('code', {}, 'shasum -a 256 ruvnet-brain.zip'),
         ' — the 64 characters must match exactly.'),
       rel.sig ? el('p', {}, 'A detached signature (', el('span', { class: 'cell-mono' }, '.sig'),
-        ') ships alongside — one-click signature verification lands here in v3.3.') : null,
+        ') ships alongside — one-click signature verification is planned right here.') : null,
       el('span', { class: 'trust-src' }, 'read live · ', rel.source || 'github.com — latest release'),
     ] : [
       el('p', {}, 'Couldn’t reach GitHub this session', rel.error ? el('span', {}, ' (', el('span', { class: 'cell-mono' }, rel.error), ')') : '',
@@ -1969,7 +1969,7 @@ function renderTrust(t) {
         ch.lastUpdated ? ` · updated ${fmtDate(ch.lastUpdated)}` : ''),
       el('span', { class: 'trust-src' }, ch.cacheDir || ''),
       ch.channel !== 'pinned' ? el('p', { style: 'margin-top:6px' },
-        'Prefer to hold a known-good release? ', el('b', {}, 'Version pinning arrives in v3.3'),
+        'Prefer to hold a known-good release? ', el('b', {}, 'Version pinning is planned'),
         ' — you’ll choose it right here.') : null,
     ] : [
       el('p', {}, 'No plugin-cache install found on this machine — you may be running from a repo checkout. ',
@@ -1979,12 +1979,12 @@ function renderTrust(t) {
 
   /* 4 · advisor mode — display-only preview, clearly labeled */
   const advNote = el('p', { class: 'adv-note' },
-    'Full is on: every change stays consent-gated, with its undo recorded first. The switch itself goes live in v3.3 — today it’s a preview and changes nothing.');
+    'Full is on: every change stays consent-gated, with its undo recorded first. The switch itself is planned — today it’s a preview and changes nothing.');
   const advisorBtn = el('button', {
     class: 'adv-opt', type: 'button',
-    title: 'Preview — Advisor Mode ships in v3.3; clicking changes nothing today',
+    title: 'Preview — Advisor Mode is planned; clicking changes nothing today',
     onclick: () => {
-      advNote.textContent = 'Advisor Mode arrives in v3.3 — nothing changed just now. When it lands, this switch makes every Apply button read-only: the console shows the exact command and steps aside.';
+      advNote.textContent = 'Advisor Mode is planned — nothing changed just now. When it lands, this switch makes every Apply button read-only: the console shows the exact command and steps aside.';
     },
   }, el('span', { class: 'pc-dot', 'aria-hidden': 'true' }), 'Advisor — read-only');
   rows.push(trustRow({

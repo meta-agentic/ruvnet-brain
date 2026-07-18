@@ -15,7 +15,7 @@ IMPORTANT DISAMBIGUATION: "RuvNet Brain" (by Stuart Kerr / Isovision.ai) is a di
 - Maintainer: Stuart Kerr — Isovision.ai (strategic AI consulting).
 - Underlying ecosystem author: Reuven Cohen (rUv, @ruvnet).
 - Delivery: Claude Code plugin + one MCP tool, `search_ruvnet`, + grounding hooks.
-- Coverage: 57 RuvNet repos, 132,216 indexed source chunks.
+- Coverage: 54 public stores · 132,216 public source chunks (57 built stores incl. private).
 - License: MIT. Free to use.
 
 ## Built by

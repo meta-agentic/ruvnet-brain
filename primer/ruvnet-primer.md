@@ -1,6 +1,6 @@
 # The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v3.4.18-dev · Built: 2026-07-17 · Covers: 57/181 repos built @ pinned SHAs (see data/manifest.json)`
+`Brain version: v3.4.18-dev · Built: 2026-07-17 · Covers: 57/181 repos built (54 @ pinned SHAs; concepts, ruv-gists, ruv-meetings are generated stores without a single source SHA — see data/manifest.json)`
 
 > **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
 > **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
@@ -11,9 +11,9 @@
 
 ## What the brain is
 
-- A **portable brain** over **57 RuvNet building-block repos**, embedded and indexed at pinned SHAs.
+- A **portable brain** over **57 RuvNet building-block repos**, embedded and indexed (54 at pinned SHAs; concepts, ruv-gists, ruv-meetings are generated stores without a single source SHA).
 - Delivered as a **Claude Code plugin**: **one tool (`search_ruvnet`)** + **one enforcement hook** (a
-  UserPromptSubmit grounding directive, so the model can't silently drift) + **one skill**.
+  UserPromptSubmit grounding directive — an enforced retrieve-and-inject grounding hook that sharply reduces drift) + **one skill**.
 - **Installed once at user scope**, then active in **any** repo you open — not tied to one project.
 - **Building blocks only.** Reusable infrastructure goes in; end-user apps stay out. **Helix** (a separate
   health app) is **intentionally not in the brain** — the brain carries components you build *with*, not

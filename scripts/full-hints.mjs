@@ -36,6 +36,19 @@ export const FULL_HINTS = {
   'cognitum-cogs': 'benches,benchmarks,cognitum-sim,crates,examples,scripts,shared,src,tests',
   // cognitum-support: 100% docs content, zero full-body entries — no --full prefix needed.
 
+  // ---- Cognitum One flagship-depth sweep, 2026-07-18 (Stuart: "same absolute crisp deep dive as
+  // the other repos — all ADRs, walk all the Rust crates, every markdown"). seed and v0-appliance
+  // were indexed SHALLOW until today — the same one-size-under-indexes-code-rich-repos failure the
+  // v0.5.0 depth audit fixed for qudag/ruv-fann. Prefixes are generic-but-superset (crates,src,…):
+  // forge-build skips prefixes that don't exist, so a superset is safe where a repo lacks a dir. ----
+  'cognitum-seed': 'crates,src,firmware,scripts,tests,examples,benches,docs/adr',
+  'cognitum-v0-appliance': 'crates,src,scripts,tests,examples,deploy,docs/adr',
+  'cognitum-open-design': 'src,app,apps,packages,electron,scripts,tests,server',
+  'cognitum-claude-plugin': 'src,scripts,plugin,plugins,mcp,tests',
+  'cognitum-spoton': 'src,crates,scripts,tests,harness',
+  // cognitum-platform-docs / cognitum-meta-llm-docs / cognitum-meta-proxy-dist: docs/dist content —
+  // default depth is the right depth; no full-body prefixes needed.
+
   // ---- tier-1 corpus expansion, 2026-07-10 (ADR-0011 Phase 5). Prefixes derived by inspecting
   // each fresh shallow clone's top-level layout; junk/vendored/build dirs deliberately absent. ----
   'midstream': 'src,crates,examples,benches,wasm,wasm-bindings,integrations,lean-agentic-js,xtask,AIMDS,fuzz,scripts,tests',

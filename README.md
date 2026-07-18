@@ -16,7 +16,7 @@
 [![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
 [![coverage](https://img.shields.io/badge/coverage-14%25%20of%20ALL%20source%20·%20honest-b58900?style=flat-square)](#testing--proof)
 
-> **Three independent things version separately here — by design, not drift. Every number below is live (read straight from its real source, never hand-typed), so none of them can go stale:**
+> **Three independent things version separately here — by design, not drift. Headline claims are regenerated and checked by the claims ledger (`scripts/claims-verify.mjs`); other numbers below are hand-stamped and dated:**
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
 > - **`installer (npm)`** (badge above) — the `npx ruvnet-brain` setup script. Read live from the [npm registry](https://www.npmjs.com/package/ruvnet-brain). Only moves when the installer script itself changes — rare.
 > - **Brain Release** (the downloadable knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
@@ -138,7 +138,7 @@ So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any 
 | **Corpus QA gate** | none | every store must prove *embeds correctly + reads correctly* — vector count == passage count, depth floors, a 3-passage self-retrieval round-trip per store — **72/72 store-variants PASS**, wired fail-closed into the nightly publish |
 | **Retrieval eval** | 12 frozen questions | **120 frozen, hash-pinned questions** across 5 strata; promotion gated on Wilson lower bounds, fail-closed — it blocked a real release this morning, which is the feature working |
 | **Token cost** | 6,183 bytes injected per hook turn · zero self-measurement | **684 bytes (~90% cut)** with an eval-PASS proving zero quality loss · a live token meter measuring real bytes/tokens per prompt class · ~27% faster repeat queries via the KB cache |
-| **rUv's gists** | not indexed | **437 gists** indexed with per-chunk freshness/provenance banners, refreshed nightly with cost-disciplined skip |
+| **rUv's gists** | not indexed | **444 gists** indexed with per-chunk freshness/provenance banners, refreshed nightly with cost-disciplined skip |
 | **Reliability** | claims were prose | **claims ledger** (6 marketing claims mechanically re-verified in CI) · integration tests in CI incl. Linux · a Windows CI job · an honest coverage denominator (all source files) |
 | **Autonomy** | hooks asked questions to an empty room — the #1 real-user complaint | **`/loop` contract** — checkpoint / resume / done-criteria; hooks detect autonomous mode and stop asking — 10 mutation-verified tests |
 | **Publishing** | manual npm token · a nightly release PATH bug | **self-renewing npm token** (launchd daemon, proven end-to-end) · PATH bug root-caused and cured |
@@ -245,8 +245,8 @@ You install once. After that, three mechanisms keep you on the current brain wit
 - **Consent-gated auto-update heartbeat** (the `SessionStart` hook, `plugin/scripts/session-start.sh`). The **first** time the plugin runs on a machine it asks you **once** whether it may keep itself updated in the background — a security-conscious opt-in, because self-update can change the model's own instructions. Your answer is remembered (`~/.cache/ruvnet-brain/.auto-update-pref`) and never asked again. On each session start it does a rate-limited (~15 min) 3s-capped check of the live GitHub `plugin.json`. If a newer plugin version exists **and** you opted in, it downloads it in the background through Claude Code's own trusted marketplace path — but the new version is **staged, not active**: Claude Code only loads plugins at process start, so **this session keeps running the version it started with** until you restart (`claude --continue` brings your conversation right back on the new version). If you declined, it just tells you the command to run. The knowledge bundle is handled more conservatively — **detect + notify only**, never auto-applied, because the bundle isn't cryptographically signed yet and applying it would overwrite executable tool files (SEC-0010 #6).
 
 - **Grounding receipt line** (the `UserPromptSubmit` gate, `plugin/scripts/ground-ruvnet.sh`). When the brain engages on a prompt, the answer ends with one dim line stating what it actually did — either it read rUv's real source and **names the file**, or it says plainly that it didn't:
-  `🧠 RuvNet Brain jumped in · cited agentic-flow/docs/adr/ADR-076-reposition-agentic-flow-as-agentic-meta-harness.md · v3.2.16`
-  `🧠 RuvNet Brain jumped in · guidance only, no source read · v3.2.16`
+  `🧠 RuvNet Brain jumped in · cited agentic-flow/docs/adr/ADR-076-reposition-agentic-flow-as-agentic-meta-harness.md · v3.4.17-dev`
+  `🧠 RuvNet Brain jumped in · guidance only, no source read · v3.4.17-dev`
   An unearned citation is worse than no citation, so the line may only name a path the tools genuinely returned — and on a prompt where nothing fires, it stays silent rather than manufacture a receipt. The version shown is the one **actually loaded in memory** for this session; if a newer one is staged awaiting a restart, the line says so plainly (`… vX staged, restart to load`). So you never have to wonder whether the brain is on, which version is acting, or whether an answer was grounded or guessed.
 
 - **Nightly publish → `releases/latest` chain** (`scripts/self-update.mjs --publish`, run by the `deploy/com.ruvnet.brain-nightly.plist` LaunchAgent at 03:15). The nightly rebuilds only the repos whose upstream changed, and **if anything was rebuilt** it bumps the product version, cuts a GitHub Release, and advances [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest). Plugin and knowledge bundle move under **one** version number, so the heartbeat above picks up both automatically. (The LaunchAgent is not auto-installed — enabling a system scheduler needs explicit owner approval.)
@@ -350,7 +350,7 @@ node plugin/test/run-tests.mjs                    # full plugin QA over real JSO
 
 <sub>The suite also carries **169 `it.todo` stubs** — a written backlog, each naming an untested behavior and what it would take to cover. They are deliberately **not** counted as tests: a stub proves nothing, and a number that flatters is worse than no number.</sub>
 
-Two honest residuals, not hidden: one described question (_“route to cheaper models to cut cost”_) still leans `ruflo` over `agentic-flow` (orchestration/cost overlap); one unnamed _“methodology”_ question routes to `synthlang` instead of `sparc`. Proof reports land in [`PROOF.md`](PROOF.md), [`DESCRIBED-PROOF.md`](DESCRIBED-PROOF.md), and [`HELIX-DEMO-NOHELIX.md`](HELIX-DEMO-NOHELIX.md).
+Two honest residuals, not hidden: one described question (_“route to cheaper models to cut cost”_) routes to `open-claude-code` instead of `agentic-flow`; one _“methodology”_ question routes to `agent-harness-generator` (in `PROOF.md`) or `cognitum-cogs` (in `HELIX-DEMO-NOHELIX.md`) instead of `sparc`/`ruflo`. Proof reports land in [`PROOF.md`](PROOF.md), [`DESCRIBED-PROOF.md`](DESCRIBED-PROOF.md), and [`HELIX-DEMO-NOHELIX.md`](HELIX-DEMO-NOHELIX.md).
 
 ### The eval flywheel
 
@@ -381,12 +381,12 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 57 repos, 132,216 chunks, dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 54 public stores · 132,216 public source chunks (57 built stores incl. private), dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
 - ✅ **Published on npm** — `npx ruvnet-brain` (short form); `npx github:stuinfla/ruvnet-brain` always tracks the latest commit if you want it even fresher.
-- ⏳ **The fully-autonomous engineering loop** ([ADR-0008](docs/adr/)) — the behavioral hook _drives_ the assess → SPARC → ADR/DDD → QA → score loop; a generalized always-loops-to-≥98 engine is the next phase.
+- ⏳ **The fully-autonomous engineering loop** ([ADR-0008](docs/adr/)) — the behavioral hook injects the loop CONTRACT (assess → SPARC → ADR/DDD → QA → score); the fully-autonomous loop is ADR-0008's open work.
 
 ---
 

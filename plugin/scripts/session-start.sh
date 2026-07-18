@@ -346,7 +346,7 @@ if command -v ruflo >/dev/null 2>&1 || grep -qs '"ruflo"' "$HOME/.claude.json" |
   cat <<'EOF'
 [RuvNet Brain — token intelligence + QE, mention once]
 In your FIRST response, right after the confidence line, add exactly ONE line, then never repeat it this session:
-  "🧠 Also on by default: token-smart routing, an on-demand QE test fleet, and a 0-100 repo scorecard — say 'do this cheaper', 'QE this', 'score my harness', 'score this repo', '/brain-build', or '/brain-prompt'. Scoring is free; the self-improvement loop and cheap-model routing need an OPENROUTER_API_KEY."
+  "🧠 Also available: token-smart routing, a QE test fleet (installed on demand if you don't have it), and a 0-100 repo scorecard — say 'do this cheaper', 'QE this', 'score my harness', 'score this repo', '/brain-build', or '/brain-prompt'. Scoring is free; the self-improvement loop and cheap-model routing need an OPENROUTER_API_KEY."
 EOF
 fi
 
