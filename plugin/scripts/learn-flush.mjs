@@ -47,6 +47,15 @@ for (const s of actions) {
   } catch { /* best-effort — one slow/failed record must not stall session end */ }
 }
 
-try { fs.rmSync(QUEUE); } catch { /* leave it if we can't remove */ }
+// DERIVED, not asserted (F14, 2026-07-18): the queue is EVIDENCE, and it may only be destroyed when
+// its contents were actually fed. The old line deleted it unconditionally — a session where every
+// `ruflo hooks` call failed (fed=0) silently discarded the whole learning queue with nothing learned
+// and no trace. Now: nothing fed + something to feed ⇒ the queue survives for the next session-end
+// to retry. An empty queue (nothing to feed) is safe to remove.
+if (fed > 0 || actions.length === 0) {
+  try { fs.rmSync(QUEUE); } catch { /* leave it if we can't remove */ }
+} else if (process.argv.includes('--sync')) {
+  console.log(`learn-flush: 0/${actions.length} fed (ruflo hooks failing?) — queue KEPT for retry next session-end`);
+}
 if (process.argv.includes('--sync')) console.log(`learn-flush: fed ${fed}/${actions.length} distinct actions to the global learner`);
 process.exit(0);

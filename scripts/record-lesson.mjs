@@ -74,14 +74,20 @@ console.log(`  1. store   -> ${stored ? 'OK' : '?'}`);
 
 // 2. REFINE (native) — L3 patterns + L4 episodes
 let batchEpisodes = '?';
+let distillOk = false;
 try {
   const dist = ruflo(['memory', 'distill', 'run']);
   const m = dist.match(/Episodes\s*\|\s*(\d+)/i);
   if (m) batchEpisodes = m[1];
+  distillOk = true;
 } catch (e) {
   /* distill is best-effort; the store already succeeded */
 }
-console.log(`  2. distill -> refined into episodes+patterns (batch: ${batchEpisodes})`);
+// DERIVED, not asserted (F15): say what actually happened — the old line printed "refined into
+// episodes+patterns" even when distill threw.
+console.log(distillOk
+  ? `  2. distill -> refined into episodes+patterns (batch: ${batchEpisodes})`
+  : '  2. distill -> FAILED (best-effort; the raw lesson is stored, refinement will catch up on a later distill)');
 
 // 3. VERIFY recall by the task text (paraphrase-ish), filtered to the namespace
 let recalled = false;
@@ -99,5 +105,9 @@ console.log(
   }`,
 );
 
-console.log(`\nDone. Lesson is captured, refined, and recall-verified.\n`);
+// DERIVED, not asserted (F15): the closing line reports exactly what was verified, never more. The
+// old line claimed "captured, refined, and recall-verified" even when distill failed and recall
+// didn't return the key — asserted prose over an honest exit code.
+const parts = ['captured', distillOk ? 'refined' : 'NOT refined (distill failed)', recalled ? 'recall-verified' : 'recall NOT verified'];
+console.log(`\nDone. Lesson is ${parts.join(', ')}.\n`);
 process.exit(stored ? 0 : 1);

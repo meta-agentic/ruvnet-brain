@@ -31,7 +31,9 @@ if [ -f "$LOCK" ]; then
   OLD_PID=$(cat "$LOCK" 2>/dev/null)
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "===== $(date -u +%FT%TZ) — SKIPPED: previous run (pid $OLD_PID) still in progress =====" >> "$LOG"
-    exit 0
+    # 75 = the reserved skip code: job-heartbeat.sh restores the live run's receipt instead of
+    # stamping ok/0s over it (F3). launchd still sees success — a skip is not a failure.
+    exit 75
   fi
   echo "===== $(date -u +%FT%TZ) — stale lock from pid $OLD_PID (not running) — clearing =====" >> "$LOG"
 fi

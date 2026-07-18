@@ -81,11 +81,12 @@ if (FRESH_WINDOW) {
   if (!Number.isFinite(days) || days <= 0) { console.error(`--fresh-window needs a positive day count, got "${FRESH_WINDOW}"`); process.exit(2); }
   const cutoff = Date.now() - days * 86400 * 1000;
   const orgs = (process.env.RUVNET_FRESH_ORGS || 'ruvnet').split(',').map((s) => s.trim()).filter(Boolean);
+  let orgFailures = 0;
   for (const org of orgs) {
     let rows;
     try {
       rows = JSON.parse(execFileSync(GH, ['repo', 'list', org, '--limit', '1000', '--json', 'name,pushedAt,isFork,isArchived'], { timeout: 60000 }).toString());
-    } catch (e) { console.error(`[fresh-window] gh repo list ${org} FAILED: ${e.message} — skipping org (nothing from it this run)`); continue; }
+    } catch (e) { orgFailures++; console.error(`[fresh-window] gh repo list ${org} FAILED: ${e.message} — skipping org (nothing from it this run)`); continue; }
     for (const r of rows) {
       if (r.isFork || r.isArchived) continue;
       if (new Date(r.pushedAt).getTime() < cutoff) continue;
@@ -117,17 +118,35 @@ if (FRESH_WINDOW) {
 }
 
 const plan = [];
+// DERIVED, not asserted (F4, 2026-07-18): remoteHead() returns null on ANY probe failure, and the
+// old planner labeled a null-probe repo "up-to-date" — so a network-dark nightly (GitHub unreachable,
+// DNS down, token dead) produced an empty todo, exit 0, and the wrapper logged "CLEAN NO-OP" while
+// having measured NOTHING. That is the exact "blind tool reports health" bug stack-sync.mjs kills
+// with its registry guard. Now: an individually-failed probe is labeled 'unverified (probe failed)' —
+// never "up-to-date", never triggering a rebuild — and if HALF OR MORE of the probes failed the run
+// REFUSES to claim anything (exit 1), letting the wrapper's retry + escalation do their job.
+let probeFailures = 0;
 for (const r of inScope) {
   const live = remoteHead(r.owner || 'ruvnet', r.repo || r.name);
+  if (live === null) probeFailures++;
   const built = builtSha[r.name.toLowerCase()] || null;
   let action = 'up-to-date';
   if (!built) action = 'build (new)';
   // 'unknown' stamped SHA cannot prove freshness — treat as changed whenever upstream is reachable.
   // (Real bug: ruflo + agentic-flow were stamped unknown and therefore NEVER auto-rebuilt — the two
   // most-central repos were invisible to the freshness loop until a 3.24 release exposed it.)
-  else if (built === 'unknown') action = live ? 'rebuild (changed)' : 'up-to-date';
-  else if (live && live !== built) action = 'rebuild (changed)';
+  else if (built === 'unknown') action = live ? 'rebuild (changed)' : 'unverified (probe failed)';
+  else if (live === null) action = 'unverified (probe failed)';
+  else if (live !== built) action = 'rebuild (changed)';
   plan.push({ name: r.name, owner: r.owner, repo: r.repo, tier: r.tier, built: built?.slice(0, 12) || '—', live: live?.slice(0, 12) || '?', action });
+}
+if (inScope.length > 0 && probeFailures * 2 >= inScope.length) {
+  console.error(`\n[blind-guard] ${probeFailures}/${inScope.length} freshness probes FAILED — refusing to claim "up-to-date" for anything. This run measured nothing; that is a failure, not a no-op.`);
+  process.exit(1);
+}
+if (typeof orgFailures !== 'undefined' && orgFailures > 0 && inScope.length === 0) {
+  console.error(`\n[blind-guard] every org listing failed (${orgFailures}) and nothing is in scope — cannot distinguish "nothing fresh" from "completely blind". Failing loudly.`);
+  process.exit(1);
 }
 
 console.log(`self-update ${APPLY ? '(APPLY)' : '(dry-run)'} — ${plan.length} repos in scope\n`);
@@ -146,7 +165,13 @@ console.log(`\nrebuild(changed): ${changed.map((p) => p.name).join(', ') || 'non
 console.log(`new(not built): ${newRepos.length} repos${INCLUDE_NEW ? ' — INCLUDED (--include-new)' : ' — SKIPPED (supervised; pass --include-new to build)'}`);
 console.log(`→ this run will (re)build ${todo.length}: ${todo.map((p) => p.name).join(', ') || 'none'}`);
 
-if (!APPLY) { console.log('\n(dry-run — pass --apply to (re)build; runs serially since embedding is CPU-bound)'); process.exit(0); }
+if (!APPLY) {
+  console.log('\n(dry-run — pass --apply to (re)build; runs serially since embedding is CPU-bound)');
+  // Sol amendment to F4: even a dry-run may not report clean (exit 0) when probes failed — the
+  // "CLEAN NO-OP" the wrapper logs on exit 0 must mean "measured everything, nothing due".
+  if (probeFailures > 0) { console.error(`[blind-guard] ${probeFailures} probe(s) failed — dry-run cannot certify freshness; exiting 1`); process.exit(1); }
+  process.exit(0);
+}
 
 const NOTIFY = (t, m, p) => { try { execFileSync('sh', [path.join(ROOT, 'scripts/notify.sh'), t, m, p || 'default']); } catch { /* alerting never breaks the pipeline */ } };
 const failures = []; // per-repo build failures collected here; ANY failure aborts before publish (see below)
@@ -279,4 +304,13 @@ if (has('--publish')) {
     NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest — rebuilt: ${todo.map((p) => p.name).join(', ')}`);
     console.log(`[publish] DONE — ${tag} live. Users' heartbeats will pick up plugin + brain automatically.`);
   }
+}
+
+// Sol amendment to F4 (end of run): the verified rebuilds/publish above are real work and were NOT
+// skipped — but if any freshness probe failed, this run still may not report clean. Exit 1 AFTER the
+// work so the wrapper's retry re-probes (rebuilds are change-gated, so the retry is cheap) and a
+// persistent blind spot escalates instead of hiding inside a green "no-op".
+if (typeof probeFailures !== 'undefined' && probeFailures > 0) {
+  console.error(`\n[blind-guard] run completed its verified work, but ${probeFailures} freshness probe(s) FAILED — those repos are 'unverified', not 'up-to-date'. Exiting 1 so the failure is visible.`);
+  process.exit(1);
 }

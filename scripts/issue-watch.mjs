@@ -126,7 +126,13 @@ export async function run({ dryRun = false, now = Date.now(), repo = REPO } = {}
         const topic = resolveTopic();
         let sent = false;
         if (topic) sent = await pushNtfy(topic, { title, body, priority: 'urgent', tags: 'rotating_light,warning' });
-        state[key] = { lastAlertAt: new Date(now).toISOString(), title: issue.title, url };
+        // DERIVED, not asserted (F5, 2026-07-18): lastAlertAt may only be written when the page was
+        // actually DELIVERED (sent===true). The old line stamped it unconditionally, so a breach whose
+        // push failed (ntfy down, no topic) was suppressed for the whole 4h cooldown — the alert ledger
+        // asserted a delivery it never verified. A failed attempt records itself as failed and the next
+        // hourly run retries; the ledger can no longer claim a page that didn't happen.
+        if (sent) state[key] = { lastAlertAt: new Date(now).toISOString(), title: issue.title, url };
+        else state[key] = { ...(state[key] || {}), lastAttemptAt: new Date(now).toISOString(), sent: false, title: issue.title, url };
         alertsSent.push({ number: issue.number, sent, reason: topic ? null : 'no ntfy topic configured' });
       }
     }
@@ -188,10 +194,13 @@ async function main() {
     } catch { /* status file is best-effort; never break the watcher */ }
   }
 
-  // Finding a breach is the watcher doing its job — exit 0. Only a real execution error is a failure
-  // (the job-heartbeat.sh wrapper turns a non-zero exit into its own "SCHEDULED JOB FAILED" page,
-  // which would be a confusing duplicate of the per-issue SLA alert this script already sent).
-  process.exit(0);
+  // Finding a breach is the watcher doing its job — exit 0. But a due alert that FAILED TO DELIVER
+  // is an execution failure (Sol amendment to F5, 2026-07-18): this watcher's one real job is the
+  // page, and if the page didn't go out, "ok" would be asserted, not derived. Exit 1 so the
+  // heartbeat records the failure and the wrapper's own channel escalates — that duplicate-looking
+  // page IS the correct behavior when the primary page provably never left the building.
+  const undeliveredAlert = !dryRun && (output.alertsSent || []).some((a) => !a.sent && a.reason !== 'dry-run');
+  process.exit(undeliveredAlert ? 1 : 0);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();

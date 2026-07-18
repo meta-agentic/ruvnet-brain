@@ -87,6 +87,12 @@ export function judge(job, hb, loaded, now) {
   if (ageHours > job.maxAgeHours) {
     return { state: STALE, ageHours, detail: `last ran ${ageHours.toFixed(1)}h ago — its schedule allows ${job.maxAgeHours}h. It stopped.` };
   }
+  // A "skipped" receipt (lock-skip fired but no real run has EVER recorded a result — job-heartbeat
+  // restores the real receipt when one exists, so this only survives when there was none) proves the
+  // schedule fires, not that the work runs. Never count it as OK. (F3, 2026-07-18)
+  if (hb.state === 'skipped') {
+    return { state: NEVER_RAN, ageHours, detail: 'only a lock-skip receipt exists — no real run has ever recorded a result' };
+  }
   if (hb.state === 'failed' || (typeof hb.exit_code === 'number' && hb.exit_code !== 0)) {
     return { state: FAILING, ageHours, detail: `last run FAILED with exit ${hb.exit_code} (${ageHours.toFixed(1)}h ago)` };
   }
@@ -165,11 +171,24 @@ async function main() {
   const bad = results.filter((r) => r.state !== OK);
 
   const prev = loadState();
+  // DERIVED, not asserted (F1, 2026-07-18): a transition is only recorded as handled when its page
+  // was actually DELIVERED (push() returned true). The old code saved every new state unconditionally
+  // — so a FAILING job whose urgent page failed (ntfy down for a minute) was marked "alerted" and,
+  // because alerts are transition-only, would NEVER page again. Now an undelivered transition keeps
+  // its PREVIOUS state in the snapshot, so the same transition re-fires (and re-pages) on the next
+  // run until a page genuinely lands. The ledger can no longer claim a page that didn't happen.
+  const undelivered = new Set();
   for (const c of transitions(results, prev)) {
-    if (c.state === OK) await push(`✅ ${c.label} is healthy again`, c.detail, 'default');
-    else await push(`🔴 ${c.state}: ${c.label}`, `${c.what}\n\n${c.detail}\n\nschedule: ${c.schedule}`, 'urgent');
+    const delivered = c.state === OK
+      ? await push(`✅ ${c.label} is healthy again`, c.detail, 'default')
+      : await push(`🔴 ${c.state}: ${c.label}`, `${c.what}\n\n${c.detail}\n\nschedule: ${c.schedule}`, 'urgent');
+    if (!delivered) undelivered.add(c.label);
   }
-  saveState(Object.fromEntries(results.map((r) => [r.label, r.state])));
+  saveState(Object.fromEntries(results.map((r) => [r.label, undelivered.has(r.label) ? (prev[r.label] ?? OK) : r.state])));
+  // Sol amendment to F1: an undelivered page also FAILS this run (exitCode, not exit — the report
+  // below still prints). The watchdog's own heartbeat then records the degradation, so "the pager is
+  // broken" is itself a paged, visible condition instead of a silent one.
+  if (undelivered.size > 0) process.exitCode = 1;
 
   if (json) console.log(JSON.stringify({ results, checkedAt: new Date().toISOString() }, null, 2));
   else if (!quiet || bad.length) {

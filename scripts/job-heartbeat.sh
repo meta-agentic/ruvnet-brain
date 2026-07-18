@@ -32,6 +32,14 @@ ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 STARTED="$(ts)"
 START_EPOCH="$(date +%s)"
 
+# F3 (2026-07-18): remember the receipt as it was BEFORE this fire. A skip-fire (exit 75, the
+# reserved "another instance is already running" code) must not destroy the live run's evidence —
+# its finish() RESTORES this snapshot instead of overwriting the receipt with a meaningless "ok/0s".
+# Without this, a skip stamped state:"ok" over a real run's "running", and if that real run was then
+# SIGKILLed, the watchdog's started-and-never-finished detection had nothing left to see.
+PREV_HB=""
+[ -f "$HB" ] && PREV_HB="$(cat "$HB" 2>/dev/null)"
+
 # Start receipt. If the job vanishes without ever writing an end receipt, THIS is the evidence that
 # it started and never finished — a state the watchdog reports as FAILING, not as silence.
 cat > "$HB" <<EOF
@@ -49,6 +57,15 @@ finish() {
   code=${FORCED_CODE:-$?}
   ended="$(ts)"
   dur=$(( $(date +%s) - START_EPOCH ))
+  # Exit 75 = SKIP (lock held by a live run). Restore the pre-fire receipt so the live run's evidence
+  # survives; report 0 to launchd (a skip is not a failure). If no receipt ever existed, record an
+  # honest "skipped" — which the watchdog treats as NOT proof of a real run.
+  if [ "$code" -eq 75 ]; then
+    if [ -n "$PREV_HB" ]; then printf '%s' "$PREV_HB" > "$HB"; else
+      printf '{"label":"%s","started_at":"%s","ended_at":"%s","state":"skipped","duration_sec":%s}' "$LABEL" "$STARTED" "$ended" "$dur" > "$HB"
+    fi
+    exit 0
+  fi
   if [ "$code" -eq 0 ]; then state="ok"; else state="failed"; fi
   cat > "$HB" <<EOF
 {"label":"$LABEL","started_at":"$STARTED","ended_at":"$ended","state":"$state","exit_code":$code,"duration_sec":$dur}

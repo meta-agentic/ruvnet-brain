@@ -48,12 +48,25 @@ if printf '%s' "$OUT" | grep -q 'nothing to do'; then
 fi
 
 # 3 — re-embed, only because the corpus actually changed. 8 shards, then one assemble.
+# DERIVED, not asserted (F6, 2026-07-18): a bare `wait` with no operands ALWAYS returns 0 under
+# POSIX, so a failed shard was structurally invisible — the script would proceed to ingest and log
+# "done — rebuilt" over a half-embedded corpus. Now every shard PID is waited on individually and a
+# single failure aborts BEFORE ingest, loudly. "done" is only printed over a fully-embedded corpus.
 log "corpus changed — re-embedding"
 i=0
+pids=""
 while [ "$i" -lt 8 ]; do
   node kb/forge-big.mjs embed --dir kb --name ruv-gists --shard "$i" --of 8 >>"$LOG" 2>&1 &
+  pids="$pids $!"
   i=$((i + 1))
 done
-wait
-node kb/forge-big.mjs ingest --dir kb --name ruv-gists >>"$LOG" 2>&1
+FAILED_SHARDS=0
+for p in $pids; do
+  wait "$p" || FAILED_SHARDS=$((FAILED_SHARDS + 1))
+done
+if [ "$FAILED_SHARDS" -gt 0 ]; then
+  log "EMBED FAILED — $FAILED_SHARDS of 8 shards exited nonzero; refusing to ingest a half-embedded corpus"
+  exit 1
+fi
+node kb/forge-big.mjs ingest --dir kb --name ruv-gists >>"$LOG" 2>&1 || { log "INGEST FAILED — store NOT rebuilt"; exit 1; }
 log "done — ruv-gists store rebuilt"

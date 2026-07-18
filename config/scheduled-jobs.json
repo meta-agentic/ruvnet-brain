@@ -91,7 +91,7 @@
     },
     {
       "label": "com.ruvnet.issue-fix",
-      "what": "Every 10 min: auto-fixes newly opened GitHub issues (stuinfla/ruvnet-brain) \u2014 bounded headless `claude -p` per issue in a disposable git worktree, pushes an issue-fix/<N> branch + comment or posts an honest triage comment, never touches main, never closes an issue",
+      "what": "Every 30 min (was 10 \u2014 a real run takes ~13 min, so the 10-min schedule SIGTERMed its own overlapping runs, fixed 2026-07-18): auto-fixes newly opened GitHub issues (stuinfla/ruvnet-brain) \u2014 bounded headless `claude -p` per issue in a disposable git worktree, pushes an issue-fix/<N> branch + comment or posts an honest triage comment, never touches main, never closes an issue",
       "schedule": "every 10 min",
       "maxAgeHours": 1,
       "required": true
@@ -100,7 +100,13 @@
       "label": "com.ruvnet.routing-flywheel",
       "schedule": "nightly 04:45",
       "maxAgeHours": 26,
-      "what": "nightly bounded live flywheel over routing policy (candidate+receipt only, never live routing)"
+      "what": "nightly data-readiness DRY-RUN of the routing flywheel (the plist runs --dry-run: reads receipts + prints readiness, runs NO loop and writes NO receipt — honest label per F13 2026-07-18; switch the plist to --synthetic to run a real $0 loop)"
+    },
+    {
+      "label": "com.ruvnet.npx-witness",
+      "schedule": "WatchPaths on ~/.npm/_npx (event-driven, no cadence)",
+      "maxAgeHours": 2160,
+      "what": "records every npx-cache mutation to the witness log (pure observer). Event-driven: weeks of silence are NORMAL when nothing touches _npx — maxAgeHours is a 90-day tripwire against the job being unloaded, not a freshness SLA. Registered per F2 2026-07-18: it was loaded+wrapped but absent here, i.e. unwatched by the registry's own definition."
     }
   ],
   "_retired": [

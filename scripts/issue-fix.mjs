@@ -529,7 +529,9 @@ async function main() {
     lock = acquireLock();
     if (!lock.acquired) {
       console.log(`issue-fix: another run is already in progress (pid ${lock.holder?.pid}, started ${lock.holder?.startedAt}) — exiting (concurrency 1).`);
-      process.exit(0);
+      // 75 = the reserved skip code: job-heartbeat.sh restores the live run's receipt (F3) instead
+      // of overwriting it with ok/0s. launchd still sees success — a skip is not a failure.
+      process.exit(75);
     }
   }
 
@@ -548,7 +550,15 @@ async function main() {
   } else {
     printReport(output, { dryRun, simulate });
   }
-  process.exit(0);
+  // DERIVED, not asserted (F9, 2026-07-18): the state FILE was already honest, but this exit(0) told
+  // the heartbeat/watchdog "ok" even when every attempt failed — a permanently broken fixer looked
+  // green on every supervised surface. The exit code now derives from the same artifact-verified
+  // outcomes the state file records: any real (non-dry-run) attempt that did not end in a verified
+  // SUCCESS_OUTCOME fails the run, so the failure reaches the receipt and the pager.
+  const failedAttempt = !dryRun && (output.results || []).some(
+    (r) => r && typeof r.outcome === 'string' && !SUCCESS_OUTCOMES.has(r.outcome) && !/^skip/i.test(r.outcome),
+  );
+  process.exit(failedAttempt ? 1 : 0);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();
