@@ -42,10 +42,14 @@ async function loadCE() {
   // tried (and in restricted networks, HUNG) fetching fresh on every call. Resolve it UNCONDITIONALLY
   // via the same chooseModelCache() path getEmbedder() already used correctly. His verification:
   // rerankPairs() with KB_MODEL_CACHE unset went from hang/timeout to 710ms, zero network.
-  T.env.cacheDir = modelCache;
-  T.env.localModelPath = modelCache;
+  // A resolver may legitimately return no modelCache (hermetic tests mock { T } only) — skip the
+  // cache wiring rather than path.join(undefined,…) throwing, which nulled every hermetic score.
+  if (modelCache) {
+    T.env.cacheDir = modelCache;
+    T.env.localModelPath = modelCache;
+  }
   T.env.allowRemoteModels = true;
-  const ceDir = path.join(modelCache, CE_MODEL);
+  const ceDir = modelCache ? path.join(modelCache, CE_MODEL) : null;
   const attempt = async () => {
     const tok = await T.AutoTokenizer.from_pretrained(CE_MODEL, { revision: CE_REVISION });
     const model = await T.AutoModelForSequenceClassification.from_pretrained(CE_MODEL, { quantized: true, revision: CE_REVISION });
@@ -58,7 +62,7 @@ async function loadCE() {
     // finished. A truncated .onnx (interrupted download — the exact #27 failure mode) silently
     // disabled reranking on every query and DEADLOCKED the process on the second query (ORT's wasm
     // fallback wedges in futex_wait). Self-heal ONCE: wipe the suspect copy, refetch, retry.
-    if (fs.existsSync(ceDir)) {
+    if (ceDir && fs.existsSync(ceDir)) {
       console.error(`[forge-rerank] cross-encoder failed to load (${String(e.message).slice(0, 120)}) — treating the local copy as corrupted: wiping ${ceDir} and re-fetching once (issue #29)`);
       fs.rmSync(ceDir, { recursive: true, force: true });
       _ce = await attempt();

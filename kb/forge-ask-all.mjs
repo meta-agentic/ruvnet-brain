@@ -36,10 +36,17 @@ export function discoverRepos(dir) {
 export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   const list = (repos && repos.length) ? repos : discoverRepos(dir);
   const perRepo = {};
-  // Fan out across repos CONCURRENTLY instead of one-at-a-time — each searchKb() call is an
-  // independent round-trip (its own embed + KB read + HNSW query), so 27 serial awaits were 27x the
-  // necessary wall-clock. Each repo's error is still isolated to its own perRepo entry.
-  const perRepoHits = await Promise.all(list.map(async (name) => {
+  // Fan out across repos concurrently — but BOUNDED (issue #30, found+fixed by Jan Lafko). The
+  // unbounded Promise.all here was a real OOM bomb: each repo's searchKb() spins up its own store
+  // handles, and an unscoped query fanned ~53+ repos at once — measured 513MB peak for ONE repo,
+  // extrapolating past his container's 17GB (dmesg: oom-kill, anon-rss 17.2GB, MCP server dead).
+  // His bounded batch (default 5, KB_CONCURRENCY to tune) cut peak RSS to ~2.4GB with identical
+  // results. Implemented as a SLIDING WINDOW rather than chunk barriers — at most KB_CONCURRENCY
+  // repos in flight, and a finishing repo immediately admits the next, so big-memory machines keep
+  // most of the parallel wall-clock win while small containers keep the same hard memory bound.
+  // Each repo's error stays isolated to its own perRepo entry.
+  const CONCURRENCY = Math.max(1, parseInt(process.env.KB_CONCURRENCY || '5', 10) || 5);
+  const searchOne = async (name) => {
     try {
       // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
       // single source repo — otherwise the queried repo's own primer is crowded out by the other 18 before
@@ -51,6 +58,13 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     } catch (e) {
       perRepo[name] = `ERR: ${e.message}`;
       return [];
+    }
+  };
+  const perRepoHits = new Array(list.length);
+  let nextIdx = 0;
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, async () => {
+    for (let i = nextIdx++; i < list.length; i = nextIdx++) {
+      perRepoHits[i] = await searchOne(list[i]);
     }
   }));
   const candidates = perRepoHits.flat();
