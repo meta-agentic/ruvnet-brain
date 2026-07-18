@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-17T10:19:36.486Z",
+  "builtUtc": "2026-07-18T15:02:36.705Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "ruvector": {
-      "kbName": "ruvector",
-      "sourceRepo": "https://github.com/ruvnet/RuVector",
-      "sourceCommit": "dc00c4425300e2d6fbb2e95514e98db1eb5e288c",
-      "sourceDescribe": "dc00c44",
-      "builtUtc": "2026-07-17T10:19:36.486Z",
+    "cognitum-api": {
+      "kbName": "cognitum-api",
+      "sourceRepo": "https://api.cognitum.one/openapi.json",
+      "sourceCommit": "75e8d35a2ec211cab11a7b6cc1d6c330260587d7",
+      "sourceDescribe": "75e8d35",
+      "builtUtc": "2026-07-18T15:02:36.705Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
       "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/latest/download/ruvnet-brain.zip",
-      "selfUpdate": "node forge-update.mjs ruvector"
+      "selfUpdate": "node forge-update.mjs cognitum-api"
     }
   }
 }
