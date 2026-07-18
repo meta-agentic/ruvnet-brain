@@ -44,32 +44,37 @@ Split the product into a **boot-frozen shell** (as small as possible, changes ~n
 
 ```
 ~/.cache/ruvnet-brain/
-  current  ->  versions/<active-version>/       # THE SPINE: one symlink, atomically flipped
+  active.json                                    # THE SPINE: atomic pointer file (temp+rename); no symlinks
   versions/<v>/                                  # immutable per-version code payloads
-  versions/<v-prev>/                             # retained: instant rollback target
+  update-txn.json · update-receipts.jsonl        # transaction record + append-only ledger
+  .update.lock/ · leases/ · dev.json             # mkdir-lock · GC leases · opt-in dev mode
   kb/                                            # KB DATA — separate track, never touched by code updates
 ```
 
 1. **Hook shim (shell)** — `hooks.json` commands change once, forever, to run
-   `hook-shim.sh <name>`: a ~15-line `exec` that runs
-   `~/.cache/ruvnet-brain/current/plugin/scripts/<name>` when the spine exists, else falls back to
-   the sibling in `${CLAUDE_PLUGIN_ROOT}` (first run, spine absent). `exec` preserves exit codes —
-   `route-dispatch.sh`'s deliberate exit-2 block still works. From then on, **hook behavior updates
-   the moment `current` flips — zero restart.**
+   `node hook-shim.mjs <hook-id>`: a typed dispatch table (file, interpreter, advisory|blocking
+   mode) that reads `active.json` once per invocation, validates codeRoot containment under
+   `versions/` (or the explicit `dev.json` checkout), and executes the hook body from that
+   immutable tree. Blocking hooks propagate exact exit codes — `route-dispatch.sh`'s deliberate
+   exit-2 wall survives by contract. Broken spine → LOUD fallback to `${CLAUDE_PLUGIN_ROOT}`;
+   first-install → quiet fallback. **Hook behavior updates the moment `active.json` flips — zero
+   restart.**
 
-2. **Hot-swap MCP proxy (shell)** — `plugin/mcp/server.mjs` is already a stdio proxy to the brain's
-   `forge-mcp-all.mjs`. It gains: cache the client's `initialize` request; between requests, check a
-   reload stamp (`~/.cache/ruvnet-brain/.reload-stamp`); on change, SIGTERM the child, respawn it on
-   the new code/data, replay the handshake, swallow the duplicate response. **Claude Code's
-   connection never drops; `search_ruvnet` serves the new brain mid-session.** (Never swap
-   mid-request; queue and swap between requests.)
+2. **Stable MCP server (shell)** — `plugin/mcp/server.mjs` owns the client protocol itself
+   (initialize / ping / tools/list / tools/call; fixed `search_ruvnet` schema) and supervises the
+   brain (`forge-mcp-all.mjs`, unchanged) as a **warm child worker over a PRIVATE handshake**:
+   parent-owned ids in both directions, the client's handshake never replayed to anyone. On a
+   generation change (or a KB-track code change), the child respawns **between requests only**
+   (pending-count drain gate); the server leases the generation it serves so GC can't collect it.
+   **Claude Code's connection never drops; `search_ruvnet` serves the new brain mid-session.**
 
-3. **Update engine (body)** — `scripts/update-apply.mjs`, mirroring cognitum-v0-appliance ADR-248's
-   proven mechanic: fetch manifest → download → **SHA-256 verify** → unpack to `versions/<v>` →
-   **health-gate** (bash -n every hook script, `node --check` every .mjs, one CLI smoke query) →
-   **atomic flip** (`ln -s` to temp name + `rename(2)`) → keep previous for `--rollback` → write the
-   reload stamp. A failed gate = no flip = users stay on the working version. A failed post-flip
-   probe = auto-flip back.
+3. **Update engine (ships in the plugin payload)** — `plugin/scripts/update-apply.mjs`, mirroring
+   cognitum-v0-appliance ADR-248's proven mechanic: mkdir-atomic lock → staged copy (never into a
+   live dir) → **interpreter-true gates** (bash -n where bash exists, node --check everywhere,
+   hooks.json parse) → **transaction record** → atomic promote → **atomic `active.json` rewrite**
+   (temp+rename — the flip IS the update) → previous retained for instant `--rollback` → GC with
+   leases → `shellChanged` computed on every flip. A failed gate = no flip = users stay on the
+   working version. Crash anywhere = deterministic recovery to old world or new world, never half.
 
 4. **Honest restart contract** — the release manifest carries `requiresRestart: true` **only** when
    boot-frozen declarations changed (hooks.json matchers, skills/commands markdown, MCP tool name,
@@ -91,8 +96,8 @@ Split the product into a **boot-frozen shell** (as small as possible, changes ~n
   reason ruflo's CLI updates live while its MCP needs a restart, solved instead of accepted.
 - Every mechanic is the already-proven house pattern (ADR-248: manifest → verify → atomic swap →
   health-gate → retained-prev rollback), applied to a plugin instead of an appliance.
-- Failure-safe by construction: verify-before-flip, gate-before-flip, flip is atomic, rollback is a
-  symlink away, and a missing spine falls back to the plugin dir (the status quo, never worse).
+- Failure-safe by construction: gate-before-flip, the flip is one atomic rename, rollback is a
+  pointer rewrite away, and a missing spine falls back to the plugin dir (the status quo, never worse).
 
 ## Consequences
 
@@ -101,10 +106,10 @@ Split the product into a **boot-frozen shell** (as small as possible, changes ~n
 - `plugin/` (the shell) must now be treated as near-frozen ABI: changes there are rare, flagged
   `requiresRestart`, and get the one honest nag.
 - The versioned CC plugin cache stops mattering: whatever stale version CC boots, the first hook
-  fire executes `current`. CC's own updater becomes a no-op path for us (kept for marketplace
-  hygiene only).
-- New failure mode to watch: a broken `current` target. Mitigated by gate-before-flip + auto-
-  rollback + shim fallback; `--doctor` reports spine state.
+  fire executes the active generation. CC's own updater becomes the trusted download path whose
+  staged payload the engine gates and applies.
+- New failure mode to watch: a broken active generation. Mitigated by gate-before-flip + retained
+  previous + loud shim fallback; `update-apply.mjs --doctor` reports spine state.
 
 ## What this does NOT claim
 

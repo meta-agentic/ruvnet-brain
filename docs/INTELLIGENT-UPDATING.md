@@ -19,10 +19,11 @@ Created: 2026-07-18 10:55:00 EDT
 Claude Code loads a plugin **once, at boot, from a version-frozen directory** — so anything that
 lives there is trapped until restart. Ruflo's CLI never has this problem because a CLI is
 **invoked** (fresh `exec` per call), not **loaded**. Intelligent Updating restructures the Brain so
-that almost everything becomes *invoked through one stable path* —
-`~/.cache/ruvnet-brain/current` — and updating is just atomically re-pointing that path. Hooks run
-new code on their next fire. The MCP proxy swaps its child worker between requests. No restart, no
-nag, no trapped users — on npm, npx, git-clone, and marketplace installs alike.
+that almost everything becomes *invoked through one stable pointer* —
+`~/.cache/ruvnet-brain/active.json` — and updating is just atomically rewriting that pointer.
+Hooks run new code on their next fire. The stable MCP server swaps its warm brain worker between
+requests. No restart, no nag, no trapped users — on npm, npx, git-clone, and marketplace installs
+alike.
 
 ## 1. The two classes: loaded vs invoked
 
@@ -32,7 +33,7 @@ nag, no trapped users — on npm, npx, git-clone, and marketplace installs alike
 | skills / commands markdown | loaded at CC boot | next restart (rare; honest nag) |
 | MCP **tool name + registration** | loaded at CC boot | next restart (rare; honest nag) |
 | **hook script bodies** (grounding, session-start, walls…) | invoked per fire → **spine** | next hook fire (seconds) |
-| **MCP behavior** (`search_ruvnet` implementation + KB) | child of the stdio **proxy** | next tool call after child swap |
+| **MCP behavior** (`search_ruvnet` implementation + KB) | warm worker under the stable server | next tool call after worker swap |
 | CLI / console / scripts | invoked | immediately |
 | KB data stores | read per query by the MCP child | on KB update (own track) |
 
