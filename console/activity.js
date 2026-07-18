@@ -334,7 +334,7 @@
         '<div class="ab-flow-narr"><span class="ab-fn-text" id="ab-fnText"></span><span class="ab-fn-steps" id="ab-fnSteps" aria-hidden="true"></span></div>' +
       '</div>' +
       '<div class="ab-vocab"><b>memories</b> = everything your AI captures automatically&ensp;·&ensp;<b>lessons</b> = what survives distillation (task → what failed → what works)</div>' +
-      (nLes ? '' : '<div class="ab-empty-note">0 lessons recorded — auto-distill into lessons is a planned next layer (<code>ADR-0017</code>). Capture one now: <code>record-lesson</code>.</div>') +
+      (nLes ? '' : '<div class="ab-empty-note">0 lessons recorded yet. Lessons are captured manually: run <code>record-lesson</code> in this project to keep one. There is no automatic distillation into lessons yet.</div>') +
       '<div class="ab-roster" id="ab-roster">' +
         '<span class="ab-who">written by</span>' +
         '<span class="ab-rchip" data-tool="memory">AgentDB<span class="ab-cs">via ruflo memory</span><span class="ab-k">✦</span></span>' +
@@ -408,7 +408,7 @@
       ? LESSONS.map(function (L) {
           return '<div class="ab-dl-title"><span class="ab-g">✦</span>' + esc(lessonTitle(L.key)) + '</div>' + lessonCardHTML(L);
         }).join('')
-      : '<p class="ab-fallback">0 lessons recorded — auto-distill into lessons is a planned next layer (<code>ADR-0017</code>). Capture one now: <code>record-lesson</code>.</p>';
+      : '<p class="ab-fallback">0 lessons recorded yet. Lessons are captured manually: run <code>record-lesson</code> in this project to keep one. There is no automatic distillation into lessons yet.</p>';
 
     (function () {
       var GLOSS = {
@@ -730,8 +730,8 @@
       ] : [
         'Your AI captures everything as it works — ' + fmt(nMem) + ' memories in this project so far.',
         "Most of that stays raw. Only what's proven survives distillation.",
-        '0 lessons distilled yet — auto-distill is a planned next layer (ADR-0017).',
-        'Capture one manually any time: run record-lesson from this project.',
+        '0 lessons distilled yet. Distillation is manual for now; there is no auto-distill.',
+        'Capture one any time: run record-lesson in this project.',
         'Click any number above to see exactly what it knows.'
       ];
       var txt = document.getElementById('ab-fnText');

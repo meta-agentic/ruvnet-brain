@@ -526,10 +526,16 @@ function familyRow(fam) {
   // Version on the row (Stuart 2026-07-17: "show the version numbers"). Healthy family → the
   // flagship's version. Attention family → the problem AND its resolution on the same line:
   // "installed → target" right beside the fix button.
+  // Exception (issue #23): "More RuvNet tools" is an explicit heterogeneous catch-all — its members
+  // are unrelated packages on independent version lines, so items[0]'s version does NOT represent the
+  // group yet reads as if it did. Suppress the flagship-version shorthand there (each package's real
+  // version is still shown in the expanded table below). A specific "installed → target" for ONE
+  // flagged package stays — it sits beside THAT package's fix button and is about it, not the group.
+  const isCatchAll = fam.name === STACK_MORE.name;
   const first = fam.attention ? fam.items.find((i) => i.state === 'BEHIND' || i.state === 'BROKEN') : null;
   const verText = first
     ? `${first.installed ?? '?'} → ${first.target ?? 'latest'}`
-    : (fam.items[0]?.installed ? `v${fam.items[0].installed}` : '');
+    : (!isCatchAll && fam.items[0]?.installed ? `v${fam.items[0].installed}` : '');
   return el('details', { class: 'fam' },
     el('summary', { class: 'fam-sum' },
       el('span', { class: 'fam-name' }, fam.name),
@@ -1451,41 +1457,63 @@ function renderDistribution(u) {
     el('p', { class: 'fineprint' }, u.note));
 }
 
-// WP2d — what we detected on YOUR machine, as chips. Each chip clicks through to the
-// setting that already owns the choice (no second provider-switching mechanism).
+// Plan block (issue #24, applying sparkling's #21 redesign) — three genuinely different questions
+// used to render as one flat row of identical "chips": which subscription this runs on ("house" — a
+// word nobody outside the source knows), whether cheap-task routing is on, and which OTHER API keys
+// merely exist. Now two plainly-labelled boxes: YOUR PLAN (the one choice that changes cost, with a
+// real per-provider key checklist) and OPENROUTER (a separate switch, not another house).
 function renderProviders(sv) {
   const re = sv && sv.routerEngine;
   if (!re) return null;
-  // House = the user's Settings choice (config.json `provider`, "Your model house"), the single
-  // source of truth (issue #21) — previously this derived "yours" from whichever pool candidate
-  // happened to be subscriptionCovered first (a profile.json guess Settings never wrote to), so
-  // picking ChatGPT in Settings never moved this strip. re.house comes from onboarding-console.mjs's
-  // gatherRouterEngine(), which now reads config.json first, same as the savings baseline does.
+  // House = the user's Settings choice (config.json `provider`), the single source of truth (issue
+  // #21). re.house + re.keys come from onboarding-console.mjs's gatherRouterEngine(); re.keys now
+  // carries a real per-provider credential check (issue #24), not a hardcoded false.
   const HOUSE_NAME = { anthropic: 'Claude Max', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' };
+  const KEY_NAME = { anthropic: 'Claude', openai: 'OpenAI', google: 'Gemini', xai: 'Grok' };
   const house = { provider: re.house && re.house.provider };
   const houseName = HOUSE_NAME[house.provider] || 'Your stack';
-  const chipBtn = (on, boldPart, rest, target, tip) => el('button', {
-    class: `prov-chip ${on ? 'on' : 'dim'}`, type: 'button', title: tip,
-    onclick: () => jumpToSetting(target),
-  },
-    el('span', { class: 'pc-dot', 'aria-hidden': 'true' }),
-    el('span', {}, el('b', {}, boldPart), rest));
-  const chips = [
-    chipBtn(true, houseName, ' — main model on your subscription ($0 extra)', 'provider',
-      'Your model house — change it in Settings'),
-    (re.keys && re.keys.openrouter)
-      ? chipBtn(true, 'OpenRouter key', ' — cheap models live', 'openrouterKey',
-          'Your OpenRouter key — manage it in Settings')
-      : chipBtn(false, 'OpenRouter key', ' — not detected', 'openrouterKey',
-          'Paste a key in Settings to light up the cheap lane'),
-  ];
-  for (const [id, label] of [['openai', 'OpenAI'], ['google', 'Gemini'], ['xai', 'Grok']]) {
-    if (id === house.provider || chips.length >= 4) continue;
-    chips.push(chipBtn(false, label, ' — not detected', 'provider',
-      `If ${label} is your house, set it under “Your model house” in Settings`));
-  }
-  return el('div', { class: 'prov-strip' },
-    el('span', { class: 'prov-lab' }, 'Your providers:'), ...chips);
+  const keys = re.keys || {};
+
+  const action = (label, target) => el('button', {
+    class: 'plan-action', type: 'button', onclick: () => jumpToSetting(target),
+  }, label);
+  const head = (dotClass, name, actionBtn) => el('div', { class: 'plan-head' },
+    el('span', { class: `plan-dot ${dotClass}`, 'aria-hidden': 'true' }),
+    el('span', { class: 'plan-name' }, name), actionBtn);
+
+  // BOX 1 — YOUR PLAN. The one choice here that changes cost: which subscription MetaHarness treats
+  // as $0. Footer checklist: which OTHER providers have a real API key on this machine — honest now.
+  const others = ['anthropic', 'openai', 'google', 'xai'].filter((id) => id !== house.provider);
+  const checklist = el('div', { class: 'plan-keys' },
+    el('span', { class: 'plan-keys-lab' }, 'Other keys found:'),
+    ...others.map((id) => {
+      const ok = !!keys[id];
+      return el('span', {
+        class: `plan-key ${ok ? 'yes' : 'no'}`,
+        title: ok ? `An API key for ${KEY_NAME[id]} is set on this machine`
+                  : `No API key for ${KEY_NAME[id]} found on this machine`,
+      },
+        el('span', { class: 'plan-key-mark', 'aria-hidden': 'true' }, ok ? '✓' : '✗'),
+        ` ${KEY_NAME[id]}`);
+    }));
+  const planBox = el('div', { class: 'plan-box' },
+    el('span', { class: 'plan-label' }, 'Your plan'),
+    head('is-house', houseName, action('Change', 'provider')),
+    el('p', { class: 'plan-sub' }, `MetaHarness's main work runs here at no extra cost.`),
+    checklist);
+
+  // BOX 2 — OPENROUTER. A separate switch, not another house: Claude Code itself never leaves your
+  // plan; this only offloads read-only text tasks (summarize, classify) to cheaper models.
+  const routerOn = !!keys.openrouter;
+  const laneBox = el('div', { class: 'plan-box' },
+    el('span', { class: 'plan-label' }, 'OpenRouter'),
+    head(`is-lane ${routerOn ? 'on' : 'off'}`, routerOn ? 'Active' : 'No key added',
+      action(routerOn ? 'Manage' : 'Add a key', 'openrouterKey')),
+    el('p', { class: 'plan-sub' }, routerOn
+      ? `Text-only tasks like summarizing or classifying can go to cheaper models instead of using ${houseName}.`
+      : `Add one so text-only tasks can skip ${houseName} and use cheaper models instead.`));
+
+  return el('div', { class: 'plan-group' }, planBox, laneBox);
 }
 
 function renderSavings(sv) {

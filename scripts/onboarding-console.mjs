@@ -525,9 +525,20 @@ function gatherRouterEngine() {
   // user's Settings choice is now the single source of truth, via the SAME detectProvider() the
   // savings.utilization frontier calc already uses (config → env → catalog default) — so this and
   // the frontier calc can never disagree either.
-  let house;
-  try { house = detectProvider(loadCatalog(), { provider: cfg.provider }); }
-  catch { house = { provider: cfg.provider && cfg.provider !== 'auto' ? cfg.provider : 'anthropic', source: 'default' }; }
+  let house, providerKeys = {};
+  try {
+    const hcat = loadCatalog();
+    house = detectProvider(hcat, { provider: cfg.provider });
+    // Per-provider credential presence (issue #24): the old chip strip hardcoded "not detected" for
+    // every provider that wasn't the current house, so it could never tell "not your house" from "no
+    // key found". Read each provider's real detect_env vars — minus the CLAUDECODE / CLAUDE_CODE_ENTRYPOINT
+    // run-context markers (which are not credentials), exactly as detectProvider() itself filters them —
+    // so the UI's "key found / not found" is now true instead of decorative.
+    const IGNORE_ENV = new Set(['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']);
+    for (const [name, p] of Object.entries(hcat.providers || {})) {
+      providerKeys[name] = (p.detect_env || []).some((k) => !IGNORE_ENV.has(k) && !!process.env[k]);
+    }
+  } catch { house = { provider: cfg.provider && cfg.provider !== 'auto' ? cfg.provider : 'anthropic', source: 'default' }; }
   return {
     engine: {
       package: '@metaharness/router', installed,
@@ -535,7 +546,7 @@ function gatherRouterEngine() {
       mode: !installed ? 'UNAVAILABLE' : rows.length >= MIN_LABELS ? 'LEARNED' : 'COLD-START',
       outcomesLog: OUTCOMES.replace(os.homedir(), '~'),
     },
-    keys: { openrouter: openrouterKey },
+    keys: { openrouter: openrouterKey, ...providerKeys },
     profile: { present: !!profile, path: PROFILE_PATH.replace(os.homedir(), '~') },
     catalogSource: engineCatalogSource(),   // 'catalog' | 'built-in-fallback' — so the UI never calls the stub a real catalog
     house,
