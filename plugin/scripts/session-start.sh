@@ -197,6 +197,27 @@ if [ ! -f "$PREF_FILE" ]; then
   echo ""
 fi
 
+# ── STABLE SPINE (ADR-023): seed on first run; honest restart notice only when the SHELL changed ──
+SPINE_HOME="$HOME/.cache/ruvnet-brain"
+if command -v node >/dev/null 2>&1 && [ -f "$(dirname "$0")/update-apply.mjs" ]; then
+  if [ ! -f "$SPINE_HOME/active.json" ]; then
+    # Zero-step migration: seed the spine from THIS running plugin install, detached + engine-locked.
+    ( node "$(dirname "$0")/update-apply.mjs" --seed >"$SPINE_HOME/.seed.log" 2>&1 ) &
+  else
+    # The ONE honest nag (replaces the old every-session "restart to load"): fires ONLY when the
+    # active generation changed boot-frozen declarations vs what this CC process booted with.
+    SPINE_V=$(grep -m1 '"version"' "$SPINE_HOME/active.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+    SHELL_CHANGED=$(grep -m1 '"shellChanged"' "$SPINE_HOME/active.json" 2>/dev/null | grep -c 'true' || true)
+    BOOT_V=""
+    [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
+      BOOT_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+    if [ "$SHELL_CHANGED" = "1" ] && [ -n "$BOOT_V" ] && [ -n "$SPINE_V" ] && [ "$BOOT_V" != "$SPINE_V" ]; then
+      echo "[RuvNet Brain — v$SPINE_V changed boot-level declarations (the rare case); this session booted v$BOOT_V's]"
+      echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V changed a boot-level declaration — one restart picks it up (\`claude --continue\` keeps this whole conversation). Everything else already updated live.\""
+    fi
+  fi
+fi
+
 # Check EVERY session start, deduped to once per 15 min (a burst of window-opens = one check).
 # The check is a single 3s-capped fetch of a ~1KB raw file — negligible. The old ~20h limit meant
 # a release shipped an hour after your last check stayed invisible until TOMORROW — day-long
@@ -231,13 +252,19 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
     AUTO_PREF=$(cat "$PREF_FILE" 2>/dev/null || echo "")
     if [ "$AUTO_PREF" = "yes" ] && command -v claude >/dev/null 2>&1; then
+      # STABLE SPINE (ADR-023): download via CC's trusted marketplace path as before, then hand the
+      # staged payload to the ONE update engine — gate, atomic active.json flip, receipt. Hook
+      # BEHAVIOR from the new version goes live in THIS session on the very next hook fire; the MCP
+      # worker swaps between calls. The engine is locked (concurrency-1 across all sessions) and
+      # detached — this hook never blocks on it.
       ( claude plugin marketplace update ruvnet-brain >"$STATE_DIR/.last-auto-update.log" 2>&1
         claude plugin update ruvnet-brain@ruvnet-brain >>"$STATE_DIR/.last-auto-update.log" 2>&1
+        node "$(dirname "$0")/update-apply.mjs" --auto >>"$STATE_DIR/.last-auto-update.log" 2>&1
       ) &
-      echo "[RuvNet Brain — downloading v$REMOTE_V in the background; THIS SESSION STILL RUNS v$LOCAL_V]"
-      echo "Tell the user this PLAINLY, near the top of your first response — be exact about running vs staged, never imply the new version is active:"
-      echo "  \"🧠 You're running RuvNet Brain v$LOCAL_V. I found v$REMOTE_V and I'm downloading it in the background now — when it finishes it will be STAGED, not active. Loading it costs you nothing: exit and run \`claude --continue\` (or reopen and resume this session) — your whole conversation comes right back, on the new version. I can't hot-swap myself in memory (Claude Code loads plugins only at process start), but with --continue a restart loses nothing. Or just keep working on v$LOCAL_V and it loads whenever you next restart naturally.\""
-      echo "If the user asks which version they're on at any point, the answer is v$LOCAL_V until they restart. Don't repeat this notice later in the same session."
+      echo "[RuvNet Brain — v$REMOTE_V is downloading and will AUTO-APPLY via the Stable Spine (ADR-023); this session picks up the new behavior live]"
+      echo "Tell the user ONE short line, near the top of your first response:"
+      echo "  \"🧠 RuvNet Brain v$REMOTE_V is installing in the background — behavior updates go live in this session automatically (no restart). If this release changed boot-level declarations, I'll tell you at your next session start — that's the only case a restart ever helps.\""
+      echo "Don't repeat this notice later in the same session."
       echo ""
     else
       echo "[RuvNet Brain — update available, auto-update not enabled]"

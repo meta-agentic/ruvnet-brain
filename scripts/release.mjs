@@ -50,6 +50,36 @@ console.log(`\n${c.b('RuvNet Brain — release / definition-of-done')} ${c.dim('
 step('A', 'version single-source-of-truth agrees across every surface');
 runOrDie('version sync', process.execPath, ['scripts/sync-version.mjs', '--check']);
 
+// A2. Stable Spine restart classifier (ADR-023, red-team finding 18): diff the boot-frozen SHELL
+// (hooks.json, hook-shim, MCP server, .mcp.json, skills/, commands/) against the previous release
+// tag and SAY OUT LOUD whether this release needs a restart. The classification is computed, never
+// remembered — the same shellDiff logic runs client-side in update-apply.mjs at every flip, so the
+// user-facing nag stays honest even if this print is ignored. Informational at ship time; the
+// releasing human sees exactly which shell files changed.
+step('A2', 'Stable Spine — does this release change the boot-frozen shell? (requiresRestart classifier)');
+{
+  const { execFileSync } = await import('node:child_process');
+  const SHELL = ['plugin/hooks/hooks.json', 'plugin/scripts/hook-shim.mjs', 'plugin/mcp/server.mjs', 'plugin/.mcp.json', 'plugin/skills', 'plugin/commands'];
+  let prevTag = '';
+  try { prevTag = execFileSync('git', ['describe', '--tags', '--abbrev=0'], { encoding: 'utf8' }).trim(); } catch { /* no tags yet */ }
+  if (!prevTag) {
+    console.log(c.dim('  no previous release tag — classifier has no baseline (first spine release: requiresRestart=true by definition)'));
+  } else {
+    let changed = [];
+    try {
+      const out = execFileSync('git', ['diff', '--name-only', `${prevTag}..HEAD`, '--', ...SHELL], { encoding: 'utf8' }).trim();
+      changed = out ? out.split('\n') : [];
+    } catch { /* diff failure = unknown; say so, never guess green */ changed = ['(diff failed — treat as changed)']; }
+    if (changed.length) {
+      console.log(`  ${c.y('requiresRestart: TRUE')} — shell changed vs ${prevTag}:`);
+      for (const f of changed) console.log(`    · ${f}`);
+      console.log(c.dim('  users get ONE honest restart notice (session-start reads active.json.shellChanged); everything else is live.'));
+    } else {
+      console.log(`  ${c.g('requiresRestart: false')} — no shell change vs ${prevTag}; this release goes fully live with zero restarts.`);
+    }
+  }
+}
+
 // B. the full brain test suite (the 60/60)
 step('B', 'full test suite (npm test)');
 runOrDie('npm test', 'npm', ['test']);

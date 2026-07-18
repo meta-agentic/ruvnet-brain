@@ -1,7 +1,7 @@
 ---
 id: ADR-023
 title: Intelligent Updating — the Stable Spine (auto-update every piece; restart only for declarations)
-status: Proposed
+status: Accepted
 date: 2026-07-18
 authors: [Stuart Kerr, Claude Code]
 tags: [updating, self-update, plugin, hot-reload, rollback, mcp, hooks]
@@ -11,7 +11,7 @@ relates: [ADR-020, ADR-021, ADR-022]
 
 # ADR-0023 — Intelligent Updating: the Stable Spine
 
-**Status**: Proposed (design under adversarial two-model review; flips on the implementing change-set)
+**Status**: Accepted (implemented in the feat/stable-spine change-set: hook-shim.mjs + dispatch-table hooks.json, stable MCP server with warm supervised worker, update-apply.mjs engine with lock/txn/gates/GC/rollback/dev-mode, session-start seed + honest shellChanged nag, release.mjs A2 classifier — 17 engine/shim tests green)
 
 **Design provenance**: mirrors the house self-update pattern in cognitum-v0-appliance's ADR-248
 (manifest → verify → atomic swap → health-gate → retained-prev rollback). A GPT-5.6 adversarial

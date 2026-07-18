@@ -390,11 +390,35 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
     // (2026-07-17: this line used to hardcode 'completed' regardless of outcome — it marked 6 issues
     // done while producing zero branches/comments/logs. That is faking, not fixing. Never again.)
     const succeeded = SUCCESS_OUTCOMES.has(outcome.outcome);
+    // NEVER-SILENT-TO-GITHUB (2026-07-18): on 2026-07-18 the fixer ran FIVE times against three
+    // fresh issues, timed out or no-actioned every attempt, alerted only via ntfy — and the ISSUE
+    // PAGE showed nothing. From the reporter's side that is indistinguishable from "nobody looked",
+    // which cost exactly the trust this automation exists to build. A failed attempt now leaves a
+    // visible comment on the issue itself (deduped: at most one failure comment per issue per 24h,
+    // so hourly retries don't spam), fail-open like ntfy — commenting must never break the run.
+    const prevRec = fixState[String(issue.number)] || {};
+    let failureCommentAt = prevRec.failureCommentAt || null;
+    if (!succeeded) {
+      const lastNote = Date.parse(failureCommentAt || 0) || 0;
+      if (now - lastNote >= 24 * 3600_000) {
+        const why = outcome.outcome === 'timeout-failed'
+          ? `hit its ${Math.round(TIMEOUT_MS / 60000)}-minute wall-clock limit before reaching a verified outcome`
+          : `exited without producing a verifiable artifact (no branch pushed, no comment posted)`;
+        const body = `🤖 Automated issue-fix run (issue-fix.mjs) — a human reviews before anything merges.\n\n`
+          + `Status: the automated fixer attempted this issue and **${why}**. It has NOT been forgotten: `
+          + `the attempt is logged locally, the maintainer has been alerted, and the fixer retries within the hour `
+          + `until a fix branch or an honest triage lands here. This note exists so a failed attempt is never `
+          + `silent on the issue page.`;
+        const r = spawnSync(GH_BIN, ['issue', 'comment', String(issue.number), '--repo', repo, '--body', body], { encoding: 'utf8' });
+        if (r.status === 0) failureCommentAt = new Date(now).toISOString();
+      }
+    }
     fixState[String(issue.number)] = {
       attemptedAt: new Date(now).toISOString(),
       status: succeeded ? 'completed' : 'failed',
       outcome: outcome.outcome,
       branch: succeeded ? (outcome.branch || null) : null,
+      failureCommentAt,
       logPath,
     };
     state[FIX_NS] = fixState;
