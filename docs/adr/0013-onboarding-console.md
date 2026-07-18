@@ -12,8 +12,12 @@ related: [ADR-0012 (grounding gate), ruflo/plugins/ruflo-ruvector ADR-0001 (pin 
 
 # ADR-013: The Onboarding Console
 
-**Status**: Proposed
+**Status**: Implemented
 **Date**: 2026-07-14
+**Updated**: 2026-07-18 — reconciled the body status with the frontmatter (`Implemented`): the console
+shipped and is live (`/configure` / `/rvbc`, served from `scripts/onboarding-console.mjs`). The body had
+been left at `Proposed` while the frontmatter said `Implemented` — a file disagreeing with itself, exactly
+the ADR-drift this project's own hooks warn about.
 
 ## Context
 
