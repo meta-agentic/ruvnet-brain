@@ -69,8 +69,17 @@ let bufLen = 0;
 let firstTs = null;
 const flush = () => {
   if (!buf.length) return;
+  const seg = String(passages.length).padStart(4, '0');
   passages.push({
     id: String(passages.length),
+    // UNIQUE path per segment (verified fix, 2026-07-19). A shared path made forge-ask.mjs doc-collapse
+    // crush every segment of a meeting into ONE ~12k window — the 317-passages→4-paths collapse that
+    // made meeting recall unretrievable (facts were IN the corpus but never surfaced; meeting recall
+    // 3/28). One path = one segment, the same granular convention ingest-gists.mjs uses (gist-id/file#N).
+    // With this + the reader's transcript-store BM25 candidates, meeting recall went 3/28 → 25/28. See
+    // docs/adr/0025.
+    path: `ruv-meetings/${date}/${slug}-seg-${seg}`,
+    title: `${title} — ${firstTs}`,
     text: `${HEADER}segment starting ${firstTs} —\n\n` + buf.join('\n\n'),
     meeting: slug, date, ts: firstTs,
   });

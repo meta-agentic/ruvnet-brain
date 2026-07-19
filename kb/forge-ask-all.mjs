@@ -17,6 +17,40 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { searchKb } from './forge-ask.mjs';
 import { rerankPairs } from './forge-rerank.mjs';
+import { tokenize, buildCorpusStats, bm25Score } from './forge-hybrid.mjs';
+
+// TRANSCRIPT/dialogue stores need LEXICAL (BM25) candidate generation, not dense alone. A fact spoken
+// in passing ("…876 commits…") embeds poorly against a conceptual question, so dense buries it past
+// rank 40 — but it shares literal words with the question ("commits", "contributors") that BM25 catches
+// (measured: 876→BM25 #4, meta-wrapper→#1, DDoS→#5, all dense-absent past 40). We add each transcript
+// store's BM25-top-N passages to the pool so the ONE global cross-encoder can promote the true answer.
+// Grounded in cognitum-learn's dense+BM25+reranker design (cognitum-learn DDD-001). Repo stores are
+// untouched: dense already works there, and this only fires for stores in KB_TRANSCRIPT_STORES.
+// NOTE: this is only effective once the transcript store's passages carry UNIQUE paths (else doc-collapse
+// in forge-ask.mjs crushes them back into a few windows — the ruv-meetings 317→4 collapse bug).
+const TRANSCRIPT_STORES = new Set(
+  (process.env.KB_TRANSCRIPT_STORES || 'ruv-meetings').split(',').map((s) => s.trim()).filter(Boolean),
+);
+const isTranscriptStore = (name) => TRANSCRIPT_STORES.has(String(name).replace(/\.big$/, ''));
+const _mbm = new Map(); // dir|name -> { passages, toks, stats } (built once per process)
+function meetingBm25Candidates(dir, name, query, topN = 40) {
+  const key = `${dir}|${name}`;
+  let e = _mbm.get(key);
+  if (!e) {
+    const big = path.join(dir, `${name}.big.passages.jsonl`);
+    const small = path.join(dir, `${name}.passages.jsonl`);
+    const pf = fs.existsSync(big) ? big : small;
+    const passages = fs.readFileSync(pf, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    const toks = passages.map((p) => tokenize(p.text || ''));
+    e = { passages, toks, stats: buildCorpusStats(toks) };
+    _mbm.set(key, e);
+  }
+  const qt = tokenize(query);
+  return e.passages
+    .map((p, i) => ({ p, s: bm25Score(qt, e.toks[i], e.stats) }))
+    .sort((a, b) => b.s - a.s).slice(0, topN).filter((x) => x.s > 0)
+    .map(({ p }) => ({ path: p.path, title: p.title, fullText: p.text, text: p.text, bestDistance: 1.0, distance: 1.0 }));
+}
 
 // Discover the repos present in a bundle dir: every <repo>.rvf (the `.big.rvf` is the same repo's
 // sharp variant, not a separate repo; idmap/embed/passages sidecars are not stores). Returns the
@@ -51,10 +85,17 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
       // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
       // single source repo — otherwise the queried repo's own primer is crowded out by the other 18 before
       // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
-      const repoPool = name === 'concepts' ? Math.max(pool, 24) : pool;
+      // Transcript stores get a deeper dense pool (24) AND BM25 candidates; concepts gets 24; others 8.
+      const repoPool = (name === 'concepts' || isTranscriptStore(name)) ? Math.max(pool, 24) : pool;
       const hits = await searchKb({ dir, name, query, k: repoPool, n: repoPool });
-      perRepo[name] = hits.length;
-      return hits.map((h) => ({ ...h, repo: name }));
+      let cands = hits;
+      if (isTranscriptStore(name)) {
+        const seen = new Set(hits.map((h) => h.path));
+        const bm = meetingBm25Candidates(dir, name, query, 40).filter((c) => !seen.has(c.path));
+        cands = hits.concat(bm); // the global cross-encoder (rerankPairs below) then promotes the real answer
+      }
+      perRepo[name] = cands.length;
+      return cands.map((h) => ({ ...h, repo: name }));
     } catch (e) {
       perRepo[name] = `ERR: ${e.message}`;
       return [];
