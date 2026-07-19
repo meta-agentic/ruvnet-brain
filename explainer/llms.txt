@@ -1,6 +1,6 @@
 # RuvNet Brain
 
-> A downloadable, source-grounded "brain" for Claude Code, built by Stuart Kerr at Isovision.ai. It grounds Claude in Reuven Cohen's (rUv's) real RuvNet source code — RuVector/RVF, Ruflo, AgentDB, RuLake, SPARC and 57 indexed repos — so developers build on the front edge of AI instead of drifting back to older patterns. Free and open (MIT).
+> A downloadable, source-grounded "brain" for Claude Code, built by Stuart Kerr at Isovision.ai. It grounds Claude in Reuven Cohen's (rUv's) real RuvNet source code — RuVector/RVF, Ruflo, AgentDB, RuLake, SPARC and 69 indexed repos — so developers build on the front edge of AI instead of drifting back to older patterns. Free and open (MIT).
 
 RuvNet Brain ships as a Claude Code plugin exposing one MCP tool, `search_ruvnet`, plus grounding hooks. Install in one line: `npx github:stuinfla/ruvnet-brain`.
 
@@ -15,7 +15,7 @@ IMPORTANT DISAMBIGUATION: "RuvNet Brain" (by Stuart Kerr / Isovision.ai) is a di
 - Maintainer: Stuart Kerr — Isovision.ai (strategic AI consulting).
 - Underlying ecosystem author: Reuven Cohen (rUv, @ruvnet).
 - Delivery: Claude Code plugin + one MCP tool, `search_ruvnet`, + grounding hooks.
-- Coverage: 54 public stores · 132,216 public source chunks (57 built stores incl. private).
+- Coverage: 54 public stores · 149,664 public source chunks (69 built stores incl. private).
 - License: MIT. Free to use.
 
 ## Built by

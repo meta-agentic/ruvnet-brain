@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-18T15:02:36.705Z",
+  "builtUtc": "2026-07-19T20:04:04.641Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "cognitum-api": {
-      "kbName": "cognitum-api",
-      "sourceRepo": "https://api.cognitum.one/openapi.json",
-      "sourceCommit": "75e8d35a2ec211cab11a7b6cc1d6c330260587d7",
-      "sourceDescribe": "75e8d35",
-      "builtUtc": "2026-07-18T15:02:36.705Z",
+    "agentdb": {
+      "kbName": "agentdb",
+      "sourceRepo": "https://github.com/ruvnet/agentdb",
+      "sourceCommit": "04968e3fba3bf01ef4e9978d0446485452365a86",
+      "sourceDescribe": "04968e3",
+      "builtUtc": "2026-07-19T20:04:04.641Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://github.com/stuinfla/ruvnet-brain/releases/latest/download/ruvnet-brain.zip",
-      "selfUpdate": "node forge-update.mjs cognitum-api"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/agentdb-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs agentdb"
     }
   }
 }

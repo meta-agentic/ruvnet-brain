@@ -309,11 +309,30 @@ if (has('--publish')) {
       '--notes', `Automated nightly: ${todo.length ? `re-ingested upstream changes in: ${todo.map((p) => p.name).join(', ')}` : `shipped reader-script fixes (no corpus change — issue #29 class)`}. One product version — plugin ${next} + this knowledge bundle ship together; user installs pick both up automatically.`,
     ], { cwd: ROOT, stdio: 'inherit' });
 
-    console.log('[publish] committing version bump + stamped manifests, pushing');
-    execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'data/manifest.json', 'primer/ruvnet-primer.md'], { cwd: ROOT, stdio: 'inherit' });
+    console.log('[publish] syncing version to EVERY surface, committing, pushing');
+    // Propagate `next` to package.json / kb/package.json / manifest / primer / explainer — NOT just the
+    // four files this block used to add. Otherwise those surfaces drift behind plugin.json (the exact
+    // 2026-07-19 3.4.19-vs-3.4.20 split that reddened repo-count + version gates).
+    execFileSync(NODE, ['scripts/sync-version.mjs'], { cwd: ROOT, stdio: 'inherit' });
+    execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'package.json', 'kb/package.json',
+      'data/manifest.json', 'primer/ruvnet-primer.md', 'explainer/index.html'], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: ROOT, stdio: 'inherit' });
     execFileSync('git', ['push', 'origin', 'main'], { cwd: ROOT, stdio: 'inherit' });
-    NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest — ${todo.length ? `rebuilt: ${todo.map((p) => p.name).join(', ')}` : `reader-script fixes only`}`);
+    // npm publish — ATOMIC with the GitHub Release so npm `latest` can NEVER lag behind it. This block
+    // previously shipped GitHub + plugin but never touched npm, so every nightly left npm further behind
+    // (the 2026-07-19 npm 3.4.18 / GitHub 3.4.20 drift). Fail LOUD if npm cannot be published — GitHub
+    // being ahead of npm must abort the run visibly, never pass silently. One product version, every channel.
+    try {
+      let onNpm = '';
+      try { onNpm = execFileSync('npm', ['view', `ruvnet-brain@${next}`, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* not yet on npm — fine */ }
+      if (onNpm !== next) execFileSync('npm', ['publish'], { cwd: ROOT, stdio: 'inherit' });
+      execFileSync('npm', ['dist-tag', 'add', `ruvnet-brain@${next}`, 'latest'], { cwd: ROOT, stdio: 'inherit' });
+      console.log(`[publish] npm ${next} + \`latest\` — channels IN SYNC (npm == GitHub == plugin)`);
+    } catch (e) {
+      console.error(`[publish] FATAL: npm publish/dist-tag FAILED (${e.message.split('\n')[0]}). GitHub is now AHEAD of npm — the exact drift this guards against. The nightly aborts here; republish npm manually (\`npm publish && npm dist-tag add ruvnet-brain@${next} latest\`) and check npm auth in the launchd env.`);
+      process.exit(1);
+    }
+    NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest + npm — ${todo.length ? `rebuilt: ${todo.map((p) => p.name).join(', ')}` : `reader-script fixes only`}`);
     console.log(`[publish] DONE — ${tag} live. Users' heartbeats will pick up plugin + brain automatically.`);
   }
 }

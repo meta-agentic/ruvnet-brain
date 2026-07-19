@@ -16,7 +16,7 @@ const ALLOWED = new Set([coverage.built, coverage.catalogued, coverage.orgTotalA
 
 // explainer/index.html and explainer/llms.txt added 2026-07-18 (issues B4/B5): the LIVE public
 // marketing page hardcoded "56 repos" in ~8 places and llms.txt contradicted itself ("36 indexed
-// repos" on line 3 vs "57 RuvNet repos" on line 18) — neither was watched because they weren't in
+// repos" on line 3 vs "69 RuvNet repos" on line 18) — neither was watched because they weren't in
 // SURFACES. The detector already does the right thing; it just wasn't pointed at them.
 const SURFACES = [
   'README.md',
@@ -42,7 +42,7 @@ const MIN_CORPUS_MAGNITUDE = 20;
 // exemption can't silently swallow an unrelated real regression.
 const EXEMPT = new Set([
   'README.md::24 repos', // v1 (pre-2.0) baseline column in the "what 2.0 proved" before/after table
-  'README.md::24→57 verified repos', // same v1-baseline row, "24→<current>" delta phrasing
+  'README.md::24→69 verified repos', // same v1-baseline row, "24→<current>" delta phrasing
 ]);
 
 /** @param {string} src @returns {{text: string, n: number}[]} */
@@ -117,19 +117,19 @@ describe(`repo-count literals match data/manifest.json coverage (built=${coverag
 
   it('detector: does not flag the correct literals (57 / 181 / 248), the documented v1 baseline, or an open "N+" qualifier', () => {
     const known_good = [
-      'You have a source-grounded brain over 57 RuvNet (rUv / Reuven Cohen) repositories, exposed through the `ruvnet-brain` MCP server.',
-      '**57 repos** built (of 248 in the org), each verified by a live retrieval query',
-      'across the full 57-repo corpus, not just the 3-4 names that come to mind first',
-      'Covers: 57/181 repos built @ pinned SHAs',
-      '24 repos built | **57 repos** built (of 248 in the org)', // v1 baseline + current, same row
-      '24→57 verified repos', // v1-baseline delta phrasing
+      'You have a source-grounded brain over 69 RuvNet (rUv / Reuven Cohen) repositories, exposed through the `ruvnet-brain` MCP server.',
+      '**69 repos** built (of 248 in the org), each verified by a live retrieval query',
+      'across the full 69-repo corpus, not just the 3-4 names that come to mind first',
+      'Covers: 69/192 repos built @ pinned SHAs',
+      '24 repos built | **69 repos** built (of 248 in the org)', // v1 baseline + current, same row
+      '24→69 verified repos', // v1-baseline delta phrasing
       "or any of rUv's 20+ repos", // deliberately open lower-bound, not a precise count
       'This is a 20+-repo ecosystem, not just the 2-3 most commonly cited',
-      'any of the 181 catalogued, or any rUv repo',
+      'any of the 192 catalogued, or any rUv repo',
       // explainer B4/B5 — the fixed forms
-      '<span data-count="57" data-decimals="0">57</span> repos',
-      '57 repos indexed in total. Together they show the reassuring breadth',
-      'SPARC and 57 indexed repos',
+      '<span data-count="69" data-decimals="0">57</span> repos',
+      '69 repos indexed in total. Together they show the reassuring breadth',
+      'SPARC and 69 indexed repos',
     ];
     for (const src of known_good) {
       expect(staleLiterals('README.md', src), `unexpected stale hit in: ${src}`).toEqual([]);

@@ -5,10 +5,11 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_444 gists · refreshed 2026-07-18_
+_444 gists · refreshed 2026-07-19_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-18 | [Liar-Ai.md](https://gist.github.com/ruvnet/481d0f8c2190decead7b14164ae3323c) | Liar Ai: Multi-Modal Lie Detection System |
 | 2026-07-17 | [META_PROXY_V0_4.md](https://gist.github.com/ruvnet/f6fee134339afd1b3eaf7105557ec934) | Meta Proxy v0.4.0 — signed routing sidecar for MetaHarness and Ruflo |
 | 2026-07-17 | [metaharness-v0.3.2-meta-proxy.md](https://gist.github.com/ruvnet/192766132e1e42ee3ec4d670f38c7fb1) | MetaHarness v0.3.2 optional signed Meta-Proxy sidecar |
 | 2026-07-17 | [gistfile0.txt](https://gist.github.com/ruvnet/2b37060362af57bbffd421aa09e4db50) | Ruflo v3.32.2 stable Codex integration, recovery, and validation guide |
@@ -89,7 +90,6 @@ _444 gists · refreshed 2026-07-18_
 | 2026-06-14 | [gist-metaharness-coding.md](https://gist.github.com/ruvnet/640c8b74b2e57690f81d130acf3cf439) | Engineering pod in one command for Claude Code: architect (opus), implementer (sonnet), reviewer (sonnet), test-writer ( |
 | 2026-06-14 | [gist-metaharness-codex.md](https://gist.github.com/ruvnet/0fbbffdbeebee890f688b378f99a271a) | A one-command minimal scaffold for OpenAI Codex CLI agents — host config, starter agent, hooks, and a built-in doctor ch |
 | 2026-06-14 | [gist-metaharness-claude-code.md](https://gist.github.com/ruvnet/79808ffb89eeb080b1c00bf79fba33e1) | MetaHarness × Claude Code: one command scaffolds a workspace + plugin — CLAUDE.md, .claude/ settings, MCP config, slash  |
-| 2026-06-14 | [Liar-Ai.md](https://gist.github.com/ruvnet/481d0f8c2190decead7b14164ae3323c) | Liar Ai: Multi-Modal Lie Detection System |
 | 2026-06-14 | [rufield-gist.md](https://gist.github.com/ruvnet/9a16984c5c1bb2e75c20b6d2096427ad) | RuField MFS — the open spec for camera-free multimodal field sensing (ADR-260) |
 | 2026-06-14 | [.tmp-gist-iter62.md](https://gist.github.com/ruvnet/1b46293206a9dd9a729b18c48c305222) | agent-harness-generator — plain-language explainer |
 | 2026-06-13 | [Gemini.md](https://gist.github.com/ruvnet/811aeab1aea67eb49ddf9c4b860c5f7b) | Free & Secure API Key Rotator for Google Gemini 2.5 Pro (Deno Edge Functions) |

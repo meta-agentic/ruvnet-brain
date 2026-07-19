@@ -83,3 +83,22 @@ docs/Ruv_advice/
 
 # meeting-transcript KB store — semi-private community calls, LOCAL brain only (also fenced in kb/PRIVATE-STORES.json)
 kb/ruv-meetings.*
+
+# PRIVATE-store human-authored files (primers/cards) — fenced like the stores themselves (never commit)
+kb/cognitum-seed-primer.md
+kb/cognitum-seed-*.md
+kb/cognitum-v0-appliance-primer.md
+kb/cognitum-v0-appliance-*.md
+kb/cognitum-platform-docs-primer.md
+kb/cognitum-platform-docs-*.md
+kb/cognitum-spoton-primer.md
+kb/cognitum-spoton-*.md
+kb/cognitum-trader-primer.md
+kb/cognitum-trader-*.md
+kb/cognitum-trader-jackishim-primer.md
+kb/cognitum-trader-jackishim-*.md
+kb/ruv-meetings-primer.md
+kb/ruv-meetings-*.md
+
+# stray local model cache — never commit
+kb/models-cache/
