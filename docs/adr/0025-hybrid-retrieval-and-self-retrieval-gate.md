@@ -10,7 +10,9 @@ supersedes: []
 relates: [ADR-0003, ADR-0004]
 ---
 
-**Status**: ACCEPTED / SHIPPED (2026-07-19), but NOT the way first written. The *global* hybrid /
+**Status**: Accepted (shipped 2026-07-19)
+
+Shipped, but NOT the way first written. The *global* hybrid /
 query-router / store-routing attempt was reverted (no repo-safe gain — see the Outcome table). The fix
 that actually shipped is **narrower and verified**: (1) every meeting passage gets a **unique path**
 (`scripts/ingest-meeting.mjs`) so `forge-ask.mjs` doc-collapse no longer crushes 317 segments into 4
