@@ -36,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -79,10 +79,26 @@ export function judge(job, hb, loaded, now) {
   }
   const ageHours = (now - stamp) / HOUR;
 
-  // Started and never finished: the receipt is stuck in "running". Either it hung or it was killed
-  // hard enough to skip its own trap. Both are failures — and both used to look like silence.
+  // Started and never finished? DERIVE it from process liveness, not wall-clock alone (2026-07-19):
+  // a full corpus rebuild legitimately runs 12h+ (five changed repos = a long day), and the old
+  // ">6h running ⇒ FAILING" rule false-alarmed on exactly that — a 13.5h nightly whose worker was
+  // verifiably at 70% CPU got paged as "hung". The receipt carries the wrapper's pid: if that pid is
+  // STILL ALIVE (and is genuinely our wrapper, not a recycled pid), the job is a long run in
+  // progress — OK, stated as such. If the pid is GONE while the receipt still says "running", THAT
+  // is the real started-and-never-finished (SIGKILL/power loss skipped the trap) — FAILING.
   if (hb.state === 'running' && ageHours > 6) {
-    return { state: FAILING, ageHours, detail: `started ${ageHours.toFixed(1)}h ago and NEVER FINISHED (hung or killed)` };
+    let alive = false;
+    if (hb.pid) {
+      try {
+        process.kill(hb.pid, 0); // signal 0 = existence check, sends nothing
+        const cmd = execFileSync('ps', ['-o', 'command=', '-p', String(hb.pid)], { encoding: 'utf8' });
+        alive = cmd.includes('job-heartbeat.sh') && cmd.includes(job.label); // guard against pid recycling
+      } catch { alive = false; }
+    }
+    if (alive) {
+      return { state: OK, ageHours, detail: `LONG RUN in progress — running ${ageHours.toFixed(1)}h, wrapper pid ${hb.pid} verified alive (full rebuilds legitimately take 12h+)` };
+    }
+    return { state: FAILING, ageHours, detail: `started ${ageHours.toFixed(1)}h ago and NEVER FINISHED — receipt says "running" but pid ${hb.pid ?? '?'} is GONE (killed/power loss skipped the trap)` };
   }
   if (ageHours > job.maxAgeHours) {
     return { state: STALE, ageHours, detail: `last ran ${ageHours.toFixed(1)}h ago — its schedule allows ${job.maxAgeHours}h. It stopped.` };
