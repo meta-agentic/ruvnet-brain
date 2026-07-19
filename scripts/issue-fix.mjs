@@ -97,12 +97,26 @@ const ALLOWED_TOOLS = [
 ].join(' ');
 
 function ghJson(args) {
-  const res = spawnSync(GH_BIN, args, { encoding: 'utf8' });
-  if (res.status !== 0) {
+  // Retry ONCE on a transient network-shaped failure (2026-07-19: a 1am GitHub API blip — "TLS
+  // handshake timeout" / "unexpected EOF" — failed the whole run and gonged the phone, when 20s of
+  // patience was the honest fix). Same bounded philosophy as nightly-wrapper's retry: blind retries
+  // fix exactly one class (transient network), so retry exactly once, log the first failure, and
+  // still fail LOUD if it happens twice. Never a silent swallow.
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const res = spawnSync(GH_BIN, args, { encoding: 'utf8' });
+    if (res.status === 0) return JSON.parse(res.stdout);
     const err = (res.stderr || res.stdout || '').trim();
-    throw new Error(`gh ${args.join(' ')} failed (exit ${res.status}): ${err}`);
+    lastErr = new Error(`gh ${args.join(' ')} failed (exit ${res.status}): ${err}`);
+    const transient = /TLS handshake|unexpected EOF|timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|connection refused|temporarily unavailable/i.test(err);
+    if (attempt === 1 && transient) {
+      console.error(`issue-fix: transient gh/network failure (${err.slice(0, 90)}) — retrying once in 20s`);
+      spawnSync('sleep', ['20']);
+      continue;
+    }
+    break;
   }
-  return JSON.parse(res.stdout);
+  throw lastErr;
 }
 
 /** Same resolution order as issue-watch.mjs / scripts/notify.sh. */

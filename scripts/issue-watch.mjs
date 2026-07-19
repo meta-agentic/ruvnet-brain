@@ -38,12 +38,24 @@ const STATUS_PATH = path.join(os.homedir(), '.cache', 'ruvnet-brain', 'open-issu
 const GH_BIN = process.env.GH_BIN || 'gh';
 
 function ghJson(args) {
-  const res = spawnSync(GH_BIN, args, { encoding: 'utf8' });
-  if (res.status !== 0) {
+  // Retry ONCE on a transient network-shaped failure (2026-07-19, same class as issue-fix's 1am
+  // "TLS handshake timeout" page): 20s of patience absorbs a blip; a second failure still fails
+  // LOUD. Bounded, logged, never silent.
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const res = spawnSync(GH_BIN, args, { encoding: 'utf8' });
+    if (res.status === 0) return JSON.parse(res.stdout);
     const err = (res.stderr || res.stdout || '').trim();
-    throw new Error(`gh ${args.join(' ')} failed (exit ${res.status}): ${err}`);
+    lastErr = new Error(`gh ${args.join(' ')} failed (exit ${res.status}): ${err}`);
+    const transient = /TLS handshake|unexpected EOF|timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|connection refused|temporarily unavailable/i.test(err);
+    if (attempt === 1 && transient) {
+      console.error(`issue-watch: transient gh/network failure (${err.slice(0, 90)}) — retrying once in 20s`);
+      spawnSync('sleep', ['20']);
+      continue;
+    }
+    break;
   }
-  return JSON.parse(res.stdout);
+  throw lastErr;
 }
 
 /** Resolve the ntfy topic the same way the rest of the repo does: env, then the machine-wide
