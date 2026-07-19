@@ -7,6 +7,19 @@ Thank you to everyone who has helped make RuvNet Brain better!
 
 ## Code Contributors
 
+- **[lafinak](https://github.com/lafinak)** (Jan Lafko) — Two hand-verified reader investigations,
+  done with the project's own re-derive-don't-assert discipline (#27, #29):
+  - Traced the second-query deadlock on a corrupted model cache to 27/28 threads parked in
+    `futex_wait_queue` (via `/proc`), designed the corrupted-cache self-heal, and verified his own fix
+    by deliberately re-truncating the files — then wrote the minimal regression repro now wired into
+    the suite (`tests/regression/reader-deadlock-pr0p.mjs` + `tests/integration/reader-deadlock-regression.test.mjs`),
+    flagging the subtlety that only an **OS-level** timeout can catch a deadlock that freezes the event
+    loop (an in-process `setTimeout`/vitest timeout never fires) (#29)
+  - Chased the onnxruntime `blob:`-Worker rejection upstream far enough to find the supposed fix never
+    covered onnxruntime-node's automatic native→wasm fallback path (#29)
+  - Surfaced, from an ordinary dev session, the `search_ruvnet` staleness-caveat gap and an exact-name
+    ranking miss (an exact package-name query not ranking that package first) (#29)
+
 - **[evaplusai](https://github.com/evaplusai)** (Eva Draganova) — Field-tested the brain through a real
   3-day production build and turned what she learned into fixes (PR #8)
   - Relevance-gated the TAKE-THE-WHEEL hook with a two-signal gate (build verb **and**
