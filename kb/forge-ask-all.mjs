@@ -70,6 +70,26 @@ export function discoverRepos(dir) {
 export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   const list = (repos && repos.length) ? repos : discoverRepos(dir);
   const perRepo = {};
+  // CORPUS AGE (issue #31, Jan Lafko): the brain is a periodic snapshot, and a model quoting a
+  // version from it had NO signal that the fact might trail live reality. Derive the queried
+  // stores' ages from the store files' own mtimes (always present, no extra plumbing) so every
+  // response can carry an honest staleness caveat instead of implying liveness.
+  const corpusAge = (() => {
+    let oldest = null, newest = null;
+    for (const name of list) {
+      for (const cand of [`${name}.big.rvf`, `${name}.rvf`]) {
+        const p = path.join(dir, cand);
+        if (!fs.existsSync(p)) continue;
+        const t = fs.statSync(p).mtimeMs;
+        if (oldest === null || t < oldest.t) oldest = { t, name };
+        if (newest === null || t > newest.t) newest = { t, name };
+        break;
+      }
+    }
+    if (!oldest) return null;
+    const days = (t) => (Date.now() - t) / 86400000;
+    return { oldestDays: +days(oldest.t).toFixed(1), oldestRepo: oldest.name, newestDays: +days(newest.t).toFixed(1) };
+  })();
   // Fan out across repos concurrently — but BOUNDED (issue #30, found+fixed by Jan Lafko). The
   // unbounded Promise.all here was a real OOM bomb: each repo's searchKb() spins up its own store
   // handles, and an unscoped query fanned ~53+ repos at once — measured 513MB peak for ONE repo,
@@ -141,8 +161,41 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     const eff = (r.repo === 'concepts' && r.path) ? (r.path.split('/')[0] || r.repo) : r.repo;
     if (r.ceScore != null && isNamed(eff)) { r.ceScore += NAME_BOOST; r.nameBoosted = true; }
   }
+  // EXACT PACKAGE-NAME boost (issue #31, found by Jan Lafko): a query naming a package EXACTLY
+  // ("@ruvector/rvf") must rank that package's own manifest above near-name siblings — measured
+  // live: rvf-node's package.json beat rvf's by ce 7.13 vs 6.67 on rvf's own exact name. The repo
+  // affinity above can't see this (both hits are the same repo). Scoped @-package tokens only —
+  // precise, zero prose false-positives — and the match is the manifest's own `"name": "<token>"`
+  // field (the self-identifying artifact), never a substring of the path.
+  const pkgTokens = [...new Set(query.match(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*/gi) || [])];
+  if (pkgTokens.length) {
+    for (const r of ranked) {
+      if (r.ceScore == null) continue;
+      const body = r.fullText || r.text || '';
+      if (pkgTokens.some((p) => body.includes(`"name": "${p}"`) || body.includes(`"name":"${p}"`))) {
+        r.ceScore += NAME_BOOST; r.exactPkgBoosted = true;
+      }
+    }
+  }
+  // EXACT-ARTIFACT-NAME boost (issue #31, found by @lafinak): an exact package/module-name query must
+  // rank the EXACT-named artifact first, not a prefix-sibling — `@ruvector/rvf` was losing to
+  // `@ruvector/rvf-node` for a query that named `@ruvector/rvf` exactly. Extract the scoped names the
+  // query explicitly contains; a candidate whose TITLE equals one exactly gets a boost strong enough to
+  // clear a sibling that merely shares the prefix. Narrow by construction (needs an `@scope/name` in the
+  // query AND an exact title match), so repo/prose questions are untouched.
+  const queriedNames = new Set(
+    [...String(query).matchAll(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/gi)].map((m) => m[0].toLowerCase()),
+  );
+  if (queriedNames.size) {
+    const EXACT_NAME_BOOST = 3.0; // > NAME_BOOST (2.0) so the exact artifact clears a prefix-sibling
+    for (const r of ranked) {
+      if (r.ceScore != null && r.title && queriedNames.has(String(r.title).toLowerCase())) {
+        r.ceScore += EXACT_NAME_BOOST; r.exactNameBoosted = true;
+      }
+    }
+  }
   ranked.sort((a, b) => (b.ceScore ?? -Infinity) - (a.ceScore ?? -Infinity));
-  return { repos: list, perRepo, results: ranked.slice(0, k), pooled: candidates.length };
+  return { repos: list, perRepo, results: ranked.slice(0, k), pooled: candidates.length, corpusAge };
 }
 
 function parseArgs() {

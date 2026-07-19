@@ -115,7 +115,7 @@ async function handle(msg) {
         const query = String(args.query || '').trim();
         const k = Math.max(1, parseInt(args.k ?? 6, 10) || 6);
         if (!query) return err(id, -32602, 'query is required');
-        const { results: rawResults, repos, perRepo } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const { results: rawResults, repos, perRepo, corpusAge } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
         // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
@@ -155,7 +155,14 @@ async function handle(msg) {
         const degraded = failedRepos.length
           ? `⚠ DEGRADED SEARCH: ${failedRepos.length}/${repos.length} repos failed (${failedRepos.map(([n]) => n).join(', ')}) — first error: ${failedRepos[0][1].slice(0, 200)}\nResults below cover only the healthy repos. Mention this degradation to the user.\n\n`
           : '';
-        const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n\n`;
+        // Staleness caveat (issue #31, Jan Lafko): the brain is a periodic SNAPSHOT — say so on every
+        // response, with the queried stores' real ages, so a model never quotes a version/dist-tag as
+        // if the corpus were live. Derived from store-file mtimes (searchAll.corpusAge), never guessed.
+        const age = corpusAge;
+        const staleness = age
+          ? `Corpus snapshot ages: newest store ${age.newestDays}d old, oldest ${age.oldestDays}d (${age.oldestRepo}). Version/"latest" facts may trail live npm/GitHub — for currency claims, verify against the live registry before asserting.\n\n`
+          : '';
+        const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n${staleness}`;
         const body = text
           ? degraded + header + text
           : degraded + header + '(no results — the search ran; nothing in the corpus matched this query)';

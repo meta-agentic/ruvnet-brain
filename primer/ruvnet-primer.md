@@ -1,6 +1,6 @@
 # The RuvNet Primer — the building blocks, on one page
 
-`Brain version: v3.4.18-dev · Built: 2026-07-17 · Covers: 57/181 repos built (54 @ pinned SHAs; concepts, ruv-gists, ruv-meetings are generated stores without a single source SHA — see data/manifest.json)`
+`Brain version: v3.4.19-dev · Built: 2026-07-17 · Covers: 57/181 repos built (54 @ pinned SHAs; concepts, ruv-gists, ruv-meetings are generated stores without a single source SHA — see data/manifest.json)`
 
 > **What this is:** a portable, source-grounded "brain" over the reusable RuvNet building blocks by
 > **Reuven Cohen (rUv)**. It ships as a **Claude Code plugin** so your assistant answers from Ruv's real
