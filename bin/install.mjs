@@ -73,6 +73,8 @@ const FLAG_ENABLE_NIGHTLY = argv.includes('--enable-nightly'); // schedule that 
 const FLAG_DISABLE_NIGHTLY = argv.includes('--disable-nightly'); // remove the nightly schedule
 const FLAG_NO_NIGHTLY_PROMPT = argv.includes('--no-nightly-prompt'); // don't offer nightly auto-updates at the end of an install
 const FLAG_NO_TELEMETRY = argv.includes('--no-telemetry'); // decline anonymous usage counts without being asked
+// High-impact, so it needs its OWN flag — `-y` cannot install a launchd job (see ask()'s note).
+const FLAG_ENABLE_SPEND_GUARD = argv.includes('--enable-spend-guard');
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
@@ -1186,9 +1188,10 @@ export async function offerSpendGuard() {
   info(`${c.bold('Strongly recommended:')} an hourly check that alerts you the moment an automated agent`);
   info('fleet floods a project — the pattern that has quietly burned real money. Alert-only, never spends.');
 
-  if (!process.stdin.isTTY && !FLAG_YES) { info(`No terminal to prompt on — install it any time by re-running  ${c.bold('npx ruvnet-brain')}`); return 'recommended'; }
+  // NOT gated on FLAG_YES — second launchd job, same rule as the nightly updater above.
+  if (!process.stdin.isTTY && !FLAG_ENABLE_SPEND_GUARD) { info(`No terminal to prompt on — install it any time with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`); return 'recommended'; }
   let yes = true;
-  if (!FLAG_YES) {
+  if (!FLAG_ENABLE_SPEND_GUARD) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((resolve) => rl.question(`    ${c.cyan('?')} Install the spend watchdog? ${c.dim('[Y/n]')} `, resolve));
     rl.close();
@@ -1333,15 +1336,18 @@ export async function offerNightly() {
 
   info(`${c.bold('Recommended:')} your brain updates itself while you sleep — new repos, new gists, zero effort.`);
 
-  if (!process.stdin.isTTY && !FLAG_YES) {
+  // NOT gated on FLAG_YES — see the high-impact consent note on ask(). This installs a launchd job
+  // that pulls code from GitHub on a schedule, which is exactly the kind of change a blanket `-y`
+  // must never authorize. It takes the explicit --enable-nightly, or a human answering in a terminal.
+  if (!process.stdin.isTTY && !FLAG_ENABLE_NIGHTLY) {
     // No terminal to ask on (CI / piped install) — recommend clearly instead of prompting.
     info(`No interactive terminal here, so I won't prompt. Enable it any time with one command:`);
     info(`  ${c.bold('npx ruvnet-brain --enable-nightly')}`);
     return 'recommended';
   }
 
-  let yes = true; // --yes accepts every optional offer, this one included
-  if (!FLAG_YES) {
+  let yes = true;
+  if (!FLAG_ENABLE_NIGHTLY) {
     // Not ask(): its parser treats anything but y/yes as no. Here the DEFAULT is yes — only an
     // explicit n/no declines (parseNightlyAnswer holds that contract, and the tests hold it there).
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -1451,8 +1457,28 @@ export async function offerTelemetry(cacheDir) {
 }
 
 // ── tiny interactive yes/no — SAFE in non-TTY (returns the default; never blocks a piped install) ──
-function ask(question, def = false) {
-  if (FLAG_YES) return Promise.resolve(true);
+/**
+ * @param {string} question
+ * @param {boolean} def answer used when there is no terminal to ask on
+ * @param {{blanketYes?: boolean}} opts blanketYes:false means --yes does NOT answer this one
+ *
+ * HIGH-IMPACT CONSENT (2026-07-20). `--yes` is documented as "accept every optional offer", and it
+ * used to include the two changes nobody would call optional: installing a persistent LaunchAgent
+ * that pulls code from GitHub on a schedule, and editing a global config file. Reported by a user on
+ * a CORPORATE machine whose enterprise policy correctly blocked the plugin/MCP install but had no
+ * rule covering a launchd job — so the one thing that survived was the background daemon.
+ *
+ * It almost certainly arrived via an AI agent: hit an interactive prompt, cannot answer it, re-run
+ * with `-y`. Entirely reasonable behaviour, and with blanket consent it silently authorizes a
+ * daemon. rUv's own ADR-302 already says why this is wrong — "accepting the enrollment screen is
+ * not blanket authorization... four distinct decisions, each with its own consent, its own prompt
+ * moment, and its own record." We were violating his design inside our own installer.
+ *
+ * So: persistent background jobs and global-config edits require their OWN explicit flag. There is
+ * no combination of `-y` alone that installs a daemon.
+ */
+function ask(question, def = false, { blanketYes = true } = {}) {
+  if (FLAG_YES && blanketYes) return Promise.resolve(true);
   if (!process.stdin.isTTY) return Promise.resolve(def);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const suffix = def ? c.dim('[Y/n]') : c.dim('[y/N]');
@@ -1605,7 +1631,12 @@ async function offerClaudeMd() {
   );
   const yes =
     FLAG_ENHANCE_CLAUDE_MD ||
-    (await ask(`Add a short RuvNet-Brain section to ${existing ? 'your' : 'a new'} ~/.claude/CLAUDE.md?`, false));
+    // blanketYes:false — editing a GLOBAL config file is not something `-y` gets to decide.
+    (await ask(
+      `Add a short RuvNet-Brain section to ${existing ? 'your' : 'a new'} ~/.claude/CLAUDE.md?`,
+      false,
+      { blanketYes: false },
+    ));
   if (!yes) {
     info('skipped — the plugin hooks already enforce grounding every turn; this was just extra reinforcement');
     return;
