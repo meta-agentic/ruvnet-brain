@@ -1,7 +1,7 @@
 {
-  "brainVersion": "3.4.20-dev",
-  "generated": "2026-07-19T21:03:30.985Z",
-  "generatedHuman": "Sun, 19 Jul 2026 21:03:30 GMT",
+  "brainVersion": "3.4.21-dev",
+  "generated": "2026-07-20T07:20:26.068Z",
+  "generatedHuman": "Mon, 20 Jul 2026 07:20:26 GMT",
   "coverage": {
     "built": 69,
     "catalogued": 192,
@@ -221,7 +221,7 @@
       "name": "ruvnet",
       "tier": "T2",
       "stars": 217,
-      "builtFromSha": "776dc65c72aeb4f405f0eb408fc7f54535ec4fee",
+      "builtFromSha": "2c02fb59ffcd2c3826908b74cc6e68e7a4e363fb",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -301,7 +301,7 @@
       "name": "musica",
       "tier": "T2",
       "stars": 17,
-      "builtFromSha": "94e0fb56cd22d06ad1b8289c7ea4440aa9a46e5b",
+      "builtFromSha": "cb5caf88bc19283294cf6f350cae8ef81e0d5c6c",
       "latestRemoteSha": null,
       "status": "built"
     },
