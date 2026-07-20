@@ -459,6 +459,28 @@ function installReader(cacheDir) {
   ok('reader installed');
 }
 
+// ── plugin presence: the ONLY reliable proof the slash commands will exist ───────────────────────
+// Reported by a user on 3.4.21-dev whose install was otherwise healthy: `/rvbc` returned
+// "Unknown command: /rvbc. Did you mean /rvf?". search_ruvnet worked, the KB was current — the
+// plugin had simply never landed, and the installer had said everything was fine.
+//
+// The brain ships as TWO independent artifacts and this is the one people lose:
+//   • KB + search_ruvnet  — installed by this script into ~/.cache/ruvnet-brain
+//   • the Claude Code plugin — slash commands, the Console, the grounding hook
+// Checking the commands directory on disk is what distinguishes them; a `claude plugin install`
+// exit code does not.
+/** @returns {string|null} the commands dir if the plugin is really installed, else null */
+function pluginCommandsDir() {
+  const candidates = [
+    path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', 'ruvnet-brain', 'plugin', 'commands'),
+    path.join(os.homedir(), '.claude', 'plugins', 'ruvnet-brain', 'commands'),
+  ];
+  for (const dir of candidates) {
+    try { if (fs.existsSync(path.join(dir, 'rvbc.md'))) return dir; } catch { /* unreadable — treat as absent */ }
+  }
+  return null;
+}
+
 // ── step: wire the Claude Code plugin ────────────────────────────────────────────────────────────
 function wirePlugin() {
   step(
@@ -480,15 +502,30 @@ function wirePlugin() {
   }
 
   const addedMarket = tryRun('claude', ['plugin', 'marketplace', 'add', 'stuinfla/ruvnet-brain']);
-  if (!addedMarket) warn(`couldn't add the marketplace automatically (it may already be added — that's fine).`);
+  // Deliberately NOT reassuring here. This used to say "it may already be added — that's fine",
+  // which is a GUESS about someone else's machine, and when it was wrong the user finished the
+  // install with a working search_ruvnet, no slash commands, and a message telling them all was
+  // well. The real state is checked below; nothing is declared fine until it has been looked at.
+  if (!addedMarket) info(`marketplace add didn't report success — checking what actually landed…`);
 
-  const installed = tryRun('claude', ['plugin', 'install', 'ruvnet-brain@ruvnet-brain', '--scope', 'user']);
-  if (installed) {
+  tryRun('claude', ['plugin', 'install', 'ruvnet-brain@ruvnet-brain', '--scope', 'user']);
+
+  // NEVER take "installed" on faith — same discipline verifyInstall() applies to the KB. An exit
+  // code says the command ran, not that the plugin is usable; the commands either exist on disk or
+  // they do not. This is the difference between `/rvbc` working and "Unknown command: /rvbc".
+  const commandsDir = pluginCommandsDir();
+  if (commandsDir) {
     ok('plugin installed at user scope (global, alongside Ruflo / RuVector)');
+    info(`  commands available after a restart: ${c.bold('/rvbc')}, ${c.bold('/ruvnet-brain:configure')}`);
     return { wired: true, manualMarketplace, manualInstall };
   }
 
-  warn(`couldn't install the plugin automatically. Run these two commands yourself:`);
+  // The honest failure. The brain still WORKS — this is the difference between a broken install and
+  // a partial one, and the user is told exactly which they have instead of being congratulated.
+  warn(`the plugin did NOT land — so slash commands like ${c.bold('/rvbc')} will not exist yet.`);
+  info(`${c.green('Your brain still works')}: search_ruvnet is wired and Claude will ground answers with it.`);
+  info(`Only the plugin extras (slash commands, the Console, the grounding hook) are missing.`);
+  info(`Run these two yourself to finish:`);
   info(`  ${c.bold(manualMarketplace)}`);
   info(`  ${c.bold(manualInstall)}`);
   return { wired: false, manualMarketplace, manualInstall };
@@ -532,7 +569,10 @@ function verifyInstall(cacheDir) {
   if (mcp) ok('search_ruvnet server present (this is what Claude calls to ground answers)');
   else warn('forge-mcp-all.mjs missing — the brain unpacked incompletely');
 
-  return { repos, reader, mcp };
+  // Plugin presence is part of "what is really on disk" — it is the difference between `/rvbc`
+  // working and "Unknown command". A user whose plugin never landed had no way to see that.
+  const plugin = pluginCommandsDir() !== null;
+  return { repos, reader, mcp, plugin };
 }
 
 // ── step: warm the model + prove grounding with one real question (best-effort, never fatal) ──────
@@ -831,7 +871,7 @@ function feedbackHealthLines(cacheDir) {
   const env = detectEnvironment();
   const allGreen = s.repos > 0 && s.reader && s.mcp;
   return [
-    `${s.repos} repo stores on disk · reader ${s.reader ? 'ok' : 'MISSING'} · search_ruvnet ${s.mcp ? 'ok' : 'MISSING'}`,
+    `${s.repos} repo stores on disk · reader ${s.reader ? 'ok' : 'MISSING'} · search_ruvnet ${s.mcp ? 'ok' : 'MISSING'} · plugin ${s.plugin ? 'ok' : 'NOT INSTALLED (no /rvbc)'}`,
     `toolkit: Ruflo ${env.ruflo ? 'present' : 'not found'} · RuVector ${env.ruvector ? 'present' : 'not found'} · claude CLI ${env.claude ? 'present' : 'not found'}`,
     allGreen ? 'verdict: Healthy — installed and reachable' : 'verdict: Needs attention — re-run npx ruvnet-brain',
   ];

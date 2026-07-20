@@ -100,6 +100,22 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   // most of the parallel wall-clock win while small containers keep the same hard memory bound.
   // Each repo's error stays isolated to its own perRepo entry.
   const CONCURRENCY = Math.max(1, parseInt(process.env.KB_CONCURRENCY || '5', 10) || 5);
+
+  // EXACT-NAME RESCUE (issue #33 Part A, Jan Lafko / @lafinak).
+  // The scoped names the query explicitly contains. Hoisted ABOVE the per-repo pool cutoff because
+  // of the bug Jan found: #31's exact-name boost runs after reranking, but each repo only contributes
+  // its top-`pool` passages by RAW relevance, so `@ruvector/rvf`'s own manifest was discarded before
+  // the boost could ever see it — in a large repo the exact artifact simply never reached the pool.
+  // A boost cannot rescue what was never a candidate. (#31's own verification missed this because it
+  // used a target that was already pool-competitive, so it never exercised the exclusion path.)
+  const queriedNames = new Set(
+    [...String(query).matchAll(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/gi)].map((m) => m[0].toLowerCase()),
+  );
+  // Searching deeper costs real time, so it happens ONLY when the query names an artifact exactly —
+  // the deeper hits are then discarded except for exact title matches, which are force-kept. Ordinary
+  // prose questions retrieve exactly as before.
+  const RESCUE_DEPTH = Math.max(64, pool);
+
   const searchOne = async (name) => {
     try {
       // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
@@ -107,8 +123,21 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
       // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
       // Transcript stores get a deeper dense pool (24) AND BM25 candidates; concepts gets 24; others 8.
       const repoPool = (name === 'concepts' || isTranscriptStore(name)) ? Math.max(pool, 24) : pool;
-      const hits = await searchKb({ dir, name, query, k: repoPool, n: repoPool });
+      // Deepen ONLY for exact-name queries (#33 Part A); everything past repoPool is discarded below
+      // except exact title matches, so ordinary questions keep their existing candidate set exactly.
+      const depth = queriedNames.size ? Math.max(repoPool, RESCUE_DEPTH) : repoPool;
+      const hits = await searchKb({ dir, name, query, k: depth, n: depth });
       let cands = hits;
+      if (queriedNames.size && hits.length > repoPool) {
+        const top = hits.slice(0, repoPool);
+        const keptPaths = new Set(top.map((h) => h.path));
+        // Force-keep any deeper hit whose TITLE is exactly a name the query asked for. This is the
+        // whole fix: the artifact now REACHES the pool, so #31's boost can act on it.
+        const rescued = hits
+          .slice(repoPool)
+          .filter((h) => h.title && queriedNames.has(String(h.title).toLowerCase()) && !keptPaths.has(h.path));
+        cands = rescued.length ? top.concat(rescued) : top;
+      }
       if (isTranscriptStore(name)) {
         const seen = new Set(hits.map((h) => h.path));
         const bm = meetingBm25Candidates(dir, name, query, 40).filter((c) => !seen.has(c.path));
@@ -183,9 +212,7 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   // query explicitly contains; a candidate whose TITLE equals one exactly gets a boost strong enough to
   // clear a sibling that merely shares the prefix. Narrow by construction (needs an `@scope/name` in the
   // query AND an exact title match), so repo/prose questions are untouched.
-  const queriedNames = new Set(
-    [...String(query).matchAll(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/gi)].map((m) => m[0].toLowerCase()),
-  );
+  // (`queriedNames` is computed once, above the pool cutoff — see the EXACT-NAME RESCUE note there.)
   if (queriedNames.size) {
     const EXACT_NAME_BOOST = 3.0; // > NAME_BOOST (2.0) so the exact artifact clears a prefix-sibling
     for (const r of ranked) {

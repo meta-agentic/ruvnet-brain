@@ -57,8 +57,20 @@ export function findRepoCountLiterals(src) {
   // than needing a per-mention exemption. Filler between the digit and the repo-word is capped at
   // 50 chars and may not cross a sentence end / table-cell boundary (".", "|", newline), so this
   // can't accidentally bridge two unrelated numbers separated by prose.
-  const reSpaced = new RegExp(`\\b(\\d{1,4})(?!\\+)\\b(?:(?![.|\\n])[\\s\\S]){0,50}?\\b${REPO_WORD}\\b`, 'gi');
-  const reHyphen = new RegExp(`\\b(\\d{1,4})(?!\\+)-repos?\\b`, 'gi');
+  // `(?<!\d\.)` — never treat a SEMVER COMPONENT as a repo count. Real false positive: the primer's
+  // header line "…v3.4.21-dev · Built: 2026-07-20 · Covers: 69/192 repos" made the detector read the
+  // patch number `21` (the `-` after it is a word boundary) and then walk 40-odd filler chars to
+  // "repos", reporting a stale count on a line whose actual claim — 69/192 — was correct. The
+  // published number was right and the gate cried wolf, which is how a gate loses its authority.
+  // Two guards, both added after REAL false positives on the primer's own header line
+  // "…<version> · Built: <date> · Covers: 69/192 repos", whose actual claim (69/192) is correct:
+  //   (?<!\d\.)  — a SEMVER COMPONENT is never a repo count. The patch number was being read as
+  //                one, because the `-` before a prerelease suffix is a word boundary.
+  //   `·` in the filler exclusion — a middle dot separates INDEPENDENT facts. Without it the walk
+  //                crossed from the build DATE into the count and reported `2026` as a repo count
+  //                (found by this file's own detector tests, after the semver fix unmasked it).
+  const reSpaced = new RegExp(`(?<!\\d\\.)\\b(\\d{1,4})(?!\\+)\\b(?:(?![.|·\\n])[\\s\\S]){0,50}?\\b${REPO_WORD}\\b`, 'gi');
+  const reHyphen = new RegExp(`(?<!\\d\\.)\\b(\\d{1,4})(?!\\+)-repos?\\b`, 'gi');
   for (const re of [reSpaced, reHyphen]) {
     for (const m of src.matchAll(re)) {
       const n = Number(m[1]);
@@ -73,6 +85,33 @@ function staleLiterals(file, src) {
     (h) => !ALLOWED.has(h.n) && !EXEMPT.has(`${file}::${h.text}`),
   );
 }
+
+// The detector itself, tested directly. A gate that stops firing is indistinguishable from a gate
+// that passes, so the semver fix below is proved BOTH ways: it must still catch a genuinely stale
+// count, and must no longer flag a correct line that merely contains a version number.
+describe('findRepoCountLiterals — the detector', () => {
+  it('CATCHES a genuinely stale count (the gate still fires)', () => {
+    expect(findRepoCountLiterals('we cover 57 repos').map((h) => h.text)).toEqual(['57 repos']);
+  });
+
+  // A SYNTHETIC version on purpose. Using the real current one made this file itself trip the
+  // "no hardcoded version literals" gate, and would have needed editing at every release — a test
+  // that breaks on an unrelated version bump is a test people learn to ignore.
+  const HEADER = `v1.2.34-dev · Built: 2026-07-20 · Covers: ${coverage.built}/${coverage.catalogued} repos`;
+
+  it('catches a stale count even on a line that also carries a version', () => {
+    expect(findRepoCountLiterals('v1.2.34-dev · Covers: 57 repos').map((h) => h.n)).toContain(57);
+  });
+
+  it('does NOT read a semver component as a repo count (the -dev false positive)', () => {
+    // This header used to be reported as a stale literal reading "34-dev · … · Covers: …",
+    // because `-` is a word boundary after the patch number.
+    const ns = findRepoCountLiterals(HEADER).map((h) => h.n);
+    expect(ns, 'the patch number is not a repo count').not.toContain(34);
+    expect(ns, 'the build year is not a repo count').not.toContain(2026);
+    expect(ns, 'the real claim on the line is still read').toContain(coverage.built);
+  });
+});
 
 describe(`repo-count literals match data/manifest.json coverage (built=${coverage.built}, catalogued=${coverage.catalogued}, org≈${coverage.orgTotalApprox})`, () => {
   for (const f of SURFACES) {

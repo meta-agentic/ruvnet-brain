@@ -120,6 +120,64 @@ function copyTree(srcDir, dstDir) {
   }
 }
 
+/** `.rvf` store filenames in a directory — the inventory the safety check compares. */
+function rvfNames(dir) {
+  try { return new Set(fs.readdirSync(dir).filter((n) => n.endsWith('.rvf'))); } catch { return new Set(); }
+}
+
+/** Recursive byte size, for honestly reporting how much was actually reclaimed. */
+function dirSize(dir) {
+  let total = 0;
+  const walk = (d) => {
+    let entries; try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p); else { try { total += fs.statSync(p).size; } catch { /* vanished mid-walk */ } }
+    }
+  };
+  walk(dir);
+  return total;
+}
+
+/**
+ * Release rollback copies after the new KB has verified (issue #35, Dr. Mark Allen).
+ *
+ * Exported and pure-ish because it DELETES MULTI-GIGABYTE DIRECTORIES — a bug here destroys user
+ * data, so it is tested directly rather than exercised only through a full update run.
+ *
+ * Refuses to delete any backup holding a `.rvf` store the live KB does not have. That is the
+ * private/local-store case: the public bundle does not ship those, the update replaces the directory,
+ * and forge-guard still passes because it verifies the store it was asked about — not what went
+ * missing. In that situation the backup is the only surviving copy, so it is kept and reported.
+ *
+ * @returns {{removed: string[], kept: [string, string][], freed: number}}
+ */
+export function reclaimBackups({ kbDir, backupsMade = [], env = process.env }) {
+  const parent = path.dirname(kbDir);
+  const prefix = `${path.basename(kbDir)}.bak-`;
+  let stranded = [];
+  try { stranded = fs.readdirSync(parent).filter((n) => n.startsWith(prefix)).map((n) => path.join(parent, n)); }
+  catch { /* unreadable parent — nothing to sweep */ }
+
+  const all = [...new Set([...backupsMade, ...stranded])];
+  const removed = []; const kept = []; let freed = 0;
+  const liveStores = rvfNames(kbDir);
+
+  for (const b of all) {
+    if (!fs.existsSync(b)) continue;
+    if (env.RUVNET_KEEP_BACKUP === '1') { kept.push([b, 'RUVNET_KEEP_BACKUP=1 is set']); continue; }
+    const lost = [...rvfNames(b)].filter((n) => !liveStores.has(n));
+    if (lost.length) {
+      kept.push([b, `it holds ${lost.length} store(s) the new copy does NOT have: ${lost.slice(0, 3).join(', ')}${lost.length > 3 ? '…' : ''}`]);
+      continue;
+    }
+    const size = dirSize(b);
+    try { fs.rmSync(b, { recursive: true, force: true }); removed.push(b); freed += size; }
+    catch (e) { kept.push([b, `could not remove: ${e.message}`]); }
+  }
+  return { removed, kept, freed };
+}
+
 async function main() {
   const canon = await fetchJson(manifestUrl);
   const targets = ONLY ? stores.filter((s) => s.kbName === ONLY) : stores;
@@ -133,6 +191,8 @@ async function main() {
   console.log(`canonical built:    ${canonLabel}\n`);
 
   let anyBehind = false; const behindStores = [];
+  // Rollback copies taken during this run. Released once the new copy verifies — see RECLAIM below.
+  const backupsMade = [];
   for (const local of targets) {
     const c = canonicalFor(canon, local.kbName);
     const behind = isBehind(local, c);
@@ -190,9 +250,11 @@ async function main() {
     console.log(`  extracting...`);
     try { execFileSync('unzip', ['-q', '-o', zipPath, '-d', extractDir], { stdio: 'inherit' }); }
     catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] unzip failed: ${e.message} — local files untouched.`); }
-    const backup = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);
-    console.log(`  backing up current copy -> ${backup}`);
-    fs.cpSync(KB_DIR, backup, { recursive: true });
+    const backupPath = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);
+    console.log(`  backing up current copy -> ${backupPath}`);
+    console.log(`  (temporary — released automatically once the new copy verifies)`);
+    fs.cpSync(KB_DIR, backupPath, { recursive: true });
+    backupsMade.push(backupPath);
     copyTree(extractDir, KB_DIR);
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log(`  files replaced.`);
@@ -211,8 +273,33 @@ async function main() {
     console.log(`\n(no forge-guard.mjs found to re-verify — skipped)`);
   }
 
+  // ── RECLAIM THE ROLLBACK COPY (issue #35, Dr. Mark Allen) ──────────────────────────────────────
+  // The rollback copy exists to survive the SWAP, not to live on disk forever. Every update used to
+  // leave a full ~2.5 GB copy behind and never remove it; Mark accumulated SEVEN (~14 GB) before
+  // noticing. By this point forge-guard has PROVEN the new copy answers, and the bundle it came from
+  // is a signed, versioned, re-downloadable artifact — so the old copy is dead weight. Released here,
+  // and any copies stranded by earlier runs are swept with it.
+  //
+  // THE ONE CASE WHERE IT IS NOT DEAD WEIGHT, and why this is a check and not an `rm`: a KB can hold
+  // stores the public bundle does not ship (private/local ones). The update replaces the directory, so
+  // if such a store is absent from the new copy, the backup is its ONLY remaining copy — and
+  // forge-guard would still pass, because it verifies the store it was asked about, not whatever went
+  // missing. Deleting there would destroy the only copy of a user's private data. So: compare store
+  // inventories first, and keep any backup holding something the new copy lost.
+  const { removed, kept, freed } = reclaimBackups({ kbDir: KB_DIR, backupsMade });
+  if (removed.length) {
+    console.log(`\nreleased ${removed.length} rollback ${removed.length === 1 ? 'copy' : 'copies'} — ${(freed / 1e9).toFixed(2)} GB reclaimed`);
+    console.log(`  (the new copy verified; this exact build is re-downloadable at any time)`);
+  }
+  for (const [b, why] of kept) console.log(`\n  KEPT ${b}\n    ${why}`);
+
   console.log(`\n=== DONE — KB updated to the canonical build (${canon.tag_name || canon.generated || canon.builtUtc}). ===`);
   process.exit(0);
 }
 
-main().catch((e) => die(`unexpected: ${e.message}`));
+// Run ONLY when executed directly. `reclaimBackups` is exported for its own tests, and without this
+// guard merely importing this file would start a live update — a network fetch, a directory swap, and
+// a process.exit() inside whatever imported it. (Found exactly that way: the reclaim test's import
+// began racing a real update against the test run.)
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) main().catch((e) => die(`unexpected: ${e.message}`));
