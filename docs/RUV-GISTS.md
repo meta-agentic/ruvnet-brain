@@ -5,10 +5,13 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_444 gists · refreshed 2026-07-19_
+_445 gists · refreshed 2026-07-20_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-19 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
+| 2026-07-19 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |
+| 2026-07-19 | [ruview-hardware-sensing-update-2026-07-18.md](https://gist.github.com/ruvnet/5ca5a27f2e607dcfcf0e3655fdec2d62) | RuView update: Realtek, MediaTek, Qualcomm, and vendor sensing program (2026-07-18) |
 | 2026-07-18 | [Liar-Ai.md](https://gist.github.com/ruvnet/481d0f8c2190decead7b14164ae3323c) | Liar Ai: Multi-Modal Lie Detection System |
 | 2026-07-17 | [META_PROXY_V0_4.md](https://gist.github.com/ruvnet/f6fee134339afd1b3eaf7105557ec934) | Meta Proxy v0.4.0 — signed routing sidecar for MetaHarness and Ruflo |
 | 2026-07-17 | [metaharness-v0.3.2-meta-proxy.md](https://gist.github.com/ruvnet/192766132e1e42ee3ec4d670f38c7fb1) | MetaHarness v0.3.2 optional signed Meta-Proxy sidecar |
@@ -16,14 +19,12 @@ _444 gists · refreshed 2026-07-19_
 | 2026-07-17 | [ruflo-v3.32.1-codex-integration.md](https://gist.github.com/ruvnet/532079b6e06e3d87e6bc9a6e30d1bb26) | Ruflo v3.32.1: stable Windows-safe Codex integration, upgrade guide, root causes, and verification |
 | 2026-07-16 | [meta-wrapper.md](https://gist.github.com/ruvnet/e1008e2a4aa13bf2a991e6aca4028d03) | Always-running MetaHarness coding service on GCP |
 | 2026-07-15 | [*specification.md](https://gist.github.com/ruvnet/6217ea3bd75cc0c27522965965e7383b) | TikTok-like recommender Algorithm |
-| 2026-07-15 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |
 | 2026-07-14 | [redaction.md](https://gist.github.com/ruvnet/332336ad5e0516daa810d98f8f0ddca9) | Redaction hooks for Claude Code |
 | 2026-07-14 | [daemon-flywheel-fix.md](https://gist.github.com/ruvnet/f4cda824aaf58e1f2dae72368e692220) | The worktree-daemon flywheel: how ruflo accidentally invented a Claude-quota DoS against itself (#2661) |
 | 2026-07-12 | [ruvector-lattice-embeddings-rust-npm-cve-fix.md](https://gist.github.com/ruvnet/cf3877071a2b1ab9252785673340ab95) | RuVector 2.3.0: local Rust & npm embeddings via Lattice, plus a full cargo-audit/cargo-deny CVE cleanup |
 | 2026-07-11 | [.roomodes.json](https://gist.github.com/ruvnet/a206de8d484e710499398e4c39fa6299) | This guide introduces Roo Code and the innovative Boomerang task concept, now integrated into SPARC Orchestration. By fo |
 | 2026-07-10 | [claude-flow-firsts-executive-brief.md](https://gist.github.com/ruvnet/a8df1bae4686ebf3914dd61c8afe6d69) | Claude-Flow / Ruflo: Year One Executive Brief — 31 verified first-mover positions, harness-not-model thesis, top 20 inno |
 | 2026-07-09 | [ruflo-3.24.0-flywheel.md](https://gist.github.com/ruvnet/f8e2851fd307df5d5de7b5c70c37fa0c) | ruflo 3.24.0 — Self-Learning Flywheel: what it is, how it works, usage & upgrade notes |
-| 2026-07-09 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
 | 2026-07-08 | [ruflo-v3.25.5-release.md](https://gist.github.com/ruvnet/ed276119404d4d3fffdadfc0797705f8) | ruflo v3.25.5 npm release: wrapper publish + CI-red fixes |
 | 2026-07-08 | [memory.md](https://gist.github.com/ruvnet/4a55971e8971a3c430a009c7f5b49d12) | Claude Memory Template |
 | 2026-07-08 | [anv-gist.md](https://gist.github.com/ruvnet/0d858ad440a4439b4a2281a40c39b1a0) | Agent-Native Versioning (ANV) — the BC→AD versioning scheme for ruflo (ADR-184) |
