@@ -2371,19 +2371,66 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
 
   const { cacheDir, isCustom } = resolveCacheDir();
 
+  // ── "ALREADY PRESENT" IS THE WRONG QUESTION — ask "already CURRENT" ──────────────────────────
+  //
+  // THE STALE-INSTALL TRAP, and the root cause of "users are still on 0.5". This used to skip the
+  // download whenever forge-mcp-all.mjs merely EXISTED — a pure file-existence check, no version
+  // anywhere in it. So a June v0.5 brain made `alreadyInstalled` true, the download was skipped,
+  // and the installer went on to print its success banner. Re-running the installer — the fix we
+  // ADVERTISE in recovery messages — refreshed the reader and the plugin wiring and left the actual
+  // brain untouched, forever. A closed trap: the advertised escape hatch was the thing that failed.
+  //
+  // The honest question is whether the installed brain is CURRENT, so that is what we now ask.
+  // Fail-safe by design: if the version cannot be resolved (offline, API rate limit) we keep the
+  // old skip behaviour rather than force a 2 GB download on someone with no network — but we SAY
+  // that is what happened, instead of implying everything is up to date.
   const alreadyInstalled = fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs'));
+  let staleSkip = false;
+  let installedTag = null;
+  let latestTag = null;
+  let resolvedRelease = null;   // reused below so the release is resolved at most once
   if (alreadyInstalled && !FLAG_FORCE) {
-    step(
-      'Brain already present — skipping the download',
-      "it's already unpacked here; I'll just make sure the reader and plugin are wired (use --force to refetch)",
-    );
-    ok(`found an existing brain at ${cacheDir}`);
+    installedTag = installedBrainVersion(cacheDir); // 'unknown' when SOURCE.json has no releaseTag
+    try {
+      resolvedRelease = await resolveRelease();
+      // ONLY a genuine `latest` lookup counts as "what current means". resolveRelease() does NOT
+      // throw when the GitHub API fails — it returns the hardcoded known-good pin with
+      // source:'fallback'. Treating that as latest inverts this whole fix: a rate-limited lookup
+      // would report installed v3.4.21-dev "→ latest v2.9.0" and DOWNGRADE a perfectly current
+      // machine. (Caught by exercising the failure path against a 404 repo — the first version of
+      // this fix did exactly that.) A pinned/forced resolution is likewise the operator's explicit
+      // choice, not a staleness verdict, so neither drives this comparison.
+      latestTag = resolvedRelease && resolvedRelease.source === 'latest'
+        ? (resolvedRelease.tag_name || resolvedRelease.tag || null)
+        : null;
+    } catch { latestTag = null; }
+    const norm = (v) => (v == null || v === 'unknown' ? null : String(v).replace(/^v/, ''));
+    const a = norm(installedTag), b = norm(latestTag);
+    // Different (or unknowable-installed) => it is NOT current => download. Same => genuinely skip.
+    staleSkip = Boolean(b && (a === null || a !== b));
+  }
+
+  if (alreadyInstalled && !FLAG_FORCE && !staleSkip) {
+    if (latestTag) {
+      step('Brain already current — skipping the download', `installed ${installedTag} matches the latest release`);
+      ok(`found an up-to-date brain at ${cacheDir}`);
+    } else {
+      // Could not check. Say so plainly rather than letting silence imply "current".
+      step('Brain present — could not check for a newer one', 'the release lookup failed (offline or rate-limited)');
+      warn(`skipping the download WITHOUT verifying it is current. Installed: ${installedTag || 'unknown'}.`);
+      info(`When you have a connection:  ${c.bold('npx ruvnet-brain --update')}   ${c.dim('(or --force to refetch now)')}`);
+    }
   } else {
+    if (staleSkip) {
+      step('Brain is out of date — fetching the current release', `installed ${installedTag || 'unknown'} → latest ${latestTag}`);
+      info(`${c.dim('(the old installer skipped this whenever any brain was present, which is why stale installs never moved)')}`);
+    }
     // Resolve which Release to fetch BEFORE downloading. Skipped entirely on the --local path
     // (obtainBundle short-circuits to the repo's dist/ zip and never touches the network).
     const localZipPresent =
       FLAG_LOCAL || fs.existsSync(path.join(REPO_ROOT, 'dist', 'ruvnet-brain.zip'));
-    const release = localZipPresent ? null : await resolveRelease();
+    // Reuse the staleness check's resolution when it already ran — one network round-trip, not two.
+    const release = localZipPresent ? null : (resolvedRelease || await resolveRelease());
     const { zipPath, tmpDir, downloaded } = await obtainBundle(release);
     // Verify the Ed25519 signature BEFORE extracting a downloaded bundle into the user's config
     // (SEC-0010 #6 — trust root = keys/ruvnet-brain-signing.pub.pem shipped inside this package).
