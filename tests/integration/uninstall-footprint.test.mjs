@@ -51,6 +51,13 @@ function seedFullInstall() {
 const USER_RULES = '# My rules\n\nAlways use tabs.\nNever deploy on Friday.\n';
 const withBlock = () => `${USER_RULES}\n${START}\n## RuvNet Brain\nsome guidance\n${END}\n`;
 
+// LaunchAgents are macOS-only BY DESIGN — machineFootprint() gates them on process.platform, and
+// disableNightly()/disableSpendGuard() return early elsewhere. The first version of these tests
+// asserted them unconditionally and went red on the Linux integration runner: the code was correct
+// and the test was wrong. Gate the platform-specific assertions rather than weakening them, so they
+// keep their teeth on macOS instead of being softened into something that passes everywhere.
+const onMac = process.platform === 'darwin';
+
 describe('--what-changed', () => {
   it('lists what is actually on disk, with an undo for each', () => {
     seedFullInstall();
@@ -58,9 +65,11 @@ describe('--what-changed', () => {
     const out = run(['--what-changed']);
 
     expect(out).toMatch(/Brain bundle/);
-    expect(out).toMatch(/Nightly updater/);
-    expect(out).toMatch(/Spend watchdog/);
     expect(out).toMatch(/--uninstall/);
+    if (onMac) {
+      expect(out).toMatch(/Nightly updater/);
+      expect(out).toMatch(/Spend watchdog/);
+    }
   });
 
   it('says so plainly when nothing is installed, rather than inventing a footprint', () => {
@@ -76,9 +85,13 @@ describe('--uninstall', () => {
     run(['--uninstall']);
 
     expect(fs.existsSync(kbDir()), 'KB bundle').toBe(false);
-    expect(fs.existsSync(path.join(home, 'Library', 'LaunchAgents', 'com.ruvnet.brain-update.plist'))).toBe(false);
-    expect(fs.existsSync(path.join(home, 'Library', 'LaunchAgents', 'com.ruvnet.spend-watchdog.plist'))).toBe(false);
-    expect(fs.existsSync(path.join(home, '.claude', 'scripts', 'api-spend-watchdog.mjs'))).toBe(false);
+    if (onMac) {
+      // The LaunchAgents and their script are only ever created — and therefore only ever
+      // removed — on macOS.
+      expect(fs.existsSync(path.join(home, 'Library', 'LaunchAgents', 'com.ruvnet.brain-update.plist'))).toBe(false);
+      expect(fs.existsSync(path.join(home, 'Library', 'LaunchAgents', 'com.ruvnet.spend-watchdog.plist'))).toBe(false);
+      expect(fs.existsSync(path.join(home, '.claude', 'scripts', 'api-spend-watchdog.mjs'))).toBe(false);
+    }
   });
 
   it('takes ONLY our block out of CLAUDE.md and leaves their content intact', () => {
