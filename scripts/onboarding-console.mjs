@@ -398,12 +398,19 @@ function serveCached(res, file, compute, decorate = (d) => d) {
   }
   return sendJSON(res, 200, { ...decorate(c.data), fromCache: true, cachedAt: c.at });
 }
+/**
+ * @returns {boolean} whether anything was actually restored — the caller uses this to decide
+ * whether to warn a first-run user that the page starts empty. It used to return undefined, so a
+ * truthiness check on it was always false; reporting what it really did keeps the caller honest.
+ */
 function loadConsoleCache() {
+  let restored = false;
   try {
     const j = JSON.parse(fs.readFileSync(CONSOLE_CACHE_PATH, 'utf8'));
-    if (j.activity && j.activity.at) ACTIVITY_MACHINE_CACHE = j.activity;
-    if (j.trust && j.trust.at) TRUST_CACHE = j.trust;
+    if (j.activity && j.activity.at) { ACTIVITY_MACHINE_CACHE = j.activity; restored = true; }
+    if (j.trust && j.trust.at) { TRUST_CACHE = j.trust; restored = true; }
   } catch { /* no cache yet — first ever boot */ }
+  return restored;
 }
 function saveConsoleCache() {
   try {
@@ -902,7 +909,15 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // Cold-start fix (2026-07-17): hydrate last run's fleet/trust caches from disk FIRST — the
     // first page load paints real, honestly-stamped data in ~2s instead of a 25–50s scan — then
     // warm a fresh scan off the request path.
-    loadConsoleCache();
+    // Tell a FIRST-RUN user what to expect. With a warm cache the page paints immediately; with no
+    // cache at all it is genuinely empty until the detached scan lands, and an empty page with no
+    // explanation reads as broken. Measured 2026-07-20: URL is printed in ~0.3s either way, so the
+    // wait a user perceives is the page filling in, not the server starting.
+    const hadCache = loadConsoleCache();
+    if (!hadCache) {
+      console.log(`      ${'first run — scanning your setup now; the page fills in as it lands'}`);
+      console.log(`      ${'(one-time, up to a minute — later runs are instant)'}\n`);
+    }
     kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
     if (open) openBrowser(url);
