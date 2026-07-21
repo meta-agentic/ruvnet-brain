@@ -123,9 +123,21 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
       // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
       // Transcript stores get a deeper dense pool (24) AND BM25 candidates; concepts gets 24; others 8.
       const repoPool = (name === 'concepts' || isTranscriptStore(name)) ? Math.max(pool, 24) : pool;
-      // Deepen ONLY for exact-name queries (#33 Part A); everything past repoPool is discarded below
-      // except exact title matches, so ordinary questions keep their existing candidate set exactly.
-      const depth = queriedNames.size ? Math.max(repoPool, RESCUE_DEPTH) : repoPool;
+      // Deepen ONLY for exact-name queries (#33 Part A), and only in repos that could PLAUSIBLY hold
+      // the named artifact. The first version deepened every one of ~69 repos to depth 64 whenever a
+      // query contained any @scope/name token — an 8x HNSW cost across the entire corpus to rescue an
+      // artifact that, by definition, lives in one or two of them. Scope it by name overlap: a query
+      // for @ruvector/rvf deepens ruvector-ish stores, not agentic-robotics.
+      // The trade is deliberate and bounded: a package whose manifest sits in an unrelated repo is
+      // still found by the normal pool + boost, it just doesn't get the deep rescue. Paying 8x on 67
+      // irrelevant repos to cover that case is the wrong bargain.
+      const plausibleForName = queriedNames.size > 0 && [...queriedNames].some((n) => {
+        const [scope, pkg] = n.replace(/^@/, '').split('/');
+        const lower = name.toLowerCase();
+        return (scope && (lower.includes(scope) || scope.includes(lower)))
+            || (pkg && (lower.includes(pkg) || pkg.includes(lower)));
+      });
+      const depth = plausibleForName ? Math.max(repoPool, RESCUE_DEPTH) : repoPool;
       const hits = await searchKb({ dir, name, query, k: depth, n: depth });
       let cands = hits;
       if (queriedNames.size && hits.length > repoPool) {

@@ -221,7 +221,21 @@ const EXTRA_FILES = ['package.json', 'package-lock.json'];
 
 /** Local (relative) specifiers a module imports — static, side-effect, and literal dynamic. */
 function localImportsOf(absFile) {
-  const src = fs.readFileSync(absFile, 'utf8');
+  const raw = fs.readFileSync(absFile, 'utf8');
+  // STRIP COMMENTS BEFORE SCANNING. The static-import pattern below uses [^;'"]* to bridge the gap
+  // between `import` and `from`, which cannot cross an apostrophe. This file's own house style is
+  // dense commentary full of contractions, so a perfectly ordinary multi-line import —
+  //     import {
+  //       foo, // don't forget bar
+  //       bar,
+  //     } from './mod.mjs';
+  // matched NOTHING: no throw, no escape warning, the walker never queued './mod.mjs', and the build
+  // happily shipped a bundle missing it. That is strictly worse than the #32 bug it replaced, which
+  // at least crashed loudly on startup. Comments carry no imports, so removing them first costs
+  // nothing and closes the whole class.
+  const src = raw
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')          // block comments
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');      // line comments (the [^:] guard spares "https://")
   const specs = new Set();
   for (const m of src.matchAll(/\b(?:import|export)\b[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
   for (const m of src.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
