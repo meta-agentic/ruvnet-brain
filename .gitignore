@@ -34,6 +34,10 @@ kb/*.symbols.json
 node_modules
 
 # secrets — NEVER commit (protection travels with the repo, not just global git excludes)
+# .swarm/ holds AgentDB session autocapture, which records whatever crossed the terminal —
+# including, on 2026-07-21, live API keys echoed by a buggy diagnostic. It was only fenced by a
+# GLOBAL gitignore, which does not travel to a clone or another machine. Fenced here now.
+.swarm/
 .env
 .env.*
 !.env.example

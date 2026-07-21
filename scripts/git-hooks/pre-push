@@ -12,6 +12,26 @@
 #
 # Escape hatch is `git push --no-verify` — but if you use it, you are consciously overriding a gate
 # that exists because of a specific failure that cost real user trust. Own that out loud.
+#
+# SECRET SCAN (2026-07-21): a buggy diagnostic echoed live OPENAI and OPENROUTER keys into a
+# terminal, and AgentDB's session autocapture wrote them to .swarm/. Nothing reached git — but the
+# only thing that stopped it was a GLOBAL gitignore that does not travel to a clone or another
+# machine. Relying on "the file happened to be ignored" is not a control. This is: a real key
+# pattern in anything being pushed refuses the push. Placeholders (your-key, abc123, xxxx,
+# deadbeef, example) are excluded, because rUv's own docs are full of them and a gate that cries
+# wolf on documentation is a gate people learn to bypass.
+SECRET_HITS=$(git diff --cached --no-color -U0 HEAD 2>/dev/null | grep -E "^\+" \
+  | grep -oE "sk-(proj|ant|or-v1)-[A-Za-z0-9_-]{20,}" \
+  | grep -vEi "your-key|abc123|xxxx+|deadbeef|example|placeholder|REDACTED" | head -3)
+if [ -n "$SECRET_HITS" ]; then
+  echo ""
+  echo "  ⛔ PUSH BLOCKED — what looks like a REAL API key is in this push."
+  echo "     matched (prefix only): $(echo "$SECRET_HITS" | cut -c1-14 | tr '\n' ' ')"
+  echo "     Remove it, rotate the key, and push again. Never --no-verify past this one:"
+  echo "     a key that reaches a remote is compromised the moment it lands."
+  echo ""
+  exit 1
+fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 node "$ROOT/scripts/verify-channels.mjs" --pre-push
