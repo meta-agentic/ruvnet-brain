@@ -46,6 +46,28 @@ const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && proc
 const APPLY = has('--apply');
 const TIER = arg('--tier', null);
 const ONLY = arg('--repo', null);
+// --publish's whole job is to end this run with `git commit` + `git push origin main` (see the
+// PUBLISH block far below) — and those two commands operate on whatever branch is CURRENTLY
+// CHECKED OUT in this working tree, not necessarily main. Real failure (2026-07-19): the nightly
+// fired at 03:15 while a developer had feat/meta-proxy-passthrough checked out, and commit 4a10833
+// "Nightly brain refresh v3.4.21-dev" landed silently on THAT branch — a version-bump commit no
+// release will ever be cut from, stranded on top of someone's unrelated in-progress work.
+// Guard here, before ANY of the (hours-long, CPU-bound) rebuild work below even starts, and before
+// the GitHub Release / npm publish steps run — checking branch only at commit-time would still
+// burn a full night's rebuild, or worse, leave a Release cut with no matching version-bump commit
+// to go with it. We deliberately do NOT `git checkout main` to self-correct: this machine is
+// routinely mid-task on a feature branch at 03:15 (that is exactly how this bug was found), and
+// switching branches out from under someone's uncommitted work is precisely the "clever and
+// destructive" move this repo has already been burned by once (see the -readonly/timeout lesson in
+// CLAUDE.md Rule 19). An aborted nightly that logs clearly and reruns tomorrow costs nothing; a
+// checkout that clobbers a developer's working tree cannot be undone.
+if (APPLY && has('--publish')) {
+  const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  if (branch !== 'main') {
+    console.error(`\n[FATAL] --publish requires 'main' to be checked out in ${ROOT} — found '${branch}' instead. Refusing to commit/push/release onto it (this is exactly how commit 4a10833 "Nightly brain refresh v3.4.21-dev" ended up stranded on feat/meta-proxy-passthrough instead of main on 2026-07-19). Nothing was touched — check out main yourself once it's free and re-run, or drop --publish to just rebuild.`);
+    process.exit(1);
+  }
+}
 // --fresh-window <days>: LIVE-scan the org(s) and take every non-fork/non-archived repo pushed within
 // N days, bypassing the static registry.tiers.json AND the nightly T3 skip. This is THE fix for
 // "new repos rUv shipped never got ingested" — a brand-new repo is discovered and built the same night

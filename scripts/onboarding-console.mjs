@@ -398,12 +398,19 @@ function serveCached(res, file, compute, decorate = (d) => d) {
   }
   return sendJSON(res, 200, { ...decorate(c.data), fromCache: true, cachedAt: c.at });
 }
+/**
+ * @returns {boolean} whether anything was actually restored — the caller uses this to decide
+ * whether to warn a first-run user that the page starts empty. It used to return undefined, so a
+ * truthiness check on it was always false; reporting what it really did keeps the caller honest.
+ */
 function loadConsoleCache() {
+  let restored = false;
   try {
     const j = JSON.parse(fs.readFileSync(CONSOLE_CACHE_PATH, 'utf8'));
-    if (j.activity && j.activity.at) ACTIVITY_MACHINE_CACHE = j.activity;
-    if (j.trust && j.trust.at) TRUST_CACHE = j.trust;
+    if (j.activity && j.activity.at) { ACTIVITY_MACHINE_CACHE = j.activity; restored = true; }
+    if (j.trust && j.trust.at) { TRUST_CACHE = j.trust; restored = true; }
   } catch { /* no cache yet — first ever boot */ }
+  return restored;
 }
 function saveConsoleCache() {
   try {
@@ -547,6 +554,12 @@ function gatherRouterEngine() {
       outcomesLog: OUTCOMES.replace(os.homedir(), '~'),
     },
     keys: { openrouter: openrouterKey, ...providerKeys },
+    // Paid seats, found at USER level. `keys` above is env-var API keys only, which is exactly why a
+    // user with ChatGPT Max and Claude Max read as "auto" — neither plan puts a key in the
+    // environment. These two fields are what let the UI say "you already have this" instead of
+    // asking someone to paste a credential they are already paying not to need.
+    subscriptions: detectSubscriptions(),
+    preferredSeat: preferredSeat(detectSubscriptions()),
     profile: { present: !!profile, path: PROFILE_PATH.replace(os.homedir(), '~') },
     catalogSource: engineCatalogSource(),   // 'catalog' | 'built-in-fallback' — so the UI never calls the stub a real catalog
     house,
@@ -658,6 +671,91 @@ async function gatherTrust() {
 }
 
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
+/**
+ * PAID SUBSCRIPTIONS, detected at USER level — not project level, not from environment variables.
+ *
+ * WHY THIS EXISTS. A user with BOTH a ChatGPT Max plan and a Claude Max plan showed up as "auto",
+ * because the only thing "auto" ever looked at was `detect_env` — API keys in environment
+ * variables. Verified on a real machine 2026-07-20: `~/.codex/auth.json` reads
+ * `auth_mode: "chatgpt"`, `OPENAI_API_KEY: null`, with live OAuth tokens. A genuine, paid,
+ * authenticated ChatGPT subscription with no API key anywhere — completely invisible to the old
+ * detector. Claude's own Max session is worse: on macOS it lives in the LOGIN KEYCHAIN, so there is
+ * no file to find at all.
+ *
+ * WHY IT MATTERS BEYOND A WRONG LABEL. A subscription is already paid for at a flat rate; an API
+ * key bills per token. Routing to a key while an authenticated seat sits idle spends money the user
+ * has already spent. So a subscription always outranks a key — the key is the LAST resort, never
+ * the default. (Same principle as the meta-proxy's Passthrough plane: use the subscription you are
+ * already paying for, and treat metered capacity as the fallback.)
+ *
+ * SECRETS ARE NEVER READ. For the keychain we ask only whether the ITEM EXISTS — never `-w`, which
+ * would print the secret. For token files we check for the presence of a field, never its value.
+ * Nothing here is logged, transmitted, or written anywhere.
+ *
+ * @returns {Record<string, {subscription: boolean, apiKey: boolean, how: string}>}
+ */
+export function detectSubscriptions() {
+  const home = os.homedir();
+  const out = {};
+  const seat = (provider, subscription, apiKey, how) => { out[provider] = { subscription, apiKey, how }; };
+
+  // ── Anthropic (Claude Pro/Max) ────────────────────────────────────────────────────────────────
+  // macOS keeps the Claude Code OAuth session in the login keychain; Linux/Windows use a file.
+  // Existence only — `security find-generic-password` WITHOUT -w prints metadata, never the secret.
+  let claudeSub = false; let claudeHow = 'not found';
+  const credFile = path.join(home, '.claude', '.credentials.json');
+  if (fs.existsSync(credFile)) { claudeSub = true; claudeHow = '~/.claude/.credentials.json'; }
+  else if (process.platform === 'darwin') {
+    try {
+      const r = spawnSync('security', ['find-generic-password', '-s', 'Claude Code-credentials'], { encoding: 'utf8', timeout: 5000 });
+      if (r.status === 0) { claudeSub = true; claudeHow = 'macOS login keychain'; }
+    } catch { /* absent or locked — treated as not found, never as an error */ }
+  }
+  seat('anthropic', claudeSub, !!process.env.ANTHROPIC_API_KEY, claudeHow);
+
+  // ── OpenAI / ChatGPT (via the Codex CLI) ──────────────────────────────────────────────────────
+  // auth_mode === 'chatgpt' means a ChatGPT plan is signed in; 'apikey' means metered billing.
+  let oaSub = false; let oaKey = !!process.env.OPENAI_API_KEY; let oaHow = 'not found';
+  const codexAuth = path.join(home, '.codex', 'auth.json');
+  if (fs.existsSync(codexAuth)) {
+    try {
+      const j = JSON.parse(fs.readFileSync(codexAuth, 'utf8'));
+      if (j.auth_mode === 'chatgpt' || (j.tokens && j.tokens.access_token)) { oaSub = true; oaHow = '~/.codex/auth.json (ChatGPT plan)'; }
+      if (j.OPENAI_API_KEY) oaKey = true;
+    } catch { /* unreadable/corrupt — report nothing rather than guess */ }
+  }
+  seat('openai', oaSub, oaKey, oaHow);
+  // Codex is the same seat as the ChatGPT plan above, surfaced separately because the UI lists it
+  // as its own "house" — one subscription, two labels, so never counted as two entitlements.
+  seat('codex', oaSub, oaKey, oaHow === 'not found' ? 'not found' : `${oaHow} — same seat as OpenAI`);
+
+  // ── Google (Gemini) ───────────────────────────────────────────────────────────────────────────
+  // gcloud ADC is a real authenticated credential; a bare ~/.gemini directory is NOT — it holds
+  // settings and skills and exists on machines that were never signed in. Claiming a subscription
+  // from a config folder would be exactly the fabricated-status this project forbids.
+  const adc = path.join(home, '.config', 'gcloud', 'application_default_credentials.json');
+  const gSub = fs.existsSync(adc);
+  seat('google', gSub, !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY), gSub ? '~/.config/gcloud (ADC)' : 'not found');
+
+  // ── xAI (Grok) ────────────────────────────────────────────────────────────────────────────────
+  // No CLI writes a discoverable subscription credential today. Say so honestly rather than
+  // inventing a detector that always returns false and looks like a real check.
+  seat('xai', false, !!process.env.XAI_API_KEY, 'no detectable subscription credential');
+
+  return out;
+}
+
+/**
+ * What to actually USE, given what was found. Subscription first, always.
+ * @returns {{provider: string|null, basis: 'subscription'|'api-key'|'none', detail: string}}
+ */
+export function preferredSeat(subs) {
+  const order = ['anthropic', 'openai', 'codex', 'google', 'xai'];
+  for (const p of order) if (subs[p]?.subscription) return { provider: p, basis: 'subscription', detail: subs[p].how };
+  for (const p of order) if (subs[p]?.apiKey) return { provider: p, basis: 'api-key', detail: 'environment variable' };
+  return { provider: null, basis: 'none', detail: 'nothing detected' };
+}
+
 function gatherState(cwd, { fleet = true } = {}) {
   const wiring = wiringSurvey();
   const memory = gatherMemory(cwd, { fleet });
@@ -902,7 +1000,15 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // Cold-start fix (2026-07-17): hydrate last run's fleet/trust caches from disk FIRST — the
     // first page load paints real, honestly-stamped data in ~2s instead of a 25–50s scan — then
     // warm a fresh scan off the request path.
-    loadConsoleCache();
+    // Tell a FIRST-RUN user what to expect. With a warm cache the page paints immediately; with no
+    // cache at all it is genuinely empty until the detached scan lands, and an empty page with no
+    // explanation reads as broken. Measured 2026-07-20: URL is printed in ~0.3s either way, so the
+    // wait a user perceives is the page filling in, not the server starting.
+    const hadCache = loadConsoleCache();
+    if (!hadCache) {
+      console.log(`      ${'first run — scanning your setup now; the page fills in as it lands'}`);
+      console.log(`      ${'(one-time, up to a minute — later runs are instant)'}\n`);
+    }
     kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
     if (open) openBrowser(url);

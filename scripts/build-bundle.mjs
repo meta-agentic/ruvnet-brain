@@ -201,7 +201,72 @@ if (hasGists) for (const suf of ['ruv-gists.big.rvf', 'ruv-gists.big.rvf.idmap.j
 // unpinned `npm i` resolve (SEC-0010 #8).
 // verify-citation.mjs ships WITH the KB because it verifies the KB: --doctor loads it from the
 // installed bundle to prove an answer's citation resolves to a real passage on disk.
-const tools = ['forge-ask.mjs', 'forge-ask-all.mjs', 'forge-mcp.mjs', 'forge-mcp-all.mjs', 'forge-rerank.mjs', 'forge-guard.mjs', 'forge-guard-injection.mjs', 'forge-update.mjs', 'resolve-deps.mjs', 'verify-citation.mjs', 'package.json', 'package-lock.json'];
+//
+// DERIVED, NOT HAND-MAINTAINED (issue #32, Jan Lafko / @lafinak, 2026-07-20).
+// This list used to be typed by hand, and twice a new required import fell out of it and shipped a
+// bundle that crashed on startup with MODULE_NOT_FOUND — most recently `forge-hybrid.mjs`, which
+// `forge-ask-all.mjs` imports unconditionally (commit 57354dd). The warning comment above was already
+// there and did not prevent it, because a comment cannot know what a file imports. The build now does.
+//
+// We walk the real static import graph from the entry points that must be runnable out of the
+// installed bundle, and ship every local module they transitively reach. A new import is therefore
+// bundled the moment it is written, with no list to remember to update.
+const ENTRYPOINTS = [
+  'forge-ask.mjs', 'forge-ask-all.mjs', 'forge-mcp.mjs', 'forge-mcp-all.mjs',
+  'forge-rerank.mjs', 'forge-guard.mjs', 'forge-update.mjs', 'verify-citation.mjs',
+];
+// Non-module assets, and modules reached only by a path the graph walk cannot see (e.g. a spawned
+// child process). Kept explicit BECAUSE they are genuinely not derivable — not as a duplicate list.
+const EXTRA_FILES = ['package.json', 'package-lock.json'];
+
+/** Local (relative) specifiers a module imports — static, side-effect, and literal dynamic. */
+function localImportsOf(absFile) {
+  const src = fs.readFileSync(absFile, 'utf8');
+  const specs = new Set();
+  for (const m of src.matchAll(/\b(?:import|export)\b[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
+  for (const m of src.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
+  for (const m of src.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.add(m[1]);
+  return [...specs].filter((s) => s.startsWith('./') || s.startsWith('../'));
+}
+
+/** Transitive closure of local modules reachable from the entry points, relative to KB. */
+function resolveModuleGraph() {
+  const seen = new Set();
+  // `from` distinguishes the two absent-file cases, which are NOT the same failure:
+  //   from === null  -> an entry point this kb/ simply does not contain (a minimal fixture, a
+  //                     partial tree). Nothing to bundle; skip it.
+  //   from !== null  -> a module that something ACTUALLY IMPORTS is missing. That is precisely the
+  //                     MODULE_NOT_FOUND of #32, and it must stop the build.
+  const queue = ENTRYPOINTS.map((rel) => ({ rel, from: null }));
+  const escapes = [];
+  while (queue.length) {
+    const { rel, from } = queue.shift();
+    if (seen.has(rel)) continue;
+    const abs = path.join(KB, rel);
+    if (!fs.existsSync(abs)) {
+      if (from === null) { console.log(`[build-bundle] note: entry point ${rel} absent from kb/ — skipping`); continue; }
+      throw new Error(
+        `[build-bundle] ${from} imports ${rel}, which does not exist in kb/ — ` +
+        `a bundle built from this tree would crash on startup (issue #32)`,
+      );
+    }
+    seen.add(rel);
+    for (const spec of localImportsOf(abs)) {
+      const target = path.normalize(path.join(path.dirname(rel), spec));
+      if (target.startsWith('..')) { escapes.push(`${rel} -> ${spec}`); continue; }
+      queue.push({ rel: target, from: rel });
+    }
+  }
+  if (escapes.length) {
+    // A bundled module importing outside kb/ cannot work once installed — the file simply is not there.
+    throw new Error(`[build-bundle] import escapes kb/ and would break the installed bundle:\n  ${escapes.join('\n  ')}`);
+  }
+  return [...seen].sort();
+}
+
+const derivedTools = resolveModuleGraph();
+const tools = [...derivedTools, ...EXTRA_FILES];
+console.log(`[build-bundle] module graph: ${derivedTools.length} modules from ${ENTRYPOINTS.length} entry points`);
 for (const t of tools) cp(t, OUT, { required: true });
 // self-update provenance (where this bundle came from + the canonical manifest URL). Optional: a build
 // without it simply ships a brain whose `forge-update.mjs --check` reports "self-update not configured".

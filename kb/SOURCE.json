@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-19T20:04:04.641Z",
+  "builtUtc": "2026-07-20T07:19:18.120Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "agentdb": {
-      "kbName": "agentdb",
-      "sourceRepo": "https://github.com/ruvnet/agentdb",
-      "sourceCommit": "04968e3fba3bf01ef4e9978d0446485452365a86",
-      "sourceDescribe": "04968e3",
-      "builtUtc": "2026-07-19T20:04:04.641Z",
+    "ruvnet": {
+      "kbName": "ruvnet",
+      "sourceRepo": "https://github.com/ruvnet/ruvnet",
+      "sourceCommit": "2c02fb59ffcd2c3826908b74cc6e68e7a4e363fb",
+      "sourceDescribe": "2c02fb5",
+      "builtUtc": "2026-07-20T07:19:18.120Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/agentdb-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs agentdb"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruvnet-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruvnet"
     }
   }
 }

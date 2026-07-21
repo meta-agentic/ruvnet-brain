@@ -73,6 +73,11 @@ const FLAG_ENABLE_NIGHTLY = argv.includes('--enable-nightly'); // schedule that 
 const FLAG_DISABLE_NIGHTLY = argv.includes('--disable-nightly'); // remove the nightly schedule
 const FLAG_NO_NIGHTLY_PROMPT = argv.includes('--no-nightly-prompt'); // don't offer nightly auto-updates at the end of an install
 const FLAG_NO_TELEMETRY = argv.includes('--no-telemetry'); // decline anonymous usage counts without being asked
+// High-impact, so it needs its OWN flag — `-y` cannot install a launchd job (see ask()'s note).
+const FLAG_ENABLE_SPEND_GUARD = argv.includes('--enable-spend-guard');
+const FLAG_DISABLE_SPEND_GUARD = argv.includes('--disable-spend-guard'); // the missing undo
+const FLAG_UNINSTALL = argv.includes('--uninstall'); // reverse everything, in one command
+const FLAG_WHAT_CHANGED = argv.includes('--what-changed'); // show our footprint on this machine
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
@@ -459,6 +464,28 @@ function installReader(cacheDir) {
   ok('reader installed');
 }
 
+// ── plugin presence: the ONLY reliable proof the slash commands will exist ───────────────────────
+// Reported by a user on 3.4.21-dev whose install was otherwise healthy: `/rvbc` returned
+// "Unknown command: /rvbc. Did you mean /rvf?". search_ruvnet worked, the KB was current — the
+// plugin had simply never landed, and the installer had said everything was fine.
+//
+// The brain ships as TWO independent artifacts and this is the one people lose:
+//   • KB + search_ruvnet  — installed by this script into ~/.cache/ruvnet-brain
+//   • the Claude Code plugin — slash commands, the Console, the grounding hook
+// Checking the commands directory on disk is what distinguishes them; a `claude plugin install`
+// exit code does not.
+/** @returns {string|null} the commands dir if the plugin is really installed, else null */
+function pluginCommandsDir() {
+  const candidates = [
+    path.join(os.homedir(), '.claude', 'plugins', 'marketplaces', 'ruvnet-brain', 'plugin', 'commands'),
+    path.join(os.homedir(), '.claude', 'plugins', 'ruvnet-brain', 'commands'),
+  ];
+  for (const dir of candidates) {
+    try { if (fs.existsSync(path.join(dir, 'rvbc.md'))) return dir; } catch { /* unreadable — treat as absent */ }
+  }
+  return null;
+}
+
 // ── step: wire the Claude Code plugin ────────────────────────────────────────────────────────────
 function wirePlugin() {
   step(
@@ -480,15 +507,30 @@ function wirePlugin() {
   }
 
   const addedMarket = tryRun('claude', ['plugin', 'marketplace', 'add', 'stuinfla/ruvnet-brain']);
-  if (!addedMarket) warn(`couldn't add the marketplace automatically (it may already be added — that's fine).`);
+  // Deliberately NOT reassuring here. This used to say "it may already be added — that's fine",
+  // which is a GUESS about someone else's machine, and when it was wrong the user finished the
+  // install with a working search_ruvnet, no slash commands, and a message telling them all was
+  // well. The real state is checked below; nothing is declared fine until it has been looked at.
+  if (!addedMarket) info(`marketplace add didn't report success — checking what actually landed…`);
 
-  const installed = tryRun('claude', ['plugin', 'install', 'ruvnet-brain@ruvnet-brain', '--scope', 'user']);
-  if (installed) {
+  tryRun('claude', ['plugin', 'install', 'ruvnet-brain@ruvnet-brain', '--scope', 'user']);
+
+  // NEVER take "installed" on faith — same discipline verifyInstall() applies to the KB. An exit
+  // code says the command ran, not that the plugin is usable; the commands either exist on disk or
+  // they do not. This is the difference between `/rvbc` working and "Unknown command: /rvbc".
+  const commandsDir = pluginCommandsDir();
+  if (commandsDir) {
     ok('plugin installed at user scope (global, alongside Ruflo / RuVector)');
+    info(`  commands available after a restart: ${c.bold('/rvbc')}, ${c.bold('/ruvnet-brain:configure')}`);
     return { wired: true, manualMarketplace, manualInstall };
   }
 
-  warn(`couldn't install the plugin automatically. Run these two commands yourself:`);
+  // The honest failure. The brain still WORKS — this is the difference between a broken install and
+  // a partial one, and the user is told exactly which they have instead of being congratulated.
+  warn(`the plugin did NOT land — so slash commands like ${c.bold('/rvbc')} will not exist yet.`);
+  info(`${c.green('Your brain still works')}: search_ruvnet is wired and Claude will ground answers with it.`);
+  info(`Only the plugin extras (slash commands, the Console, the grounding hook) are missing.`);
+  info(`Run these two yourself to finish:`);
   info(`  ${c.bold(manualMarketplace)}`);
   info(`  ${c.bold(manualInstall)}`);
   return { wired: false, manualMarketplace, manualInstall };
@@ -532,7 +574,10 @@ function verifyInstall(cacheDir) {
   if (mcp) ok('search_ruvnet server present (this is what Claude calls to ground answers)');
   else warn('forge-mcp-all.mjs missing — the brain unpacked incompletely');
 
-  return { repos, reader, mcp };
+  // Plugin presence is part of "what is really on disk" — it is the difference between `/rvbc`
+  // working and "Unknown command". A user whose plugin never landed had no way to see that.
+  const plugin = pluginCommandsDir() !== null;
+  return { repos, reader, mcp, plugin };
 }
 
 // ── step: warm the model + prove grounding with one real question (best-effort, never fatal) ──────
@@ -727,6 +772,9 @@ async function doctor() {
   have('node') ? ok('node present') : warn('node missing');
   have('npm') ? ok('npm present') : warn('npm missing');
   have('claude') ? ok('claude CLI present') : warn('claude CLI missing (plugin wiring needs it)');
+  // Two independent version streams (KB bundle vs plugin wrapper) — see checkVersionDrift()'s
+  // header comment for the full story. Silent unless they've genuinely diverged.
+  reportVersionDrift(cacheDir);
   have('unzip') || have('pwsh') || have('powershell')
     ? ok('zip extraction available (unzip or PowerShell Expand-Archive)')
     : warn('no zip tool found — unzip or PowerShell needed for re-install');
@@ -813,6 +861,67 @@ function installedBrainVersion(cacheDir) {
   return 'unknown';
 }
 
+// ── the OTHER version: the plugin WRAPPER's own plugin.json ──────────────────────────────────────
+// installedBrainVersion() above answers "what KB is on disk". This answers "what PLUGIN WRAPPER is
+// on disk" — a genuinely different artifact (hooks, skills, slash commands), updated on a genuinely
+// different schedule (see the drift note at checkVersionDrift() below). Reuses pluginCommandsDir()
+// — the ONE locator for "is the plugin really here" — instead of growing a second one: plugin.json
+// always lives one directory above commands/, in both layouts that function checks.
+function wrapperVersion() {
+  const commandsDir = pluginCommandsDir();
+  if (!commandsDir) return null; // plugin not installed — nothing to read, nothing to compare
+  try {
+    const p = path.join(path.dirname(commandsDir), '.claude-plugin', 'plugin.json');
+    const v = String(JSON.parse(fs.readFileSync(p, 'utf8')).version || '');
+    return /^[A-Za-z0-9._-]{1,32}$/.test(v) ? v : null; // present-but-unparsable = "don't know"
+  } catch { return null; }
+}
+
+/**
+ * The brain ships as TWO independently-versioned artifacts: the KB content bundle (self-updates
+ * nightly via forge-update.mjs + GitHub Releases) and the Claude Code PLUGIN WRAPPER (hooks,
+ * skills, slash commands), which updates ONLY when Claude Code itself pulls the marketplace git
+ * clone at ~/.claude/plugins/marketplaces/ruvnet-brain — NOT AT ALL if a user's
+ * ~/.claude/settings.json has "autoUpdate": false for that marketplace. They drift silently, and —
+ * this is the damaging part — the version a user is SHOWN always comes from the frozen wrapper,
+ * never the brain. Verified live on this machine 2026-07-20: KB SOURCE.json built today, wrapper
+ * plugin.json still 3.4.18-dev, nine commits behind origin/main, because autoUpdate was false. A
+ * user (Dr. Mark Allen) hit exactly this: KB current, wrapper still the June v0.5.0-dev build, and
+ * nothing anywhere told him the two had diverged.
+ *
+ * NEVER invent or guess a version — this project's hardest rule. Either side unresolved → null, and
+ * null is NEVER treated as drift: a locally-built or pre-stamping KB legitimately has no releaseTag
+ * (see installedBrainVersion's own comment above), and a plugin that simply isn't installed yet is
+ * a DIFFERENT, already-reported situation (wirePlugin / verifyInstall), not a version mismatch.
+ * Drift is reported ONLY when BOTH sides resolved to a real value AND those values differ.
+ *
+ * @returns {{wrapper: string|null, kb: string|null, drift: boolean}}
+ */
+function checkVersionDrift(cacheDir) {
+  const wrapper = wrapperVersion();
+  const kbRaw = installedBrainVersion(cacheDir); // already honest — 'unknown' rather than a guess
+  const kb = kbRaw === 'unknown' ? null : kbRaw;
+  return { wrapper, kb, drift: Boolean(wrapper && kb && wrapper !== kb) };
+}
+
+/**
+ * Shared narration for --doctor and --what-changed (via printFootprint). Silent whenever there is
+ * nothing actionable to say — matched versions, or either side not comparable — so this never adds
+ * noise to a healthy machine or a not-yet-fully-installed one. Speaks up only when the two
+ * artifacts have genuinely diverged, in plain, warm, non-alarming language (neither artifact is
+ * broken — they just update on different schedules), and always hands over the exact command to
+ * fix it — verified live against `claude plugin marketplace --help` (2026-07-20) before ever being
+ * printed here.
+ */
+function reportVersionDrift(cacheDir) {
+  const state = checkVersionDrift(cacheDir);
+  if (!state.drift) return state;
+  warn(`the brain (${c.bold(state.kb)}) and the Claude Code plugin (${c.bold(state.wrapper)}) have drifted apart —`);
+  info(`that's normal (they update on separate schedules) and neither one is broken. To bring the`);
+  info(`plugin up to date:  ${c.bold('claude plugin marketplace update ruvnet-brain')}  ${c.dim('(then restart Claude Code)')}`);
+  return state;
+}
+
 function installAgeLine(cacheDir) {
   // SOURCE.json's mtime is when the bundle last landed here (install or self-update) — say which.
   for (const f of ['SOURCE.json', 'forge-mcp-all.mjs']) {
@@ -831,7 +940,7 @@ function feedbackHealthLines(cacheDir) {
   const env = detectEnvironment();
   const allGreen = s.repos > 0 && s.reader && s.mcp;
   return [
-    `${s.repos} repo stores on disk · reader ${s.reader ? 'ok' : 'MISSING'} · search_ruvnet ${s.mcp ? 'ok' : 'MISSING'}`,
+    `${s.repos} repo stores on disk · reader ${s.reader ? 'ok' : 'MISSING'} · search_ruvnet ${s.mcp ? 'ok' : 'MISSING'} · plugin ${s.plugin ? 'ok' : 'NOT INSTALLED (no /rvbc)'}`,
     `toolkit: Ruflo ${env.ruflo ? 'present' : 'not found'} · RuVector ${env.ruvector ? 'present' : 'not found'} · claude CLI ${env.claude ? 'present' : 'not found'}`,
     allGreen ? 'verdict: Healthy — installed and reachable' : 'verdict: Needs attention — re-run npx ruvnet-brain',
   ];
@@ -1132,6 +1241,151 @@ function enableSpendGuard() {
   return 'enabled';
 }
 
+/**
+ * Remove the spend watchdog. Mirrors disableNightly() exactly.
+ *
+ * This did not exist until 2026-07-20, which meant the watchdog was the one thing this installer
+ * could put on a machine with no supported way to take it back off. "Reversible" has to be a
+ * command someone can run, not a paragraph telling them which files to delete by hand — a user
+ * asking how to undo our changes should never need us to answer.
+ */
+function disableSpendGuard() {
+  printBanner('disable spend watchdog');
+  if (process.platform !== 'darwin') {
+    info('The spend-watchdog LaunchAgent is macOS-only, so nothing was scheduled here by this tool.');
+    return;
+  }
+  const plistPath = spendGuardPlistPath();
+  const scriptPath = spendGuardScriptPath();
+  const existed = fs.existsSync(plistPath);
+  if (TEST_MODE) {
+    warn('RUVNET_BRAIN_TEST=1 — skipping launchctl bootout (plist removal only)');
+  } else {
+    // Ignore failure: "not loaded" is the state we want anyway.
+    spawnSync('launchctl', ['bootout', `gui/${process.getuid()}/${SPEND_GUARD_LABEL}`], { stdio: 'ignore' });
+  }
+  let failed = false;
+  for (const p of [plistPath, scriptPath]) {
+    if (!fs.existsSync(p)) continue;
+    try { fs.rmSync(p); } catch (e) {
+      failed = true;
+      console.error(`\n${c.red("✗ couldn't remove:")} ${p} — ${e.message}`);
+      console.error(`  Remove it yourself:  rm ${p}`);
+    }
+  }
+  if (failed) process.exit(1);
+  if (existed) ok(`spend watchdog disabled — removed ${plistPath}`);
+  else ok('spend watchdog was already off — nothing to remove (safe to run any time)');
+}
+
+/**
+ * Everything this installer can leave on a machine, DERIVED from disk — never asserted.
+ *
+ * A user who wants out should not have to ask us which files to delete. That was the actual
+ * position the corporate-machine report left someone in: they had to reverse-engineer our
+ * footprint from a bug report. Anything listed here has a real undo next to it.
+ *
+ * @returns {{label:string, path:string, undo:string}[]}
+ */
+export function machineFootprint() {
+  const items = [];
+  const add = (label, p, undo) => { try { if (p && fs.existsSync(p)) items.push({ label, path: p, undo }); } catch { /* unreadable → not ours to claim */ } };
+
+  add('Brain bundle (knowledge base)', resolvedKbDir(), 'npx ruvnet-brain --uninstall');
+  if (process.platform === 'darwin') {
+    add('Nightly updater (LaunchAgent)', nightlyPlistPath(), 'npx ruvnet-brain --disable-nightly');
+    add('Spend watchdog (LaunchAgent)', spendGuardPlistPath(), 'npx ruvnet-brain --disable-spend-guard');
+    add('Spend watchdog script', spendGuardScriptPath(), 'npx ruvnet-brain --disable-spend-guard');
+  }
+  const cmds = pluginCommandsDir();
+  if (cmds) items.push({
+    label: 'Claude Code plugin',
+    path: path.dirname(cmds),
+    undo: 'claude plugin uninstall ruvnet-brain@ruvnet-brain',
+  });
+  const cmdPath = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+  try {
+    if (fs.existsSync(cmdPath) && fs.readFileSync(cmdPath, 'utf8').includes(CLAUDE_MD_START)) {
+      items.push({ label: 'CLAUDE.md block (6 lines, between markers)', path: cmdPath, undo: 'npx ruvnet-brain --uninstall' });
+    }
+  } catch { /* unreadable */ }
+  add('Usage-counts preference', telemetryConsentPath(), 'delete this file');
+  return items;
+}
+
+/** Print the footprint. Called at the end of an install so nobody is ever surprised later. */
+function printFootprint({ heading = 'What this put on your machine' } = {}) {
+  const items = machineFootprint();
+  if (!items.length) { info('Nothing from RuvNet Brain is currently installed.'); return items; }
+  console.log(`\n  ${c.bold(heading)}`);
+  for (const it of items) {
+    console.log(`    • ${it.label}`);
+    console.log(`      ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+    console.log(`      ${c.dim(`undo: ${it.undo}`)}`);
+  }
+  console.log(`\n  ${c.dim('Remove all of it at once:')}  ${c.bold('npx ruvnet-brain --uninstall')}`);
+  // Same "two artifacts, one machine" story as --doctor — surfaced here too, since a footprint
+  // listing is exactly where a user would otherwise reasonably assume one version covers both.
+  // Silent unless they've genuinely diverged.
+  reportVersionDrift(resolvedKbDir());
+  return items;
+}
+
+/**
+ * Surgically remove ONLY our block from CLAUDE.md, leaving every other line exactly as it was.
+ * Backed up and written atomically, same as when it was added — taking something away is at least
+ * as sensitive as putting it there.
+ */
+function removeClaudeMdBlock() {
+  const p = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+  let src = '';
+  try { src = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { return 'unreadable'; }
+  const start = src.indexOf(CLAUDE_MD_START);
+  const end = src.indexOf(CLAUDE_MD_END);
+  if (start === -1 || end === -1 || end < start) return 'absent';
+  const next = `${src.slice(0, start)}${src.slice(end + CLAUDE_MD_END.length)}`.replace(/\n{3,}/g, '\n\n').replace(/^\s+/, '');
+  try {
+    const backup = `${p}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(p, backup);
+    const tmp = `${p}.ruvnet-tmp`;
+    fs.writeFileSync(tmp, next);
+    fs.renameSync(tmp, p);
+    return 'removed';
+  } catch { return 'failed'; }
+}
+
+/** Reverse everything, and PROVE it rather than claiming it. */
+function uninstallAll() {
+  printBanner('uninstall RuvNet Brain');
+  const before = machineFootprint();
+  if (!before.length) { ok('Nothing to remove — RuvNet Brain is not installed here.'); return; }
+
+  console.log(`  This will remove:`);
+  for (const it of before) console.log(`    • ${it.label}  ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+  console.log(`\n  ${c.dim('Your own CLAUDE.md content is preserved — only our marked block is taken out,')}`);
+  console.log(`  ${c.dim('and the file is backed up first.')}\n`);
+
+  if (process.platform === 'darwin') { disableNightly(); disableSpendGuard(); }
+
+  const claudeMd = removeClaudeMdBlock();
+  if (claudeMd === 'removed') ok('removed our block from ~/.claude/CLAUDE.md (your content untouched, backup saved)');
+
+  const kb = resolvedKbDir();
+  if (kb && fs.existsSync(kb)) {
+    try { fs.rmSync(kb, { recursive: true, force: true }); ok(`removed the brain bundle (${kb.replace(os.homedir(), '~')})`); }
+    catch (e) { warn(`couldn't remove ${kb}: ${e.message}`); }
+  }
+
+  // PROOF, not a claim — re-derive the footprint and show what (if anything) survived.
+  const after = machineFootprint();
+  console.log('');
+  if (!after.length) { ok('Verified clean — nothing from RuvNet Brain remains.'); }
+  else {
+    warn('These need one more step (they are not ours to remove automatically):');
+    for (const it of after) console.log(`    • ${it.label} — ${c.bold(it.undo)}`);
+  }
+}
+
 // Exported (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerNightly). Never throws — the caller
 // also guards, because a finished install must never be broken by an optional safety offer.
 export async function offerSpendGuard() {
@@ -1143,12 +1397,16 @@ export async function offerSpendGuard() {
     'One more safety net — a spend watchdog',
     'agentic tools can bill the paid API in the background; this alarm catches a runaway before it drains your card',
   );
-  info(`${c.bold('Strongly recommended:')} an hourly check that alerts you the moment an automated agent`);
-  info('fleet floods a project — the pattern that has quietly burned real money. Alert-only, never spends.');
+  info(`${c.green('Recommended')} — an hourly check that alerts you the moment an automated agent fleet`);
+  info(`floods a project. That pattern has quietly burned real money. ${c.bold('Your call, and easy to undo.')}`);
+  info(`${c.dim('What it sets up:')} a small background job (a macOS LaunchAgent) that watches for the burst`);
+  info(`${c.dim('                 ')} pattern. ${c.bold('Alert-only — it never spends, and never changes your billing.')}`);
+  info(`${c.dim('If you skip:')}     nothing changes; add it later with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`);
 
-  if (!process.stdin.isTTY && !FLAG_YES) { info(`No terminal to prompt on — install it any time by re-running  ${c.bold('npx ruvnet-brain')}`); return 'recommended'; }
+  // NOT gated on FLAG_YES — second launchd job, same rule as the nightly updater above.
+  if (!process.stdin.isTTY && !FLAG_ENABLE_SPEND_GUARD) { info(`No terminal to prompt on — install it any time with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`); return 'recommended'; }
   let yes = true;
-  if (!FLAG_YES) {
+  if (!FLAG_ENABLE_SPEND_GUARD) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((resolve) => rl.question(`    ${c.cyan('?')} Install the spend watchdog? ${c.dim('[Y/n]')} `, resolve));
     rl.close();
@@ -1293,15 +1551,28 @@ export async function offerNightly() {
 
   info(`${c.bold('Recommended:')} your brain updates itself while you sleep — new repos, new gists, zero effort.`);
 
-  if (!process.stdin.isTTY && !FLAG_YES) {
+  // Recommend it, mean it, and still make declining feel completely fine. The goal is a user who
+  // understands what they're agreeing to — not one who is either scared off by a wall of caveats or
+  // nudged past a decision they'd have made differently. Both failures cost trust; only one is loud.
+  info(`${c.green('Recommended')} — rUv ships constantly, and this is how fixes reach you without you`);
+  info(`thinking about it. ${c.bold('Entirely your call, though')}, and easy to undo.`);
+  info(`${c.dim('What it sets up:')} a small background job (a macOS LaunchAgent) that checks each night`);
+  info(`${c.dim('                 ')} and downloads a fresher brain — signature-verified before anything is applied.`);
+  info(`${c.dim('If you skip:')}     nothing changes; update whenever you like with  ${c.bold('npx ruvnet-brain --update')}`);
+  info(`${c.dim('Turn it off:')}     ${c.bold('npx ruvnet-brain --disable-nightly')}  ${c.dim('(any time, no reinstall)')}`);
+
+  // NOT gated on FLAG_YES — see the high-impact consent note on ask(). A blanket `-y` means nobody is
+  // present to READ the explanation above, and an explanation nobody read is not consent. It takes the
+  // explicit --enable-nightly, or a human answering in a terminal.
+  if (!process.stdin.isTTY && !FLAG_ENABLE_NIGHTLY) {
     // No terminal to ask on (CI / piped install) — recommend clearly instead of prompting.
     info(`No interactive terminal here, so I won't prompt. Enable it any time with one command:`);
     info(`  ${c.bold('npx ruvnet-brain --enable-nightly')}`);
     return 'recommended';
   }
 
-  let yes = true; // --yes accepts every optional offer, this one included
-  if (!FLAG_YES) {
+  let yes = true;
+  if (!FLAG_ENABLE_NIGHTLY) {
     // Not ask(): its parser treats anything but y/yes as no. Here the DEFAULT is yes — only an
     // explicit n/no declines (parseNightlyAnswer holds that contract, and the tests hold it there).
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -1411,8 +1682,28 @@ export async function offerTelemetry(cacheDir) {
 }
 
 // ── tiny interactive yes/no — SAFE in non-TTY (returns the default; never blocks a piped install) ──
-function ask(question, def = false) {
-  if (FLAG_YES) return Promise.resolve(true);
+/**
+ * @param {string} question
+ * @param {boolean} def answer used when there is no terminal to ask on
+ * @param {{blanketYes?: boolean}} opts blanketYes:false means --yes does NOT answer this one
+ *
+ * HIGH-IMPACT CONSENT (2026-07-20). `--yes` is documented as "accept every optional offer", and it
+ * used to include the two changes nobody would call optional: installing a persistent LaunchAgent
+ * that pulls code from GitHub on a schedule, and editing a global config file. Reported by a user on
+ * a CORPORATE machine whose enterprise policy correctly blocked the plugin/MCP install but had no
+ * rule covering a launchd job — so the one thing that survived was the background daemon.
+ *
+ * It almost certainly arrived via an AI agent: hit an interactive prompt, cannot answer it, re-run
+ * with `-y`. Entirely reasonable behaviour, and with blanket consent it silently authorizes a
+ * daemon. rUv's own ADR-302 already says why this is wrong — "accepting the enrollment screen is
+ * not blanket authorization... four distinct decisions, each with its own consent, its own prompt
+ * moment, and its own record." We were violating his design inside our own installer.
+ *
+ * So: persistent background jobs and global-config edits require their OWN explicit flag. There is
+ * no combination of `-y` alone that installs a daemon.
+ */
+function ask(question, def = false, { blanketYes = true } = {}) {
+  if (FLAG_YES && blanketYes) return Promise.resolve(true);
   if (!process.stdin.isTTY) return Promise.resolve(def);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const suffix = def ? c.dim('[Y/n]') : c.dim('[y/N]');
@@ -1552,31 +1843,65 @@ Prefer rUv-native primitives (RVF over Pinecone/pgvector, Ruflo over LangChain, 
 Not sure it's active? Run \`npx ruvnet-brain --doctor\`.
 ${CLAUDE_MD_END}`;
 
-async function offerClaudeMd() {
+export async function offerClaudeMd() {
   if (FLAG_NO_ENHANCE) return;
   const p = path.join(os.homedir(), '.claude', 'CLAUDE.md');
   let existing = '';
   try { existing = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { /* ignore */ }
-  if (existing.includes(CLAUDE_MD_START)) { return; } // already enhanced — idempotent, stay silent
+  if (existing.includes(CLAUDE_MD_START)) { return; } // already there — idempotent, stay silent
+
+  // DON'T ASK WHEN IT ADDS NOTHING. If the plugin is installed, its hooks already enforce grounding
+  // on every turn and this block is pure duplication — the old skip-branch message said exactly that
+  // out loud. Asking to edit the most sensitive file we touch, for a benefit the user already has,
+  // is how a helpful tool starts feeling invasive. So the question is only worth someone's attention
+  // when the plugin is absent, which is a real population (see the "Unknown command: /rvbc" report)
+  // but not the common one.
+  if (pluginCommandsDir()) return;
 
   step(
-    'Teaching your Claude to lean on the brain',
-    'a short note in your global CLAUDE.md so every session — in any project — knows to use it',
+    'Optional — a note in your global CLAUDE.md',
+    "so Claude leans on the brain in projects where the plugin's hooks aren't running",
   );
+  // Say precisely what changes on their disk, in their words, BEFORE asking. "Enhance your CLAUDE.md"
+  // is the kind of phrasing that makes a careful person assume the worst — and on a managed machine
+  // that file may be governed. Six lines at the bottom, markers, reversible, backed up: all of that
+  // is far less alarming than the vague version, and it happens to be the whole truth.
+  info(`Adds ${c.bold('6 lines to the BOTTOM')} of ${c.bold('~/.claude/CLAUDE.md')}, wrapped in`);
+  info(`  ${c.dim('<!-- ruvnet-brain:start -->')} … ${c.dim('<!-- ruvnet-brain:end -->')}`);
+  info(`Nothing already in the file is changed or removed. Delete the block any time.`);
+  info(`${c.green("We back the file up first")}, and re-running never adds it twice.`);
+  info(c.dim(`Honestly: if you install the plugin, you don't need this — its hooks already do it.`));
+
   const yes =
     FLAG_ENHANCE_CLAUDE_MD ||
-    (await ask(`Add a short RuvNet-Brain section to ${existing ? 'your' : 'a new'} ~/.claude/CLAUDE.md?`, false));
+    // blanketYes:false — editing a file THEY own is not something a blanket `-y` gets to decide.
+    (await ask('Add it?', false, { blanketYes: false }));
   if (!yes) {
-    info('skipped — the plugin hooks already enforce grounding every turn; this was just extra reinforcement');
+    info(`No problem, skipped — add it any time with  ${c.bold('npx ruvnet-brain --enhance-claude-md')}`);
     return;
   }
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true });
+    // Back up before touching it — the same courtesy this installer already extends to settings.json,
+    // and this is the more sensitive file of the two.
+    let backup = null;
+    if (existing) {
+      backup = `${p}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      fs.copyFileSync(p, backup);
+    }
     const next = existing ? `${existing.replace(/\s*$/, '')}\n\n${CLAUDE_MD_BLOCK}\n` : `${CLAUDE_MD_BLOCK}\n`;
-    fs.writeFileSync(p, next);
-    ok(`added a RuvNet-Brain section to ${p} ${c.dim('(marker-guarded — safe to re-run)')}`);
+    // ATOMIC write — temp sibling then rename. The content was always a pure append, but the old
+    // code rewrote the whole file in place, so an interruption (disk full, power loss) could leave
+    // a TRUNCATED CLAUDE.md. Fine 999 times out of 1000 and unforgivable the other time. This is the
+    // discipline rUv already applies to credential files (cognitum-seed cloud_key.rs: tmp → rename).
+    const tmp = `${p}.ruvnet-tmp`;
+    fs.writeFileSync(tmp, next);
+    fs.renameSync(tmp, p);
+    ok(`added 6 lines to the bottom of ${p}`);
+    if (backup) info(c.dim(`  your original is saved at ${backup}`));
+    info(c.dim(`  to remove: delete the block between the two ruvnet-brain markers`));
   } catch (e) {
-    warn(`couldn't update CLAUDE.md (${e.message}) — not important; the plugin hooks still enforce grounding`);
+    warn(`couldn't update CLAUDE.md (${e.message}) — your file is untouched, and this was optional anyway`);
   }
 }
 
@@ -1853,6 +2178,14 @@ Usage:
   npx ruvnet-brain --enable-nightly    Schedule that update nightly at 03:47 — macOS LaunchAgent;
                               other platforms get the documented cron line. OFF by default.
   npx ruvnet-brain --disable-nightly   Remove the nightly schedule (safe to run any time)
+  npx ruvnet-brain --what-changed     Show exactly what RuvNet Brain has put on this machine,
+                              with the undo command for each piece
+  npx ruvnet-brain --uninstall        Remove all of it (bundle, LaunchAgents, and our CLAUDE.md
+                              block only — your own CLAUDE.md content is preserved and backed up)
+  npx ruvnet-brain --enable-spend-guard   Install the hourly runaway-agent spend alarm (alert-only)
+  npx ruvnet-brain --disable-spend-guard  Remove it (safe to run any time)
+  npx ruvnet-brain --enhance-claude-md    Add the 6-line RuvNet-Brain block to ~/.claude/CLAUDE.md
+                              (appended at the bottom between markers; your file is backed up first)
                               (a default install RECOMMENDS nightly and asks, defaulting to yes)
   node bin/install.mjs --no-nightly-prompt Don't offer nightly auto-updates at the end of the install
   node bin/install.mjs --no-telemetry      Decline anonymous usage counts without being asked
@@ -1891,6 +2224,14 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   if (FLAG_UPDATE) return runUpdate();
   if (FLAG_ENABLE_NIGHTLY) return enableNightly();
   if (FLAG_DISABLE_NIGHTLY) return disableNightly();
+  // Standalone, like the nightly pair above. Without these, the flags existed only as a way to
+  // pre-answer a prompt DURING a full install — so the copy telling someone to "add it later with
+  // npx ruvnet-brain --enable-spend-guard" would have kicked off an entire reinstall instead of the
+  // small targeted action they asked for. Promised in the UI, therefore real here.
+  if (FLAG_ENABLE_SPEND_GUARD) { enableSpendGuard(); return; }
+  if (FLAG_DISABLE_SPEND_GUARD) { disableSpendGuard(); return; }
+  if (FLAG_UNINSTALL) { uninstallAll(); return; }
+  if (FLAG_WHAT_CHANGED) { printBanner('what RuvNet Brain put on this machine'); printFootprint(); return; }
 
   printBanner('installer');
   console.log(c.dim("I'll set up the brain and the Claude Code plugin, explaining each step as I go.\n"));
@@ -1986,6 +2327,12 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   try { await offerStatusline(); } catch { /* non-fatal — a status-bar nicety must never break the install */ }
 
   success({ cacheDir, isCustom, plugin, env, nightly });
+
+  // Close every install by stating, in one place, exactly what is now on their machine and how to
+  // take each piece back off. Someone reading this should never have to file a bug report to find
+  // out what we did — which is precisely the position the 2026-07-20 corporate-machine reporter was
+  // left in. Derived from disk, so it can only ever describe what is actually there.
+  try { printFootprint(); } catch { /* a summary must never break a finished install */ }
 })().catch((e) => {
   die(e && e.message ? e.message : String(e));
 });

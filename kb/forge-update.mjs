@@ -24,6 +24,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const KB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.join(KB_DIR, 'SOURCE.json');
@@ -120,6 +121,208 @@ function copyTree(srcDir, dstDir) {
   }
 }
 
+/** `.rvf` store filenames in a directory — the inventory the safety check compares. */
+function rvfNames(dir) {
+  try { return new Set(fs.readdirSync(dir).filter((n) => n.endsWith('.rvf'))); } catch { return new Set(); }
+}
+
+/** Recursive byte size, for honestly reporting how much was actually reclaimed. */
+function dirSize(dir) {
+  let total = 0;
+  const walk = (d) => {
+    let entries; try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p); else { try { total += fs.statSync(p).size; } catch { /* vanished mid-walk */ } }
+    }
+  };
+  walk(dir);
+  return total;
+}
+
+/**
+ * Release rollback copies after the new KB has verified (issue #35, Dr. Mark Allen).
+ *
+ * Exported and pure-ish because it DELETES MULTI-GIGABYTE DIRECTORIES — a bug here destroys user
+ * data, so it is tested directly rather than exercised only through a full update run.
+ *
+ * Refuses to delete any backup holding a `.rvf` store the live KB does not have. That is the
+ * private/local-store case: the public bundle does not ship those, the update replaces the directory,
+ * and forge-guard still passes because it verifies the store it was asked about — not what went
+ * missing. In that situation the backup is the only surviving copy, so it is kept and reported.
+ *
+ * @returns {{removed: string[], kept: [string, string][], freed: number}}
+ */
+export function reclaimBackups({ kbDir, backupsMade = [], env = process.env }) {
+  const parent = path.dirname(kbDir);
+  const prefix = `${path.basename(kbDir)}.bak-`;
+  let stranded = [];
+  try { stranded = fs.readdirSync(parent).filter((n) => n.startsWith(prefix)).map((n) => path.join(parent, n)); }
+  catch { /* unreadable parent — nothing to sweep */ }
+
+  const all = [...new Set([...backupsMade, ...stranded])];
+  const removed = []; const kept = []; let freed = 0;
+  const liveStores = rvfNames(kbDir);
+
+  for (const b of all) {
+    if (!fs.existsSync(b)) continue;
+    if (env.RUVNET_KEEP_BACKUP === '1') { kept.push([b, 'RUVNET_KEEP_BACKUP=1 is set']); continue; }
+    const lost = [...rvfNames(b)].filter((n) => !liveStores.has(n));
+    if (lost.length) {
+      kept.push([b, `it holds ${lost.length} store(s) the new copy does NOT have: ${lost.slice(0, 3).join(', ')}${lost.length > 3 ? '…' : ''}`]);
+      continue;
+    }
+    const size = dirSize(b);
+    try { fs.rmSync(b, { recursive: true, force: true }); removed.push(b); freed += size; }
+    catch (e) { kept.push([b, `could not remove: ${e.message}`]); }
+  }
+  return { removed, kept, freed };
+}
+
+/**
+ * Decide which URL to actually download the replacement bundle from (issue #35 item 1, Dr. Mark
+ * Allen / @mamd69).
+ *
+ * The OLD code (line 218 before this fix) always used `local.canonicalBundleUrl` — the URL
+ * literally written into the copy of SOURCE.json that is BEING REPLACED. That value can only ever
+ * point BACKWARD: it was correct on the day this copy was forged, and every day after is a day it
+ * could go stale. Mark's machine re-downloaded the same June v0.5.0-dev asset for three weeks
+ * because that pinned URL never moved even though newer releases existed on GitHub the whole time.
+ *
+ * This resolves the URL from `canon` — the live "latest release" (or manifest) payload `main()`
+ * already fetched fresh, moments ago, over the network — instead of the stale local copy:
+ *   - Shape 3 (a GitHub `releases/latest` payload — what this project actually publishes): the
+ *     release carries real `assets[]` with `browser_download_url`s that GitHub resolves NOW, not
+ *     whatever was true when this local copy was built. Prefer the asset whose name matches the
+ *     pinned URL's basename; this project in practice ships ONE combined zip per release (not one
+ *     per KB store, despite forge-build.mjs's per-store naming convention — the two drifted apart),
+ *     so if there's exactly one `.zip` asset and no name match, that unambiguous single zip IS it.
+ *   - Shape 1/2 (a forge `.last-built.json` or SOURCE.json-shaped manifest): these can carry the
+ *     same `canonicalBundleUrl` field per store, but THIS copy was just fetched fresh over the
+ *     network, so it reflects the manifest's CURRENT contents — still a live resolution, not a
+ *     pinned local guess.
+ *   - Only when neither live source resolves an asset does this fall back to the URL pinned in the
+ *     local SOURCE.json — and it says so. Falling back to that value SILENTLY is issue #35 item 3
+ *     (the "known-good" bundle applied with zero warning); callers MUST surface `warning` when set.
+ *
+ * @returns {{ url: string|null, origin: 'latest-release-asset'|'live-manifest'|'pinned-fallback'|'none', assetName: string|null, digest: string|null, warning: string|null }}
+ */
+export function resolveBundleUrl({ canon, local, source }) {
+  const pinned = (local && local.canonicalBundleUrl) || (source && source.canonicalBundleUrl) || null;
+
+  if (canon && Array.isArray(canon.assets) && canon.assets.length) {
+    const wantName = pinned ? path.basename(pinned) : null;
+    let asset = wantName ? canon.assets.find((a) => a && a.name === wantName) : null;
+    if (!asset) {
+      const zips = canon.assets.filter((a) => a && typeof a.name === 'string' && a.name.endsWith('.zip'));
+      if (zips.length === 1) asset = zips[0];
+    }
+    if (asset && (asset.browser_download_url || asset.url)) {
+      return {
+        url: asset.browser_download_url || asset.url,
+        origin: 'latest-release-asset',
+        assetName: asset.name,
+        digest: asset.digest || null,
+        warning: null,
+      };
+    }
+  }
+
+  if (canon && canon.stores && typeof canon.stores === 'object' && !Array.isArray(canon.stores) && local) {
+    const cs = canon.stores[local.kbName];
+    if (cs && cs.canonicalBundleUrl) {
+      return { url: cs.canonicalBundleUrl, origin: 'live-manifest', assetName: path.basename(cs.canonicalBundleUrl), digest: null, warning: null };
+    }
+  }
+
+  if (pinned) {
+    const staleness = local
+      ? `this copy's own record (built ${local.builtUtc || '?'}${local.sourceDescribe ? `, ${local.sourceDescribe}` : local.sourceCommit ? `, ${short(local.sourceCommit)}` : ''})`
+      : `this copy's own record`;
+    return {
+      url: pinned,
+      origin: 'pinned-fallback',
+      assetName: path.basename(pinned),
+      digest: null,
+      warning: `could not resolve a bundle asset from the LIVE manifest ` +
+        `(${canon && canon.tag_name ? `release ${canon.tag_name} has no matching/unambiguous .zip asset` : 'the manifest is not a GitHub Release payload and carries no live canonicalBundleUrl'}); ` +
+        `falling back to the URL PINNED inside ${staleness}: ${pinned} — this can only point BACKWARD (issue #35) and may be stale.`,
+    };
+  }
+
+  return { url: null, origin: 'none', assetName: null, digest: null, warning: null };
+}
+
+/**
+ * Confirm the download+extraction actually changed what is on disk (issue #35 item 2, Dr. Mark
+ * Allen / @mamd69).
+ *
+ * The OLD code's final "DONE" message (line 296 before this fix) was built from `canon.tag_name` —
+ * a lookup made BEFORE anything was downloaded — regardless of what the download actually
+ * contained. Mark's run printed "KB updated to the canonical build (v3.4.21-dev)" while his
+ * SOURCE.json on disk still read v0.5.0-dev, because nothing ever re-read it afterward.
+ *
+ * This deliberately does NOT reuse `isBehind()` for the pass/fail decision: `isBehind()` compares
+ * against `canon.builtUtc`, which for a GitHub Release is the RELEASE's publish timestamp — always
+ * a few minutes AFTER the KB inside it was actually forged. Confirmed LIVE against this repo's own
+ * kb/SOURCE.json (2026-07-20): running `--check` against a store forged 2 minutes before its own
+ * release was published already reads BEHIND. Reusing that comparison here would make EVERY
+ * successful update fail this guard too — crying wolf on success is as dishonest as silence on
+ * failure. Instead this checks something isBehind() cannot: does the on-disk identity now differ
+ * from what it was immediately BEFORE this update ran? `builtUtc` is regenerated at every forge
+ * build, so a genuine new build always changes it — an unchanged fingerprint after a "successful"
+ * download IS the bug (identical bytes re-fetched, exactly Mark's report). When the resolved asset
+ * carried a real digest, this also verifies the downloaded bytes against it — the one place a
+ * directly comparable "resolved vs. landed" fact actually exists in a GitHub Release payload.
+ *
+ * @returns {{ok: boolean, reason: string|null, landed: object|null}}
+ */
+export function verifyLanded({ kbDir, kbName, before, expectedDigest = null, downloadedBuffer = null }) {
+  const p = path.join(kbDir, 'SOURCE.json');
+  if (!fs.existsSync(p)) {
+    return { ok: false, reason: `no SOURCE.json found at ${p} after extraction — cannot confirm what actually landed`, landed: null };
+  }
+  let landedSource;
+  try { landedSource = JSON.parse(fs.readFileSync(p, 'utf8')); }
+  catch (e) { return { ok: false, reason: `SOURCE.json on disk after extraction is unreadable/corrupt: ${e.message}`, landed: null }; }
+
+  const list = Array.isArray(landedSource.stores)
+    ? landedSource.stores
+    : (landedSource.stores && typeof landedSource.stores === 'object')
+      ? Object.entries(landedSource.stores).map(([n, v]) => ({ kbName: n, ...v }))
+      : [landedSource];
+  // The single-item, no-kbName-field fallback exists ONLY for the legacy flat schema (a SOURCE.json
+  // predating the multi-store `stores` object — see the identical pattern at the top of this file,
+  // lines 46-50). It must NOT swallow a genuine name mismatch: if the one store present names
+  // itself something else, that is a real "wrong store landed" error, not a format quirk.
+  const landed = list.find((s) => s.kbName === kbName)
+    || (list.length === 1 && list[0].kbName == null ? { kbName, ...list[0] } : null);
+  if (!landed) {
+    return { ok: false, reason: `SOURCE.json on disk after extraction has no entry for store "${kbName}"`, landed: null };
+  }
+
+  const fingerprint = (r) => `${r.builtUtc || ''}|${r.sourceCommit || ''}|${r.sourceDescribe || ''}`;
+  if (before && fingerprint(landed) === fingerprint(before)) {
+    return {
+      ok: false,
+      reason: `SOURCE.json on disk is IDENTICAL to before the update (built ${landed.builtUtc || '?'}` +
+        `${landed.sourceDescribe ? `, ${landed.sourceDescribe}` : ''}) — nothing actually changed. ` +
+        `This is the exact failure reported in issue #35: bytes replaced with an identical copy while success was printed.`,
+      landed,
+    };
+  }
+
+  if (expectedDigest && downloadedBuffer) {
+    const algo = expectedDigest.includes(':') ? expectedDigest.split(':')[0] : 'sha256';
+    const actual = `${algo}:${createHash(algo).update(downloadedBuffer).digest('hex')}`;
+    if (actual !== expectedDigest) {
+      return { ok: false, reason: `downloaded bundle digest ${actual} does not match the release-declared digest ${expectedDigest}`, landed };
+    }
+  }
+
+  return { ok: true, reason: null, landed };
+}
+
 async function main() {
   const canon = await fetchJson(manifestUrl);
   const targets = ONLY ? stores.filter((s) => s.kbName === ONLY) : stores;
@@ -133,6 +336,8 @@ async function main() {
   console.log(`canonical built:    ${canonLabel}\n`);
 
   let anyBehind = false; const behindStores = [];
+  // Rollback copies taken during this run. Released once the new copy verifies — see RECLAIM below.
+  const backupsMade = [];
   for (const local of targets) {
     const c = canonicalFor(canon, local.kbName);
     const behind = isBehind(local, c);
@@ -154,10 +359,22 @@ async function main() {
 
   if (!anyBehind) { console.log(`\nNothing to apply — already current.`); process.exit(0); }
 
+  // What actually landed for each store, so the final message (below RECLAIM) can be built from
+  // the real on-disk artifact instead of the `canon` lookup made at the top of this run — issue
+  // #35 item 2. Populated by verifyLanded() as each store is applied; main() dies loudly before
+  // reaching the summary if any store's landed copy does not check out.
+  const landedByStore = new Map();
+
   for (const { local } of behindStores) {
-    const bundleUrl = local.canonicalBundleUrl || source.canonicalBundleUrl;
-    if (!bundleUrl) die(`[${local.kbName}] no canonicalBundleUrl in SOURCE.json — cannot self-update this store.`);
-    console.log(`\n[${local.kbName}] downloading ${bundleUrl} ...`);
+    // ── RESOLVE THE BUNDLE URL FROM THE LIVE MANIFEST, NOT THE PINNED LOCAL COPY (issue #35 item 1) ─
+    const resolved = resolveBundleUrl({ canon, local, source });
+    if (!resolved.url) die(`[${local.kbName}] no canonicalBundleUrl in SOURCE.json and no resolvable asset in the live manifest — cannot self-update this store.`);
+    if (resolved.warning) console.warn(`\n  ⚠ ${resolved.warning}`); // issue #35 item 3: never fall back silently
+    const bundleUrl = resolved.url;
+    const originLabel = resolved.origin === 'latest-release-asset' ? `live release asset "${resolved.assetName}"`
+      : resolved.origin === 'live-manifest' ? `live manifest entry for ${local.kbName}`
+      : 'PINNED FALLBACK (see warning above)';
+    console.log(`\n[${local.kbName}] downloading ${bundleUrl}\n  (source: ${originLabel}) ...`);
     const buf = await fetchBuffer(bundleUrl);
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `forge-update-${local.kbName}-`));
     const zipPath = path.join(tmp, 'bundle.zip'), extractDir = path.join(tmp, 'extracted');
@@ -190,12 +407,26 @@ async function main() {
     console.log(`  extracting...`);
     try { execFileSync('unzip', ['-q', '-o', zipPath, '-d', extractDir], { stdio: 'inherit' }); }
     catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] unzip failed: ${e.message} — local files untouched.`); }
-    const backup = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);
-    console.log(`  backing up current copy -> ${backup}`);
-    fs.cpSync(KB_DIR, backup, { recursive: true });
+    const backupPath = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);
+    console.log(`  backing up current copy -> ${backupPath}`);
+    console.log(`  (temporary — released automatically once the new copy verifies)`);
+    fs.cpSync(KB_DIR, backupPath, { recursive: true });
+    backupsMade.push(backupPath);
     copyTree(extractDir, KB_DIR);
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log(`  files replaced.`);
+
+    // ── VERIFY WHAT ACTUALLY LANDED (issue #35 item 2) ────────────────────────────────────────────
+    // Re-read the SOURCE.json this extraction just wrote to KB_DIR and confirm it genuinely differs
+    // from the copy we started with (and, when GitHub gave us a digest, that the bytes match it).
+    // Do NOT trust `canon` here — that lookup happened before any download and says nothing about
+    // what is now actually on disk. See verifyLanded()'s doc comment for why this can't reuse
+    // isBehind() safely.
+    const verified = verifyLanded({ kbDir: KB_DIR, kbName: local.kbName, before: local, expectedDigest: resolved.digest, downloadedBuffer: buf });
+    if (!verified.ok) {
+      die(`[${local.kbName}] UPDATE MISMATCH: ${verified.reason}\n  Previous copy is backed up beside the KB dir (*.bak-*); restore it if needed. REFUSING to report success.`);
+    }
+    landedByStore.set(local.kbName, { landed: verified.landed, origin: resolved.origin, assetName: resolved.assetName });
   }
 
   // Re-verify only the updated store(s) with the bundled guard. forge-guard.mjs takes the KB
@@ -211,8 +442,47 @@ async function main() {
     console.log(`\n(no forge-guard.mjs found to re-verify — skipped)`);
   }
 
-  console.log(`\n=== DONE — KB updated to the canonical build (${canon.tag_name || canon.generated || canon.builtUtc}). ===`);
+  // ── RECLAIM THE ROLLBACK COPY (issue #35, Dr. Mark Allen) ──────────────────────────────────────
+  // The rollback copy exists to survive the SWAP, not to live on disk forever. Every update used to
+  // leave a full ~2.5 GB copy behind and never remove it; Mark accumulated SEVEN (~14 GB) before
+  // noticing. By this point forge-guard has PROVEN the new copy answers, and the bundle it came from
+  // is a signed, versioned, re-downloadable artifact — so the old copy is dead weight. Released here,
+  // and any copies stranded by earlier runs are swept with it.
+  //
+  // THE ONE CASE WHERE IT IS NOT DEAD WEIGHT, and why this is a check and not an `rm`: a KB can hold
+  // stores the public bundle does not ship (private/local ones). The update replaces the directory, so
+  // if such a store is absent from the new copy, the backup is its ONLY remaining copy — and
+  // forge-guard would still pass, because it verifies the store it was asked about, not whatever went
+  // missing. Deleting there would destroy the only copy of a user's private data. So: compare store
+  // inventories first, and keep any backup holding something the new copy lost.
+  const { removed, kept, freed } = reclaimBackups({ kbDir: KB_DIR, backupsMade });
+  if (removed.length) {
+    console.log(`\nreleased ${removed.length} rollback ${removed.length === 1 ? 'copy' : 'copies'} — ${(freed / 1e9).toFixed(2)} GB reclaimed`);
+    console.log(`  (the new copy verified; this exact build is re-downloadable at any time)`);
+  }
+  for (const [b, why] of kept) console.log(`\n  KEPT ${b}\n    ${why}`);
+
+  // ── FINAL MESSAGE — DERIVED FROM WHAT LANDED, NOT FROM THE TAG LOOKUP (issue #35 item 2) ────────
+  // The old line above printed `canon.tag_name` regardless of what the download actually contained
+  // — that is verbatim the bug: "printed 'KB updated to the canonical build (v3.4.21-dev)' [...]
+  // SOURCE.json still said v0.5.0-dev afterward." Every store reaching this line already passed
+  // verifyLanded() above (main() dies before this point otherwise), so what follows is read back
+  // from the real file on disk, not asserted.
+  console.log(`\n=== DONE — ${behindStores.length} store(s) updated ===`);
+  console.log(`resolved target (live manifest, checked BEFORE downloading): ${canonLabel}`);
+  for (const { local } of behindStores) {
+    const r = landedByStore.get(local.kbName);
+    const l = r.landed;
+    console.log(`[${local.kbName}] SOURCE.json on disk now reads: built ${l.builtUtc || '?'} from ${short(l.sourceCommit)}${l.sourceDescribe ? ` (${l.sourceDescribe})` : ''}`);
+    console.log(`  fetched from: ${r.origin === 'latest-release-asset' ? `release asset "${r.assetName}"` : r.origin === 'live-manifest' ? 'live manifest entry' : 'PINNED FALLBACK — see warning above'}`);
+  }
+  console.log(`\n(the above is read back from disk, verified — not a tag lookup)`);
   process.exit(0);
 }
 
-main().catch((e) => die(`unexpected: ${e.message}`));
+// Run ONLY when executed directly. `reclaimBackups` is exported for its own tests, and without this
+// guard merely importing this file would start a live update — a network fetch, a directory swap, and
+// a process.exit() inside whatever imported it. (Found exactly that way: the reclaim test's import
+// began racing a real update against the test run.)
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) main().catch((e) => die(`unexpected: ${e.message}`));
