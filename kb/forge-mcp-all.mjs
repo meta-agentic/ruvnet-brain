@@ -115,7 +115,7 @@ async function handle(msg) {
         const query = String(args.query || '').trim();
         const k = Math.max(1, parseInt(args.k ?? 6, 10) || 6);
         if (!query) return err(id, -32602, 'query is required');
-        const { results: rawResults, repos, perRepo, corpusAge } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
         // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
@@ -162,10 +162,28 @@ async function handle(msg) {
         const staleness = age
           ? `Corpus snapshot ages: newest store ${age.newestDays}d old, oldest ${age.oldestDays}d (${age.oldestRepo}). Version/"latest" facts may trail live npm/GitHub — for currency claims, verify against the live registry before asserting.\n\n`
           : '';
+        // EVIDENCE GRADE — the single most important line when coverage is thin. A user reported
+        // that "every shallow sweep concluded, wrongly, that we'd have to build it ourselves": a
+        // weak result set was formatted identically to a strong one, so the reading model supplied
+        // the missing conclusion itself — and it supplied the expensive wrong one. Absence of
+        // retrieval is not absence of code, and the tool now says so IN BAND rather than leaving it
+        // to be inferred. Placed BEFORE the results so it caveats everything below.
+        const evidenceNote = evidence?.caveat
+          ? `⚠ EVIDENCE: ${evidence.grade.toUpperCase()} (top relevance ${evidence.topScore}). ${evidence.caveat}\n`
+            + (evidence.droppedIrrelevant > 0
+              ? `${evidence.droppedIrrelevant} further result(s) were judged irrelevant by the reranker and WITHHELD rather than padded in.\n`
+              : '')
+            + `➡ INSTRUCTION TO THE MODEL: do not tell the user this capability does not exist. Say coverage is thin, and try a narrower or artifact-named query first.\n\n`
+          : '';
+        // Same discipline for cross-repo ADR-number collisions (issue #33 Part B).
+        const adrNote = adrCollision ? `⚠ ${adrCollision.note}\n\n` : '';
         const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n${staleness}`;
         const body = text
-          ? degraded + header + text
-          : degraded + header + '(no results — the search ran; nothing in the corpus matched this query)';
+          ? degraded + header + adrNote + evidenceNote + text
+          : degraded + header + adrNote
+            + '(no results — the search ran; nothing in the corpus matched this query)\n'
+            + '➡ This means THIS QUERY found nothing, NOT that the capability is absent from the ecosystem. '
+            + 'Try a narrower query or name a specific repo or artifact before concluding it must be built.';
         meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: body.length });
         // Local grounded-once stamp (never leaves the machine) + opt-in count ping. Guarded:
         // telemetry can never break or delay the response being returned right below.

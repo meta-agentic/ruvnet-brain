@@ -299,7 +299,56 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     }
   }
 
-  return { repos: list, perRepo, results, pooled: candidates.length, corpusAge, adrCollision };
+  // ── EVIDENCE GRADE — the tool reports its OWN confidence, as data ─────────────────────────────
+  //
+  // THE FAILURE THIS FIXES, in the user's words: "every shallow sweep concluded, wrongly, that we'd
+  // have to build it ourselves." A thin-coverage query ("audio DSP speech enhancement") returned four
+  // results formatted exactly like four answers — but only the first (ce 3.71) was real; the rest
+  // scored 1.04, -1.28, -2.77. The cross-encoder had ALREADY judged those irrelevant and we handed
+  // them over anyway. A reasonable reader sees four mostly-useless hits and concludes the ecosystem
+  // has nothing. That is the worst outcome this product can produce: the tool whose entire purpose is
+  // preventing hand-rolling CAUSED hand-rolling — not by hiding the answer, but by making thin
+  // evidence indistinguishable from strong evidence.
+  //
+  // This is NOT agentdb_explainable_recall's job (that explains why a given match scored where it
+  // did); this is "is this result set trustworthy enough to act on at all".
+  //
+  // Thresholds DERIVED from measured runs on this corpus, never invented:
+  //   10.22  exact package-name match          8.43  AgentDB capability question
+  //    6.73  solid conceptual hit              5.56  ADR lookup
+  //    4.37  the WEAKEST question in the answer-quality suite that has a known-good answer
+  //    3.71  the query that wrongly read as "nothing exists"
+  const STRONG = 6.0, OK = 4.0;
+  const topScore = results.length && results[0].ceScore != null ? results[0].ceScore : null;
+
+  // Never hand back what the reranker already rejected. A negative cross-encoder score means "not
+  // relevant to this query"; passing it along as a result is how noise becomes a conclusion. The
+  // single best hit is always kept, so a caller can still see the strongest thing that exists.
+  const kept = results.filter((r, i) => i === 0 || (r.ceScore ?? -Infinity) >= 0);
+  const droppedIrrelevant = results.length - kept.length;
+  results = kept;
+
+  const grade = topScore == null ? 'insufficient_evidence'
+    : topScore >= STRONG ? 'strong'
+    : topScore >= OK ? 'ok'
+    : topScore >= 0 ? 'thin'
+    : 'insufficient_evidence';
+
+  // The sentence that matters. Retrieval finding little is NOT evidence the thing does not exist —
+  // it is evidence THIS QUERY did not reach it. Said explicitly, because a model reading weak
+  // results will otherwise supply the wrong conclusion on its own, and that conclusion is expensive.
+  const evidence = {
+    grade,
+    topScore: topScore == null ? null : Number(topScore.toFixed(3)),
+    droppedIrrelevant,
+    caveat: (grade === 'thin' || grade === 'insufficient_evidence')
+      ? 'WEAK COVERAGE for this query. Do NOT conclude the ecosystem lacks this capability — absence '
+        + 'of retrieval is not absence of code. Narrow the query, name a specific repo, or search for a '
+        + 'concrete artifact (function, struct, or package name) before deciding to build it yourself.'
+      : null,
+  };
+
+  return { repos: list, perRepo, results, pooled: candidates.length, corpusAge, adrCollision, evidence };
 }
 
 function parseArgs() {
@@ -317,7 +366,7 @@ function parseArgs() {
 async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
-  const { repos: used, perRepo, results, pooled, adrCollision } = await searchAll({ dir, query, k, pool, repos });
+  const { repos: used, perRepo, results, pooled, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
   // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
   // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
   // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
@@ -346,6 +395,14 @@ async function main() {
   // Surface the ambiguity BEFORE the results, so it is read as a caveat on everything below rather
   // than a footnote after the reader has already accepted the first hit as "the" answer.
   if (adrCollision) console.log(`⚠ ${adrCollision.note}`);
+  // Confidence BEFORE the results, so it is read as a caveat on everything below rather than a
+  // footnote after the reader has already drawn a conclusion from a thin list.
+  if (evidence?.caveat) {
+    console.log(`⚠ EVIDENCE: ${evidence.grade.toUpperCase()} (top score ${evidence.topScore}) — ${evidence.caveat}`);
+  }
+  if (evidence?.droppedIrrelevant > 0) {
+    console.log(`  (${evidence.droppedIrrelevant} result(s) the reranker judged irrelevant were withheld rather than padded in)`);
+  }
   console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}\n`);
   results.forEach((r, i) => {
     console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}${r.statusLabel ? `  [${r.statusLabel}]` : ''}`);
