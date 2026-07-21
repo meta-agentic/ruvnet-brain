@@ -76,6 +76,8 @@ const FLAG_NO_TELEMETRY = argv.includes('--no-telemetry'); // decline anonymous 
 // High-impact, so it needs its OWN flag — `-y` cannot install a launchd job (see ask()'s note).
 const FLAG_ENABLE_SPEND_GUARD = argv.includes('--enable-spend-guard');
 const FLAG_DISABLE_SPEND_GUARD = argv.includes('--disable-spend-guard'); // the missing undo
+const FLAG_UNINSTALL = argv.includes('--uninstall'); // reverse everything, in one command
+const FLAG_WHAT_CHANGED = argv.includes('--what-changed'); // show our footprint on this machine
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
@@ -1212,6 +1214,110 @@ function disableSpendGuard() {
   else ok('spend watchdog was already off — nothing to remove (safe to run any time)');
 }
 
+/**
+ * Everything this installer can leave on a machine, DERIVED from disk — never asserted.
+ *
+ * A user who wants out should not have to ask us which files to delete. That was the actual
+ * position the corporate-machine report left someone in: they had to reverse-engineer our
+ * footprint from a bug report. Anything listed here has a real undo next to it.
+ *
+ * @returns {{label:string, path:string, undo:string}[]}
+ */
+export function machineFootprint() {
+  const items = [];
+  const add = (label, p, undo) => { try { if (p && fs.existsSync(p)) items.push({ label, path: p, undo }); } catch { /* unreadable → not ours to claim */ } };
+
+  add('Brain bundle (knowledge base)', resolvedKbDir(), 'npx ruvnet-brain --uninstall');
+  if (process.platform === 'darwin') {
+    add('Nightly updater (LaunchAgent)', nightlyPlistPath(), 'npx ruvnet-brain --disable-nightly');
+    add('Spend watchdog (LaunchAgent)', spendGuardPlistPath(), 'npx ruvnet-brain --disable-spend-guard');
+    add('Spend watchdog script', spendGuardScriptPath(), 'npx ruvnet-brain --disable-spend-guard');
+  }
+  const cmds = pluginCommandsDir();
+  if (cmds) items.push({
+    label: 'Claude Code plugin',
+    path: path.dirname(cmds),
+    undo: 'claude plugin uninstall ruvnet-brain@ruvnet-brain',
+  });
+  const cmdPath = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+  try {
+    if (fs.existsSync(cmdPath) && fs.readFileSync(cmdPath, 'utf8').includes(CLAUDE_MD_START)) {
+      items.push({ label: 'CLAUDE.md block (6 lines, between markers)', path: cmdPath, undo: 'npx ruvnet-brain --uninstall' });
+    }
+  } catch { /* unreadable */ }
+  add('Usage-counts preference', telemetryConsentPath(), 'delete this file');
+  return items;
+}
+
+/** Print the footprint. Called at the end of an install so nobody is ever surprised later. */
+function printFootprint({ heading = 'What this put on your machine' } = {}) {
+  const items = machineFootprint();
+  if (!items.length) { info('Nothing from RuvNet Brain is currently installed.'); return items; }
+  console.log(`\n  ${c.bold(heading)}`);
+  for (const it of items) {
+    console.log(`    • ${it.label}`);
+    console.log(`      ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+    console.log(`      ${c.dim(`undo: ${it.undo}`)}`);
+  }
+  console.log(`\n  ${c.dim('Remove all of it at once:')}  ${c.bold('npx ruvnet-brain --uninstall')}`);
+  return items;
+}
+
+/**
+ * Surgically remove ONLY our block from CLAUDE.md, leaving every other line exactly as it was.
+ * Backed up and written atomically, same as when it was added — taking something away is at least
+ * as sensitive as putting it there.
+ */
+function removeClaudeMdBlock() {
+  const p = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+  let src = '';
+  try { src = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { return 'unreadable'; }
+  const start = src.indexOf(CLAUDE_MD_START);
+  const end = src.indexOf(CLAUDE_MD_END);
+  if (start === -1 || end === -1 || end < start) return 'absent';
+  const next = `${src.slice(0, start)}${src.slice(end + CLAUDE_MD_END.length)}`.replace(/\n{3,}/g, '\n\n').replace(/^\s+/, '');
+  try {
+    const backup = `${p}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(p, backup);
+    const tmp = `${p}.ruvnet-tmp`;
+    fs.writeFileSync(tmp, next);
+    fs.renameSync(tmp, p);
+    return 'removed';
+  } catch { return 'failed'; }
+}
+
+/** Reverse everything, and PROVE it rather than claiming it. */
+function uninstallAll() {
+  printBanner('uninstall RuvNet Brain');
+  const before = machineFootprint();
+  if (!before.length) { ok('Nothing to remove — RuvNet Brain is not installed here.'); return; }
+
+  console.log(`  This will remove:`);
+  for (const it of before) console.log(`    • ${it.label}  ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+  console.log(`\n  ${c.dim('Your own CLAUDE.md content is preserved — only our marked block is taken out,')}`);
+  console.log(`  ${c.dim('and the file is backed up first.')}\n`);
+
+  if (process.platform === 'darwin') { disableNightly(); disableSpendGuard(); }
+
+  const claudeMd = removeClaudeMdBlock();
+  if (claudeMd === 'removed') ok('removed our block from ~/.claude/CLAUDE.md (your content untouched, backup saved)');
+
+  const kb = resolvedKbDir();
+  if (kb && fs.existsSync(kb)) {
+    try { fs.rmSync(kb, { recursive: true, force: true }); ok(`removed the brain bundle (${kb.replace(os.homedir(), '~')})`); }
+    catch (e) { warn(`couldn't remove ${kb}: ${e.message}`); }
+  }
+
+  // PROOF, not a claim — re-derive the footprint and show what (if anything) survived.
+  const after = machineFootprint();
+  console.log('');
+  if (!after.length) { ok('Verified clean — nothing from RuvNet Brain remains.'); }
+  else {
+    warn('These need one more step (they are not ours to remove automatically):');
+    for (const it of after) console.log(`    • ${it.label} — ${c.bold(it.undo)}`);
+  }
+}
+
 // Exported (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerNightly). Never throws — the caller
 // also guards, because a finished install must never be broken by an optional safety offer.
 export async function offerSpendGuard() {
@@ -2004,6 +2110,10 @@ Usage:
   npx ruvnet-brain --enable-nightly    Schedule that update nightly at 03:47 — macOS LaunchAgent;
                               other platforms get the documented cron line. OFF by default.
   npx ruvnet-brain --disable-nightly   Remove the nightly schedule (safe to run any time)
+  npx ruvnet-brain --what-changed     Show exactly what RuvNet Brain has put on this machine,
+                              with the undo command for each piece
+  npx ruvnet-brain --uninstall        Remove all of it (bundle, LaunchAgents, and our CLAUDE.md
+                              block only — your own CLAUDE.md content is preserved and backed up)
   npx ruvnet-brain --enable-spend-guard   Install the hourly runaway-agent spend alarm (alert-only)
   npx ruvnet-brain --disable-spend-guard  Remove it (safe to run any time)
   npx ruvnet-brain --enhance-claude-md    Add the 6-line RuvNet-Brain block to ~/.claude/CLAUDE.md
@@ -2052,6 +2162,8 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // small targeted action they asked for. Promised in the UI, therefore real here.
   if (FLAG_ENABLE_SPEND_GUARD) { enableSpendGuard(); return; }
   if (FLAG_DISABLE_SPEND_GUARD) { disableSpendGuard(); return; }
+  if (FLAG_UNINSTALL) { uninstallAll(); return; }
+  if (FLAG_WHAT_CHANGED) { printBanner('what RuvNet Brain put on this machine'); printFootprint(); return; }
 
   printBanner('installer');
   console.log(c.dim("I'll set up the brain and the Claude Code plugin, explaining each step as I go.\n"));
@@ -2147,6 +2259,12 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   try { await offerStatusline(); } catch { /* non-fatal — a status-bar nicety must never break the install */ }
 
   success({ cacheDir, isCustom, plugin, env, nightly });
+
+  // Close every install by stating, in one place, exactly what is now on their machine and how to
+  // take each piece back off. Someone reading this should never have to file a bug report to find
+  // out what we did — which is precisely the position the 2026-07-20 corporate-machine reporter was
+  // left in. Derived from disk, so it can only ever describe what is actually there.
+  try { printFootprint(); } catch { /* a summary must never break a finished install */ }
 })().catch((e) => {
   die(e && e.message ? e.message : String(e));
 });
