@@ -307,6 +307,38 @@ if (has('--publish')) {
     );
     fs.writeFileSync(README, readme);
 
+    // ── RE-STAMP THE BUNDLE WITH ITS OWN RELEASE TAG (issue #35, Dr. Mark Allen) ────────────────
+    //
+    // EVERY nightly release shipped a bundle stamped ONE VERSION BEHIND its own tag. build-bundle
+    // runs far above (it assembles dist/ before the publish block), and it stamps
+    // SOURCE.json.releaseTag = getVersionTag() — which at that moment is still the PREVIOUS version,
+    // because `next` is not computed until line ~284. Proven on the live release: the v3.4.21-dev
+    // asset (uploaded 07:21:52Z) carries releaseTag "v3.4.20-dev", one second before the version
+    // bump commit at 07:21:53Z.
+    //
+    // The consequence is not cosmetic. It is exactly the "my version says X but my knowledge base
+    // is older" confusion users reported: every installed brain misidentifies itself, --doctor's
+    // drift check compares against a wrong number, and forge-update's own behind/current logic
+    // reads a tag that never matches the release it came from.
+    //
+    // build-bundle.mjs already anticipated this fix in its own comment ("a release workflow that
+    // knows the exact git tag may overwrite this with the bundle's own Release tag") — it was just
+    // never written. Here it is, at the only point in the pipeline where the final tag is known and
+    // the bytes have not yet been zipped.
+    const bundleSource = path.join(ROOT, 'dist', 'ruvnet-brain', 'SOURCE.json');
+    try {
+      const doc = JSON.parse(fs.readFileSync(bundleSource, 'utf8'));
+      const before = doc.releaseTag;
+      doc.releaseTag = tag;
+      fs.writeFileSync(bundleSource, JSON.stringify(doc, null, 2) + '\n');
+      console.log(`[publish] bundle releaseTag ${before || '(none)'} → ${tag}`);
+    } catch (e) {
+      // Fail LOUD. Shipping a mis-stamped bundle is precisely the defect this block exists to end,
+      // and a silent skip here would restore it invisibly.
+      console.error(`[publish] FATAL: could not stamp the bundle's releaseTag (${e.message}). Refusing to publish a bundle that would misidentify its own version.`);
+      process.exit(1);
+    }
+
     const zipPath = path.join(ROOT, 'dist', 'ruvnet-brain.zip');
     console.log('[publish] zipping bundle (private stores already fenced out at assembly)');
     try { fs.unlinkSync(zipPath); } catch {}
