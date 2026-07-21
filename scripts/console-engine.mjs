@@ -140,31 +140,53 @@ export function buildHealthRecommendations({ memory = null, learning = null } = 
   //    This is the North Star case: the capability was OWNED, INSTALLED, and OFF, and a tool that
   //    could see it stayed quiet because nobody asked. Knowing which question to ask is the scarce
   //    thing; supplying it is the job.
+  //    THE HONESTY SPLIT (2026-07-21, second pass). The first version of this said "turn on the
+  //    learning loop" for every store with `learns === false`. That was two lies in one button.
+  //
+  //    First, "the learning loop" is not a switch — memory-doctor has printed the ACTUAL fix since
+  //    the day it was written: `embedded but never distilled — run: ruflo memory distill run`
+  //    (rUv's ADR-174 pipeline: memory_entries → reasoning_patterns/episodes/causal_edges). We had
+  //    the sentence and shipped a vaguer one.
+  //
+  //    Second, `learns === false` has two causes and only ONE of them is fixable this way. A store
+  //    whose rows were never embedded (cover < 50%) cannot be distilled at all — there are no
+  //    vectors to cluster. Offering it a distill button would burn the user's time and then report
+  //    success having changed nothing. So only the genuinely distillable stores are counted here,
+  //    and the un-embedded ones are named separately rather than silently folded in.
   const fleet = Array.isArray(learning?.fleet) ? learning.fleet : [];
-  const inertStores = fleet.filter(
-    (f) => Number(f?.total || 0) > 0 && Number(f?.learns || 0) === 0,
+  const populated = fleet.filter((f) => Number(f?.total || 0) > 0 && !f?.unreadable);
+  const distillable = populated.filter(
+    (f) => !f?.learns && Number(f?.coverPct ?? 0) >= 50 && Number(f?.patterns ?? 0) === 0,
   );
-  if (inertStores.length >= 3) {
-    const memories = inertStores.reduce((n, f) => n + Number(f.total || 0), 0);
+  const unembedded = populated.filter((f) => !f?.learns && Number(f?.coverPct ?? 0) < 50);
+
+  if (distillable.length >= 3) {
+    const memories = distillable.reduce((n, f) => n + Number(f.total || 0), 0);
+    const evidence = [
+      { observed: `${distillable.length} project stores are embedded but have never been distilled — they hold memories and zero patterns` },
+      { observed: `${memories.toLocaleString()} memories sitting in those stores, teaching nothing` },
+    ];
+    // Never let the fixable count quietly absorb the unfixable ones. If some stores can't be helped
+    // by this button, the card says so on the card — not in a footnote nobody reads.
+    if (unembedded.length) {
+      evidence.push({ observed: `${unembedded.length} further store${unembedded.length === 1 ? '' : 's'} have too little embedded to distill — this fix does NOT cover them` });
+    }
     recs.push(makeRecommendation({
-      id: 'learning:enable-fleet',
+      id: 'learning:distill-fleet',
       title: 'You are storing memories that teach your AI nothing',
       rationale:
-        'Your projects are capturing plenty — but with learning off, none of it changes how your AI '
-        + 'works. It is a filing cabinet, not experience.',
+        'These projects captured plenty and embedded it — but nothing has ever mined it into reusable '
+        + 'patterns. It is a filing cabinet, not experience.',
       severity: 'IMPORTANT',
       touchesMachine: true,
       plainImpact:
-        'Switches on the learning loop that is already installed, so captured work becomes reusable '
-        + 'patterns instead of dead rows. Runs entirely on your machine; nothing is uploaded, and '
-        + 'learning can be turned back off at any time.',
-      evidence: [
-        { observed: `${inertStores.length} project stores hold memories but have learned nothing` },
-        { observed: `${memories.toLocaleString()} memories captured with learning inactive` },
-      ],
-      cost: { time: 'a minute', risk: 'low — local only, reversible' },
-      change: { human: 'turn on the learning loop so captured work becomes patterns your AI reuses' },
-      undo: { human: 'learning can be switched off again, and learned state cleared, at any time' },
+        'Runs RuvNet\'s own distillation over the memory stores that are ready for it, turning stored '
+        + 'work into patterns your AI can reuse. Each store is snapshotted first, it runs entirely on '
+        + 'your machine at no cost, and the snapshots can be restored if you want it undone.',
+      evidence,
+      cost: { time: 'a few minutes for a large store', usd: 0, risk: 'low — every store is snapshotted before it is touched' },
+      change: { human: 'distill stored memories into reusable patterns (ruflo memory distill run)' },
+      undo: { human: 'restore the snapshot taken of each store immediately before it was distilled' },
     }));
   }
 

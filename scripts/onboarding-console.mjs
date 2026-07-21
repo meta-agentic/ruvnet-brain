@@ -29,6 +29,7 @@ import { spawnSync, execFileSync, spawn } from 'node:child_process';
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
+import { planFor } from './remedy-registry.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -882,7 +883,17 @@ function observeLearning() {
     if (j) trajectories = Number(j[1]);
   } catch { /* ruflo absent or slow — leave null, and null NEVER produces a recommendation */ }
 
-  return { queueDepth, lastTrainSeconds, trajectories };
+  // The fleet is what makes ADR-027's North Star recommendation constructible at all — without it,
+  // `learning:distill-fleet` can never be built, so it can never be offered, so clicking it would be
+  // rejected as "your machine changed". It was missing here, which is exactly how a recommendation
+  // ends up existing in code and nowhere else.
+  //
+  // Read from the cache the /api/memory scan already writes: a live scan opens 100+ SQLite stores at
+  // ~90ms each, which is far too slow to sit on this path. A cold cache honestly yields [] — and []
+  // produces no recommendation, which is the correct answer when we have not looked.
+  const fleet = readJSON(MEMORY_CACHE)?.data?.fleet ?? [];
+
+  return { queueDepth, lastTrainSeconds, trajectories, fleet };
 }
 
 function currentValidIds() {
@@ -905,31 +916,42 @@ function apply(ids) {
   for (const id of ids) {
     if (!validNow.has(id)) { results.push({ id, ok: false, skipped: true, error: 'worldMoved', log: 'Skipped — this is already resolved, or your machine changed since the page loaded. Nothing was done. Reload to see the current state.' }); continue; }
 
-    // ORDER MATTERS — health ids are matched FIRST. 'repair:memory-index' also satisfies
-    // startsWith('repair:'), so when the stack-sync branch came first it swallowed the id and ran a
-    // GLOBAL NPM SYNC while telling the user their database had been repaired. Caught by adversarial
-    // review before shipping. The exact-match branch must precede every prefix branch, forever.
-    if (id === 'repair:memory-index' || id === 'learning:flush' || id === 'learning:train') {
-      const flag = id === 'repair:memory-index' ? '--repair-memory'
-        : id === 'learning:flush' ? '--flush-learning' : '--train-learning';
-      const undoToken = journalUndo({ kind: id === 'repair:memory-index' ? 'restore-memory-backup' : 'learning-noop', id });
-      const res = runNode('scripts/health-repair.mjs', [flag]);
-      results.push({ id, ...res, undoToken });
-    } else if (id.startsWith('sync:') || id.startsWith('repair:') || id === 'purge:shadows') {
-      // Record the inverse FIRST: for a version bump, the inverse is the version currently on disk.
-      const pkg = id.split(':')[1];
-      const prev = pkg && pkg !== 'shadows' ? installedVersion(pkg) : null;
-      const undoToken = journalUndo({ kind: prev ? 'reinstall-version' : 'auto-rebuild', pkg, prevVersion: prev, id });
-      const res = runNode('scripts/stack-sync.mjs', ['--sync']);
-      results.push({ id, ...res, undoToken });
-    } else if (id.startsWith('reconcile:')) {
-      const project = id.slice('reconcile:'.length);
-      const undoToken = journalUndo({ kind: 'restore-backup', project, id });
-      const res = runNode('scripts/reconcile-project.mjs', ['--apply', '--project', resolveProjectDir(project)]);
-      results.push({ id, ...res, undoToken });
-    } else {
-      results.push({ id, ok: false, log: `Unknown recommendation id: ${id}` });
+    // ONE dispatch, through the registry (scripts/remedy-registry.mjs). This used to be a chain of
+    // `if (id.startsWith(...))` whose handled-id set no code could inspect — so it drifted from the
+    // builders and nothing noticed: `learning:enable-fleet` was offered with NO executor and fell
+    // through to "Unknown recommendation id", and one reordering silently routed a database repair
+    // into a global npm sync. Now the id→executor→inverse binding is a value, an ambiguous id
+    // THROWS instead of picking a winner, and remedy-registry.test.mjs proves every offerable id
+    // resolves to exactly one runnable remedy with a real undo behind it.
+    let plan;
+    try { plan = planFor(id); }
+    catch (e) { results.push({ id, ok: false, log: e.message }); continue; } // ambiguous — a bug, said out loud
+    if (!plan) { results.push({ id, ok: false, log: `Unknown recommendation id: ${id}` }); continue; }
+
+    // Record the inverse BEFORE the change, and fill in the parts only this moment knows.
+    const undoSpec = { ...plan.undo, id };
+    if (undoSpec.kind === 'reinstall-version') {
+      const prev = installedVersion(undoSpec.pkg);
+      // No readable previous version ⇒ there is nothing to reinstall. Say that, rather than
+      // journalling an inverse that would fail later while looking recorded.
+      if (prev) undoSpec.prevVersion = prev; else { undoSpec.kind = 'auto-rebuild'; undoSpec.human = `no previous version of ${undoSpec.pkg} was readable, so there is nothing to roll back to`; }
     }
+    if (undoSpec.kind === 'restore-memory-backup') undoSpec.db = path.join(process.cwd(), '.swarm/memory.db');
+
+    let args = [...plan.exec.args];
+    if (plan.exec.resolveProject) {
+      const i = args.indexOf('--project');
+      if (i >= 0) args[i + 1] = resolveProjectDir(args[i + 1]);
+    }
+    if (plan.exec.needsReceipt) {
+      const receipt = path.join(HOME, '.cache', 'ruvnet-brain', 'undo', `${plan.key}-${stamp()}.json`);
+      undoSpec.receipt = receipt;
+      args = [...args, '--receipt', receipt];
+    }
+
+    const undoToken = journalUndo(undoSpec);
+    const res = runNode(plan.exec.script, args);
+    results.push({ id, ...res, undoToken });
   }
   return { results };
 }
@@ -975,8 +997,57 @@ function undo(undoToken) {
     }
     return { ok: restored > 0, log: restored ? `restored ${restored} settings file(s) from backup` : 'no reconcile backups found to restore' };
   }
-  return { ok: true, log: 'nothing to undo (the change reverses itself automatically)' };
+  // THE BRANCH THAT DID NOT EXIST. `repair:memory-index` journalled kind 'restore-memory-backup'
+  // and nothing here handled it, so it fell to the default arm below and answered "nothing to undo
+  // (the change reverses itself automatically)" — while the recommendation had promised to restore
+  // the pre-repair backup. health-repair.mjs writes that backup as `<db>.rescue-<iso>`; this finds
+  // the newest one and puts it back.
+  if (entry.kind === 'restore-memory-backup' && entry.db) {
+    const dir = path.dirname(entry.db);
+    const base = `${path.basename(entry.db)}.rescue-`;
+    let baks = [];
+    try { baks = fs.readdirSync(dir).filter((n) => n.startsWith(base)).sort(); } catch { /* dir gone */ }
+    if (!baks.length) return { ok: false, log: `no pre-repair backup found next to ${entry.db.replace(HOME, '~')} — nothing was restored` };
+    const from = path.join(dir, baks[baks.length - 1]);
+    try { fs.copyFileSync(from, entry.db); }
+    catch (e) { return { ok: false, log: `could not restore ${from.replace(HOME, '~')}: ${e.message}` }; }
+    return { ok: true, log: `restored your memory store from the snapshot taken before the repair (${baks[baks.length - 1]})` };
+  }
+  // Fleet distillation touches a set of stores discovered at run time, so its executor writes a
+  // receipt naming each store it snapshotted. No receipt ⇒ we do not know what was touched, and we
+  // say so instead of guessing — restoring the wrong snapshot over a live store is worse than
+  // restoring nothing.
+  if (entry.kind === 'restore-store-backups') {
+    const rec = entry.receipt && fs.existsSync(entry.receipt) ? readJSON(entry.receipt) : null;
+    const stores = Array.isArray(rec?.stores) ? rec.stores : [];
+    if (!stores.length) return { ok: false, log: 'no receipt of which stores were distilled — nothing was restored. Each store\'s own snapshot is still in its .swarm/backups folder.' };
+    let restored = 0; const failures = [];
+    for (const s of stores) {
+      let snaps = [];
+      try { snaps = fs.readdirSync(s.backupDir).filter((n) => n.endsWith('.db') || n.includes('memory')).sort(); } catch { /* dir gone */ }
+      if (!snaps.length) { failures.push(`${s.name}: no snapshot found`); continue; }
+      try { fs.copyFileSync(path.join(s.backupDir, snaps[snaps.length - 1]), s.db); restored++; }
+      catch (e) { failures.push(`${s.name}: ${e.message}`); }
+    }
+    return {
+      ok: restored > 0,
+      log: `${restored} of ${stores.length} store(s) restored from their pre-distill snapshots`
+        + (failures.length ? ` — could not restore: ${failures.join('; ')}` : ''),
+    };
+  }
+  // Only kinds that genuinely reverse themselves reach here. Anything else arriving at this arm is
+  // a registry/undo drift, and remedy-registry.test.mjs fails the build before it can reach a user.
+  if (entry.kind === 'none' || entry.kind === 'auto-rebuild') {
+    return { ok: true, log: entry.human || 'nothing to undo (the change reverses itself automatically)' };
+  }
+  return { ok: false, log: `no undo is implemented for "${entry.kind}" — nothing was changed back. Please report this.` };
 }
+// The undo kinds this function actually implements. Exported so the closure test can check the
+// registry against the REAL handler set rather than a hand-copied list that would drift from it.
+export const HANDLED_UNDO_KINDS = Object.freeze([
+  'restore-config', 'reinstall-version', 'restore-backup',
+  'restore-memory-backup', 'restore-store-backups', 'auto-rebuild', 'none',
+]);
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────────────────────────
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.json': 'application/json', '.woff2': 'font/woff2' };
