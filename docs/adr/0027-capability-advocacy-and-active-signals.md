@@ -105,7 +105,30 @@ live this session. Our job is wiring, surfacing, and advocacy. Where rUv ships a
 surface (`ruflo-intelligence`, 29 tools behind `/intelligence` and `/neural`), we **recommend and
 install it** rather than building a worse parallel.
 
-### 5. Every ADR carries a DDD, and both get attacked
+### 5. When we disagree with RuvNet, RuvNet is right
+
+**If our instinct disagrees with how RuvNet does something, the disagreement is evidence we have not
+found the tool yet — not evidence the tool is wrong.** The required response is to go find the
+RuvNet tool that implements it: search the corpus, **read the crate, not the ADR**, and only then
+form an opinion.
+
+This exists because the opposite has cost full days, repeatedly: a hand-rolled AgentDB capture hook
+while ADR-174's distill pipeline shipped the real design; a fake "MetaHarness router" while
+`@metaharness/router` sat on npm; and on 2026-07-21, three lines into hand-rolling a proxy health
+check before the `ground-before-write` gate stopped it and `ruflo doctor --component proxy` turned
+out to already do all of it. The failure mode is always the same shape — quietly building a worse
+version of something that exists, giving it rUv's tool's name, and hiding that it is a hand-roll.
+
+This is **not** "rUv is infallible." Real defects exist and finding them is valuable — the same day,
+this project found and reported a genuine macOS bug in `@claude-flow/security`'s `PathValidator`
+that breaks `ruflo proxy install` for every Mac user. The rule governs **disposition and sequence**:
+look first, assume we are the ones missing context, and never let a disagreement become a silent
+reimplementation. If we still disagree after genuinely looking, we say so out loud, cite the exact
+source path, and name the hand-roll as a hand-roll.
+
+Enforced by the `ground-before-write` gate rather than by intention.
+
+### 6. Every ADR carries a DDD, and both get attacked
 
 An ADR ships with an accompanying DDD (bounded context, ubiquitous language, invariants), and both
 are subjected to adversarial review before acceptance — to establish the design is *optimal*, not
