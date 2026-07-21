@@ -75,6 +75,7 @@ const FLAG_NO_NIGHTLY_PROMPT = argv.includes('--no-nightly-prompt'); // don't of
 const FLAG_NO_TELEMETRY = argv.includes('--no-telemetry'); // decline anonymous usage counts without being asked
 // High-impact, so it needs its OWN flag — `-y` cannot install a launchd job (see ask()'s note).
 const FLAG_ENABLE_SPEND_GUARD = argv.includes('--enable-spend-guard');
+const FLAG_DISABLE_SPEND_GUARD = argv.includes('--disable-spend-guard'); // the missing undo
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
@@ -1174,6 +1175,43 @@ function enableSpendGuard() {
   return 'enabled';
 }
 
+/**
+ * Remove the spend watchdog. Mirrors disableNightly() exactly.
+ *
+ * This did not exist until 2026-07-20, which meant the watchdog was the one thing this installer
+ * could put on a machine with no supported way to take it back off. "Reversible" has to be a
+ * command someone can run, not a paragraph telling them which files to delete by hand — a user
+ * asking how to undo our changes should never need us to answer.
+ */
+function disableSpendGuard() {
+  printBanner('disable spend watchdog');
+  if (process.platform !== 'darwin') {
+    info('The spend-watchdog LaunchAgent is macOS-only, so nothing was scheduled here by this tool.');
+    return;
+  }
+  const plistPath = spendGuardPlistPath();
+  const scriptPath = spendGuardScriptPath();
+  const existed = fs.existsSync(plistPath);
+  if (TEST_MODE) {
+    warn('RUVNET_BRAIN_TEST=1 — skipping launchctl bootout (plist removal only)');
+  } else {
+    // Ignore failure: "not loaded" is the state we want anyway.
+    spawnSync('launchctl', ['bootout', `gui/${process.getuid()}/${SPEND_GUARD_LABEL}`], { stdio: 'ignore' });
+  }
+  let failed = false;
+  for (const p of [plistPath, scriptPath]) {
+    if (!fs.existsSync(p)) continue;
+    try { fs.rmSync(p); } catch (e) {
+      failed = true;
+      console.error(`\n${c.red("✗ couldn't remove:")} ${p} — ${e.message}`);
+      console.error(`  Remove it yourself:  rm ${p}`);
+    }
+  }
+  if (failed) process.exit(1);
+  if (existed) ok(`spend watchdog disabled — removed ${plistPath}`);
+  else ok('spend watchdog was already off — nothing to remove (safe to run any time)');
+}
+
 // Exported (testable under RUVNET_BRAIN_IMPORT_ONLY=1, like offerNightly). Never throws — the caller
 // also guards, because a finished install must never be broken by an optional safety offer.
 export async function offerSpendGuard() {
@@ -1185,8 +1223,11 @@ export async function offerSpendGuard() {
     'One more safety net — a spend watchdog',
     'agentic tools can bill the paid API in the background; this alarm catches a runaway before it drains your card',
   );
-  info(`${c.bold('Strongly recommended:')} an hourly check that alerts you the moment an automated agent`);
-  info('fleet floods a project — the pattern that has quietly burned real money. Alert-only, never spends.');
+  info(`${c.green('Recommended')} — an hourly check that alerts you the moment an automated agent fleet`);
+  info(`floods a project. That pattern has quietly burned real money. ${c.bold('Your call, and easy to undo.')}`);
+  info(`${c.dim('What it sets up:')} a small background job (a macOS LaunchAgent) that watches for the burst`);
+  info(`${c.dim('                 ')} pattern. ${c.bold('Alert-only — it never spends, and never changes your billing.')}`);
+  info(`${c.dim('If you skip:')}     nothing changes; add it later with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`);
 
   // NOT gated on FLAG_YES — second launchd job, same rule as the nightly updater above.
   if (!process.stdin.isTTY && !FLAG_ENABLE_SPEND_GUARD) { info(`No terminal to prompt on — install it any time with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`); return 'recommended'; }
@@ -1336,9 +1377,19 @@ export async function offerNightly() {
 
   info(`${c.bold('Recommended:')} your brain updates itself while you sleep — new repos, new gists, zero effort.`);
 
-  // NOT gated on FLAG_YES — see the high-impact consent note on ask(). This installs a launchd job
-  // that pulls code from GitHub on a schedule, which is exactly the kind of change a blanket `-y`
-  // must never authorize. It takes the explicit --enable-nightly, or a human answering in a terminal.
+  // Recommend it, mean it, and still make declining feel completely fine. The goal is a user who
+  // understands what they're agreeing to — not one who is either scared off by a wall of caveats or
+  // nudged past a decision they'd have made differently. Both failures cost trust; only one is loud.
+  info(`${c.green('Recommended')} — rUv ships constantly, and this is how fixes reach you without you`);
+  info(`thinking about it. ${c.bold('Entirely your call, though')}, and easy to undo.`);
+  info(`${c.dim('What it sets up:')} a small background job (a macOS LaunchAgent) that checks each night`);
+  info(`${c.dim('                 ')} and downloads a fresher brain — signature-verified before anything is applied.`);
+  info(`${c.dim('If you skip:')}     nothing changes; update whenever you like with  ${c.bold('npx ruvnet-brain --update')}`);
+  info(`${c.dim('Turn it off:')}     ${c.bold('npx ruvnet-brain --disable-nightly')}  ${c.dim('(any time, no reinstall)')}`);
+
+  // NOT gated on FLAG_YES — see the high-impact consent note on ask(). A blanket `-y` means nobody is
+  // present to READ the explanation above, and an explanation nobody read is not consent. It takes the
+  // explicit --enable-nightly, or a human answering in a terminal.
   if (!process.stdin.isTTY && !FLAG_ENABLE_NIGHTLY) {
     // No terminal to ask on (CI / piped install) — recommend clearly instead of prompting.
     info(`No interactive terminal here, so I won't prompt. Enable it any time with one command:`);
@@ -1618,36 +1669,65 @@ Prefer rUv-native primitives (RVF over Pinecone/pgvector, Ruflo over LangChain, 
 Not sure it's active? Run \`npx ruvnet-brain --doctor\`.
 ${CLAUDE_MD_END}`;
 
-async function offerClaudeMd() {
+export async function offerClaudeMd() {
   if (FLAG_NO_ENHANCE) return;
   const p = path.join(os.homedir(), '.claude', 'CLAUDE.md');
   let existing = '';
   try { existing = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { /* ignore */ }
-  if (existing.includes(CLAUDE_MD_START)) { return; } // already enhanced — idempotent, stay silent
+  if (existing.includes(CLAUDE_MD_START)) { return; } // already there — idempotent, stay silent
+
+  // DON'T ASK WHEN IT ADDS NOTHING. If the plugin is installed, its hooks already enforce grounding
+  // on every turn and this block is pure duplication — the old skip-branch message said exactly that
+  // out loud. Asking to edit the most sensitive file we touch, for a benefit the user already has,
+  // is how a helpful tool starts feeling invasive. So the question is only worth someone's attention
+  // when the plugin is absent, which is a real population (see the "Unknown command: /rvbc" report)
+  // but not the common one.
+  if (pluginCommandsDir()) return;
 
   step(
-    'Teaching your Claude to lean on the brain',
-    'a short note in your global CLAUDE.md so every session — in any project — knows to use it',
+    'Optional — a note in your global CLAUDE.md',
+    "so Claude leans on the brain in projects where the plugin's hooks aren't running",
   );
+  // Say precisely what changes on their disk, in their words, BEFORE asking. "Enhance your CLAUDE.md"
+  // is the kind of phrasing that makes a careful person assume the worst — and on a managed machine
+  // that file may be governed. Six lines at the bottom, markers, reversible, backed up: all of that
+  // is far less alarming than the vague version, and it happens to be the whole truth.
+  info(`Adds ${c.bold('6 lines to the BOTTOM')} of ${c.bold('~/.claude/CLAUDE.md')}, wrapped in`);
+  info(`  ${c.dim('<!-- ruvnet-brain:start -->')} … ${c.dim('<!-- ruvnet-brain:end -->')}`);
+  info(`Nothing already in the file is changed or removed. Delete the block any time.`);
+  info(`${c.green("We back the file up first")}, and re-running never adds it twice.`);
+  info(c.dim(`Honestly: if you install the plugin, you don't need this — its hooks already do it.`));
+
   const yes =
     FLAG_ENHANCE_CLAUDE_MD ||
-    // blanketYes:false — editing a GLOBAL config file is not something `-y` gets to decide.
-    (await ask(
-      `Add a short RuvNet-Brain section to ${existing ? 'your' : 'a new'} ~/.claude/CLAUDE.md?`,
-      false,
-      { blanketYes: false },
-    ));
+    // blanketYes:false — editing a file THEY own is not something a blanket `-y` gets to decide.
+    (await ask('Add it?', false, { blanketYes: false }));
   if (!yes) {
-    info('skipped — the plugin hooks already enforce grounding every turn; this was just extra reinforcement');
+    info(`No problem, skipped — add it any time with  ${c.bold('npx ruvnet-brain --enhance-claude-md')}`);
     return;
   }
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true });
+    // Back up before touching it — the same courtesy this installer already extends to settings.json,
+    // and this is the more sensitive file of the two.
+    let backup = null;
+    if (existing) {
+      backup = `${p}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      fs.copyFileSync(p, backup);
+    }
     const next = existing ? `${existing.replace(/\s*$/, '')}\n\n${CLAUDE_MD_BLOCK}\n` : `${CLAUDE_MD_BLOCK}\n`;
-    fs.writeFileSync(p, next);
-    ok(`added a RuvNet-Brain section to ${p} ${c.dim('(marker-guarded — safe to re-run)')}`);
+    // ATOMIC write — temp sibling then rename. The content was always a pure append, but the old
+    // code rewrote the whole file in place, so an interruption (disk full, power loss) could leave
+    // a TRUNCATED CLAUDE.md. Fine 999 times out of 1000 and unforgivable the other time. This is the
+    // discipline rUv already applies to credential files (cognitum-seed cloud_key.rs: tmp → rename).
+    const tmp = `${p}.ruvnet-tmp`;
+    fs.writeFileSync(tmp, next);
+    fs.renameSync(tmp, p);
+    ok(`added 6 lines to the bottom of ${p}`);
+    if (backup) info(c.dim(`  your original is saved at ${backup}`));
+    info(c.dim(`  to remove: delete the block between the two ruvnet-brain markers`));
   } catch (e) {
-    warn(`couldn't update CLAUDE.md (${e.message}) — not important; the plugin hooks still enforce grounding`);
+    warn(`couldn't update CLAUDE.md (${e.message}) — your file is untouched, and this was optional anyway`);
   }
 }
 
@@ -1924,6 +2004,10 @@ Usage:
   npx ruvnet-brain --enable-nightly    Schedule that update nightly at 03:47 — macOS LaunchAgent;
                               other platforms get the documented cron line. OFF by default.
   npx ruvnet-brain --disable-nightly   Remove the nightly schedule (safe to run any time)
+  npx ruvnet-brain --enable-spend-guard   Install the hourly runaway-agent spend alarm (alert-only)
+  npx ruvnet-brain --disable-spend-guard  Remove it (safe to run any time)
+  npx ruvnet-brain --enhance-claude-md    Add the 6-line RuvNet-Brain block to ~/.claude/CLAUDE.md
+                              (appended at the bottom between markers; your file is backed up first)
                               (a default install RECOMMENDS nightly and asks, defaulting to yes)
   node bin/install.mjs --no-nightly-prompt Don't offer nightly auto-updates at the end of the install
   node bin/install.mjs --no-telemetry      Decline anonymous usage counts without being asked
@@ -1962,6 +2046,12 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   if (FLAG_UPDATE) return runUpdate();
   if (FLAG_ENABLE_NIGHTLY) return enableNightly();
   if (FLAG_DISABLE_NIGHTLY) return disableNightly();
+  // Standalone, like the nightly pair above. Without these, the flags existed only as a way to
+  // pre-answer a prompt DURING a full install — so the copy telling someone to "add it later with
+  // npx ruvnet-brain --enable-spend-guard" would have kicked off an entire reinstall instead of the
+  // small targeted action they asked for. Promised in the UI, therefore real here.
+  if (FLAG_ENABLE_SPEND_GUARD) { enableSpendGuard(); return; }
+  if (FLAG_DISABLE_SPEND_GUARD) { disableSpendGuard(); return; }
 
   printBanner('installer');
   console.log(c.dim("I'll set up the brain and the Claude Code plugin, explaining each step as I go.\n"));
