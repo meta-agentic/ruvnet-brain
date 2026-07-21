@@ -295,8 +295,20 @@ export function verifyLanded({ kbDir, kbName, before, expectedDigest = null, dow
   // predating the multi-store `stores` object — see the identical pattern at the top of this file,
   // lines 46-50). It must NOT swallow a genuine name mismatch: if the one store present names
   // itself something else, that is a real "wrong store landed" error, not a format quirk.
+  // THE UPGRADE DIRECTION MATTERS TOO. The lookup above assumes the CALLER knows its store name —
+  // but a legacy flat SOURCE.json has no `stores` object at all, so `stores = [source]` (lines 46-50)
+  // yields an entry whose kbName is undefined, and `kbName` arrives here as undefined. Landing a
+  // modern multi-store bundle over it then matched neither branch, and main() turned that into
+  // "UPDATE MISMATCH — REFUSING to report success" on an update that had genuinely worked.
+  //
+  // That is the worst possible false failure: it permanently blocks self-update for people still on
+  // an OLD bundle — precisely the stale installs this whole issue exists to rescue, and precisely the
+  // users reporting "I'm still on 0.5". A guard that bricks the upgrade path is worse than the bug.
+  const legacyCaller = kbName == null || kbName === 'undefined';
   const landed = list.find((s) => s.kbName === kbName)
-    || (list.length === 1 && list[0].kbName == null ? { kbName, ...list[0] } : null);
+    || (list.length === 1 && list[0].kbName == null ? { kbName, ...list[0] } : null)
+    // Legacy caller upgrading into the modern schema: any single landed store is unambiguous.
+    || (legacyCaller && list.length === 1 ? { kbName: list[0].kbName, ...list[0] } : null);
   if (!landed) {
     return { ok: false, reason: `SOURCE.json on disk after extraction has no entry for store "${kbName}"`, landed: null };
   }

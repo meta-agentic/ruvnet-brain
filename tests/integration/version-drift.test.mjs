@@ -75,9 +75,17 @@ const FIX_COMMAND = 'claude plugin marketplace update ruvnet-brain';
 // Fixture tags only — deliberately NOT real product-version-shaped strings (no trailing "-dev"),
 // so they never trip the repo's own sync-version --check "stray hardcoded version literal" guard,
 // which flags any quoted vX.Y.Z(-dev)? literal that is or looks like the real product version.
-const KB_TAG = 'v9.9.9-test';
-const WRAPPER_MATCHING = 'v9.9.9-test';
-const WRAPPER_DIFFERENT = 'v8.8.8-test';
+// PRODUCTION SHAPE, deliberately asymmetric. The two sides are written by different writers in
+// different formats: build-bundle stamps SOURCE.json.releaseTag as a git TAG (v-prefixed), while
+// sync-version writes plugin.json.version as a bare SEMVER. The first version of this file gave the
+// wrapper a v-prefixed version — an input sync-version can NEVER produce — so the "matching" case
+// compared two identical strings and passed, while the real code did a raw !== and reported drift on
+// every healthy install in the world. An impossible fixture green-lit a false user-facing claim.
+// These constants now mirror what the two writers actually emit, so the matching case only passes
+// if the comparison genuinely normalizes the tag prefix.
+const KB_TAG = 'v9.9.9-test';           // as build-bundle stamps it
+const WRAPPER_MATCHING = '9.9.9-test';  // as sync-version writes it — SAME version, no prefix
+const WRAPPER_DIFFERENT = '8.8.8-test'; // genuinely different, also unprefixed
 
 describe('wrapper-vs-KB version drift — --doctor', () => {
   it('says nothing when both versions match', () => {

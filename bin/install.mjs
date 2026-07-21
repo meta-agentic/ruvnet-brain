@@ -901,7 +901,19 @@ function checkVersionDrift(cacheDir) {
   const wrapper = wrapperVersion();
   const kbRaw = installedBrainVersion(cacheDir); // already honest — 'unknown' rather than a guess
   const kb = kbRaw === 'unknown' ? null : kbRaw;
-  return { wrapper, kb, drift: Boolean(wrapper && kb && wrapper !== kb) };
+  // COMPARE NUMBERS, NOT NAMESPACES. The two sides are written by different writers in different
+  // formats: build-bundle stamps SOURCE.json.releaseTag as a git TAG (v-prefixed) while
+  // sync-version writes plugin.json.version as a bare SEMVER (no prefix). A raw !== is therefore
+  // ALWAYS true, so the first version of this check told every perfectly healthy user their install
+  // had drifted, and handed them a fix command that could never clear it. Caught by adversarial
+  // review, not by the tests — the test fixture used a v-prefixed plugin version that sync-version
+  // never produces, so an impossible input was green-lighting a false claim.
+  // Duplicated deliberately from scripts/version.mjs's stripTag(): this installer ships standalone
+  // on npm (package.json `files` excludes scripts/version.mjs) and imports node builtins ONLY, so
+  // it cannot import the canonical one. Same one-line rule, kept identical on purpose.
+  const stripV = (v) => String(v).replace(/^v/, '');
+  const drift = Boolean(wrapper && kb && stripV(wrapper) !== stripV(kb));
+  return { wrapper, kb, drift };
 }
 
 /**
@@ -1310,6 +1322,34 @@ export function machineFootprint() {
     }
   } catch { /* unreadable */ }
   add('Usage-counts preference', telemetryConsentPath(), 'delete this file');
+
+  // EVERYTHING ELSE THIS INSTALLER WRITES. The first version of this listed the KB bundle and
+  // little else — one artifact out of six — while the help text promised "exactly what RuvNet Brain
+  // has put on this machine" and uninstallAll() went on to print "Verified clean". That is the same
+  // position the corporate-machine reporter was left in, reproduced by the very feature written to
+  // prevent it. It also explains a user seeing ~5 GB used for a ~2 GB knowledge base: most of the
+  // footprint was never reported. Anything this installer can create belongs here, or the summary
+  // is a comfortable fiction.
+  add('Status-bar version script', path.join(os.homedir(), '.cache', 'ruvnet-brain', 'ruvnet-brain-statusline.cjs'),
+      'remove the statusLine entry in ~/.claude/settings.json, then delete this file');
+  add('Status-bar preference', path.join(telemetryStateDir(), '.statusline-pref'), 'delete this file');
+  add('Model-router files', path.join(os.homedir(), '.claude', 'model-router'),
+      'rm -rf ~/.claude/model-router');
+  // Config entries live INSIDE files the user owns, so they are reported as edits to review rather
+  // than as paths to delete — deleting someone's settings.json over one key would be indefensible.
+  try {
+    const settings = path.join(os.homedir(), '.claude', 'settings.json');
+    if (fs.existsSync(settings) && fs.readFileSync(settings, 'utf8').includes('ruvnet-brain')) {
+      items.push({ label: 'A statusLine entry in your settings.json', path: settings, undo: 'remove the "statusLine" entry that points at ruvnet-brain' });
+    }
+  } catch { /* unreadable — do not claim it */ }
+  try {
+    const claudeJson = path.join(os.homedir(), '.claude.json');
+    if (fs.existsSync(claudeJson) && fs.readFileSync(claudeJson, 'utf8').includes('ruvnet-brain')) {
+      items.push({ label: 'The search_ruvnet MCP server registration', path: claudeJson, undo: 'claude mcp remove ruvnet-brain --scope user' });
+    }
+  } catch { /* unreadable — do not claim it */ }
+
   return items;
 }
 
@@ -1340,10 +1380,28 @@ function removeClaudeMdBlock() {
   const p = path.join(os.homedir(), '.claude', 'CLAUDE.md');
   let src = '';
   try { src = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { return 'unreadable'; }
-  const start = src.indexOf(CLAUDE_MD_START);
+  // PAIR THE MARKERS PROPERLY. The first version took the FIRST start and the FIRST end, unpaired.
+  // Adversarial review proved that eats the user's file: a CLAUDE.md that merely MENTIONS the start
+  // marker in prose (entirely plausible — we print both marker strings to the console when adding
+  // the block) above a real installed block causes everything between the prose mention and the real
+  // block's end marker to be deleted. Their rules, silently gone, under a message saying "your
+  // content untouched".
+  //
+  // Take the LAST start that has an end after it, and the FIRST end after that start — the real
+  // block is the innermost well-formed pair. Anything we cannot pair confidently is left alone:
+  // refusing to edit is always better than removing the wrong span from a file we do not own.
   const end = src.indexOf(CLAUDE_MD_END);
-  if (start === -1 || end === -1 || end < start) return 'absent';
-  const next = `${src.slice(0, start)}${src.slice(end + CLAUDE_MD_END.length)}`.replace(/\n{3,}/g, '\n\n').replace(/^\s+/, '');
+  if (end === -1) return 'absent';
+  const start = src.lastIndexOf(CLAUDE_MD_START, end);
+  if (start === -1) return 'absent';
+
+  // Splice ONLY the block. The previous version also ran .replace(/\n{3,}/g,'\n\n') and stripped
+  // leading whitespace across the WHOLE document, which silently reformatted unrelated content —
+  // including collapsing blank lines inside fenced code blocks — while the docstring promised
+  // "every other line exactly as it was". Normalize only at the seam we actually cut.
+  const before = src.slice(0, start).replace(/\n{3,}$/, '\n\n');
+  const after = src.slice(end + CLAUDE_MD_END.length).replace(/^\n{3,}/, '\n\n');
+  const next = `${before}${after}`;
   try {
     const backup = `${p}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.copyFileSync(p, backup);
@@ -1360,8 +1418,28 @@ function uninstallAll() {
   const before = machineFootprint();
   if (!before.length) { ok('Nothing to remove — RuvNet Brain is not installed here.'); return; }
 
+  // SPLIT WHAT WE REMOVE FROM WHAT WE CANNOT. The first version printed one flat "This will remove:"
+  // list built from the whole footprint — including the Claude Code plugin and edits inside files
+  // the user owns, none of which this function touches. It then closed by admitting those same
+  // items still needed a manual step. One command contradicting itself inside a single run is
+  // exactly the sloppiness that makes people stop believing any of our output, so the promise is now
+  // scoped to what actually happens.
+  // Ours-by-construction directories and files are removed; things that live INSIDE a file the user
+  // owns (settings.json entries, the MCP registration) and the Claude Code plugin itself are not
+  // ours to delete, so they are handed over as commands.
+  const AUTO = new Set(['Brain bundle (knowledge base)', 'Nightly updater (LaunchAgent)',
+    'Spend watchdog (LaunchAgent)', 'Spend watchdog script', 'CLAUDE.md block (6 lines, between markers)',
+    'Model-router files', 'Status-bar version script', 'Status-bar preference', 'Usage-counts preference']);
+  const willRemove = before.filter((it) => AUTO.has(it.label));
+  const manual = before.filter((it) => !AUTO.has(it.label));
+
   console.log(`  This will remove:`);
-  for (const it of before) console.log(`    • ${it.label}  ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+  for (const it of willRemove) console.log(`    • ${it.label}  ${c.dim(it.path.replace(os.homedir(), '~'))}`);
+  if (!willRemove.length) console.log(`    ${c.dim('(nothing that this command removes automatically)')}`);
+  if (manual.length) {
+    console.log(`\n  ${c.bold('It will NOT remove these')} — they are not ours to delete, so you get the command instead:`);
+    for (const it of manual) console.log(`    • ${it.label}\n      ${c.dim(it.undo)}`);
+  }
   console.log(`\n  ${c.dim('Your own CLAUDE.md content is preserved — only our marked block is taken out,')}`);
   console.log(`  ${c.dim('and the file is backed up first.')}\n`);
 
@@ -1370,10 +1448,40 @@ function uninstallAll() {
   const claudeMd = removeClaudeMdBlock();
   if (claudeMd === 'removed') ok('removed our block from ~/.claude/CLAUDE.md (your content untouched, backup saved)');
 
+  // NEVER rm -rf A PATH WE HAVE NOT PROVEN IS OURS. resolvedKbDir() honours $RUVNET_BRAIN_KB, which
+  // the docs encourage for custom install locations — so `RUVNET_BRAIN_KB=$HOME npx ruvnet-brain
+  // --uninstall` would have recursively deleted the user's home directory. Found by adversarial
+  // review. The asymmetry was already visible in this same file: runUpdate() refuses to act unless
+  // forge-update.mjs is present, precisely so it can never surprise someone. Uninstall skipped it.
+  //
+  // Proof-of-ownership: the directory must actually contain the reader we install. That is cheap,
+  // unspoofable in practice, and fails CLOSED — if we cannot prove it is a brain, we do not touch it
+  // and we say why.
   const kb = resolvedKbDir();
-  if (kb && fs.existsSync(kb)) {
+  const looksLikeBrain = kb && ['forge-ask.mjs', 'forge-mcp.mjs', 'SOURCE.json']
+    .some((marker) => { try { return fs.existsSync(path.join(kb, marker)); } catch { return false; } });
+  if (kb && fs.existsSync(kb) && !looksLikeBrain) {
+    warn(`refusing to delete ${kb.replace(os.homedir(), '~')} — it does not look like a brain bundle.`);
+    info(`  (no forge-ask.mjs / forge-mcp.mjs / SOURCE.json found there). Nothing was removed.`);
+    info(`  If that really is your brain, remove it yourself:  rm -rf ${kb.replace(os.homedir(), '~')}`);
+  } else if (kb && fs.existsSync(kb)) {
     try { fs.rmSync(kb, { recursive: true, force: true }); ok(`removed the brain bundle (${kb.replace(os.homedir(), '~')})`); }
     catch (e) { warn(`couldn't remove ${kb}: ${e.message}`); }
+  }
+
+  // The rest of what is ours by construction. Leaving these behind is how an "uninstalled" machine
+  // still shows gigabytes of us — 8 executables under ~/.claude/model-router, a statusline script
+  // that settings.json is still pointing at, and preference files. Each is removed only if it is
+  // inside a directory this installer creates, never a path the user chose.
+  for (const [label, target] of [
+    ['model-router files', path.join(os.homedir(), '.claude', 'model-router')],
+    ['status-bar script', path.join(os.homedir(), '.cache', 'ruvnet-brain', 'ruvnet-brain-statusline.cjs')],
+    ['status-bar preference', path.join(telemetryStateDir(), '.statusline-pref')],
+    ['usage-counts preference', telemetryConsentPath()],
+  ]) {
+    if (!fs.existsSync(target)) continue;
+    try { fs.rmSync(target, { recursive: true, force: true }); ok(`removed the ${label}`); }
+    catch (e) { warn(`couldn't remove ${target.replace(os.homedir(), '~')}: ${e.message}`); }
   }
 
   // PROOF, not a claim — re-derive the footprint and show what (if anything) survived.
@@ -2053,7 +2161,14 @@ export async function offerStatusline() {
   info(`Adds a small ${c.bold('"RuvNet Brain vX.Y.Z"')} segment, read live from your installed brain — it`);
   info(`updates itself the moment the brain updates. ${c.bold('Never overwrites an existing status line.')}`);
 
-  const interactive = process.stdin.isTTY || FLAG_YES || FLAG_STATUSLINE;
+  // FLAG_YES deliberately does NOT appear here. This writes ~/.claude/settings.json — a file the
+  // USER owns — and installs a script Claude Code then executes on EVERY PROMPT. An adversarial
+  // review caught that a blanket `-y` on a non-TTY still did both, which made the security fix in
+  // 9ad02f5 ("`-y` can no longer install a daemon or edit a global config file") FALSE as written:
+  // the two functions that commit gated were the two I happened to be thinking about, and this
+  // third one — higher-frequency persistent execution than the LaunchAgent — was never checked.
+  // Same footprint rule as everywhere else: their config, their explicit yes.
+  const interactive = process.stdin.isTTY || FLAG_STATUSLINE;
   if (!interactive) {
     // No terminal to ask on, and no explicit flag either — skip WITHOUT recording an answer, so a
     // future interactive (or flagged) run still gets a real chance to ask.
@@ -2062,7 +2177,7 @@ export async function offerStatusline() {
     return 'not-asked';
   }
 
-  const yes = FLAG_STATUSLINE || (await ask('Add a RuvNet Brain version segment to your Claude Code status bar?', false));
+  const yes = FLAG_STATUSLINE || (await ask('Add a RuvNet Brain version segment to your Claude Code status bar?', false, { blanketYes: false }));
 
   try {
     fs.mkdirSync(telemetryStateDir(), { recursive: true });

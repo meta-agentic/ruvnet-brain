@@ -226,6 +226,13 @@ function localImportsOf(absFile) {
   for (const m of src.matchAll(/\b(?:import|export)\b[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
   for (const m of src.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
   for (const m of src.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.add(m[1]);
+  // `import(new URL('./x.mjs', import.meta.url).href)` — the computed-URL form. Missed by the plain
+  // literal pattern above, and it is not hypothetical: forge-ask-all.mjs and forge-mcp-all.mjs both
+  // load brain-alarm.mjs and telemetry-ping.mjs exactly this way. Neither was reaching the bundle,
+  // and because both call sites are try/catch-guarded it failed SILENTLY — meaning the brain-down
+  // "GONG" alarm, the thing whose entire job is to make a broken brain impossible to miss, has been
+  // dead in every installed bundle. Found by adversarial review, not by any test.
+  for (const m of src.matchAll(/\bimport\s*\(\s*new\s+URL\s*\(\s*['"]([^'"]+)['"]/g)) specs.add(m[1]);
   return [...specs].filter((s) => s.startsWith('./') || s.startsWith('../'));
 }
 

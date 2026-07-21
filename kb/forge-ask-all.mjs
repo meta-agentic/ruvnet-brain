@@ -262,11 +262,28 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
         note: `ADR-${asTyped} exists in ${repos.length} repos (${repos.join(', ')}). ADR numbers are ` +
               `per-repo, so these are DIFFERENT decisions — name the repo to disambiguate.`,
       };
-      // Guarantee every colliding repo a slot. Without this the top-k can be entirely one repo's
-      // chunks and the collision stays invisible, which IS the bug.
-      const forced = [...byRepo.values()];
-      const forcedSet = new Set(forced);
-      results = [...forced, ...ranked.filter((r) => !forcedSet.has(r))].slice(0, Math.max(k, forced.length));
+      // ONLY REORDER FOR AN ACTUAL ADR LOOKUP — and NEVER return more than k.
+      //
+      // The first version forced one hit per colliding repo to the front and sliced to
+      // max(k, forced.length). Adversarial review proved both halves wrong against the live corpus:
+      //   • ADR-1 collides across 23 repos, so `--k 6` returned TWENTY-TWO results. forge-mcp-all
+      //     renders each result's FULL document, so search_ruvnet silently shipped several times the
+      //     token volume its own schema promises.
+      //   • Forcing ignored the cross-encoder entirely. Adding an aside ("...see ADR-201") to an
+      //     unrelated question promoted a passage scored ce=-1.860 — explicitly judged NOT relevant —
+      //     to position #2, pushing out genuinely on-topic answers. The disclosure fix was actively
+      //     degrading answers, which is worse than the ambiguity it set out to expose.
+      //
+      // So: the NOTE is the disclosure and it always fires. Reordering only happens when the query
+      // really is a bare ADR lookup ("ADR-085", "what does ADR-085 say") rather than a question that
+      // merely mentions one — and it is always capped at k, because a caller asking for k means k.
+      const residual = String(query).replace(adrMatch[0], ' ').replace(/[^a-z0-9]+/gi, ' ').trim();
+      const isBareLookup = residual.split(/\s+/).filter(Boolean).length <= 4;
+      if (isBareLookup) {
+        const forced = [...byRepo.values()].slice(0, k);
+        const forcedSet = new Set(forced);
+        results = [...forced, ...ranked.filter((r) => !forcedSet.has(r))].slice(0, k);
+      }
     }
   }
 
