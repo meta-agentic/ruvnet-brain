@@ -772,6 +772,9 @@ async function doctor() {
   have('node') ? ok('node present') : warn('node missing');
   have('npm') ? ok('npm present') : warn('npm missing');
   have('claude') ? ok('claude CLI present') : warn('claude CLI missing (plugin wiring needs it)');
+  // Two independent version streams (KB bundle vs plugin wrapper) — see checkVersionDrift()'s
+  // header comment for the full story. Silent unless they've genuinely diverged.
+  reportVersionDrift(cacheDir);
   have('unzip') || have('pwsh') || have('powershell')
     ? ok('zip extraction available (unzip or PowerShell Expand-Archive)')
     : warn('no zip tool found — unzip or PowerShell needed for re-install');
@@ -856,6 +859,67 @@ function installedBrainVersion(cacheDir) {
     if (/^[A-Za-z0-9._-]{1,32}$/.test(v)) return v;
   } catch { /* fall through */ }
   return 'unknown';
+}
+
+// ── the OTHER version: the plugin WRAPPER's own plugin.json ──────────────────────────────────────
+// installedBrainVersion() above answers "what KB is on disk". This answers "what PLUGIN WRAPPER is
+// on disk" — a genuinely different artifact (hooks, skills, slash commands), updated on a genuinely
+// different schedule (see the drift note at checkVersionDrift() below). Reuses pluginCommandsDir()
+// — the ONE locator for "is the plugin really here" — instead of growing a second one: plugin.json
+// always lives one directory above commands/, in both layouts that function checks.
+function wrapperVersion() {
+  const commandsDir = pluginCommandsDir();
+  if (!commandsDir) return null; // plugin not installed — nothing to read, nothing to compare
+  try {
+    const p = path.join(path.dirname(commandsDir), '.claude-plugin', 'plugin.json');
+    const v = String(JSON.parse(fs.readFileSync(p, 'utf8')).version || '');
+    return /^[A-Za-z0-9._-]{1,32}$/.test(v) ? v : null; // present-but-unparsable = "don't know"
+  } catch { return null; }
+}
+
+/**
+ * The brain ships as TWO independently-versioned artifacts: the KB content bundle (self-updates
+ * nightly via forge-update.mjs + GitHub Releases) and the Claude Code PLUGIN WRAPPER (hooks,
+ * skills, slash commands), which updates ONLY when Claude Code itself pulls the marketplace git
+ * clone at ~/.claude/plugins/marketplaces/ruvnet-brain — NOT AT ALL if a user's
+ * ~/.claude/settings.json has "autoUpdate": false for that marketplace. They drift silently, and —
+ * this is the damaging part — the version a user is SHOWN always comes from the frozen wrapper,
+ * never the brain. Verified live on this machine 2026-07-20: KB SOURCE.json built today, wrapper
+ * plugin.json still 3.4.18-dev, nine commits behind origin/main, because autoUpdate was false. A
+ * user (Dr. Mark Allen) hit exactly this: KB current, wrapper still the June v0.5.0-dev build, and
+ * nothing anywhere told him the two had diverged.
+ *
+ * NEVER invent or guess a version — this project's hardest rule. Either side unresolved → null, and
+ * null is NEVER treated as drift: a locally-built or pre-stamping KB legitimately has no releaseTag
+ * (see installedBrainVersion's own comment above), and a plugin that simply isn't installed yet is
+ * a DIFFERENT, already-reported situation (wirePlugin / verifyInstall), not a version mismatch.
+ * Drift is reported ONLY when BOTH sides resolved to a real value AND those values differ.
+ *
+ * @returns {{wrapper: string|null, kb: string|null, drift: boolean}}
+ */
+function checkVersionDrift(cacheDir) {
+  const wrapper = wrapperVersion();
+  const kbRaw = installedBrainVersion(cacheDir); // already honest — 'unknown' rather than a guess
+  const kb = kbRaw === 'unknown' ? null : kbRaw;
+  return { wrapper, kb, drift: Boolean(wrapper && kb && wrapper !== kb) };
+}
+
+/**
+ * Shared narration for --doctor and --what-changed (via printFootprint). Silent whenever there is
+ * nothing actionable to say — matched versions, or either side not comparable — so this never adds
+ * noise to a healthy machine or a not-yet-fully-installed one. Speaks up only when the two
+ * artifacts have genuinely diverged, in plain, warm, non-alarming language (neither artifact is
+ * broken — they just update on different schedules), and always hands over the exact command to
+ * fix it — verified live against `claude plugin marketplace --help` (2026-07-20) before ever being
+ * printed here.
+ */
+function reportVersionDrift(cacheDir) {
+  const state = checkVersionDrift(cacheDir);
+  if (!state.drift) return state;
+  warn(`the brain (${c.bold(state.kb)}) and the Claude Code plugin (${c.bold(state.wrapper)}) have drifted apart —`);
+  info(`that's normal (they update on separate schedules) and neither one is broken. To bring the`);
+  info(`plugin up to date:  ${c.bold('claude plugin marketplace update ruvnet-brain')}  ${c.dim('(then restart Claude Code)')}`);
+  return state;
 }
 
 function installAgeLine(cacheDir) {
@@ -1260,6 +1324,10 @@ function printFootprint({ heading = 'What this put on your machine' } = {}) {
     console.log(`      ${c.dim(`undo: ${it.undo}`)}`);
   }
   console.log(`\n  ${c.dim('Remove all of it at once:')}  ${c.bold('npx ruvnet-brain --uninstall')}`);
+  // Same "two artifacts, one machine" story as --doctor — surfaced here too, since a footprint
+  // listing is exactly where a user would otherwise reasonably assume one version covers both.
+  // Silent unless they've genuinely diverged.
+  reportVersionDrift(resolvedKbDir());
   return items;
 }
 

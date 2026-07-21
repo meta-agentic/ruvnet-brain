@@ -222,7 +222,55 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     }
   }
   ranked.sort((a, b) => (b.ceScore ?? -Infinity) - (a.ceScore ?? -Infinity));
-  return { repos: list, perRepo, results: ranked.slice(0, k), pooled: candidates.length, corpusAge };
+
+  // ── BARE ADR-NUMBER QUERIES ARE AMBIGUOUS (issue #33 Part B, Jan Lafko / @lafinak) ────────────
+  // ADR numbering is PER-REPO, not global: "ADR-085" names a completely different decision
+  // depending which repo you mean. Confirmed against the corpus — ADR-085 is "Temporal Tensor
+  // Pattern Compression" in one repo and "Public Benchmark Harness" in another; ADR-086 collides
+  // three ways. A bare-number query returned exactly ONE repo's answer with no hint the others
+  // existed, so a reader with a specific repo in mind could not tell they had been handed a
+  // different repo's decision unless they already knew the content well enough to notice. That is
+  // the failure this project cares most about: a confident answer to a question nobody asked.
+  //
+  // The fix is DISCLOSURE, not guessing. We deliberately do not infer which repo was meant — a bare
+  // "chapter 5" with no book named is genuinely ambiguous input, and picking one silently is the
+  // bug. Instead every colliding repo is guaranteed a slot, and the collision is reported so the
+  // caller can say "there are three of these — which repo did you mean?"
+  const adrMatch = String(query).match(/\bADR[-\s]?(\d{1,4})\b/i);
+  let adrCollision = null;
+  let results = ranked.slice(0, k);
+  if (adrMatch) {
+    const num = adrMatch[1].replace(/^0+/, '') || '0';   // ADR-085 and ADR-85 are the same number
+    const sameNumber = (r) => {
+      const m = `${r.title || ''} ${r.path || ''}`.match(/\bADR[-\s]?(\d{1,4})\b/i);
+      return m ? (m[1].replace(/^0+/, '') || '0') === num : false;
+    };
+    // Best-scoring representative per repo — the collision set.
+    const byRepo = new Map();
+    for (const r of ranked) {
+      if (sameNumber(r) && !byRepo.has(r.repo)) byRepo.set(r.repo, r);
+    }
+    if (byRepo.size > 1) {
+      const repos = [...byRepo.keys()];
+      // Echo the number the way THEY wrote it (ADR-085, not ADR-85). Zero-stripping is only for
+      // matching; showing a user a different number than they typed makes them doubt the answer.
+      const asTyped = adrMatch[1];
+      adrCollision = {
+        number: num,
+        asTyped,
+        repos,
+        note: `ADR-${asTyped} exists in ${repos.length} repos (${repos.join(', ')}). ADR numbers are ` +
+              `per-repo, so these are DIFFERENT decisions — name the repo to disambiguate.`,
+      };
+      // Guarantee every colliding repo a slot. Without this the top-k can be entirely one repo's
+      // chunks and the collision stays invisible, which IS the bug.
+      const forced = [...byRepo.values()];
+      const forcedSet = new Set(forced);
+      results = [...forced, ...ranked.filter((r) => !forcedSet.has(r))].slice(0, Math.max(k, forced.length));
+    }
+  }
+
+  return { repos: list, perRepo, results, pooled: candidates.length, corpusAge, adrCollision };
 }
 
 function parseArgs() {
@@ -240,7 +288,7 @@ function parseArgs() {
 async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
-  const { repos: used, perRepo, results, pooled } = await searchAll({ dir, query, k, pool, repos });
+  const { repos: used, perRepo, results, pooled, adrCollision } = await searchAll({ dir, query, k, pool, repos });
   // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
   // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
   // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
@@ -266,6 +314,9 @@ async function main() {
       .catch(() => {});
   }
   console.log(`\n=== RuvNet Brain (cross-repo) — "${query}" ===`);
+  // Surface the ambiguity BEFORE the results, so it is read as a caveat on everything below rather
+  // than a footnote after the reader has already accepted the first hit as "the" answer.
+  if (adrCollision) console.log(`⚠ ${adrCollision.note}`);
   console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}\n`);
   results.forEach((r, i) => {
     console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}${r.statusLabel ? `  [${r.statusLabel}]` : ''}`);
