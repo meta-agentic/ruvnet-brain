@@ -1,7 +1,7 @@
 {
-  "brainVersion": "3.4.21-dev",
-  "generated": "2026-07-20T07:20:26.068Z",
-  "generatedHuman": "Mon, 20 Jul 2026 07:20:26 GMT",
+  "brainVersion": "3.4.22-dev",
+  "generated": "2026-07-21T10:00:41.649Z",
+  "generatedHuman": "Tue, 21 Jul 2026 10:00:41 GMT",
   "coverage": {
     "built": 69,
     "catalogued": 192,
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "12ede21767a6dd669df1b79392a5d27d9154f237",
+      "builtFromSha": "26c35b59b40a0a95b286ccf5ac675a15edcc995f",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -213,7 +213,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "76017317119d8ef1ec54a2be561b85683a8b337b",
+      "builtFromSha": "219cb61a96f92b935cdcc1ef8efeb468e4bc007f",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -301,7 +301,7 @@
       "name": "musica",
       "tier": "T2",
       "stars": 17,
-      "builtFromSha": "cb5caf88bc19283294cf6f350cae8ef81e0d5c6c",
+      "builtFromSha": "9ab2f57bc679f3be2772a56e6444e6d023481dcd",
       "latestRemoteSha": null,
       "status": "built"
     },
