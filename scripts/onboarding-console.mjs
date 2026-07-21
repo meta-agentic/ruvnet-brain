@@ -28,7 +28,7 @@ import { spawnSync, execFileSync, spawn } from 'node:child_process';
 
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
-import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth } from './console-engine.mjs';
+import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -851,11 +851,52 @@ function resolveProjectDir(project) {
   return path.join(HOME, 'Code', project); // last-resort fallback: the previous fixed behavior
 }
 // Re-derive the currently-valid recommendation set, so apply can only ever act on something STILL true.
+/**
+ * Observe the learner's REAL state, for the health recommendations.
+ *
+ * Deliberately reads the GLOBAL learner (`cwd: HOME`), because that is the store the capture flush
+ * actually writes to. Reading the project-local `.claude-flow/neural` instead is exactly the mistake
+ * that made the console display a dead learner (5 trajectories, last trained 6 days earlier) while
+ * the live one held 412 — rUv documents this fragmentation as issue #2245, "four contradictory
+ * sources". Until it is unified upstream we read the store that learning writes, never the corpse.
+ */
+function observeLearning() {
+  const queueDir = path.join(os.homedir(), '.cache', 'ruvnet-brain', 'learn');
+  let queueDepth = 0;
+  try {
+    for (const f of fs.readdirSync(queueDir)) {
+      if (!f.endsWith('.jsonl')) continue;
+      queueDepth += fs.readFileSync(path.join(queueDir, f), 'utf8').split('\n').filter(Boolean).length;
+    }
+  } catch { /* no queue dir yet — depth stays 0, which is honest */ }
+
+  let lastTrainSeconds = null; let trajectories = 0;
+  try {
+    const r = spawnSync(path.join(os.homedir(), '.npm-global/bin/ruflo'),
+      ['hooks', 'intelligence', '--status'],
+      { cwd: os.homedir(), encoding: 'utf8', timeout: 20_000 });
+    const out = `${r.stdout || ''}`;
+    const t = out.match(/Last Training:\s*(\d+)s ago/);
+    const j = out.match(/Trajectories\s*\|\s*(\d+)/);
+    if (t) lastTrainSeconds = Number(t[1]);
+    if (j) trajectories = Number(j[1]);
+  } catch { /* ruflo absent or slow — leave null, and null NEVER produces a recommendation */ }
+
+  return { queueDepth, lastTrainSeconds, trajectories };
+}
+
 function currentValidIds() {
   const ids = new Set();
   for (const r of buildWiringRecommendations({ sites: wiringSurvey().sites })) ids.add(r.id);
   const a = auditModel();
   for (const r of buildStackRecommendations({ rows: a.rows, stale: a.stale })) ids.add(r.id);
+  // Health + learning. Previously the console could SEE a corrupt store and score it 49/100 while
+  // offering nothing to do about it — detection without a remedy, which ADR-027 prohibits.
+  try {
+    const project = process.cwd();
+    const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
+    for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
+  } catch { /* an advisory surface must never break the apply path */ }
   return { ids, auditRows: a.rows };
 }
 function apply(ids) {
@@ -864,7 +905,17 @@ function apply(ids) {
   for (const id of ids) {
     if (!validNow.has(id)) { results.push({ id, ok: false, skipped: true, error: 'worldMoved', log: 'Skipped — this is already resolved, or your machine changed since the page loaded. Nothing was done. Reload to see the current state.' }); continue; }
 
-    if (id.startsWith('sync:') || id.startsWith('repair:') || id === 'purge:shadows') {
+    // ORDER MATTERS — health ids are matched FIRST. 'repair:memory-index' also satisfies
+    // startsWith('repair:'), so when the stack-sync branch came first it swallowed the id and ran a
+    // GLOBAL NPM SYNC while telling the user their database had been repaired. Caught by adversarial
+    // review before shipping. The exact-match branch must precede every prefix branch, forever.
+    if (id === 'repair:memory-index' || id === 'learning:flush' || id === 'learning:train') {
+      const flag = id === 'repair:memory-index' ? '--repair-memory'
+        : id === 'learning:flush' ? '--flush-learning' : '--train-learning';
+      const undoToken = journalUndo({ kind: id === 'repair:memory-index' ? 'restore-memory-backup' : 'learning-noop', id });
+      const res = runNode('scripts/health-repair.mjs', [flag]);
+      results.push({ id, ...res, undoToken });
+    } else if (id.startsWith('sync:') || id.startsWith('repair:') || id === 'purge:shadows') {
       // Record the inverse FIRST: for a version bump, the inverse is the version currently on disk.
       const pkg = id.split(':')[1];
       const prev = pkg && pkg !== 'shadows' ? installedVersion(pkg) : null;
@@ -943,9 +994,38 @@ function send(res, code, type, body) { res.writeHead(code, { 'content-type': typ
 function sendJSON(res, code, obj) { send(res, code, 'application/json', JSON.stringify(obj)); }
 function readBody(req) { return new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; if (b.length > 1e6) req.destroy(); }); req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } }); }); }
 
+/**
+ * Open the console AND PUT IT IN FRONT OF THE USER.
+ *
+ * `open <url>` creates the tab but does NOT raise the browser window. Observed live 2026-07-21:
+ * the console had been opened twice and was sitting in two Chrome tabs the whole time, behind
+ * VS Code, while the user stared at their editor and reasonably concluded it was broken — and I
+ * kept reporting "opened" because the command exited 0. Exit code 0 meant "a tab exists
+ * somewhere", never "you can see it".
+ *
+ * So on macOS we also `activate` the browser. Raising a window the user asked for is not a
+ * surprise; leaving them looking at the wrong app while claiming success is.
+ */
 function openBrowser(url) {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
   try { spawnSync(opener, [url], { stdio: 'ignore' }); } catch { /* headless is fine */ }
+  if (process.platform !== 'darwin') return;
+  // Bring whichever browser now holds the tab to the front. Best-effort and silent: a failure here
+  // must never break serving the page.
+  try {
+    spawnSync('osascript', ['-e', `
+      tell application "System Events"
+        set brs to name of every application process whose bundle identifier is in ¬
+          {"com.google.Chrome","com.apple.Safari","company.thebrowser.Browser","org.mozilla.firefox","com.brave.Browser"}
+      end tell
+      repeat with b in brs
+        try
+          tell application (b as text) to activate
+          exit repeat
+        end try
+      end repeat
+    `], { stdio: 'ignore', timeout: 8000 });
+  } catch { /* no browser scriptable — the tab still exists */ }
 }
 function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = false, cwd = process.cwd() } = {}) {
   const server = http.createServer(async (req, res) => {

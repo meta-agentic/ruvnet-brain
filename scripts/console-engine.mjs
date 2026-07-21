@@ -44,6 +44,133 @@ export function makeRecommendation(spec) {
   });
 }
 
+// ── Health & learning recommendations ────────────────────────────────────────────────────────────
+//
+// WHY THIS EXISTS (2026-07-21, found by Stuart, not by us). The console detected that his AgentDB
+// store was CORRUPT, computed a memory score of 49/100, rendered it into a card — and offered no
+// fix. His words: "when it finds a problem, the fact that it didn't recommend a fix is
+// unconscionable." He was right. Detection without a remedy is a nicer way of doing nothing.
+//
+// The same run exposed a second dormancy: the capture queue had grown to 1,884 undelivered events
+// because the flush only fires on a clean SessionEnd, and sessions that compact, crash, or resume
+// never reach it. Draining it took the learner from 5 trajectories / 7 patterns (last trained SIX
+// DAYS earlier) to 412 / 412. The architecture was built, installed, active — and starving.
+//
+// Both become RECOMMENDATIONS here rather than console prose, so they inherit the schema gate above:
+// nothing can be offered without evidence we actually observed, a stated cost, and a recorded undo.
+// That is the difference between a card that worries you and a button that fixes it.
+//
+// @param {{ memory?: {dimensions?:Array}, learning?: {queueDepth?:number, lastTrainSeconds?:number|null, trajectories?:number} }} input
+export function buildHealthRecommendations({ memory = null, learning = null } = {}) {
+  const recs = [];
+
+  // 1. Store corruption. SQLite "wrong # of entries in index" is INDEX damage, not data loss —
+  //    REINDEX rebuilds indexes from the intact table. Measured live 2026-07-21 on the real store:
+  //    1193 rows before, 1193 after, integrity_check ok. That measured no-data-loss result is what
+  //    makes this safe to offer as one click instead of a warning to go read about.
+  const corrupt = (memory?.dimensions || []).find(
+    (d) => d?.status === 'fail' && /corrupt|integrity/i.test(String(d?.detail || '')),
+  );
+  if (corrupt) {
+    recs.push(makeRecommendation({
+      id: 'repair:memory-index',
+      title: 'Repair your memory store',
+      rationale: 'A corrupt index makes counts and lookups wrong — it is why saved lessons can read as zero when they are still there.',
+      severity: 'IMPORTANT',
+      touchesMachine: true,
+      plainImpact:
+        'Rebuilds the database indexes for your project memory. Your memories themselves are never touched — '
+        + 'index damage is not data loss — and a full backup is taken first, so this is reversible.',
+      evidence: [{ observed: String(corrupt.detail || 'integrity_check reported a corrupt index') }],
+      cost: { time: 'seconds', risk: 'low — indexes rebuilt from the intact table; backup taken first' },
+      change: { human: 'back up the store, REINDEX it, then re-run integrity_check to prove it is clean' },
+      undo: { human: 'restore the backup taken immediately before the repair' },
+    }));
+  }
+
+  // 2. A capture queue that fills but does not drain. The depth IS the evidence.
+  const depth = Number(learning?.queueDepth);
+  if (Number.isFinite(depth) && depth > 50) {
+    recs.push(makeRecommendation({
+      id: 'learning:flush',
+      title: 'Feed your captured work into the learner',
+      rationale: 'Your AI captured this work, but none of it has reached the learner yet — so none of it has taught it anything.',
+      severity: 'IMPORTANT',
+      touchesMachine: true,
+      plainImpact:
+        'Sends events already captured on your own machine into the local learner so it improves from them. '
+        + 'Nothing leaves your computer, and the queue is kept intact if the feed fails.',
+      evidence: [{ observed: `${depth} captured events waiting, undelivered` }],
+      cost: { time: 'under a minute', risk: 'low — local only; queue preserved on failure' },
+      change: { human: 'drain the capture queue into the learner' },
+      undo: { human: 'nothing to reverse — this only adds observations; learned state can be cleared separately' },
+    }));
+  }
+
+  // 3. A learner that has not trained in days. Installed-but-dormant is a DEFECT, not a neutral
+  //    state — the entire point of shipping a learning system is that it runs.
+  const STALE_TRAIN_SECONDS = 60 * 60 * 24 * 2; // two days
+  const age = Number(learning?.lastTrainSeconds);
+  if (Number.isFinite(age) && age > STALE_TRAIN_SECONDS) {
+    recs.push(makeRecommendation({
+      id: 'learning:train',
+      title: 'Your learner has gone quiet',
+      rationale: 'It is installed and switched on, but it has not learned anything recently — so it is not getting smarter.',
+      severity: 'SUGGESTED',
+      touchesMachine: true,
+      plainImpact:
+        'Runs one local training cycle so recent work becomes patterns it can reuse next time. '
+        + 'Runs on your machine only and changes nothing about your projects.',
+      evidence: [{ observed: `last trained ${(age / 86400).toFixed(1)} days ago (${learning?.trajectories ?? 0} trajectories recorded)` }],
+      cost: { time: 'under a minute', risk: 'low — local, and the learned state is resettable' },
+      change: { human: 'run one training cycle so captured work becomes reusable patterns' },
+      undo: { human: 'the learned state can be reset, returning it to its pre-training condition' },
+    }));
+  }
+
+  // 4. THE ONE THAT SHOULD HAVE FIRED ON DAY ONE — storage without learning.
+  //
+  //    Measured on the owner's machine 2026-07-21: 208 AgentDB stores, 156 with ZERO learns, and 87
+  //    holding 154,106 memories between them while learning nothing at all. The console had
+  //    `patterns` and `learns` on every fleet entry the entire time. It had the data and never said
+  //    the sentence. His words: "you're basically storing a whole bunch of information that none of
+  //    what you're using is changing how I do a damn thing... That should have been the first thing
+  //    you noticed."
+  //
+  //    This is the North Star case: the capability was OWNED, INSTALLED, and OFF, and a tool that
+  //    could see it stayed quiet because nobody asked. Knowing which question to ask is the scarce
+  //    thing; supplying it is the job.
+  const fleet = Array.isArray(learning?.fleet) ? learning.fleet : [];
+  const inertStores = fleet.filter(
+    (f) => Number(f?.total || 0) > 0 && Number(f?.learns || 0) === 0,
+  );
+  if (inertStores.length >= 3) {
+    const memories = inertStores.reduce((n, f) => n + Number(f.total || 0), 0);
+    recs.push(makeRecommendation({
+      id: 'learning:enable-fleet',
+      title: 'You are storing memories that teach your AI nothing',
+      rationale:
+        'Your projects are capturing plenty — but with learning off, none of it changes how your AI '
+        + 'works. It is a filing cabinet, not experience.',
+      severity: 'IMPORTANT',
+      touchesMachine: true,
+      plainImpact:
+        'Switches on the learning loop that is already installed, so captured work becomes reusable '
+        + 'patterns instead of dead rows. Runs entirely on your machine; nothing is uploaded, and '
+        + 'learning can be turned back off at any time.',
+      evidence: [
+        { observed: `${inertStores.length} project stores hold memories but have learned nothing` },
+        { observed: `${memories.toLocaleString()} memories captured with learning inactive` },
+      ],
+      cost: { time: 'a minute', risk: 'low — local only, reversible' },
+      change: { human: 'turn on the learning loop so captured work becomes patterns your AI reuses' },
+      undo: { human: 'learning can be switched off again, and learned state cleared, at any time' },
+    }));
+  }
+
+  return recs;
+}
+
 // ── Stack recommendations ────────────────────────────────────────────────────────────────────────
 // Inputs come from stack-sync.auditModel(): rows[{name,installed,target,state,tag}], stale[{name,version,global,dir}].
 // AHEAD is legal and produces NO recommendation — that modelling choice is what makes the

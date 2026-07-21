@@ -37,4 +37,21 @@ SID="${CLAUDE_SESSION_ID:-default}"
 DIR="$HOME/.cache/ruvnet-brain/learn"
 mkdir -p "$DIR" 2>/dev/null || exit 0
 printf '{"tool":"%s","action":"%s"}\n' "$TOOL" "${ACTION//\"/\\\"}" >> "$DIR/session-$SID.jsonl" 2>/dev/null || true
+
+# ── HEARTBEAT FLUSH (ADR-027) ────────────────────────────────────────────────────────────────────
+# The flush used to fire ONLY on a clean SessionEnd. Sessions compact, crash, get resumed, or are
+# killed — none of those reach SessionEnd — so the queue silently grew to 1,884 undelivered events
+# over days while the learner sat at 5 trajectories, last trained six days earlier. Draining it took
+# the learner to 412/412 in one command. A queue that only empties on a graceful exit will always
+# leak; activity itself must be the trigger.
+#
+# So: every HEARTBEAT_EVERY captures, drain in the BACKGROUND. Detached and fully silent — this runs
+# inside a PostToolUse hook and must never add latency to the user's turn or fail one. Cheap check
+# (a line count) on the common path; real work only at the threshold.
+HEARTBEAT_EVERY=200
+LINES=$(wc -l < "$DIR/session-$SID.jsonl" 2>/dev/null || echo 0)
+if [ "$LINES" -ge "$HEARTBEAT_EVERY" ] && [ $((LINES % HEARTBEAT_EVERY)) -eq 0 ]; then
+  FLUSH="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/marketplaces/ruvnet-brain/plugin}/scripts/learn-flush.mjs"
+  [ -f "$FLUSH" ] && (nohup node "$FLUSH" >/dev/null 2>&1 &) || true
+fi
 exit 0

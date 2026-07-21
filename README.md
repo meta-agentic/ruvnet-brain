@@ -8,6 +8,22 @@
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
+</div>
+
+> ## 🧭 North Star
+>
+> **rUv has built dozens of genuinely powerful capabilities that are effectively invisible — not undocumented, but _undiscovered_.** Ruflo's own docs call cross-project IPFS pattern transfer *"the substrate plugin's most underused capability."* The author knows people can't find his own work.
+>
+> **This project exists to close that gap** — a CTO on your shoulder that says *"you have this, it's off, here's what turning it on buys you."*
+>
+> **Retrieval was never the product. Proactive capability advocacy is the product.**
+>
+> The test we hold ourselves to: a developer who solves a hard problem with this tool and later learns they'd been sitting on a capability that would have made it trivial — that is a **failure of this project**, not of the user. Knowing which question to ask is the scarce thing; supplying that question is the job.
+>
+> Every feature is judged against this. If a surface can detect something useful and doesn't volunteer it, it is broken — see [ADR-027](docs/adr/0027-capability-advocacy-and-active-signals.md) and [DDD-0004](docs/ddd/0004-advocacy-context.md).
+
+<div align="center">
+
 [![plugin version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fstuinfla%2Fruvnet-brain%2Fmain%2Fplugin%2F.claude-plugin%2Fplugin.json&query=%24.version&label=plugin&color=e8a13a&style=flat-square)](plugin/.claude-plugin/plugin.json)
 [![installer version](https://img.shields.io/npm/v/ruvnet-brain?label=installer%20%28npm%29&color=2e7d32&style=flat-square)](https://www.npmjs.com/package/ruvnet-brain)
 [![download](https://img.shields.io/badge/download-latest%20brain-2e7d32?style=flat-square)](https://github.com/stuinfla/ruvnet-brain/releases/latest)

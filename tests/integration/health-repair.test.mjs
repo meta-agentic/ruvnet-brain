@@ -1,0 +1,93 @@
+/**
+ * health-repair.mjs — the executor behind the console's health recommendations.
+ *
+ * Context (2026-07-21): the console detected a CORRUPT AgentDB store, scored it 49/100, drew a card,
+ * and offered no fix. "When it finds a problem, the fact that it didn't recommend a fix is
+ * unconscionable." This file guards the repair half.
+ *
+ * These are SAFETY tests, not happy-path tests. A repair tool that lies about success, or that
+ * destroys rows while claiming to fix indexes, is worse than no repair tool at all — so the
+ * properties held here are:
+ *
+ *   1. A clean store is left alone and says so (no busywork, no false "repaired!").
+ *   2. Corruption REINDEX cannot fix is reported as FAILURE with the backup path — never as success.
+ *   3. A backup always exists before any write.
+ *
+ * The lossless-repair case was verified live on the real store rather than synthesized here:
+ * 1193 rows before, 1193 after, integrity_check ok. Index-entry drift ("wrong # of entries in
+ * index X") is not reproducible with plain SQL — deleting an index from sqlite_master produces
+ * ORPHAN-PAGE corruption, a genuinely different class, which is what test 2 exercises.
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SCRIPT = path.join(ROOT, 'scripts', 'health-repair.mjs');
+
+let dir;
+beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'health-repair-')); });
+afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+const sqlite = (db, sql) => execFileSync('sqlite3', [db, sql], { encoding: 'utf8', timeout: 60_000 }).trim();
+
+function seedStore({ rows = 3 } = {}) {
+  const db = path.join(dir, 'memory.db');
+  const values = Array.from({ length: rows }, (_, i) => `('lessons','k${i}','v${i}')`).join(',');
+  sqlite(db, `CREATE TABLE memory_entries(id INTEGER PRIMARY KEY, namespace TEXT, key TEXT, content TEXT);
+              CREATE INDEX idx_ns ON memory_entries(namespace);
+              INSERT INTO memory_entries(namespace,key,content) VALUES ${values};`);
+  return db;
+}
+
+function repair(db) {
+  const r = spawnSync(process.execPath, [SCRIPT, '--repair-memory', '--db', db], { encoding: 'utf8', timeout: 120_000 });
+  return { out: `${r.stdout || ''}${r.stderr || ''}`, code: r.status };
+}
+
+const backupsIn = () => fs.readdirSync(dir).filter((f) => f.includes('.rescue-'));
+
+describe('health-repair --repair-memory', () => {
+  it('leaves a CLEAN store alone and says so', () => {
+    const db = seedStore();
+
+    const { out, code } = repair(db);
+
+    expect(code, 'a clean store is a success, not an error').toBe(0);
+    expect(out).toMatch(/already clean/i);
+    expect(backupsIn(), 'no backup churn when there is nothing to repair').toEqual([]);
+    expect(Number(sqlite(db, 'SELECT COUNT(*) FROM memory_entries;'))).toBe(3);
+  });
+
+  it('reports FAILURE (never success) on corruption it cannot fix, and keeps the backup', () => {
+    const db = seedStore();
+    // Orphan-page corruption: remove the index definition itself. REINDEX genuinely cannot repair
+    // this, so the tool must say so rather than run REINDEX and declare victory.
+    sqlite(db, "PRAGMA writable_schema=ON; DELETE FROM sqlite_master WHERE type='index' AND name='idx_ns'; PRAGMA writable_schema=OFF;");
+
+    const { out, code } = repair(db);
+
+    expect(code, 'unfixable corruption must exit non-zero').toBe(1);
+    expect(out).toMatch(/still corrupt/i);
+    expect(out, 'the user must be told where their backup is').toMatch(/rescue-/);
+    expect(backupsIn().length, 'a backup must exist before any write').toBe(1);
+  });
+
+  it('never destroys rows — the data survives even a failed repair', () => {
+    const db = seedStore({ rows: 5 });
+    sqlite(db, "PRAGMA writable_schema=ON; DELETE FROM sqlite_master WHERE type='index' AND name='idx_ns'; PRAGMA writable_schema=OFF;");
+
+    repair(db);
+
+    expect(Number(sqlite(db, 'SELECT COUNT(*) FROM memory_entries;')), 'rows must be untouched').toBe(5);
+  });
+
+  it('says so plainly when there is no store at all, instead of pretending', () => {
+    const { out, code } = repair(path.join(dir, 'does-not-exist.db'));
+    expect(code).toBe(1);
+    expect(out).toMatch(/no memory store/i);
+  });
+});
