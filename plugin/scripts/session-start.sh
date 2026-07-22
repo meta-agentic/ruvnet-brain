@@ -305,7 +305,31 @@ fi
 # RUNNING version from this file — never the on-disk marketplace copy, which the background
 # auto-updater refreshes ahead of the restart. Showing a staged version as if it were running
 # is a trust-destroying lie ("user thinks they have the 6.2 fix; they're on 6.1").
-[ "$BANNER_V" != "unknown" ] && echo "$BANNER_V" > "$STATE_DIR/.running-version" 2>/dev/null
+#
+# ONLY A REAL INSTALL MAY WRITE THE GLOBAL RUNNING VERSION (fixed 2026-07-22).
+#
+# $CLAUDE_PLUGIN_ROOT points at whatever plugin THIS session loaded. In a development checkout of
+# this repo that is the working tree — so a dev session wrote its uncommitted version into a file
+# that EVERY OTHER PROJECT's statusline reads. Measured: .running-version held 3.9.0-dev while the
+# installed marketplace copy was 3.8.1-dev, so the owner's other projects displayed a version they
+# were not running. He caught it, not us.
+#
+# That is the same global-state pollution as issue #36 (per-CWD ledgers scattered into users'
+# repos), and the same lie shape the comment above this line already warns about — a staged version
+# shown as running. The comment was right and the code disagreed with it.
+#
+# So: write the global marker only when the loaded plugin IS the installed one. A dev checkout
+# still gets its banner; it just may not speak for the machine.
+case "$CLAUDE_PLUGIN_ROOT" in
+  "$HOME/.claude/plugins/"*)
+    [ "$BANNER_V" != "unknown" ] && echo "$BANNER_V" > "$STATE_DIR/.running-version" 2>/dev/null
+    ;;
+  *)
+    # Development checkout: record it separately so it is visible but never mistaken for the
+    # machine-wide running version.
+    [ "$BANNER_V" != "unknown" ] && echo "$BANNER_V" > "$STATE_DIR/.dev-version" 2>/dev/null
+    ;;
+esac
 # The brain bundle stamps its own provenance (SOURCE.json releaseTag) at build time.
 [ -f "$HOME/.cache/ruvnet-brain/kb/SOURCE.json" ] && \
   BANNER_KB=$(grep -m1 '"releaseTag"' "$HOME/.cache/ruvnet-brain/kb/SOURCE.json" 2>/dev/null | sed -E 's/.*"releaseTag": *"([^"]+)".*/\1/')
