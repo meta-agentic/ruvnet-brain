@@ -1,5 +1,8 @@
 ---
 id: ADR-009
+status: Accepted
+date: 2026-07-06
+updated: 2026-07-16
 ---
 # ADR-0009: The Mirror Discipline — RuvNet Brain must pass its own bar (self-audit + ADR/DDD/doc QA)
 

@@ -65,6 +65,16 @@
   // Rule 1's enforcement point. Anything that is not a finite number is UNKNOWN with a reason the
   // UI is obliged to show — there is deliberately no path that turns absence into 0.
   function metric(raw, why) {
+    // ABSENCE IS REJECTED BEFORE COERCION, not after. Number(null) === 0 and Number('') === 0,
+    // and both sail straight through Number.isFinite — so the obvious `Number.isFinite(Number(x))`
+    // shape reports a confident hard ZERO for a source that is merely absent. Caught live
+    // 2026-07-22: with no KV store linked, `telemetry.totals` is null, `totals && totals.install`
+    // evaluates to null, and the "opted-in installs" tile rendered "0" — a measurement claim about
+    // an instrument that does not exist. undefined and NaN already fail isFinite; null and '' are
+    // the two that need naming.
+    if (raw === null || raw === undefined || raw === '') {
+      return { known: false, why: why || 'no configured source provides this' };
+    }
     var n = Number(raw);
     if (Number.isFinite(n)) return { known: true, v: n };
     return { known: false, why: why || 'no configured source provides this' };
@@ -394,6 +404,78 @@
     host.innerHTML = '<div class="tl">' + rows + more + '</div>';
   }
 
+  // ── reach: the four headline counters, each carrying its own limitation ───────────────────────
+  //
+  // The owner's question is "how many people use this?" — and NO single counter answers it, because
+  // the three cheap ones each count a different non-person: a browser session, a file fetch, a
+  // consenting machine. The tile therefore renders the caveat as structure, not as fine print: a
+  // number without its limitation is how "2,207 npm downloads" got read as 2,207 users when it is
+  // mostly mirrors and this project's own nightly refresh.
+  function rcell(opts) {
+    if (!opts.value.known) {
+      return '<div class="rcell unknown"><b>—</b><span class="lbl">' + esc(opts.label) + '</span>'
+        + '<span class="win">' + esc(opts.value.why) + '</span>'
+        + '<span class="caveat">' + esc(opts.caveat) + '</span></div>';
+    }
+    return '<div class="rcell' + (opts.hero ? ' hero' : '') + '"><b>' + num(opts.value.v) + '</b>'
+      + '<span class="lbl">' + esc(opts.label) + '</span>'
+      + '<span class="win">' + esc(opts.window) + '</span>'
+      + '<span class="caveat">' + esc(opts.caveat) + '</span></div>';
+  }
+
+  function renderReach(d) {
+    var t = d.traffic || {};
+    var trafficWhy = t.configured ? 'no data in the current 14-day window' : 'GITHUB_TOKEN not set — traffic API needs push access';
+    var telCfg = d.telemetry && d.telemetry.configured;
+    var telTotals = (telCfg && d.telemetry.totals) || null;
+    var telWhy = telCfg ? 'no opt-in install pings recorded yet' : 'opt-in counter store not linked';
+
+    // Newest release = the best available read on the ACTIVE installed base: every machine that
+    // refreshes pulls the current bundle, so a fresh release accumulates roughly one download per
+    // live machine. Labelled as the estimate it is, with its own arithmetic shown.
+    var rels = Array.isArray(d.releases) ? d.releases : [];
+    var newest = rels.filter(function (r) { return r.assets && r.assets.length; })[0] || null;
+    var newestDl = newest ? newest.assets.reduce(function (n, a) { return n + (a.downloads || 0); }, 0) : null;
+
+    $('[data-reach]').innerHTML = [
+      rcell({
+        hero: true,
+        label: 'unique repo visitors',
+        window: 'rolling 14 days · github.com',
+        value: metric(t.views && t.views.uniques, trafficWhy),
+        caveat: 'The only tile here that counts PEOPLE. GitHub de-duplicates by visitor, so this is humans who opened the repo page — not machines, not CI.'
+      }),
+      rcell({
+        label: 'bundle downloads',
+        window: 'lifetime, all releases',
+        value: metric(d.totalAssetDownloads, 'no release data returned'),
+        caveat: 'Downloads, NOT people — GitHub exposes no unique-downloader field for release assets. Each nightly refresh re-downloads, so one machine counts many times.'
+      }),
+      rcell({
+        label: newest ? 'pulled ' + newest.tag : 'newest release pulls',
+        window: newest ? 'since ' + String(newest.publishedAt || '').slice(0, 10) : 'no published release found',
+        value: metric(newestDl, 'no assets on the newest release'),
+        caveat: 'The closest read on the ACTIVE installed base: every live machine pulls the current bundle once. An estimate of machines, and it is the number to watch.'
+      }),
+      rcell({
+        label: 'opted-in installs',
+        window: 'lifetime · consenting machines only',
+        value: metric(telTotals && telTotals.install, telWhy),
+        caveat: 'A FLOOR, never a total. Fires once per machine on first install, and only if that person said yes. Everyone who declined is real and invisible here.'
+      })
+    ].join('');
+
+    var stars = d.repo ? d.repo.stars : null;
+    $('[data-reach-qual]').textContent = Number.isFinite(Number(stars))
+      ? '★ ' + num(stars) + ' stars · ' + num((d.repo && d.repo.forks) || 0) + ' forks'
+      : 'repo metadata unavailable';
+
+    $('[data-reach-note]').textContent = 'No counter here is a headcount, and the gap between them is the point: '
+      + 'visitors are people, bundle pulls are machines, opted-in installs are consenting machines. '
+      + 'npm downloads are deliberately excluded from this row — mirrors and the nightly refresh dominate them, '
+      + 'so they measure traffic volume and never population. They remain in Momentum below, as shape only.';
+  }
+
   function mcell(label, mom, stroke, unknownWhy) {
     if (!mom) {
       return '<div class="mcell unknown"><div class="top"><b>—</b></div><span>' + esc(label) + '</span>'
@@ -416,15 +498,20 @@
     var telSeries = d.telemetry && d.telemetry.configured ? ascend(d.telemetry.daily, 'date', 'search') : null;
     var telWhy = d.telemetry && !d.telemetry.configured ? 'opt-in counter store not linked' : 'no opt-in pings recorded yet';
 
+    // Ordered by how close each one sits to a real person: visitors (people) → cloners (machines)
+    // → opted-in searches (consenting machines actually USING it) → npm (mostly mirrors). npm is
+    // last on purpose; it was leading this row and reading as an adoption number, which it is not.
     $('[data-momentum]').innerHTML = [
-      mcell('npm downloads, last 7d', momentum(npmSeries), 'var(--accent-2)', 'npm range unavailable'),
-      mcell('unique cloners, last 7d', momentum(cloneSeries), 'var(--accent)', trafficWhy),
       mcell('unique repo visitors, last 7d', momentum(viewSeries), 'var(--accent)', trafficWhy),
-      mcell('opted-in searches, last 7d', momentum(telSeries), 'var(--accent-3)', telWhy)
+      mcell('unique cloners, last 7d', momentum(cloneSeries), 'var(--accent)', trafficWhy),
+      mcell('opted-in searches, last 7d', momentum(telSeries), 'var(--accent-3)', telWhy),
+      mcell('npm downloads, last 7d', momentum(npmSeries), 'var(--accent-2)', 'npm range unavailable')
     ].join('');
 
-    $('[data-momentum-note]').textContent = 'npm\'s most recent day is often partial, so the newest point in that sparkline can dip for no real reason. '
-      + 'Clone and view counts include CI checkouts and the plugin\'s own auto-update traffic — they are a shape, not a headcount.';
+    $('[data-momentum-note]').textContent = 'Read left to right: the tiles get further from a human as you go. '
+      + 'Unique visitors are people. Unique cloners are machines, and this project\'s own plugin auto-update is among them. '
+      + 'npm downloads are dominated by registry mirrors — the 7d figure moves with release cadence, not with adoption, '
+      + 'which is why it no longer leads this row. npm\'s most recent day is also partial, so the last sparkline point can dip for no real reason.';
   }
 
   function renderReferrers(d) {
@@ -500,6 +587,7 @@
     var s = shape(d);
     var base = readBaseline();
 
+    renderReach(d);
     var since = renderSince(d, s, base);
     renderTodo(s);
     renderPeople(d, s, base);

@@ -1,5 +1,8 @@
 ---
 id: ADR-010
+status: Accepted
+date: 2026-07-06
+updated: 2026-07-09
 ---
 # ADR-0010: Security hardening (SEC-0010) — Dragan's QE review, and exactly how each finding was fixed
 

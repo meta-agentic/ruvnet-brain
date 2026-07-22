@@ -37,6 +37,10 @@ import path from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
+
+// The only exit code this file may ever use. A Stop hook that exits non-zero refuses to let the turn
+// end; this gate informs and never refuses, so every path below returns exactly this.
+const EXIT_ALLOW = 0;
 /**
  * PROJECT-SCOPED, because this runs machine-wide.
  *
@@ -109,24 +113,83 @@ if (has('--done')) {
 if (has('--clear')) { save({ items: [] }); console.log('ledger cleared'); process.exit(0); }
 
 // ── the Stop hook itself (default action) ────────────────────────────────────────────────────────
+/**
+ * READ THE PAYLOAD. Every Stop hook receives a JSON object on stdin, and until 2026-07-22 this file
+ * ignored it completely — which made the loop guard below not merely absent but UNREACHABLE.
+ *
+ * Never block waiting for stdin: the CLI paths (--commit-to / --done) are invoked from a terminal
+ * with no piped input, and a gate that hangs is worse than a gate that is silent.
+ */
+function readHookInput() {
+  if (process.stdin.isTTY) return {};
+  try { return JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { return {}; }
+}
+const hookInput = readHookInput();
+
+/**
+ * THE LOOP GUARD. This is the single most important line in the file.
+ *
+ * `additionalContext` at Stop is NOT a passive message — it CONTINUES THE TURN, and it counts
+ * against the same 8-consecutive-continuation cap as `decision: "block"`. From the live hooks doc:
+ *
+ *   "It keeps the conversation going through the same loop protections as decision: 'block',
+ *    namely the stop_hook_active input and the 8-consecutive-continuation cap"
+ *   "Claude Code overrides the hook and ends the turn after 8 consecutive blocks."
+ *
+ * So a Stop hook that speaks unconditionally will continue the turn eight times and be overridden
+ * on the ninth. That is not a hypothetical: it happened on 2026-07-22 across three projects, and
+ * the harness's own error text named this exact fix — "check stop_hook_active in the input and
+ * return success while it's true."
+ *
+ * `stop_hook_active` is true once Claude Code is already continuing because of a stop hook. Honouring
+ * it means the nudge is delivered EXACTLY ONCE and the turn then ends normally.
+ */
+if (hookInput.stop_hook_active === true) process.exit(EXIT_ALLOW);
+
 const led = load();
 const open = led.items.filter((i) => !i.done);
 
-if (!open.length) process.exit(0);   // nothing outstanding: silence is correct
+if (!open.length) process.exit(EXIT_ALLOW);   // nothing outstanding: silence is correct
 
-// This is the one moment the model can still see before the turn ends. Make the unfinished work the
-// last thing in context, and make the instruction unambiguous — an ambiguous nudge at this boundary
-// reads as optional, and optional is what produced the failure.
-console.error('');
-console.error('  ⛔ DO NOT STOP — you committed to work that is not finished.');
-console.error('');
-for (const i of open.slice(0, 8)) console.error(`     ☐ ${i.text}`);
-if (open.length > 8) console.error(`     … and ${open.length - 8} more`);
-console.error('');
-console.error('  A status report is not a finish line (lesson L13, ratified by the owner).');
-console.error('  Start the next item NOW, in this turn. Mark items done as you complete them:');
-console.error('     node scripts/continuation-gate.mjs --done "<item text>"');
-console.error('');
+/**
+ * ONE NUDGE PER SESSION, not one per turn.
+ *
+ * The state gate above is necessary but not sufficient for a well-behaved hook. A ledger carries
+ * items across sessions, so "work remains" stays true for days — and a nudge that fires on every
+ * turn-end for days is a forced extra model turn every single time the user talks. That is the
+ * ham-fisted behaviour that gets a tool switched off, and being technically correct about the
+ * unfinished work does not redeem it.
+ *
+ * Keyed on session_id from the payload, so a genuinely new session hears it again.
+ */
+if (hookInput.session_id && led.nudgedSession === hookInput.session_id) process.exit(EXIT_ALLOW);
+if (hookInput.session_id) save({ ...led, nudgedSession: hookInput.session_id });
+
+/**
+ * DELIVERY. `additionalContext` on STDOUT is the only channel the model reads at exit 0.
+ *
+ * This file previously wrote all ten of these lines to console.error. On exit 0, stderr is not a
+ * delivery channel — the doc lists it nowhere among the exit-0 paths that reach the model. So the
+ * one Stop hook that actually knew whether work was outstanding had been shouting into a void since
+ * the day it was written, while the one that knew nothing was heard on every turn. Built, tested,
+ * unwired: the exact defect class this project exists to catch, in the file written to catch it.
+ */
+const lines = [
+  'You committed to work that is not finished. This is advisory — if the remaining items are genuinely',
+  'blocked or already done, say so and finish the turn; do not manufacture an action to satisfy it.',
+  '',
+  ...open.slice(0, 8).map((i) => `  ☐ ${i.text}`),
+  ...(open.length > 8 ? [`  … and ${open.length - 8} more`] : []),
+  '',
+  'Mark items done as you complete them:  node scripts/continuation-gate.mjs --done "<item text>"',
+];
+
+process.stdout.write(JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'Stop',            // must name the firing event or the envelope is discarded
+    additionalContext: lines.join('\n'),
+  },
+}));
 
 // Exit 0 regardless. This gate informs at the boundary; it never breaks the turn.
-process.exit(0);
+process.exit(EXIT_ALLOW);

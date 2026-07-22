@@ -21,10 +21,33 @@ re_t='"tool_name"[[:space:]]*:[[:space:]]*"([^"]*)"'
 ACTION=""
 case "$TOOL" in
   Bash)
-    # Capture up to the first embedded quote — that's the command's workflow verbs (git push, gh run
-    # watch, npx vercel, playwright, npm test). Long args/paths past a quote are dropped: verb, not facts.
+    # Capture the VERB CHAIN ONLY — "git push", "npm test", "npx vercel" — never the arguments.
+    #
+    # This previously took the first 120 chars up to an embedded quote and called that "verb, not
+    # facts". It wasn't. Unquoted inline secrets were captured in full and written to disk, proven
+    # by test: `export AWS_SECRET_ACCESS_KEY=wJalr... && psql postgres://admin:Hunter2Pass@db/prod`
+    # landed verbatim in session-*.jsonl, and from there fed the global learner. Real command lines
+    # routinely carry API keys, DB URLs with inline passwords, and internal hostnames — on a
+    # corporate laptop the hostnames alone are a DLP finding.
+    #
+    # Now: keep at most the first two tokens, and stop at the first token that carries DATA rather
+    # than INTENT (contains = / @ : , is a flag, or is improbably long). "export FOO=secret" records
+    # "export"; "cd /Users/me/ClientProject" records "cd". The learner only ever needed the verb.
     re_c='"command"[[:space:]]*:[[:space:]]*"([^"]*)"'
-    [[ $INPUT =~ $re_c ]] && ACTION="${BASH_REMATCH[1]:0:120}"
+    if [[ $INPUT =~ $re_c ]]; then
+      set -f                      # no globbing while we word-split untrusted text
+      _n=0
+      for _tok in ${BASH_REMATCH[1]}; do
+        case "$_tok" in
+          *=*|*/*|*@*|*:*|-*) break ;;
+        esac
+        [ ${#_tok} -gt 24 ] && break
+        ACTION="${ACTION:+$ACTION }$_tok"
+        _n=$((_n + 1))
+        [ "$_n" -ge 2 ] && break
+      done
+      set +f
+    fi
     ;;
   Write|Edit|MultiEdit)
     re_f='"file_path"[[:space:]]*:[[:space:]]*"([^"]*)"'
@@ -35,8 +58,12 @@ esac
 
 SID="${CLAUDE_SESSION_ID:-default}"
 DIR="$HOME/.cache/ruvnet-brain/learn"
-mkdir -p "$DIR" 2>/dev/null || exit 0
-printf '{"tool":"%s","action":"%s"}\n' "$TOOL" "${ACTION//\"/\\\"}" >> "$DIR/session-$SID.jsonl" 2>/dev/null || true
+# Owner-only (0700 dir / 0600 file). This queue was 0644 inside a 0755 dir: on macOS every local
+# account is normally in `staff`, so any other user on a shared or corporate machine could read it.
+( umask 077 && mkdir -p "$DIR" ) 2>/dev/null || exit 0
+QUEUE="$DIR/session-$SID.jsonl"
+[ -e "$QUEUE" ] || { : > "$QUEUE" 2>/dev/null && chmod 600 "$QUEUE" 2>/dev/null; } || true
+printf '{"tool":"%s","action":"%s"}\n' "$TOOL" "${ACTION//\"/\\\"}" >> "$QUEUE" 2>/dev/null || true
 
 # ── HEARTBEAT FLUSH (ADR-027) ────────────────────────────────────────────────────────────────────
 # The flush used to fire ONLY on a clean SessionEnd. Sessions compact, crash, get resumed, or are

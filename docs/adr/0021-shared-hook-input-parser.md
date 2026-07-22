@@ -7,6 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [gates, hooks, parsing, correctness, dry, trust]
 supersedes: []
 relates: [ADR-020]
+updated: 2026-07-18
 ---
 
 **Status**: Accepted (hook-input.mjs shipped; design-wall.sh + verify-interface.sh ported; tested)

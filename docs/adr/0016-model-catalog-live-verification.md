@@ -7,6 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [routing, models, enforcement, ci, rule-0]
 supersedes: []
 relates: [ADR-015, ADR-0012]
+updated: 2026-07-15
 ---
 
 **Status**: Accepted (implemented in v3.0.3)

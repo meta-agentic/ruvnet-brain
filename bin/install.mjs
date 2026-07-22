@@ -349,11 +349,18 @@ async function obtainBundle(release) {
     );
   }
   ok(`downloaded to ${tmp}`);
-  // Best-effort fetch of the detached Ed25519 signature published alongside the asset (SEC-0010 #6).
-  // If present we verify it before extracting; if absent (a pre-signing release) we warn but proceed
-  // (transitional — see SIGNING_REQUIRED at the verify gate).
-  try { await download(`${downloadUrl}.sig`, `${tmp}.sig`); } catch { /* no published sig yet */ }
-  return { zipPath: tmp, tmpDir, downloaded: true };
+  // Fetch the detached Ed25519 signature published alongside the asset (SEC-0010 #6).
+  // We record WHY a fetch failed rather than discarding it. Swallowing the error made two very
+  // different worlds look identical: "this release genuinely has no signature" and "someone
+  // 404'd/reset/stripped the .sig so verification would be skipped." The second is the whole
+  // downgrade attack — strip one small file and 800MB+ of executable .mjs extracts unverified.
+  let sigError = null;
+  try {
+    await download(`${downloadUrl}.sig`, `${tmp}.sig`);
+  } catch (e) {
+    sigError = e && e.message ? e.message : String(e);
+  }
+  return { zipPath: tmp, tmpDir, downloaded: true, sigError };
 }
 
 // ── step: unzip into the cache dir (flattening the top-level ruvnet-brain/ folder) ───────────────
@@ -2547,17 +2554,25 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       FLAG_LOCAL || fs.existsSync(path.join(REPO_ROOT, 'dist', 'ruvnet-brain.zip'));
     // Reuse the staleness check's resolution when it already ran — one network round-trip, not two.
     const release = localZipPresent ? null : (resolvedRelease || await resolveRelease());
-    const { zipPath, tmpDir, downloaded } = await obtainBundle(release);
+    const { zipPath, tmpDir, downloaded, sigError } = await obtainBundle(release);
     // Verify the Ed25519 signature BEFORE extracting a downloaded bundle into the user's config
-    // (SEC-0010 #6 — trust root = keys/ruvnet-brain-signing.pub.pem shipped inside this package).
-    // SIGNING_REQUIRED is transitional: while releases predate signing, a MISSING sig warns-and-proceeds
-    // but a PRESENT-but-INVALID sig ALWAYS fails closed. Flip to true once every release is signed.
-    const SIGNING_REQUIRED = false;
+    // (SEC-0010 #6 — trust root = the pubkey EMBEDDED in this file, so an attacker who swaps the
+    // bundle cannot also swap the key it is checked against).
+    //
+    // SIGNING_REQUIRED was `false` transitionally, for releases that predated signing. That is over:
+    // every release from v2.0.0 on is signed, including the pinned offline fallback (RELEASE_VERSION).
+    // Leaving it false left a real downgrade path — strip or 404 the small .sig file and the missing-
+    // signature branch printed a warning and extracted 800MB+ of executable .mjs anyway. No alarm
+    // fired, because no signature was ever obtained. Now a missing signature fails closed like an
+    // invalid one, and --no-verify remains the single explicit, user-chosen override.
+    const SIGNING_REQUIRED = true;
     if (downloaded && !FLAG_NO_VERIFY) {
       const sigPath = `${zipPath}.sig`;
       const hasSig = fs.existsSync(sigPath);
-      if (!hasSig && !SIGNING_REQUIRED) {
-        warn('this release is not signed yet — proceeding (bundle integrity not cryptographically verified)');
+      if (!hasSig) {
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+        die(`no signature published alongside this release — refusing to extract an unverified bundle${sigError ? `\n  (signature fetch failed: ${sigError})` : ''}`,
+            `Every release from v2.0.0 on is signed, so a missing signature means the download was\nincomplete, blocked, or tampered with. Re-run to fetch a fresh copy. If it persists, report it.\n(Override at your own risk with ${c.bold('--no-verify')}.)`);
       } else {
         step('Verifying the bundle signature', 'so a tampered or MITM-swapped download can never be extracted');
         const { ok: valid, reason } = verifyBundle(zipPath, sigPath);

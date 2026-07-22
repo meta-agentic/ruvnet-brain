@@ -728,11 +728,34 @@ describe('against the REAL repository', () => {
     expect(docs).toContain('docs/adr/0024-derived-status-never-asserted.md');
   });
 
-  it('the legacy ADRs are reported and never blocked', () => {
+  // PREMISE RETIRED 2026-07-22 — and the retirement is the point.
+  //
+  // This asserted that legacy unstamped ADRs are reported and never blocked. That behaviour was
+  // correct while 12 of 32 ADRs carried no frontmatter status or dates: blocking them on day one
+  // would have got the gate uninstalled. scripts/adr-backfill.mjs then stamped all 22 affected
+  // documents from values LIFTED out of their own bodies and DERIVED from git — nothing invented —
+  // so the legacy set is now empty and the old assertion could only pass by finding a defect.
+  //
+  // Rewritten to pin the two properties that still matter, rather than deleted: the legacy PATH
+  // must keep working (a new unstamped document must still warn, never block), and the corpus must
+  // stay clean. Deleting it would have quietly removed the guarantee along with the condition.
+  it('no ADR is legacy-unstamped any more — the backfill is complete and stays complete', () => {
     const d = evaluateDoc(REPO_ROOT, 'docs/adr/0009-mirror-discipline-self-audit-and-qa.md', { checkWiring: false });
-    expect(d.legacy).toBe(true);
-    expect(codes(d)).toContain('legacy-unstamped');
-    expect(blockingFindings([d])).toHaveLength(0);
+    expect(d.legacy, 'this ADR was backfilled; if it reads legacy again, a stamp was lost').toBe(false);
+    expect(codes(d)).not.toContain('legacy-unstamped');
+  });
+
+  it('an unstamped document still WARNS and never blocks — the legacy path must survive its own emptiness', () => {
+    // The mechanism has to keep working for documents added later, or the gate becomes brittle the
+    // first time someone writes a new ADR without frontmatter.
+    const tmpDoc = path.join(REPO_ROOT, 'docs', 'adr', '9999-temp-unstamped-probe.md');
+    fs.writeFileSync(tmpDoc, '# probe\n\nno frontmatter at all\n');
+    try {
+      const d = evaluateDoc(REPO_ROOT, 'docs/adr/9999-temp-unstamped-probe.md', { checkWiring: false });
+      expect(blockingFindings([d]), 'an unstamped doc must never block — that is how gates get uninstalled').toHaveLength(0);
+    } finally {
+      fs.rmSync(tmpDoc, { force: true });
+    }
   });
 
   it('ADR-0021 — old, no governed set — is NOT flagged stale', () => {

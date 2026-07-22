@@ -1,5 +1,8 @@
 ---
 id: ADR-008
+status: Accepted
+date: 2026-06-28
+updated: 2026-07-09
 ---
 # ADR-0008: The autonomous RuvNet-native engineering loop (the build product on top of the brain)
 

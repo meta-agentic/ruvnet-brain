@@ -7,6 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [architecture, tech-debt, host-model, console, proactivity, honesty]
 supersedes: []
 relates: [ADR-020, ADR-021, ADR-013, ADR-014]
+updated: 2026-07-18
 ---
 
 **Status**: Accepted (this ADR is the honest record; the deferred items are tracked here, not dropped)

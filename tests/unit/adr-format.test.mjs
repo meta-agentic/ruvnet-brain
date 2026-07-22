@@ -75,3 +75,30 @@ describe('the linter itself can fail', () => {
     expect(canonicalId('0002')).toBe('ADR-002');
   });
 });
+
+// ── Currency stamps are now REQUIRED (added 2026-07-22) ─────────────────────────────────────────
+// The owner: "One thing I ALWAYS want you to do is indicate in an ADR what the status is... and a
+// date stamped on when it was written and the last time it was updated. That way I know I am never
+// looking at out-of-date documents."
+//
+// The convention existed from ADR-0013 onward and NOTHING ENFORCED IT, so 12 of 32 ADRs carried no
+// frontmatter status or dates at all and 9 more had no `updated`. That is the exact prose-vs-gate
+// asymmetry this repo has measured: every convention that got a gate survived; every one that
+// stayed prose decayed. So it becomes a gate.
+describe('every ADR carries its currency stamps', () => {
+  const adrFiles = fs.readdirSync(ADR_DIR).filter((f) => /^\d{4}-.*\.md$/.test(f));
+
+  it('has at least the full historical corpus — a shrinking glob would make this vacuous', () => {
+    expect(adrFiles.length).toBeGreaterThanOrEqual(30);
+  });
+
+  for (const f of adrFiles) {
+    it(`${f} — frontmatter carries status, date and updated`, () => {
+      const src = fs.readFileSync(path.join(ADR_DIR, f), 'utf8');
+      const fm = src.split('\n---')[0];
+      expect(fm, `${f}: no frontmatter "status:" — tooling cannot read a status stated only in the body`).toMatch(/^status:\s*\S+/m);
+      expect(fm, `${f}: no frontmatter "date:" (when it was written)`).toMatch(/^date:\s*\d{4}-\d{2}-\d{2}/m);
+      expect(fm, `${f}: no frontmatter "updated:" — without it nobody can tell a current document from a stale one`).toMatch(/^updated:\s*\d{4}-\d{2}-\d{2}/m);
+    });
+  }
+});

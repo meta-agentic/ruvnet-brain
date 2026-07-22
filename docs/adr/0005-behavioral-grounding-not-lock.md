@@ -1,5 +1,8 @@
 ---
 id: ADR-005
+status: Accepted
+date: 2026-06-27
+updated: 2026-07-09
 ---
 # ADR-0005: Behavioral grounding via retrieve-and-inject + hard-deny + drift SLO (not a "lock")
 

@@ -154,12 +154,42 @@ const optedIn = loadBlockingOptIn();
 // Merge every requested decision point into one ranked, de-duplicated list. A lesson registered at
 // two triggers must appear once, or the model reads the same correction twice and learns to skim.
 const seen = new Set();
-const inForce = [];
+const candidates = [];
 for (const t of triggers) {
   for (const l of lessonsFor(t, lessons, { limit: 3 })) {
-    if (!seen.has(l.id)) { seen.add(l.id); inForce.push(l); }
+    if (!seen.has(l.id)) { seen.add(l.id); candidates.push(l); }
   }
 }
+
+/**
+ * THE CHARACTER BUDGET — because an event can now carry four decision points.
+ *
+ * Measured 2026-07-22: UserPromptSubmit rendered 6 lessons / 3,757 characters, injected on EVERY
+ * prompt. That is not a reminder, it is a wall, and a wall gets skimmed and then switched off —
+ * which costs the user every lesson at once, including the ones that were working.
+ *
+ * Budget the COST, not the COUNT: a lesson is ~300 chars, so "three lessons" and "900 characters"
+ * are the same rule until an unusually long lesson arrives, and then only the character rule holds.
+ *
+ * Ranked by repeatCount — how many times the user has actually had to say it — so the correction
+ * they are most tired of repeating is the one that always survives the trim.
+ *
+ * AND THE TRIM IS ANNOUNCED. A silent truncation reads as "that is all there is", which is the same
+ * lie as a silent cap one layer up. If something was dropped, the model is told how many and where
+ * to read the rest.
+ */
+const NUDGE_CHAR_BUDGET = Number(process.env.RUVNET_NUDGE_BUDGET) || 1200;
+const ranked = [...candidates].sort((a, b) => (b.repeatCount || 0) - (a.repeatCount || 0));
+const inForce = [];
+let spent = 0;
+for (const l of ranked) {
+  const cost = renderLesson(l, '·').length;
+  // Always admit the first lesson even if it alone exceeds the budget — a budget that can render
+  // nothing is worse than a budget that overruns once.
+  if (inForce.length && spent + cost > NUDGE_CHAR_BUDGET) continue;
+  inForce.push(l); spent += cost;
+}
+const trimmed = candidates.length - inForce.length;
 
 /**
  * BLOCKING = four conditions, all required. The user's opt-in is necessary and NOT sufficient.
@@ -197,6 +227,12 @@ function renderBody() {
   lines.push('');
   for (const l of inForce) {
     lines.push(renderLesson(l, isBlocking(l) ? '⛔' : '·'));
+    lines.push('');
+  }
+  // Say it out loud when the budget trips. A silent truncation reads as "that is all there is".
+  if (trimmed > 0) {
+    lines.push(`  (${trimmed} further lesson${trimmed === 1 ? '' : 's'} also applies here, trimmed to keep this short —`);
+    lines.push(`   see them all with: node scripts/lesson-ratify.mjs --list)`);
     lines.push('');
   }
   if (blockCapable.length && !blocking.length) {

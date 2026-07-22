@@ -20,7 +20,29 @@
 # pattern in anything being pushed refuses the push. Placeholders (your-key, abc123, xxxx,
 # deadbeef, example) are excluded, because rUv's own docs are full of them and a gate that cries
 # wolf on documentation is a gate people learn to bypass.
-SECRET_HITS=$(git diff --cached --no-color -U0 HEAD 2>/dev/null | grep -E "^\+" \
+#
+# SCOPE FIX (2026-07-22): this scanned `git diff --cached HEAD` — the STAGED INDEX. But a push ships
+# COMMITS, and at push time the index is normally clean, so the scan read nothing. Proven both ways
+# in a scratch repo: a key COMMITTED then pushed sailed through, while the same key merely STAGED was
+# blocked. The gate could only catch the one case that never happens. It is the same defect class the
+# 7e715bb commit fixed in the *test* — a check that cannot fail in the situation it was written for —
+# which survived here in the *scan*. Now it reads the actual push range from the hook's stdin.
+RANGE_DIFF=""
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ -z "$local_sha" ] && continue
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac        # all-zeros = branch deletion, nothing to scan
+  case "$remote_sha" in
+    ""|*[!0-9a-f]*|0000000000000000000000000000000000000000)  # new branch: scan its whole history vs other refs
+      RANGE_DIFF="$RANGE_DIFF$(git diff --no-color -U0 "$(git merge-base HEAD origin/main 2>/dev/null || echo '')" "$local_sha" 2>/dev/null)" ;;
+    *)
+      RANGE_DIFF="$RANGE_DIFF$(git diff --no-color -U0 "$remote_sha" "$local_sha" 2>/dev/null)" ;;
+  esac
+done
+# Fall back to the staged index too, so a pre-commit-style invocation still gets covered.
+RANGE_DIFF="$RANGE_DIFF
+$(git diff --cached --no-color -U0 HEAD 2>/dev/null)"
+
+SECRET_HITS=$(printf '%s' "$RANGE_DIFF" | grep -E "^\+" \
   | grep -oE "sk-(proj|ant|or-v1)-[A-Za-z0-9_-]{20,}" \
   | grep -vEi "your-key|abc123|xxxx+|deadbeef|example|placeholder|REDACTED" | head -3)
 if [ -n "$SECRET_HITS" ]; then

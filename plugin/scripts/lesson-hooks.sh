@@ -68,12 +68,36 @@ command -v node >/dev/null 2>&1 || exit 0
 # the nudge silently reaches nobody. That is this project's signature failure; it is not repeating here.
 TRIGGERS=""
 CLAUDE_EVENT=""
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# WHY `Stop` IS NO LONGER HERE (2026-07-22, and this is the fix for a live, machine-wide defect).
+#
+# `additionalContext` at Stop does not merely inform — it CONTINUES THE TURN, and counts against the
+# 8-consecutive-continuation cap. The doc is explicit: "It keeps the conversation going through the
+# same loop protections as decision: 'block'... Claude Code overrides the hook and ends the turn
+# after 8 consecutive blocks."
+#
+# This dispatcher fired on Stop with triggers `report-status claim-done`, which match lessons that
+# match ALWAYS. So EVERY turn-end was continued, in every project, until the harness killed it on the
+# ninth. Observed live on 2026-07-22 in three separate projects; the harness's own error text named
+# the missing guard.
+#
+# The deeper error was not the missing guard, it was the DESIGN: this gate fires on the ACT of
+# stopping with no state check, so it cannot tell "stopped early" from "genuinely finished". A guard
+# that fires unconditionally carries no information, and paying a forced model turn to deliver a
+# reminder is the ham-fisted behaviour that gets a tool switched off.
+#
+# So Stop is now owned by ONE hook — continuation-gate.mjs — which reads a real work ledger, speaks
+# only when committed work is actually outstanding, honours stop_hook_active, and nudges at most once
+# per session. The `report-status` and `claim-done` lessons moved to UserPromptSubmit, where they
+# reach the model BEFORE the work rather than after it, and cost nothing to deliver.
+TRIGGERS=""
+CLAUDE_EVENT=""
 case "$EVENT" in
-  Stop)             TRIGGERS="report-status claim-done";        CLAUDE_EVENT="Stop" ;;
+  Stop)             exit 0 ;;   # deliberately inert — see above. continuation-gate.mjs owns Stop.
   PreToolUse-write) TRIGGERS="write-code";                      CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-bash)  TRIGGERS="mutate-machine";                  CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-push)  TRIGGERS="ship";                            CLAUDE_EVENT="PreToolUse" ;;
-  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture"; CLAUDE_EVENT="UserPromptSubmit" ;;
+  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done"; CLAUDE_EVENT="UserPromptSubmit" ;;
   *) exit 0 ;;
 esac
 

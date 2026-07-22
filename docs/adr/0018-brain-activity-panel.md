@@ -7,6 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [console, brain-activity, agentdb, visualization, personalization, ux, legibility]
 supersedes: []
 relates: [ADR-013, ADR-015, ADR-017]
+updated: 2026-07-16
 ---
 
 # ADR-0018: Brain Activity panel — the harness, visible, inside the configure console

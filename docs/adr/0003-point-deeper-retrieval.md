@@ -1,5 +1,8 @@
 ---
 id: ADR-003
+status: Accepted
+date: 2026-06-27
+updated: 2026-07-09
 ---
 # ADR-0003: Point deeper — the KB resolves to exact code; the agent never chooses to dig
 

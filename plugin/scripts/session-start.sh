@@ -24,7 +24,11 @@ fi
 # one place). scripts/nightly-wrapper.sh writes this ONLY after a real failure survives its own
 # self-heal retry; a clean run or legitimate no-op removes it. Presence here = unprompted, first
 # thing surfaced, no waiting for the phone alert to be seen.
-NIGHTLY_MARKER="/Users/stuartkerr/Code/ruvnet-brain/.ruvnet-brain/nightly-failure.json"
+# Resolved against the CURRENT project, not a hardcoded absolute path. This was the maintainer's own
+# machine path (/Users/<maintainer>/Code/ruvnet-brain/...) shipped verbatim to every user: inert
+# elsewhere, but it disclosed the maintainer's directory layout in a hook everyone runs, and it only
+# ever worked on one machine. Relative resolution does the same job for whoever is running it.
+NIGHTLY_MARKER="${CLAUDE_PROJECT_DIR:-$PWD}/.ruvnet-brain/nightly-failure.json"
 # canonical project-state-current auto-recall moved to the GLOBAL hook
 # (~/.claude/hooks/agentdb-ensure.sh, 2026-07-12) so every project with AgentDB gets it, not just
 # this one — kept here it would double-print in this repo since both hooks fire in the same session.
@@ -230,16 +234,21 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
 
   # ── KB (brain bundle) freshness — a SEPARATE store at ~/.cache/ruvnet-brain/kb.
   # SECURITY (SEC-0010 #6): forge-update.mjs --apply overwrites the KB dir INCLUDING its .mjs tool
-  # files from an unsigned GitHub Release — a compromised release would be silent RCE on opted-in
-  # users. Until the bundle is signed (Ed25519 / cosign, verify-before-extract — tracked in SEC-0010
-  # #6), we DETECT + NOTIFY only; we do NOT auto-run --apply (no unattended code overwrite from an
-  # unsigned source). The user can apply manually after reviewing; the plugin auto-update below goes
-  # through Claude Code's own trusted marketplace path, which is a different trust story.
+  # files, so an unverified Release would be silent RCE on opted-in users.
+  #
+  # STATUS CORRECTED 2026-07-22: the bundle IS signed. Ed25519 signing shipped and every release
+  # from v2.0.0 on carries a valid detached .sig; forge-update.mjs verifies BEFORE extracting and
+  # fail-closes on both an invalid signature and an unfetchable one. The comment and the user-facing
+  # message here both still said "isn't signed yet" — the product was reporting its own security as
+  # weaker than it is, which is its own kind of false statement.
+  # We still DETECT + NOTIFY rather than auto-apply: that is now a deliberate policy choice about
+  # unattended code replacement, not a gap waiting on crypto. Flipping it to auto-apply is a real
+  # decision to make on purpose, not a default to drift into.
   KB_DIR="$HOME/.cache/ruvnet-brain/kb"
   if [ "$(cat "$PREF_FILE" 2>/dev/null)" = "yes" ] && [ -f "$KB_DIR/forge-update.mjs" ] && command -v node >/dev/null 2>&1; then
     ( cd "$KB_DIR" && node forge-update.mjs --check > "$STATE_DIR/.last-kb-check.log" 2>&1
       if grep -q "BEHIND" "$STATE_DIR/.last-kb-check.log" 2>/dev/null; then
-        echo "[RuvNet Brain — a newer knowledge bundle is available. It is NOT auto-applied for safety (the update overwrites executable tool files and the bundle isn't cryptographically signed yet). To update it manually after you're comfortable: cd ~/.cache/ruvnet-brain/kb && node forge-update.mjs --apply]"
+        echo "[RuvNet Brain — a newer knowledge bundle is available. It is signed (Ed25519) and the updater verifies the signature before extracting anything, refusing outright if it doesn't check out. We still don't auto-apply it, because applying replaces executable tool files and that should be your call, not a background job's. To update: cd ~/.cache/ruvnet-brain/kb && node forge-update.mjs --apply]"
       fi
     ) >&3 &
   fi

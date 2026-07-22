@@ -7,6 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [honesty, gates, ci, claims-ledger, coverage, adr-citation, trust]
 supersedes: []
 relates: [ADR-011]
+updated: 2026-07-18
 ---
 
 **Status**: Accepted (three gates shipped + proven on live known-bad; a fourth deferred, see below)

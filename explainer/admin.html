@@ -100,6 +100,18 @@
     .tl-row .what a:hover { text-decoration: underline; }
     .tl-row .what .who { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 
+    /* ── reach: the headline "how many people" tiles ───────────────────────────────────────────── */
+    .reach { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+    .rcell { border: 1px solid var(--ridge); border-radius: 12px; padding: 16px 18px; background: var(--surface); min-width: 0; }
+    .rcell.hero { border-color: color-mix(in srgb, var(--accent-3) 55%, var(--ridge)); }
+    .rcell b { display: block; font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.05; color: var(--ink); }
+    .rcell.hero b { color: var(--accent-3); }
+    .rcell.unknown b { color: var(--faint); font-size: 22px; }
+    .rcell .lbl { display: block; margin-top: 6px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.03em; color: var(--ink-2); line-height: 1.4; }
+    .rcell .win { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+    /* the "and what it cannot count" line — never omitted, it is what keeps the tile honest */
+    .rcell .caveat { display: block; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--ridge); font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
     /* ── momentum (7d vs prior 7d) ─────────────────────────────────────────────────────────────── */
     .mom { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
     .mcell { border: 1px solid var(--ridge); border-radius: 12px; padding: 15px 17px; background: var(--surface); min-width: 0; }
@@ -140,7 +152,7 @@
     .more-btn:hover { color: var(--ink); }
 
     @media (max-width: 880px) {
-      .dstrip, .mom { grid-template-columns: 1fr 1fr; }
+      .dstrip, .mom, .reach { grid-template-columns: 1fr 1fr; }
       .ppl { grid-template-columns: 1fr; }
     }
   </style>
@@ -170,8 +182,31 @@
         <button data-logout style="margin-left:auto">Forget token</button>
       </div>
 
-      <!-- 1. THE LEAD — deltas against a locally stored baseline. -->
-      <div class="since-box" data-since></div>
+      <!-- 1. REACH — the owner's actual question: "how many people use this?" Four counters, each
+           labelled with WHAT IT COUNTS and WHAT IT CANNOT. npm downloads are deliberately NOT here:
+           they are dominated by mirrors and the nightly auto-update, so they answer "how much
+           traffic" and never "how many people". They survive one row down, in Momentum, as shape. -->
+      <div class="adm-sec" style="margin-top:0">
+        <h2>How many people <span class="qual" data-reach-qual></span></h2>
+        <p class="lead-note">The closest honest answer to “how many people use this”. Each tile says what it counts <em>and</em> what it cannot count — three of these four are machine-side counters, so the number that means <em>humans</em> is the first one.</p>
+        <div class="reach" data-reach></div>
+        <p class="note" data-reach-note></p>
+      </div>
+
+      <!-- 2. MOMENTUM — moved above the fold at the owner's request. 7d vs prior 7d, computed inside
+           each source's own daily series. Only sources WITH a daily series can appear here. -->
+      <div class="adm-sec">
+        <h2>Momentum <span class="qual">last 7 days vs the 7 before — direction, not totals</span></h2>
+        <p class="lead-note">Computed inside each source's own daily series, so both halves cover an equal window. These are machine counters: CI checkouts, npm mirrors, and the plugin's own auto-update all land here. Read them for <em>shape</em>, and read the humans below for truth.</p>
+        <div class="mom" data-momentum></div>
+        <p class="note" data-momentum-note></p>
+      </div>
+
+      <!-- 3. THE LEAD — deltas against a locally stored baseline. -->
+      <div class="adm-sec">
+        <h2>Since you last looked</h2>
+        <div class="since-box" data-since></div>
+      </div>
 
       <!-- 2. THE QUEUE — open threads from outside humans, oldest first. -->
       <div class="adm-sec">
@@ -192,14 +227,6 @@
         <h2>Every human event <span class="qual" data-feed-qual></span></h2>
         <p class="lead-note">The one place the actual conversation lives. Titles link straight into the thread — the sentiment you are hearing about is in those comments, and this page deliberately does not paraphrase it (see “Not instrumented yet”).</p>
         <div data-feed></div>
-      </div>
-
-      <!-- 5. MOMENTUM — 7d vs prior 7d from the daily series. Direction, not lifetime totals. -->
-      <div class="adm-sec">
-        <h2>Momentum <span class="qual">last 7 days vs the 7 before — direction, not totals</span></h2>
-        <p class="lead-note">Computed inside each source's own daily series, so both halves cover an equal window. These are machine counters: CI checkouts, npm mirrors, and the plugin's own auto-update all land here. Read them for <em>shape</em>, and read the humans above for truth.</p>
-        <div class="mom" data-momentum></div>
-        <p class="note" data-momentum-note></p>
       </div>
 
       <!-- 6. REFERRERS — already a moving 14-day window; kept as-is. -->

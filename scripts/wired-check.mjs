@@ -70,6 +70,7 @@ const STANDALONE = {
   'check-legibility': 'CI check invoked from the workflow, not from source',
   'status-honesty': 'CI check invoked from the workflow, not from source',
   'doc-currency': 'gate CLI: npm run doc:currency, and the release path',
+  'adr-backfill': 'one-shot backfill run by a human; its result is enforced by adr-format.test.mjs',
 };
 
 /**

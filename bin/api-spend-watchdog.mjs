@@ -42,13 +42,19 @@ const BURST_AGENTS = Number(process.env.SPEND_BURST_AGENTS || 20);
 const COOLDOWN_MS = 60 * 60 * 1000; // one alert/hour max
 const ROOTS = (process.env.SPEND_SCAN_ROOTS || join(HOME, 'Code')).split(':');
 
-// Reuse the pipeline's ntfy topic if not overridden (parse, never source).
+// Resolve the ntfy topic from config this tool owns. Nothing else.
+//
+// This used to also read `~/Code/All In Expert/.env` — the maintainer's own unrelated project's
+// secrets file — as a fallback. On any other machine that is a failed read of a file that isn't
+// theirs, so it bought nothing; but "hourly background job reads another project's .env and POSTs
+// to an anonymous relay" is a sentence no corporate security review survives, and every EDR scores
+// .env access as credential theft. Removed: own env var, own config file, or no topic at all.
 function ntfyTopic() {
   if (process.env.AIE_NTFY_TOPIC) return process.env.AIE_NTFY_TOPIC;
-  for (const f of [join(HOME, 'Code', 'All In Expert', '.env')]) {
+  for (const f of [join(HOME, '.cache', 'ruvnet-brain', 'ntfy-topic')]) {
     try {
-      const line = readFileSync(f, 'utf8').split('\n').find((l) => l.startsWith('AIE_NTFY_TOPIC='));
-      if (line) return line.slice('AIE_NTFY_TOPIC='.length).trim();
+      const line = readFileSync(f, 'utf8').split('\n').find((l) => l.trim() && !l.startsWith('#'));
+      if (line) return line.trim();
     } catch {}
   }
   return '';
