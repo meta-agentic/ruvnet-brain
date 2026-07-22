@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" UserPromptSubmit 2>&1 || true"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" UserPromptSubmit"
           }
         ]
       },
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-write 2>&1 || true"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-write"
           }
         ]
       },
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-bash 2>&1 || true"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-bash"
           }
         ]
       }
@@ -144,16 +144,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/../scripts/continuation-gate.mjs\" 2>&1 || true"
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" Stop 2>&1 || true"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/../scripts/continuation-gate.mjs\""
           }
         ]
       }

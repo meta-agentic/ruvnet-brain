@@ -1,7 +1,7 @@
 ---
 id: ADR-036
 title: Knowing who uses this — counting installs and versions without becoming a tracker
-status: Proposed-Blocked
+status: Proposed
 date: 2026-07-22
 updated: 2026-07-22
 authors: [Stuart Kerr, Claude Code]
@@ -10,8 +10,10 @@ supersedes: []
 relates: [ADR-035, ADR-013, ADR-023]
 ---
 
-**Status**: Proposed — BLOCKED (2026-07-22). Every tier is blocked on a finding in §10, and the
-consent question in §7 additionally requires an owner decision. Nothing here is implemented.
+**Status**: Proposed (2026-07-22)
+
+**BLOCKED.** Every tier is blocked on a finding in §10, and the consent question in §7 additionally
+requires an owner decision. Nothing here is implemented.
 
 ---
 
@@ -93,6 +95,17 @@ immediately.
 more than IP noise does. Keep GitHub's release totals as the legacy baseline, put a failure-open
 first-party redirect in newly shipped updaters, retain only short-lived daily aggregates with **no
 durable per-client record**, and reconcile the three instruments as a **range**, never one number.
+
+> **SECOND CORRECTION, 2026-07-22 — Option 1 is a product, not a build.** [Scarf
+> Gateway](https://docs.scarf.sh/gateway/) is *"a universal redirect layer for any digital artifact
+> or URL […] Docker containers, Python/NPM packages, binaries"* that provides download analytics **at
+> the point of distribution regardless of how software is distributed**, plus a [custom telemetry
+> API](https://docs.scarf.sh/custom-telemetry/) and [`scarf-js`](https://about.scarf.sh/open-source/)
+> for npm. That is precisely the redirect-and-count layer this ADR specified from scratch.
+> **This is the third time in one session that a component was designed before checking whether it
+> already shipped** (see 10.4). Evaluate Scarf before writing any redirect code. The genuine tradeoff
+> is that it introduces a **third party into the download path** and into the privacy disclosure —
+> which must be named in `PRIVACY.md` and the consent prompt, not buried.
 
 ### Option 2 — Anonymous install ID on a periodic heartbeat
 `crypto.randomUUID()` on disk, sent with a daily ping alongside both version strings.
@@ -285,6 +298,6 @@ carve-out in §5.
 
 ### Status change
 
-This ADR moves from *Proposed* to **Proposed — blocked**. Tier 1 is blocked on 10.1 and 10.3; Tier 3
+This ADR stays *Proposed* and is **blocked**. Tier 1 is blocked on 10.1 and 10.3; Tier 3
 on the 10.4 silent-drop bug; Tier 4 on 10.2 and 10.6. **Nothing here is implemented, and no tier may
 be described as shipped until its §8 verification fails on broken code first.**

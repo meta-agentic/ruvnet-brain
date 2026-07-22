@@ -22,7 +22,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const PING_URL = 'https://ruvnet-brain.vercel.app/api/ping';
+// Honors RUVNET_BRAIN_PING_URL, matching the convention bin/install.mjs:1825 already uses. The
+// default is unchanged, so this is a no-op for every existing install — it exists so the endpoint
+// can be repointed by configuration instead of by shipping a new bundle.
+//
+// Why that mattered enough to change (2026-07-22): the hardcoded default was found DEAD. DNS for
+// ruvnet-brain.vercel.app resolves to Vercel IPs, but the hostname is attached to no project in the
+// account (absent from both `vercel alias ls` and `vercel domains ls`) and refuses TCP on 443, while
+// the very same app answers 405 on `isovision.ai/ruvnet-brain/api/ping` and on its direct deployment
+// URL. Every ping this module sent was therefore discarded at the last hop — invisibly, because
+// sendPing swallows all network errors by design (a lost count must never break a user's session).
+// A single hardcoded const with no override made that a code-and-release fix instead of a config one.
+export const PING_URL = process.env.RUVNET_BRAIN_PING_URL || 'https://ruvnet-brain.vercel.app/api/ping';
 
 export function defaultStateDir() {
   return path.join(os.homedir(), '.cache', 'ruvnet-brain');

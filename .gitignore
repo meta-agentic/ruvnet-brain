@@ -106,3 +106,4 @@ kb/ruv-meetings-*.md
 
 # stray local model cache — never commit
 kb/models-cache/
+.env*

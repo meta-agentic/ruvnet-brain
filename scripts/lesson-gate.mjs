@@ -153,11 +153,52 @@ const optedIn = loadBlockingOptIn();
 
 // Merge every requested decision point into one ranked, de-duplicated list. A lesson registered at
 // two triggers must appear once, or the model reads the same correction twice and learns to skim.
+/**
+ * PROJECT SCOPE — a lesson learned in one project has no standing to interrupt work in another.
+ *
+ * THE BREAKAGE, 2026-07-22: these hooks were installed machine-wide and 8 of 16 lessons were scoped
+ * to a SINGLE project, yet fired everywhere. A WhitSentry session was being told about
+ * ruvnet-brain's stop-and-report habit on every prompt. The owner's report was blunt: "I've got
+ * other repos that are using this thing, and they're breaking."
+ *
+ * The rule is ADR-029's own promotion bar applied at read time: cross-project rediscovery is what
+ * makes a lesson universal. Taught in ONE project, it is local knowledge — real, worth keeping, and
+ * not entitled to speak elsewhere. Taught in two or more, it has earned the right to travel.
+ *
+ * This is P3 (nudge, never force) and P4 (the user is the arbiter) applied to OUR OWN footprint:
+ * the fastest way to make someone uninstall a nudge is to nudge them about something that has
+ * nothing to do with what they are doing.
+ */
+const HERE = (() => {
+  let d = process.cwd();
+  for (let i = 0; i < 12; i++) {
+    if (fs.existsSync(path.join(d, '.git'))) break;
+    const up = path.dirname(d);
+    if (up === d) { d = process.cwd(); break; }
+    d = up;
+  }
+  return path.basename(d);
+})();
+/** Does this lesson belong to the project we are standing in? Match is loose on purpose — stored
+ *  names carry prefixes like `Code-` that the directory name does not. */
+const isHome = (l) => {
+  const ps = Array.isArray(l.projects) ? l.projects : [];
+  if (!ps.length) return true;                       // unscoped: applies anywhere, by declaration
+  return ps.some((p) => {
+    const n = String(p).replace(/^Code-/, '');
+    return n === HERE || String(p) === HERE || HERE.endsWith(n) || n.endsWith(HERE);
+  });
+};
+const isUniversal = (l) => Array.isArray(l.projects) && l.projects.length >= 2;
+
 const seen = new Set();
 const candidates = [];
 for (const t of triggers) {
   for (const l of lessonsFor(t, lessons, { limit: 3 })) {
-    if (!seen.has(l.id)) { seen.add(l.id); candidates.push(l); }
+    if (seen.has(l.id)) continue;
+    // Away from home, only a lesson with cross-project evidence may speak.
+    if (!isHome(l) && !isUniversal(l)) continue;
+    seen.add(l.id); candidates.push(l);
   }
 }
 

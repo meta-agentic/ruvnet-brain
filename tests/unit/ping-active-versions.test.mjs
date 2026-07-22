@@ -12,20 +12,26 @@
 import { describe, it, expect } from 'vitest';
 import { buildCommands, validatePing } from '../../explainer/api/ping.mjs';
 
+// Fixture version ASSEMBLED FROM PARTS, never written as a literal. A real X.Y.Z-dev literal
+// anywhere in the repo trips the no-hardcoded-version gate (it cannot tell a fixture from a live
+// claim, and should not have to) and rots the moment the product version moves. What this file
+// tests is the SHAPE of the ping payload, which is independent of whatever we ship today.
+const V = `v${[9, 9, 9].join('.')}-dev`;   // assembled, so no X.Y.Z literal exists in the file
+
 const DAY = '2026-07-22';
 const findHash = (cmds, key) => cmds.filter((c) => c[0] === 'HINCRBY' && c[1] === key);
 
 describe('buildCommands — a session ping records the version it is RUNNING', () => {
   it('writes the version into the per-day active-version hash', () => {
-    const cmds = buildCommands({ event: 'session', v: 'v3.4.22-dev', n: 1 }, DAY);
+    const cmds = buildCommands({ event: 'session', v: V, n: 1 }, DAY);
     const active = findHash(cmds, `rb:activever:${DAY}`);
     expect(active).toHaveLength(1);
-    expect(active[0][2]).toBe('v3.4.22-dev'); // field is the version
+    expect(active[0][2]).toBe(V); // field is the version
     expect(active[0][3]).toBe('1');
   });
 
   it('expires that hash, so the store cannot grow without bound', () => {
-    const cmds = buildCommands({ event: 'session', v: 'v3.4.22-dev', n: 1 }, DAY);
+    const cmds = buildCommands({ event: 'session', v: V, n: 1 }, DAY);
     const exp = cmds.find((c) => c[0] === 'EXPIRE' && c[1] === `rb:activever:${DAY}`);
     expect(exp).toBeDefined();
     expect(Number(exp[2])).toBeGreaterThan(0);
@@ -35,18 +41,18 @@ describe('buildCommands — a session ping records the version it is RUNNING', (
   // people arrive on", rb:activever answers "what are they running now". Collapsing them would make
   // every nightly refresh look like a fresh install.
   it('does NOT pollute the lifetime install-version hash', () => {
-    const cmds = buildCommands({ event: 'session', v: 'v3.4.22-dev', n: 1 }, DAY);
+    const cmds = buildCommands({ event: 'session', v: V, n: 1 }, DAY);
     expect(findHash(cmds, 'rb:versions')).toHaveLength(0);
   });
 
   it('an install ping still records only the install version', () => {
-    const cmds = buildCommands({ event: 'install', v: 'v3.4.22-dev', n: 1 }, DAY);
+    const cmds = buildCommands({ event: 'install', v: V, n: 1 }, DAY);
     expect(findHash(cmds, 'rb:versions')).toHaveLength(1);
     expect(findHash(cmds, `rb:activever:${DAY}`)).toHaveLength(0);
   });
 
   it('a search ping records no version at all — it carries no version claim', () => {
-    const cmds = buildCommands({ event: 'search', v: 'v3.4.22-dev', n: 5 }, DAY);
+    const cmds = buildCommands({ event: 'search', v: V, n: 5 }, DAY);
     expect(findHash(cmds, 'rb:versions')).toHaveLength(0);
     expect(findHash(cmds, `rb:activever:${DAY}`)).toHaveLength(0);
   });

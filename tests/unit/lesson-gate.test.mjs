@@ -124,7 +124,13 @@ describe('a NUDGE informs and never refuses', () => {
       blockLesson(),
       blockLesson({ id: 'T03-status-is-a-table', trigger: 'report-status', enforcement: 'checklist', check: null }),
     ]);
-    const { stdout, code } = runDispatch('Stop');
+    // UserPromptSubmit, not Stop. Stop was made DELIBERATELY INERT on 2026-07-22: a non-blocking
+    // nudge emitted at Stop reaches nobody (the harness surfaces stdout as context only at
+    // UserPromptSubmit / SessionStart), so report-status and claim-done were moved onto
+    // UserPromptSubmit where they are actually delivered. Testing Stop here would assert a channel
+    // that does not exist — the same "verified through a channel incapable of observing it" error
+    // this very lesson is about.
+    const { stdout, code } = runDispatch('UserPromptSubmit');
     expect(code).toBe(0);
     expect(() => JSON.parse(stdout)).not.toThrow();
     const ctx = JSON.parse(stdout).hookSpecificOutput.additionalContext;
@@ -220,7 +226,7 @@ describe('the dispatcher propagates faithfully in BOTH directions', () => {
     // returned ALLOW — the single most misleading state the system could be in.
     writeStore([blockLesson()]);
     writeOptIn(['T01-verify-with-a-capable-channel']);
-    const { code, stderr, stdout } = runDispatch('Stop');
+    const { code, stderr, stdout } = runDispatch('UserPromptSubmit');
     expect(code).toBe(2);
     expect(stderr).toContain('BLOCKED');
     expect(stdout).toBe('');
@@ -228,10 +234,12 @@ describe('the dispatcher propagates faithfully in BOTH directions', () => {
 
   test('propagates a nudge: exit 0 with json on stdout', () => {
     writeStore([blockLesson()]);
-    const { code, stdout, stderr } = runDispatch('Stop');
+    const { code, stdout, stderr } = runDispatch('UserPromptSubmit');
     expect(code).toBe(0);
     expect(stderr).toBe('');
-    expect(JSON.parse(stdout).hookSpecificOutput.hookEventName).toBe('Stop');
+    // The event name must match the event the dispatcher was CALLED with — the harness keys on it,
+    // and a mismatched name means the context is attached to the wrong event or silently discarded.
+    expect(JSON.parse(stdout).hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
   });
 
   test('never says BLOCKED while returning 0 — the exact shipped defect', () => {
@@ -245,7 +253,7 @@ describe('the dispatcher propagates faithfully in BOTH directions', () => {
     // green, specific-looking, and incapable of observing the failure it named. Caught only by
     // running the suite against the old implementation and noticing this one did not go red.
     writeStore([blockLesson()]);
-    const { code, stdout, stderr } = runDispatch('Stop');
+    const { code, stdout, stderr } = runDispatch('UserPromptSubmit');
     expect(code).toBe(0);
     expect(stdout + stderr).not.toContain('BLOCKED');
   });
@@ -264,7 +272,7 @@ describe('FAILS OPEN on malfunction — but never on a decision', () => {
   test('a corrupt store allows the action', () => {
     fs.writeFileSync(storePath, '{ not json at all');
     expect(runGate(['--event', 'Stop', '--trigger', 'claim-done']).code).toBe(0);
-    expect(runDispatch('Stop').code).toBe(0);
+    expect(runDispatch('UserPromptSubmit').code).toBe(0);
   });
 
   test('a missing store allows the action', () => {
