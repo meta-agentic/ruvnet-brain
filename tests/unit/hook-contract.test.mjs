@@ -222,4 +222,77 @@ describe('registry hygiene', () => {
     const stopCmds = (reg.hooks.Stop ?? []).flatMap((m) => (m.hooks ?? []).map((h) => h.command));
     expect(stopCmds.length).toBe(1);
   });
+
+  /**
+   * THE FAILSAFE CONTRACT — the belt to the packaging test's braces.
+   *
+   * The packaging test above proves a registered path EXISTS today. This proves that even when a
+   * hook fails anyway — a bad path that slips through, a node crash, a corrupt store, an OOM — the
+   * failure cannot reach the user's screen. Those are different guarantees, and the 2026-07-22
+   * incident needed both: the Stop hook had the wrong path AND no failsafe, so every turn surfaced
+   * a node stack trace. Fixing only the path would have left the class alive for the next mistake.
+   *
+   * `|| true` forces exit 0 no matter what the body does. For an ADVISORY hook that is always
+   * correct: its whole job is to inform, and an informational hook that can break a turn is a net
+   * negative. Claude Code reads hooks.json ONCE at session start, so a shipped mistake here keeps
+   * running in every already-open session until each user restarts — it cannot be hotfixed. That
+   * un-recallability is exactly why this belongs in a gate and not in a review checklist.
+   *
+   * The three BLOCKING hooks are the deliberate exception and are named explicitly, never inferred:
+   * their exit codes ARE their contract (see hooks.json `_note` — mode:'blocking' in the shim's
+   * dispatch table). `|| true` on those would silently disarm every wall in the product, so the
+   * assertion is two-sided: advisory hooks MUST have it, blocking hooks MUST NOT. A one-sided test
+   * would pass on a registry that had disarmed all three.
+   *
+   * WHY THE LIST HAS FOUR ENTRIES, NOT THE THREE THE `_note` NAMES. The registry `_note` calls out
+   * three blocking hooks — the shim-dispatched walls. `lesson-hooks.sh` is a fourth, and it is
+   * blocking-capable by DESIGN rather than by dispatch table: `lesson-hooks.sh:134` is
+   * `[ "$CODE" -eq 2 ] && exit 2`, propagating a block only when a ratified lesson genuinely refuses
+   * (ADR-035's "the block is the exception"). This test was written with the three-name list and
+   * immediately flagged all three lesson-hooks registrations as unguarded. The code was right and
+   * the test was wrong: wrapping them in `|| true` is precisely the disarm the next assertion
+   * exists to prevent, and it is the same `|| true` ADR-035 documents as having turned "the gate is
+   * broken" into "the gate is silent" once already.
+   *
+   * It needs no failsafe because it already fails OPEN internally on every non-deliberate path —
+   * verified at the real door 2026-07-22: no event → 0, no gate file → 0, no node → 0, malformed
+   * stdin → 0. Exit 2 is reachable only from a real refusal. That is the correct shape for a
+   * blocking hook: unguarded at the registry, defensive on the inside.
+   */
+  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'lesson-hooks.sh']);
+  const isBlocking = (cmd) => BLOCKING.some((b) => cmd.includes(b));
+
+  it('gives every ADVISORY hook a `|| true` failsafe — a hook error must never reach the user', () => {
+    const offenders = [];
+    for (const [event, entries] of Object.entries(reg.hooks)) {
+      for (const m of entries) {
+        for (const h of m.hooks ?? []) {
+          if (isBlocking(h.command)) continue;
+          if (!h.command.includes('|| true')) offenders.push(`${event}: ${h.command}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      `advisory hook(s) with no failsafe — a crash here surfaces a stack trace to the user every turn:\n  ${offenders.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('leaves the three BLOCKING hooks unguarded — `|| true` there would disarm every wall', () => {
+    const disarmed = [];
+    for (const [event, entries] of Object.entries(reg.hooks)) {
+      for (const m of entries) {
+        for (const h of m.hooks ?? []) {
+          if (!isBlocking(h.command)) continue;
+          if (h.command.includes('|| true')) disarmed.push(`${event}: ${h.command}`);
+        }
+      }
+    }
+    expect(disarmed, `blocking hook(s) disarmed by a failsafe:\n  ${disarmed.join('\n  ')}`).toEqual([]);
+    // And the exemption list must not rot into fiction: every name on it is really registered.
+    const all = Object.values(reg.hooks).flatMap((es) => es.flatMap((m) => (m.hooks ?? []).map((h) => h.command)));
+    for (const b of BLOCKING) {
+      expect(all.some((c) => c.includes(b)), `${b} is exempted but not registered — stale exemption`).toBe(true);
+    }
+  });
 });
