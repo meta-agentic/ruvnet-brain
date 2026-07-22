@@ -48,10 +48,33 @@ printf '{"tool":"%s","action":"%s"}\n' "$TOOL" "${ACTION//\"/\\\"}" >> "$DIR/ses
 # So: every HEARTBEAT_EVERY captures, drain in the BACKGROUND. Detached and fully silent — this runs
 # inside a PostToolUse hook and must never add latency to the user's turn or fail one. Cheap check
 # (a line count) on the common path; real work only at the threshold.
+# LEVEL-TRIGGERED, NOT EDGE-TRIGGERED. This is the whole fix, and the bug it replaces was severe.
+#
+# The condition used to be `LINES >= 200 && LINES % 200 == 0` — it fired ONLY when the count landed
+# exactly on a multiple of 200. Two captures arriving between checks, or any concurrent write,
+# steps the counter over the window and the flush NEVER fires again. Measured on the owner's machine
+# 2026-07-22: the queue was at 491. It had sailed past both 200 and 400 without draining once, and
+# would have grown forever.
+#
+# The failure mode is the nastiest kind: capture works, the learner works, and the PIPE BETWEEN THEM
+# is severed — while every surface honestly reports both ends as healthy. "Is learning on?" had no
+# true answer, because learning is not a switch; it is a chain, and one link was open.
+#
+# `-ge` cannot skip a window. It fires on every capture past the threshold until the queue is
+# actually drained, which is the definition of level-triggered: the condition is the QUEUE'S DEPTH,
+# not the instant it crossed a line.
 HEARTBEAT_EVERY=200
 LINES=$(wc -l < "$DIR/session-$SID.jsonl" 2>/dev/null || echo 0)
-if [ "$LINES" -ge "$HEARTBEAT_EVERY" ] && [ $((LINES % HEARTBEAT_EVERY)) -eq 0 ]; then
-  FLUSH="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/marketplaces/ruvnet-brain/plugin}/scripts/learn-flush.mjs"
-  [ -f "$FLUSH" ] && (nohup node "$FLUSH" >/dev/null 2>&1 &) || true
+if [ "$LINES" -ge "$HEARTBEAT_EVERY" ]; then
+  # Debounce so a deep queue doesn't spawn a flush on EVERY subsequent capture: at most one drain
+  # per minute. Without this, level-triggering trades a stuck queue for a fork storm.
+  STAMP="$DIR/.last-flush"
+  NOW=$(date +%s)
+  LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
+  if [ $((NOW - LAST)) -ge 60 ]; then
+    echo "$NOW" > "$STAMP" 2>/dev/null || true
+    FLUSH="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/marketplaces/ruvnet-brain/plugin}/scripts/learn-flush.mjs"
+    [ -f "$FLUSH" ] && (nohup node "$FLUSH" >/dev/null 2>&1 &) || true
+  fi
 fi
 exit 0

@@ -24,16 +24,26 @@ try { lines = fs.readFileSync(QUEUE, 'utf8').split('\n').filter(Boolean); } catc
 if (!lines.length) process.exit(0);
 
 // Distinct workflow actions this session (dedupe → a session has only a handful of real patterns).
-const actions = [];
+//
+// COLLECT ALL, FEED SOME, KEEP THE REST (fixed 2026-07-22). This used to `break` at MAX_ACTIONS and
+// then delete the ENTIRE queue, so a session with 30 distinct actions fed 8 and destroyed 22 —
+// permanently, silently, while reporting success. Measured on the owner's machine the same day: the
+// queue stood at 491 raw captures, every one of which would have been discarded after feeding 8.
+//
+// The cap exists for a good reason (SessionEnd must stay fast) but a work LIMIT is not a licence to
+// destroy the work you didn't do. Now the remainder is written back and drains on the next flush,
+// so a deep queue converges instead of being truncated.
+const allDistinct = [];
 const seen = new Set();
 for (const line of lines) {
   let s; try { s = JSON.parse(line); } catch { continue; }
   const key = `${s.tool}|${(s.action || '').slice(0, 60)}`;
   if (!s.action || seen.has(key)) continue;
   seen.add(key);
-  actions.push(s);
-  if (actions.length >= MAX_ACTIONS) break;
+  allDistinct.push(s);
 }
+const actions = allDistinct.slice(0, MAX_ACTIONS);
+const deferred = allDistinct.slice(MAX_ACTIONS);
 
 let fed = 0;
 for (const s of actions) {
@@ -52,10 +62,21 @@ for (const s of actions) {
 // `ruflo hooks` call failed (fed=0) silently discarded the whole learning queue with nothing learned
 // and no trace. Now: nothing fed + something to feed ⇒ the queue survives for the next session-end
 // to retry. An empty queue (nothing to feed) is safe to remove.
-if (fed > 0 || actions.length === 0) {
-  try { fs.rmSync(QUEUE); } catch { /* leave it if we can't remove */ }
+if (fed > 0 || allDistinct.length === 0) {
+  if (deferred.length) {
+    // Work remains. Write back ONLY what was not fed, so the next flush continues where this one
+    // stopped. Deleting here is what turned a rate limit into data loss.
+    try {
+      fs.writeFileSync(QUEUE, deferred.map((s) => JSON.stringify(s)).join('\n') + '\n');
+    } catch { /* if we cannot rewrite it, leaving the full queue is strictly safer than removing it */ }
+  } else {
+    try { fs.rmSync(QUEUE); } catch { /* leave it if we can't remove */ }
+  }
 } else if (process.argv.includes('--sync')) {
   console.log(`learn-flush: 0/${actions.length} fed (ruflo hooks failing?) — queue KEPT for retry next session-end`);
 }
-if (process.argv.includes('--sync')) console.log(`learn-flush: fed ${fed}/${actions.length} distinct actions to the global learner`);
+if (process.argv.includes('--sync')) {
+  console.log(`learn-flush: fed ${fed}/${actions.length} distinct actions to the global learner`
+    + (deferred.length ? `; ${deferred.length} distinct action(s) deferred to the next flush (queue kept, nothing discarded)` : ''));
+}
 process.exit(0);
