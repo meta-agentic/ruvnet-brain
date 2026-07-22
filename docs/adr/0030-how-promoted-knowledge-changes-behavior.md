@@ -63,21 +63,81 @@ per-lesson hook file is unmaintainable within a month.
 
 ## Decision
 
-### 1. Gates are per DECISION POINT, not per lesson. There are five.
+### 1. Gates are per DECISION POINT, not per lesson — and the FIRST one is the assumption
 
-Behaviour only goes wrong at a small number of moments. The gate count is **fixed forever** — it does
-not grow with the lesson count, which is the entire trick.
+**Correction, 2026-07-22, made after the owner read the first draft.** The original list had five
+entries and led with "before writing code." It was wrong in the most embarrassing possible way:
 
-| # | Decision point | Hook | The question it forces |
+> *"I ask you questions about architecture, and you immediately do a casual look, look at the
+> history, and come back and tell me something that's dead wrong. Why? Because you didn't bother to
+> look deeply, didn't check the RuvNet brain, didn't do research, didn't check the assumptions.
+> Those assumptions are the big toxic killer of quality and effectiveness. To have that not be in
+> that list is inexcusable."*
+
+He is right, and the omission is self-indicting: **his global CLAUDE.md Rule 0 is literally
+"VERIFY-FIRST — NEVER ASSUME (overrides everything below; the #1 cause of failure)."** This document
+enumerated the moments knowledge must interrupt and left out the one his own constitution ranks
+first. An ADR about enforcing lessons, committing the exact failure it describes, in the act of
+describing it.
+
+The failure mode is also structurally different from the others, which is *why* it was missed: every
+other gate fires on a **tool call** (Write, Edit, push) and is therefore easy to hook. An assumption
+fires on **text output** — the cheapest possible action, with no tool boundary to intercept. It is
+the least gated surface and the highest-frequency failure. That is not a coincidence; it is the
+explanation.
+
+The corrected enumeration. The gate count is bounded by decision **types** — it never grows with the
+lesson count, which remains the trick — but there are more than five, and pretending otherwise was
+tidiness at the cost of truth.
+
+| # | Decision point | Hook surface | The question it forces |
 |---|---|---|---|
-| 1 | Before writing code | `PreToolUse(Write\|Edit)` | "Does rUv already ship this? Is it grounded?" |
-| 2 | Before claiming done | `Stop` / pre-response | "Did you RUN it, or are you asserting?" |
-| 3 | Before shipping | `pre-push` | "Version bumped? Docs current? Both suites green?" |
-| 4 | Before answering | `UserPromptSubmit` | "Did you recall prior decisions on this?" |
-| 5 | After finishing work | `PostToolUse` / `SessionEnd` | "State checkpointed? People thanked? Lesson captured?" |
+| **1** | **Before asserting a fact about the world** (a version, an API, what a tool does) | `UserPromptSubmit` classify → `Stop` verify | **"Did you CHECK, or are you recalling? Name the source."** |
+| **2** | **Before recommending an architecture** | `UserPromptSubmit` classify | **"Did you research, compare ≥3 options, and state tradeoffs — or pattern-match?"** |
+| **3** | **Before relaying a number** (a score, a benchmark, a subagent's result) | `Stop` | **"Did you re-check the artifact, or repeat what you were handed?"** |
+| 4 | Before writing code | `PreToolUse(Write\|Edit)` | "Does rUv already ship this? Is the term grounded?" |
+| 5 | Before claiming done | `Stop` | "Did you RUN it, or are you asserting?" |
+| 6 | Before shipping | `pre-push` | "Version bumped? Docs current? Both suites green?" |
+| 7 | After finishing work | `PostToolUse` / `SessionEnd` | "Checkpointed? People thanked? Lesson captured?" |
 
-Four of these hooks **already exist** in this project. This is not new infrastructure; it is giving
-the existing hooks a lesson store to consult.
+1–3 are all species of the same disease — **asserting without checking** — separated because they
+need different evidence: (1) a live source, (2) a comparison, (3) a re-measurement. Collapsing them
+into "be careful" is how the whole class went unenforced.
+
+Gates 4–7 exist today. **1–3 do not, and they are the ones that fail most often.**
+
+### 1b. Repetition IS the signal — and rUv already built the detector
+
+The owner: *"If I'm having to tell you three, four, five, and six times, that's indicative of a huge
+failure. You should be looking for those, spotting those, and addressing it proactively."*
+
+He independently reinvented `ruflo` ADR-G008 Step 1 (`v3/@claude-flow/guidance/src/ledger.ts`,
+`RunLedger.rankViolations()`), which ranks by `frequency × cost`, and Step 2, which states verbatim:
+*"Existing rule, frequently violated (>5 times): modify the rule text to be more specific and **add
+automated enforcement annotation**."* Escalating a repeatedly-violated rule from prose to enforcement
+is rUv's shipped design. We adopt it rather than inventing one.
+
+The two readings of the same data are **different signals and must not be conflated**:
+
+| Signal | Meaning | Response |
+|---|---|---|
+| Taught across ≥2 **projects** | universal knowledge | **promote** to the constitution (ADR-029) |
+| Taught ≥3 times **within one project** | the existing rule is not being enforced | **escalate** to a blocking gate |
+
+Measured on the owner's machine, 2026-07-22:
+
+```
+prove it works             25× in Code-PowerPlatePulse   → ESCALATE
+version + release          14× in Code-ruvnet-brain      → ESCALATE
+ground it / never assume    7× in Code-PowerPlatePulse   → ESCALATE
+honesty / no fabrication    5× in Code-PowerPlatePulse   → ESCALATE
+use the real tool           3× in Code-ruvnet-brain      → ESCALATE
+```
+
+**Version discipline was recorded 14 times in THIS repository, and was violated again on
+2026-07-22** — six behaviour-changing commits at patch level with no bump. Promotion would not have
+helped: the lesson was already here, in this project, fourteen times over. Only enforcement closes
+that gap, and the repeat count is the trigger that should have demanded it long ago.
 
 ### 2. Lessons are DATA the gates read — never code
 
