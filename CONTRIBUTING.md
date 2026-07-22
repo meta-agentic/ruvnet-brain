@@ -175,3 +175,7 @@ bundle on every publish.
   `data/manifest.json` `brainVersion`, `kb/package.json`) — bump `plugin.json` and run
   `sync-version.mjs` instead.
 - If you touch a doc, version it per the header convention used across `docs/`.
+
+## Principles
+
+Every design decision in this project is governed by [`docs/PRINCIPLES.md`](docs/PRINCIPLES.md). Read it before proposing an architecture; a change that contradicts a principle is wrong, and the contradiction is the finding.

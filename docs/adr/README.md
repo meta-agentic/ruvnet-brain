@@ -1,3 +1,6 @@
+> **Before writing or reviewing any ADR, read [`../PRINCIPLES.md`](../PRINCIPLES.md).**
+> An ADR that contradicts a principle is wrong, and the contradiction is the finding.
+
 # RuvNet Brain — Architecture Decision Records
 
 Each ADR records a decision the 3-way red-team forced, so it can't be quietly regressed.

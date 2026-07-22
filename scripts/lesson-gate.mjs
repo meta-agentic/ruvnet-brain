@@ -5,82 +5,253 @@
  * THIS IS THE L3 STEP. ADR-029 mines which lessons are universal; ADR-030 says a lesson must
  * INTERRUPT at a decision point or it is prose. Both shipped. And nothing read the store: a grep for
  * `lessonsFor` across every gate returned zero. Lessons were written, schema-validated, weighted,
- * trust-boundaried — and consumed by nobody. That is the fourth built-tested-unwired failure in a
- * single night, which is itself the argument for wiring rather than intending.
+ * trust-boundaried — and consumed by nobody.
  *
- * WHAT IT DOES. A gate calls it with the decision point it guards:
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * WHAT CHANGED, 2026-07-22, and it is two separate corrections that happen to point the same way.
  *
- *     node scripts/lesson-gate.mjs --trigger ship
+ * CORRECTION 1 — THE BLOCK NEVER BLOCKED. Two independent reviewers found it; running it confirmed
+ * it. The previous version printed the word "BLOCKED" and then allowed the action, in three
+ * compounding ways:
  *
- * It returns the lessons in force at that moment, formatted for a human who is about to be
- * interrupted, and exits non-zero ONLY if a lesson at that trigger is genuinely blocking:
- * `enforcement: block` AND ratified by a human. Unratified candidates print as a checklist and exit
- * 0 — they inform, they do not refuse.
+ *     scripts/lesson-gate.mjs:86     exited 1, not 2. Exit 1 is a NON-BLOCKING error: the live hooks
+ *                                    doc says other non-zero codes show a "hook error" notice to the
+ *                                    USER and "execution continues". Only exit 2 refuses anything.
+ *     scripts/lesson-gate.mjs        15 console.log, 0 console.error. On exit 2 the doc is explicit:
+ *                                    "Claude Code ignores stdout... stderr text is fed back to
+ *                                    Claude". The refusal reason went to the one stream a refusal
+ *                                    cannot use.
+ *     plugin/scripts/lesson-hooks.sh `|| true` then exit 0 — discarding whatever code did survive.
  *
- * WHY THAT ASYMMETRY IS THE POINT. Every lesson currently in the store is an unratified candidate,
- * because the model does not get to ratify its own rules (ADR-031's trust boundary, added after an
- * adversarial review found that a hallucinated session summary could otherwise become a blocking
- * gate). So today this changes what you SEE, and the day the owner ratifies, the same wire starts
- * refusing — with no code change. The enforcement ladder is data, not a rewrite.
+ * Measured before the fix:  `bash plugin/scripts/lesson-hooks.sh Stop` → printed "⛔ BLOCKED", exit 0.
  *
- * DESIGN CONSTRAINT: a gate must never break the thing it guards. Any failure here — missing store,
- * corrupt JSON, unreadable file — exits 0 silently. A lesson gate that blocks a push because it
- * could not read a config file would be worse than no lesson gate, and would be switched off within
- * a day, which is how every over-eager gate dies.
+ * ADR-028 claimed "five gates exit 1 and refuse the action — proven by exit code". That proof was
+ * obtained by running this file BY HAND on a terminal, which is the one caller that is not a hook.
+ * The exit code was real; the claim that it blocked anything was not. This is L01 — verify through a
+ * channel CAPABLE of observing the change — violated by the very file that enforces L01.
+ *
+ * CORRECTION 2 — AND WE DO NOT WANT IT TO BLOCK. The owner, the same day:
+ *
+ *     "Nudging somebody is very fair. Forcing them through a gate is not."
+ *     "That respect for the individual and how they do it is a big part of the win."
+ *
+ * So the fix is NOT to turn six silent blocks into six real ones. That would ship, for the first
+ * time, the product the owner has just rejected — and it would land on existing users as a machine
+ * that suddenly started refusing work it accepted yesterday. Every ratified `block` lesson is now a
+ * NUDGE. Blocking is a per-lesson decision the USER makes, in a file only the user writes.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * THE CONTRACT, verified against code.claude.com/docs/en/hooks on 2026-07-22 rather than recalled:
+ *
+ *   NUDGE  → exit 0 + JSON `hookSpecificOutput.additionalContext` on stdout.  Informs, never refuses.
+ *   BLOCK  → exit 2 + reason on stderr.  Refuses. Opt-in per lesson, by the user, only.
+ *
+ * The nudge channel is NOT stderr, and this is the subtle part that a plausible-sounding design got
+ * wrong twice. On exit 0 the doc says stdout "is written to the debug log but not shown in the
+ * transcript" for most events, with only UserPromptSubmit / UserPromptExpansion / SessionStart as
+ * exceptions — and it says nothing about exit-0 stderr at all, because exit-0 stderr is not a
+ * delivery channel. A nudge written to stderr at Stop or PreToolUse reaches NOBODY: it would have
+ * been the identical built-tested-unwired defect, rebuilt one file to the left.
+ *
+ * What actually works, quoted from the live doc:
+ *
+ *     "The `additionalContext` field passes a string from your hook into Claude's context window.
+ *      Claude Code wraps the string in a system reminder and inserts it into the conversation at the
+ *      point where the hook fired."
+ *
+ * and it is supported at every event this gate fires on — PreToolUse, Stop, UserPromptSubmit
+ * included. (An adversarial review asserted a non-blocking nudge at Stop was IMPOSSIBLE because Stop
+ * accepts only `decision: "block"`. The live doc contradicts it: "Stop and SubagentStop also accept
+ * hookSpecificOutput.additionalContext for non-error feedback that continues the conversation." The
+ * reviewer was reasoning from an older contract. Checked, not assumed — which is the whole rule.)
+ *
+ * That gives a nudge everything the block was supposed to have and the one thing it should not:
+ * it reaches the model, at the decision point, carrying the user's own words — and it refuses nothing.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * DESIGN CONSTRAINT, unchanged and load-bearing: a gate must never break the thing it guards. Any
+ * failure here — missing store, corrupt JSON, unreadable file — exits 0 silently. A lesson gate that
+ * blocked a push because it could not read a config file would be worse than no lesson gate, and
+ * would be switched off within a day, which is how every over-eager gate dies.
  */
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { loadLessons, lessonsFor, ENFORCEMENT, STATUS, TRIGGERS } from './lesson-store.mjs';
+import { loadLessons, lessonsFor, ENFORCEMENT, STATUS, ORIGIN, TRIGGERS } from './lesson-store.mjs';
+
+// The two codes that mean something to the harness. Anything else is an error, and an error here
+// must never be mistaken for a refusal — see ALLOW-on-failure throughout.
+const EXIT_ALLOW = 0;
+const EXIT_BLOCK = 2;
 
 const argv = process.argv.slice(2);
 const arg = (f, d = null) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
+// --trigger is REPEATABLE. One real event carries several decision points at once (ending a turn is
+// simultaneously "reporting status" and "claiming done"), and they must resolve to ONE verdict and
+// ONE JSON object — two JSON documents on stdout is not JSON, and two node spawns on every event is
+// latency on the hot path for no gain.
+const allArgs = (f) => argv.reduce((acc, v, i) => (v === f && argv[i + 1] ? [...acc, argv[i + 1]] : acc), []);
 
-const trigger = arg('--trigger');
+const triggers = allArgs('--trigger');
+const event = arg('--event');          // the real Claude Code event name → hook mode
 const quiet = argv.includes('--quiet');
 const json = argv.includes('--json');
 
-if (!trigger) {
+/**
+ * THE CONSENT FILE — where "yes, actually refuse me" is recorded, and why it is not in the lesson store.
+ *
+ * Two reasons, and the first is a measured fact rather than a preference:
+ *
+ * 1. A per-lesson flag in the store WOULD NOT SURVIVE. `makeLesson()` destructures a fixed field set
+ *    and returns a frozen object built from exactly those fields; any unknown key is silently
+ *    dropped on load. Verified 2026-07-22 by construction — `makeLesson({...,userOptedIntoBlocking:
+ *    true})` returns an object without it. A consent flag stored there would read back as absent on
+ *    every load, i.e. consent that silently evaporates, which is the worst possible failure mode for
+ *    a consent record.
+ *
+ * 2. It is the right trust boundary anyway. `lessons.json` is written by the MINING pipeline —
+ *    unattended, over session transcripts, over content that may have been planted (ADR-031's whole
+ *    subject). If "may block" lived in that file, anything that could get a lesson mined could grant
+ *    itself the power to refuse the user's work. It lives in a file the pipeline never writes.
+ *
+ * Honest about what this is NOT: it is not a defence against a model that can run shell commands —
+ * such a model can write any file on the machine. It is a boundary against MINED and IMPORTED
+ * content reaching enforcement, which is the path the adversarial review actually found.
+ *
+ * The empty default is the point: no file, no blocking. Consent is never inferred from silence.
+ */
+export const OPTIN_PATH = process.env.RUVNET_LESSON_OPTIN
+  || path.join(os.homedir(), '.config', 'ruvnet-brain', 'blocking-optin.json');
+
+if (!triggers.length) {
   console.log('lesson-gate — surface the lessons in force at a decision point\n');
   console.log('  --trigger <key>   one of: ' + Object.values(TRIGGERS).map((t) => t.key).join(', '));
+  console.log('                    repeatable; one event may carry several decision points');
+  console.log('  --event <name>    Claude Code event (Stop, PreToolUse, UserPromptSubmit) → hook mode:');
+  console.log('                    nudges emit JSON additionalContext (exit 0), blocks emit stderr (exit 2)');
   console.log('  --json            machine-readable');
   console.log('  --quiet           print nothing; exit code only\n');
-  process.exit(0);
+  console.log('  blocking is OPT-IN per lesson: ' + OPTIN_PATH);
+  process.exit(EXIT_ALLOW);
+}
+
+function loadBlockingOptIn(file = OPTIN_PATH) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    // Tolerant of both shapes because a human is expected to hand-edit this: a bare array reads
+    // fine, and so does the documented object. Being fussy about a consent file's punctuation would
+    // silently downgrade someone's explicit "yes" to a "no".
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.blocking) ? raw.blocking : [];
+    return new Set(list.filter((x) => typeof x === 'string' && x.length));
+  } catch { return new Set(); }   // absent or unparseable → nobody blocks. Never fail INTO refusing.
 }
 
 let lessons = [];
-try { lessons = loadLessons(); } catch { process.exit(0); }   // never break the caller
-const inForce = lessonsFor(trigger, lessons, { limit: 3 });
+try { lessons = loadLessons(); } catch { process.exit(EXIT_ALLOW); }   // never break the caller
 
-// BLOCKING requires both: declared `block` AND ratified by a human. A candidate never refuses work.
-const blocking = inForce.filter(
-  (l) => l.enforcement === ENFORCEMENT.BLOCK && (l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE),
-);
-// Candidates that WOULD block once ratified — worth showing, because the whole point is that the
-// user can see what is about to become enforcement and agree or reject it before it bites.
-const pendingBlock = inForce.filter((l) => l.intendedEnforcement === ENFORCEMENT.BLOCK && !blocking.includes(l));
+const optedIn = loadBlockingOptIn();
+
+// Merge every requested decision point into one ranked, de-duplicated list. A lesson registered at
+// two triggers must appear once, or the model reads the same correction twice and learns to skim.
+const seen = new Set();
+const inForce = [];
+for (const t of triggers) {
+  for (const l of lessonsFor(t, lessons, { limit: 3 })) {
+    if (!seen.has(l.id)) { seen.add(l.id); inForce.push(l); }
+  }
+}
+
+/**
+ * BLOCKING = four conditions, all required. The user's opt-in is necessary and NOT sufficient.
+ *
+ * The last two are already guaranteed by makeLesson (which refuses to construct a `block` lesson
+ * that is machine-authored or unratified). They are re-asserted here deliberately: this is the one
+ * place in the system where the answer is "refuse the human's work", and a security invariant
+ * enforced only at a distance is one refactor away from being enforced nowhere. Cheap to state,
+ * catastrophic to omit.
+ */
+const isBlocking = (l) => optedIn.has(l.id)
+  && l.enforcement === ENFORCEMENT.BLOCK
+  && (l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE)
+  && l.origin === ORIGIN.USER_STATED;
+
+const blocking = inForce.filter(isBlocking);
+// Lessons that COULD block if the user asked them to. Shown, because the entire product claim is
+// that the user can see what is available and choose — not discover enforcement by being refused.
+const blockCapable = inForce.filter((l) => !isBlocking(l)
+  && (l.enforcement === ENFORCEMENT.BLOCK || l.intendedEnforcement === ENFORCEMENT.BLOCK));
+
+/** One lesson, rendered. Evidence is what makes this a lesson rather than a nag — it says why, from
+ *  real history, in the user's own words. Counts come from the store; nothing here is invented. */
+function renderLesson(l, mark) {
+  const out = [`  ${mark} ${l.statement}`];
+  if (l.evidence?.[0]?.observed) out.push(`      ${String(l.evidence[0].observed).slice(0, 150)}`);
+  if (l.repeatCount >= 3) out.push(`      you have had to say this ${l.repeatCount} times across ${l.projects.length} project(s)`);
+  return out.join('\n');
+}
+
+function renderBody() {
+  const lines = [''];
+  const label = Object.values(TRIGGERS).find((t) => t.key === triggers[0])?.label || triggers.join(', ');
+  lines.push(`  ⚑ ${blocking.length ? 'BLOCKED' : 'Before you continue'} — you are ${label}.`);
+  lines.push('');
+  for (const l of inForce) {
+    lines.push(renderLesson(l, isBlocking(l) ? '⛔' : '·'));
+    lines.push('');
+  }
+  if (blockCapable.length && !blocking.length) {
+    // Deliberately phrased as an available choice, not as a pending threat. The previous wording
+    // ("would REFUSE this action once you ratify them") described enforcement arriving on its own.
+    // It does not arrive on its own any more, and telling someone a refusal is coming when they
+    // never asked for one is the coercive framing the owner rejected.
+    lines.push(`  ${blockCapable.length} of these can REFUSE this action instead of mentioning it,`);
+    lines.push(`  if you want that. Entirely your call — nothing changes unless you add the id:`);
+    lines.push(`      ${OPTIN_PATH}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// ── Emit ─────────────────────────────────────────────────────────────────────────────────────────
 
 if (json) {
-  console.log(JSON.stringify({ trigger, inForce, blocking: blocking.map((l) => l.id), pendingBlock: pendingBlock.map((l) => l.id) }, null, 2));
-  process.exit(blocking.length ? 1 : 0);
+  console.log(JSON.stringify({
+    triggers, event: event ?? null, inForce,
+    blocking: blocking.map((l) => l.id),
+    blockCapable: blockCapable.map((l) => l.id),
+    optInPath: OPTIN_PATH,
+  }, null, 2));
+  process.exit(blocking.length ? EXIT_BLOCK : EXIT_ALLOW);
 }
 
-if (!quiet && inForce.length) {
-  const label = Object.values(TRIGGERS).find((t) => t.key === trigger)?.label || trigger;
-  console.log('');
-  console.log(`  ⚑ ${blocking.length ? 'BLOCKED' : 'Before you continue'} — you are ${label}.`);
-  console.log('');
-  for (const l of inForce) {
-    const mark = blocking.includes(l) ? '⛔' : pendingBlock.includes(l) ? '○' : '·';
-    console.log(`  ${mark} ${l.statement}`);
-    // The evidence is what makes this a lesson rather than a nag — it says why, from real history.
-    if (l.evidence?.[0]?.observed) console.log(`      ${String(l.evidence[0].observed).slice(0, 150)}`);
-    if (l.repeatCount >= 3) console.log(`      you have had to say this ${l.repeatCount} times across ${l.projects.length} project(s)`);
-    console.log('');
+if (event) {
+  // HOOK MODE — the streams are the contract, so nothing else may touch them.
+  if (blocking.length) {
+    // Exit 2: stdout is ignored by the harness, stderr becomes the model's error message. Writing
+    // the reason anywhere but stderr is exactly the bug this file exists to fix.
+    process.stderr.write(renderBody() + '\n');
+    process.exit(EXIT_BLOCK);
   }
-  if (pendingBlock.length && !blocking.length) {
-    console.log(`  ${pendingBlock.length} of these would REFUSE this action once you ratify them:`);
-    console.log(`      node scripts/lesson-ratify.mjs --list`);
-    console.log('');
+  if (inForce.length && !quiet) {
+    // Exit 0 + additionalContext: reaches the model, at the decision point, refusing nothing.
+    // hookEventName MUST name the firing event or the harness discards the envelope.
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: event,
+        additionalContext: [
+          'Your own recorded corrections apply at this moment. These are advisory — they do not',
+          'refuse anything, and you may proceed. Weigh them and say so if you go another way.',
+          renderBody(),
+        ].join('\n'),
+      },
+    }));
   }
+  process.exit(EXIT_ALLOW);
 }
 
-process.exit(blocking.length ? 1 : 0);
+// ── CLI MODE (no --event) ────────────────────────────────────────────────────────────────────────
+// Plain text on stdout, unchanged. version-bump-gate.sh captures this stdout verbatim and appends it
+// to its own refusal under "── from your own lesson store ──"; changing the stream or the shape here
+// would silently empty that section of the only gate in the system that genuinely works.
+if (!quiet && inForce.length) console.log(renderBody());
+process.exit(blocking.length ? EXIT_BLOCK : EXIT_ALLOW);

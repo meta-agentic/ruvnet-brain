@@ -56,12 +56,36 @@ every fleet entry the entire time — but because nothing was structurally oblig
 
 **Where we are: L3, as of v3.7.0-dev** (updated 2026-07-22 05:40). L0–L2 shipped earlier.
 
-**L3 landed** and is the one level with a falsifiable proof rather than a description:
-`scripts/lesson-gate.mjs` consults the lesson store at a decision point, and
-`scripts/lesson-ratify.mjs` is the human control over what may enforce. Measured end to end —
-before ratification the ship gate exits 0 (informs); after the owner ratified, five gates
-(ship, assert-fact, write-code, claim-done, mutate-machine) exit 1 and **refuse the action**.
-Same wire, no code change: enforcement is data.
+**L3 is PARTIAL, and the earlier claim here was FALSE — corrected 2026-07-22 07:00.**
+
+This section previously read: *"five gates exit 1 and refuse the action — same wire, no code
+change."* That is wrong, and the way it was wrong matters more than the fact.
+
+Claude Code's hook contract — documented in this repo's own `plugin/scripts/ground-before-write.sh:33`
+— is **`exit 0 = allow · exit 2 + stderr = BLOCK`**. `lesson-gate.mjs` exits **1**, writes to
+**stdout**, and `lesson-hooks.sh` discards the code with `|| true` before exiting 0. Verified by
+execution: the dispatcher prints the word "BLOCKED" and returns **exit 0**, permitting the action.
+
+The proof that was cited was obtained by running the gate CLI **by hand in a terminal** — the one
+caller in the system that is not a gate. This is L01 (verify through a channel CAPABLE of observing
+the truth) violated by the very document that records L01, which is the second time that exact
+inversion has happened in 24 hours.
+
+A second defect compounds it: `block` is **condition-free**. The gate blocks whenever any ratified
+block-lesson exists at a trigger; it reads no diff, no tool input, no stdin. So `block` can only
+mean "refuse everything at this event, forever" — which is why the sole genuinely-working gate
+(`version-bump-gate.sh`) carries its predicate in 60 lines of bespoke bash. The store holds the
+message, never the condition.
+
+**What is actually true today:** lessons are stored, ratified, retrieved at the right decision
+point, and their text reaches a hook. Nothing refuses anything. That is L3-minus: contextual
+delivery without enforcement.
+
+**Resolution — and the defect and the philosophy point the same way.** The owner, 2026-07-22:
+*"Nudging somebody is very fair. Forcing them through a gate is not."* So the fix is NOT to convert
+these into hard blocks. It is to make the nudge deliberate and correct (stderr so the model actually
+receives it, exit 0 so it never refuses), and to make blocking a narrow exception a user opts a
+specific rule into. Governed by ADR-035.
 
 **L4 and L5 remain unbuilt.** 4.0 is not claimable until both land with the five test classes green.
 

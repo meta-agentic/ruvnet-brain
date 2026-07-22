@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.8.1-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.8.1--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.0-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.9.0--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -56,7 +56,24 @@
 
 ---
 
-## What's new in 3.8 — the gate that fires when you stop
+## What's new in 3.9 — it anticipates, and it learns whether it was right
+
+**Shipped 2026-07-22.** Two levels of the proactivity ladder landed together.
+
+- **L4 Anticipatory.** It infers what you're *trying to do* and names the capability that serves
+  that goal — before you hit the wall. The design is built to stay quiet: a match needs **two
+  independent cues** (the problem AND that the topic is your AI workflow), so near-misses get
+  silence. Measured: **0 false positives** across the negative table, fires on a genuine match.
+- **L5 Compounding.** Advocacy now learns whether it was right. A dismissal is evidence about
+  **fit, not importance**, so the budget is asymmetric: a suggestion dies on one dismissal; an
+  important finding needs three and gets a state-change reprieve. One action mutes anything forever.
+- **The admin page is rebuilt around deltas**, not lifetime totals — and the humans who wrote in
+  are promoted to the top, ranked by recency rather than lifetime count.
+
+<details>
+<summary><b>Earlier &#8212; what 3.8 shipped</b> &#183; the gate that fires when you stop. <i>Expand.</i></summary>
+
+## 3.8 — the gate that fires when you stop
 
 **Shipped 2026-07-22.** Every gate in this project fires on an **action** — a write, a push, a
 claim. That is what makes it enforceable. But **stopping is the absence of an action**, so the most
@@ -334,6 +351,7 @@ claude plugin install ruvnet-brain@ruvnet-brain --scope user
 
 Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
+</details>
 </details>
 </details>
 </details>
