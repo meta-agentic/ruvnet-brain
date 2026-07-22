@@ -393,7 +393,8 @@ function jumpToRec(recId) {
 async function recheckMachine() {
   setChips('chips-stack', [chip('re-checking your machine…', 'wait')]);
   announce('Re-checking your machine — every card will update to the current state.');
-  await Promise.allSettled([loadStack({ skipCache: true }), loadState()]);
+  setChips('chips-capabilities', [chip('re-checking…', 'wait')]);
+  await Promise.allSettled([loadStack({ skipCache: true }), loadState(), loadCapabilities()]);
   announce('Re-check complete.');
 }
 
@@ -675,6 +676,282 @@ function renderStack(data) {
   }
 
   body.replaceChildren(withIllo('stack', ...main));
+}
+
+/* ------------------------------------------- section 1b: what's on, what's off
+   THE MURK, ADDRESSED. Owner, 2026-07-22: "a ton of people don't know what is or isn't turned on
+   because it's very much a black box."
+
+   The console already knew plenty — capability-audit.mjs has had three working detectors since
+   2026-07-22 and they report real, observed state — but every one of them surfaced only as a
+   RECOMMENDATION, i.e. only when something was wrong. There was no surface anywhere that answered
+   the plain question "what is on right now", so a machine with nothing wrong looked identical to a
+   machine nobody had checked. That is the black box: not missing data, missing a place to read it.
+
+   THREE STATES, AND THE THIRD IS THE WHOLE POINT.
+   ON (green) · OFF (amber) · UNKNOWN (grey, dashed, "not checked"). Rendering an unchecked
+   capability as OFF would be the console telling the user a fact it does not have — the precise lie
+   this project bans (a detector that didn't answer is not a detector that answered "no"). So UNKNOWN
+   is carried end-to-end and drawn in a different visual CHANNEL from OFF, not just a different hue:
+   dashed rail + dashed chip, so it survives greyscale, colour-blindness, and a squint from six feet.
+
+   DATA-DRIVEN, NO EXCEPTIONS. Not one capability name appears in this file or in index.html. Rows
+   come from /api/capabilities and only from there; a capability added server-side shows up here with
+   zero client change. The alternative — a hardcoded list — rots the week rUv ships again, which is
+   the same rot capability-audit.mjs explicitly refuses in its own header. */
+
+const CAP_STATE = {
+  ON: {
+    tone: 'green', klass: 'is-on', label: 'on',
+    hint: 'Observed on this machine — the evidence beside it is what we saw.',
+  },
+  OFF: {
+    tone: 'amber', klass: 'is-off', label: 'off',
+    hint: 'We looked and it is not running. This is a measured "off", not an assumption.',
+  },
+  UNKNOWN: {
+    tone: 'nt', klass: 'is-unknown', label: 'not checked',
+    hint: 'Nothing established this one either way, so nothing is claimed. Not checked is not off.',
+  },
+  /* ABSENT is a MEASURED ANSWER, and leaving it out was this card's own version of the lie it exists
+     to kill — inverted. The registry has emitted four states since it was written; this console knew
+     three, so every "we looked and it is not installed here" landed in the unknown bucket wearing the
+     hint "the server reported a state this console doesn't recognise". Hard facts, filed under
+     "we couldn't tell, and won't guess."
+
+     It bites hardest on precisely the machine the bar names: a brand-new install, where most rows are
+     legitimately `absent`. The newcomer whose console must be most trustworthy got the most rows
+     mislabelled as unanswered. "Not installed" is not ignorance — it is the answer, and it is the one
+     that tells them what to do next. */
+  ABSENT: {
+    tone: 'grey', klass: 'is-absent', label: 'not installed',
+    hint: 'We looked and this piece is not on this machine — a measured answer, not a guess. Installing it is what changes this row.',
+  },
+};
+
+/* ON / OFF / UNKNOWN / ABSENT, or null for a token this console has never heard of. A future
+   capability reporting some richer state must NOT be quietly folded into OFF — it lands in the
+   unknown bucket and shows its own raw word, which is honest about both the state and our ignorance
+   of it. Adding ABSENT here does not weaken that rule; it retires one specific known state from the
+   "we've never heard of it" pile, where it never belonged. */
+function capState(raw) {
+  const t = String(raw ?? '').trim().toUpperCase();
+  return (t === 'ON' || t === 'OFF' || t === 'UNKNOWN' || t === 'ABSENT') ? t : null;
+}
+const capBucket = (row) => capState(row && row.state) || 'UNKNOWN';
+
+/* Evidence arrives in whichever shape the detector that produced it already uses: a plain string,
+   a list of strings, or capability-audit.mjs's own [{ observed }] records. Accept all three rather
+   than force one, and silently drop nothing-shaped entries — an empty bullet is noise, not evidence. */
+function capEvidence(ev) {
+  const src = Array.isArray(ev) ? ev : (ev == null ? [] : [ev]);
+  const out = [];
+  for (const e of src) {
+    const t = (typeof e === 'string') ? e
+      : (e && typeof e === 'object') ? (e.observed ?? e.text ?? e.detail ?? e.note) : null;
+    if (typeof t === 'string' && t.trim()) out.push(t.trim());
+  }
+  return out;
+}
+
+function capRow(row) {
+  const known = capState(row.state);
+  const st = CAP_STATE[known || 'UNKNOWN'];
+  const raw = String(row.state ?? '').trim();
+  // An unrecognised state shows its own word, not ours — relabelling it "not checked" would hide
+  // that the server did answer, and calling it "off" would invent an answer it never gave.
+  const label = known ? st.label : (raw ? raw.toLowerCase().slice(0, 24) : st.label);
+  const hint = known ? st.hint
+    : `The server reported the state “${raw}”, which this console doesn’t recognise — so it is grouped with the unchecked rather than guessed either way.`;
+
+  const buys = (typeof row.whatItBuysYou === 'string' && row.whatItBuysYou.trim())
+    ? row.whatItBuysYou.trim() : null;
+  const evidence = capEvidence(row.evidence);
+
+  /* THE RECOMMENDATION HALF OF THE QUESTION. The brief is "SHOULD it be on for this user, and IS it
+     on" — the state chip answers IS, and until now nothing answered SHOULD. The registry has shipped
+     a `turnOn: {human, cmd}` on every row it can verify one for, and this renderer dropped it on the
+     floor, so the console displayed exactly half of what the server already knew.
+
+     Rendered as TEXT, never a button. There is no executor and no undo behind these commands here,
+     and this project has already shipped one dead button; a control that looks live and does nothing
+     is worse than a command you can read and decide about yourself.
+
+     A null turnOn is SAID OUT LOUD rather than omitted, because the registry's own header rule is
+     that four capabilities have no verified enable command and silence would read as "nothing can be
+     done about this" — which is a different, quieter falsehood. */
+  const turnOn = (row.turnOn && typeof row.turnOn === 'object'
+    && typeof row.turnOn.cmd === 'string' && row.turnOn.cmd.trim()) ? row.turnOn : null;
+  const wantsAdvice = known === 'OFF' || known === 'ABSENT';
+
+  return el('div', { class: `cap-row ${st.klass}` },
+    el('span', { class: 'cap-name' },
+      String(row.label || row.key || 'unnamed capability'),
+      row.scope ? el('span', { class: 'cap-scope', title: `where this applies: ${row.scope}` }, String(row.scope)) : null),
+    el('div', { class: 'cap-val' },
+      buys
+        ? el('p', { class: 'cap-buys' }, buys)
+        : el('p', { class: 'cap-buys cell-dim' },
+            'No plain-words description came with this one — inventing a benefit for it would be worse than leaving the line empty.'),
+      evidence.length
+        ? el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e)))
+        : el('p', { class: 'cap-ev-none cell-dim' }, 'No evidence was recorded for this row.'),
+      wantsAdvice
+        ? (turnOn
+          ? el('p', { class: 'cap-turnon' },
+              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+              String(turnOn.human || 'run'), ' — ', el('code', {}, String(turnOn.cmd)))
+          : el('p', { class: 'cap-turnon cap-turnon-none' },
+              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+              'No verified one-line command exists for this one, so none is offered — a command that ',
+              'sends you to a terminal to be told “unknown subcommand” would cost you trust in every ',
+              'other row on this page.'))
+        : null),
+    el('span', { class: 'cap-status' }, chip(label, st.tone, hint)));
+}
+
+/* The colour key, stated once at the top of the card. The page already teaches its rail colours in
+   the same shape (.stage-legend) — this borrows the grammar, not the class, because the two legends
+   answer different questions and must be free to move apart. */
+function capLegend() {
+  return el('p', { class: 'cap-legend mono' },
+    el('span', { class: 'cl-cap' }, 'the four states'),
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-on' }), 'on — observed here'),
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-off' }), 'off — present, not running'),
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-absent' }), 'not installed — we looked, it isn’t here'),
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'));
+}
+
+function renderCapabilities(data) {
+  const body = $('#body-capabilities');
+  const rows = Array.isArray(data && data.rows)
+    ? data.rows.filter((r) => r && typeof r === 'object')
+    : null;
+
+  // 200 with a body we can't read is NOT an empty machine. Say which of the two happened.
+  if (!rows) {
+    setChips('chips-capabilities', [chip('not checked', 'nt')]);
+    body.replaceChildren(withIllo('capabilities',
+      el('p', { class: 'lead-stat' }, 'Not checked — the answer arrived in a shape this page can’t read.'),
+      el('p', {}, 'The console asked for your capability states and got a reply without a readable ',
+        el('code', {}, 'rows'), ' list. Rather than show you something invented from a malformed answer, ',
+        'this card shows nothing and says so.'),
+      el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => { capsSkeleton(); loadCapabilities(); } }, 'Try again')));
+    return;
+  }
+
+  if (!rows.length) {
+    // Empty-first: a fresh machine with nothing installed must read honestly and sensibly.
+    setChips('chips-capabilities', [chip('nothing to report', 'grey')]);
+    body.replaceChildren(withIllo('capabilities',
+      el('p', { class: 'lead-stat' }, 'Nothing to report yet.'),
+      el('p', {}, 'The audit ran and found no capabilities to describe on this machine — that is a real ',
+        'answer, not a blank card. As you install more of the stack, each piece appears here with its ',
+        'state and the evidence behind it.')));
+    return;
+  }
+
+  const on = rows.filter((r) => capBucket(r) === 'ON').length;
+  const off = rows.filter((r) => capBucket(r) === 'OFF').length;
+  const absent = rows.filter((r) => capBucket(r) === 'ABSENT').length;
+  const unknown = rows.length - on - off - absent;
+
+  const chips = [];
+  if (on) chips.push(chip(`${fmtInt(on)} on`, 'green'));
+  if (off) chips.push(chip(`${fmtInt(off)} off`, 'amber', CAP_STATE.OFF.hint));
+  if (absent) chips.push(chip(`${fmtInt(absent)} not installed`, 'grey', CAP_STATE.ABSENT.hint));
+  if (unknown) chips.push(chip(`${fmtInt(unknown)} not checked`, 'nt', CAP_STATE.UNKNOWN.hint));
+  setChips('chips-capabilities', chips);
+
+  // Attention first, same law as every other list on this page (never alphabetical, never arrival
+  // order): what you own but aren't getting, then what we couldn't answer, then what isn't here at
+  // all, then what's already working. ABSENT sits below UNKNOWN because an unanswered question is
+  // more actionable than a piece of software the user has simply not installed — and above ON
+  // because "not here" is still a gap. Array#sort is stable, so the server's own ordering survives
+  // inside each bucket.
+  const RANK = { OFF: 0, UNKNOWN: 1, ABSENT: 2, ON: 3 };
+  const sorted = rows.slice().sort((a, b) => RANK[capBucket(a)] - RANK[capBucket(b)]);
+
+  // Built as clauses so a fresh machine — where `on` and `off` are both 0 and everything is absent —
+  // reads as a sentence rather than as "0 on, 0 off". Empty-first is a rendering requirement, not
+  // only a data one: the honest numbers still have to make sense out loud.
+  const counts = [
+    on ? el('span', {}, el('b', {}, fmtInt(on)), ' on') : null,
+    off ? el('span', {}, el('b', {}, fmtInt(off)), ' off') : null,
+    absent ? el('span', {}, el('b', {}, fmtInt(absent)), ' not installed') : null,
+    unknown ? el('span', {}, el('b', {}, fmtInt(unknown)), ' we could not check') : null,
+  ].filter(Boolean);
+  const joined = [];
+  counts.forEach((c, i) => {
+    if (i) joined.push(i === counts.length - 1 ? ', and ' : ', ');
+    joined.push(c);
+  });
+
+  const main = [];
+  main.push(el('p', { class: 'lead-stat' },
+    'We looked at ', el('b', {}, fmtInt(rows.length)),
+    ` capabilit${rows.length === 1 ? 'y' : 'ies'} on this machine: `,
+    ...joined, '.',
+    unknown
+      ? ' “Not checked” is its own answer here — no detector established those either way, so this card claims nothing about them.'
+      : ' Every row below was established by something we observed, not assumed.'));
+
+  main.push(capLegend());
+  main.push(el('div', { class: 'cap-list' }, ...sorted.map(capRow)));
+
+  // No control that can't act: this card reads state, it does not flip switches. Say where the
+  // acting happens instead of growing a button with no executor and no undo behind it.
+  main.push(el('p', { class: 'fineprint' },
+    'This card only reads — nothing here changes your machine. Anything worth switching on shows up ',
+    'in ', el('b', {}, 'What we’d suggest'), ' below, with its evidence, its cost, and its undo recorded first.'));
+
+  body.replaceChildren(withIllo('capabilities', ...main));
+}
+
+function capsSkeleton() {
+  $('#body-capabilities').replaceChildren(
+    frag('<div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w80"></div><div class="sk-bar w65"></div></div>'),
+    el('p', { class: 'loading-note' },
+      'Checking each capability against this machine — local and read-only. ',
+      'Anything we can’t establish is reported as “not checked”, never as “off”.'));
+  setChips('chips-capabilities', [chip('checking…', 'wait')]);
+}
+
+/* The endpoint is NEW. A console binary older than this panel — or a plugin mid-update — simply has
+   no /api/capabilities route, and the server's static handler answers 404 for it. That is a known,
+   expected, non-broken condition and must not be dressed as a crash, so the status code is read
+   directly here instead of being recovered from an error string. */
+async function fetchCapabilities() {
+  if (MOCK) return { ok: true, status: 200, data: structuredClone(MOCK_CAPABILITIES) };
+  const res = await fetch('/api/capabilities', { headers: { Accept: 'application/json' } });
+  if (!res.ok) return { ok: false, status: res.status, data: null };
+  return { ok: true, status: res.status, data: await res.json() };
+}
+
+function capsMissingEndpoint() {
+  setChips('chips-capabilities', [chip('not checked yet', 'nt')]);
+  $('#body-capabilities').replaceChildren(withIllo('capabilities',
+    el('p', { class: 'lead-stat' }, 'Not checked yet — this console can’t ask the question.'),
+    el('p', {}, 'The page asks ', el('code', {}, '/api/capabilities'),
+      ' for the state of each capability, and the server answering right now doesn’t have that ',
+      'endpoint — it was built before this panel existed. Nothing is inferred from that silence: ',
+      'an unanswered question is not an ', el('b', {}, 'off'), ', so no rows are shown at all.'),
+    el('p', {}, 'Update the Brain and restart the console, and this card fills itself in.'),
+    el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => { capsSkeleton(); loadCapabilities(); } }, 'Try again')));
+}
+
+async function loadCapabilities() {
+  try {
+    const r = await fetchCapabilities();
+    if (r.status === 404) { capsMissingEndpoint(); return; }
+    if (!r.ok) throw new Error(`/api/capabilities answered HTTP ${r.status}`);
+    renderCapabilities(r.data);
+  } catch (err) {
+    // A real failure (server down, unparseable JSON) gets the page's real failure treatment —
+    // deliberately different from the 404 above, so "not built yet" never reads as "broken".
+    setChips('chips-capabilities', [chip('unavailable', 'grey')]);
+    inlineError('body-capabilities', String(err.message || err), () => { capsSkeleton(); loadCapabilities(); });
+  }
 }
 
 /* ----------------------------------------------------------- section 2: wiring */
@@ -2299,6 +2576,30 @@ const MOCK_STACK = {
   ],
 };
 
+/* Capability fixture — ?mock=1 ONLY, never a default. It exists so the three states can be seen
+   side by side while styling: the whole design claim is that "not checked" is visually unmistakable
+   from "off", and that claim is unfalsifiable without all three on screen at once. Shapes match the
+   contract exactly, including the [{ observed }] evidence records capability-audit.mjs emits. */
+const MOCK_CAPABILITIES = {
+  rows: [
+    {
+      key: 'mock:learning-hooks', label: 'Learning hooks', state: 'OFF', scope: 'machine',
+      whatItBuysYou: 'Records what worked in your sessions so the next one starts from it instead of from nothing.',
+      evidence: [{ observed: '26 hooks are registered on this machine and 0 are enabled' }],
+    },
+    {
+      key: 'mock:harness-champion', label: 'Harness champion policy', state: 'ON', scope: 'machine',
+      whatItBuysYou: 'Runs your agents on the best-scoring policy found so far rather than the stock one.',
+      evidence: [{ observed: 'a champion policy is active, applied 6 days ago' }],
+    },
+    {
+      key: 'mock:recall-quality', label: 'Recall quality', state: 'UNKNOWN', scope: 'project',
+      whatItBuysYou: 'Tells you whether what your AI stored can actually be found again when it matters.',
+      evidence: [{ observed: 'no probe has run this session, so nothing was measured either way' }],
+    },
+  ],
+};
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function mockGet(url) {
@@ -2328,6 +2629,7 @@ initTheme();
 loadState();
 loadStack();
 loadTrust();
+loadCapabilities();
 $('#recheck-btn')?.addEventListener('click', () => recheckMachine());
 
 // Stack card leads (Stuart 2026-07-16): expand immediately on a true first visit so newcomers

@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.5.1-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.5.1--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.6.0-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.6.0--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -56,7 +56,37 @@
 
 ---
 
-## What's new in 3.5 — it stopped waiting to be asked
+## What's new in 3.6 — it can finally show you what you own
+
+**Shipped 2026-07-22.** 3.5 made the brain speak. 3.6 makes it *legible*: a console panel that
+answers the question the owner has been asking for weeks — **"what is actually turned on?"**
+
+- **Eleven capabilities, each ON / OFF / UNKNOWN**, every state *derived* from a real check on your
+  machine at render time. `UNKNOWN` is a first-class state and is visually separated from `OFF` in a
+  non-colour channel, because collapsing the two is precisely the lie this release exists to kill.
+- **A one-line plain-English "what it buys you"** on every row, and the evidence we observed.
+- **Settings that are conservative by construction.** Each setting declares which of its *values*
+  escalate beyond the current project, and `default ∉ escalates` is asserted as a test — so the rule
+  holds for settings added later instead of relying on a comment nobody re-reads.
+- **A false alarm found and killed.** 3.5's audit reported *"26 learning hooks installed and every
+  one is switched off."* That was wrong: `ruflo hooks list` renders a table column keyed `enabled`
+  against a payload that has no such key, so it prints "No" 26 times. The learner had 457
+  trajectories and had adapted 106 minutes earlier. We scraped a human-readable table instead of
+  reading state, which is the exact mistake this project keeps writing rules about. The detector now
+  reads the learner's own state file and **stays silent when it cannot tell** — ADR-028 fixes the
+  false-alarm rate at zero and calls it non-negotiable.
+- **Three surfaces that were built and never wired** are now connected. `capability-registry.mjs`
+  had zero call sites; the client referenced it only in comments. Built-tested-unwired is this
+  project's signature failure, and it happened three times in one night.
+
+Honest limit: this is **3.6, not 4.0**. 4.0 requires levels 3–5 of ADR-028's proactivity ladder
+(contextual, anticipatory, compounding) and all three remain unbuilt — see `docs/4.0-READINESS.md`,
+which grades the current state at **L2** with evidence for every mark.
+
+<details>
+<summary><b>Earlier &#8212; what 3.5 shipped</b> &#183; it stopped waiting to be asked. <i>Expand for the receipts.</i></summary>
+
+## 3.5 — it stopped waiting to be asked
 
 **Shipped 2026-07-22.** For three weeks this thing had indexed rUv's entire learning stack — ReasoningBank, SONA, MoE, the ADR-174 distillation pipeline — and could have answered any question about any of it. It never once said the only sentence that mattered:
 
@@ -267,6 +297,7 @@ claude plugin install ruvnet-brain@ruvnet-brain --scope user
 
 Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
+</details>
 </details>
 </details>
 

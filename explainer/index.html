@@ -67,7 +67,7 @@
     "alternateName": "RuvNet-Brain",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Cross-platform (Node.js)",
-    "softwareVersion": "3.5.1-dev",
+    "softwareVersion": "3.6.0-dev",
     "datePublished": "2026-06-30",
     "dateModified": "2026-07-18",
     "description": "A downloadable, source-grounded brain for Claude Code that grounds the AI in rUv's real RuvNet source — RuVector/RVF, ruflo, AgentDB, RuLake, SPARC and 69 indexed repos — and integrates two of rUv's hardest tools when they are installed — offering to install them on demand, invoked in plain English: MetaHarness (harness self-improvement + cost-optimal model routing, ~56x cheaper than frontier-only) and the Agentic-QE testing fleet. Ships the search_ruvnet MCP tool plus grounding hooks.",
@@ -233,7 +233,7 @@
         Built by <strong>Stuart Kerr</strong> at <a href="https://isovision.ai" target="_blank" rel="noopener">Isovision.ai</a>.
         <strong>Free &amp; fair use</strong> &mdash; so everyone can fully leverage the high end of agentic coding.
       </p>
-      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.5.1-dev</p>
+      <p class="prov-live"><span class="prov-dot">&#9679;</span> STATUS&nbsp;<code>live</code> &middot; v3.6.0-dev</p>
     </div>
   </div>
 
@@ -420,12 +420,15 @@
         .v2-score .tbl td.moved{grid-column:1 / -1;margin-top:2px;min-width:0}
       }
     </style>
-    <section class="v2band" id="v2" aria-label="What's new in version 3.5">
+    <section class="v2band" id="v2" aria-label="What's new in version 3.6">
       <div class="wrap v2band-inner reveal">
-        <p class="eyebrow">new &middot; version 3.5</p>
-        <h2>What&rsquo;s new in <span class="grad">3.5</span></h2>
-        <p class="lede">It stopped waiting to be asked. The Brain now <strong>tells you what you already own
-          and aren&rsquo;t using</strong> &mdash; and offers to switch it on.</p>
+        <p class="eyebrow">new &middot; version 3.6</p>
+        <h2>What&rsquo;s new in <span class="grad">3.6</span></h2>
+        <p class="lede">3.5 got the Brain talking. Then it was asked the only question that decides whether any of
+          this is real &mdash; <em>does anything it learns actually change what happens next?</em> &mdash; and instead
+          of answering, it <strong>counted</strong>. Every lesson you have taught it, how many times you had to repeat
+          each one, and exactly which of them ever changed its behaviour. The numbers are on this page because they
+          are not flattering.</p>
         <!-- Cards LEFT, update command RIGHT — the command is the hero of the right side:
              one line makes any old install current, and auto-update takes it from there.
              Reuses .install-block / pre.code-block exactly; only the size is scoped up. -->
@@ -433,6 +436,11 @@
           .v34-duo{display:grid;grid-template-columns:minmax(320px,0.9fr) minmax(380px,1.1fr);gap:30px;align-items:start;margin-top:6px}
           .v34-duo > *{min-width:0} /* the pre's min-content must never blow the track out */
           .v34-duo + .v2-fine{margin-top:34px}
+          /* 4.0 adds the receipts table + the version history between the duo and the fine print, so the
+             adjacent-sibling breathing room has to follow them rather than stay pinned to .v2-fine. */
+          .v34-duo + .v2-ledger{margin-top:38px}
+          .v2-ledger .tier{margin:0 0 10px}
+          .v2-ledger + .v2-details{margin-top:var(--space-l)}
           .v34-duo .spear-grid{display:grid;grid-template-columns:1fr;gap:14px;margin:0}
           .v34-kicker{margin:0 0 12px;font-size:var(--step-1);color:var(--ink-2);text-wrap:balance}
           .v34-kicker strong{color:var(--ink)}
@@ -483,31 +491,38 @@
           }
         </style>
         <div class="v34-duo">
+          <!-- The four cards are the four findings, in blast-radius order. Every one is a number read off a real
+               machine on 2026-07-22 — not a feature list. The 3.5 band led with capabilities because 3.5 shipped
+               capabilities; this one leads with evidence because the evidence is what earned the major version. -->
           <div class="spear-grid">
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">it speaks first</div>
-              <p class="spear-lab">it scans what&rsquo;s actually on your machine and says the sentence nobody knew to ask
-                for &mdash; on the author&rsquo;s own machine, unprompted: <em>&ldquo;36 project stores are embedded but have
-                never been distilled &mdash; 6,858 memories sitting in those stores, teaching nothing&rdquo;</em><span
-                class="spear-src">observed, never a hardcoded feature list</span></p>
+              <div class="spear-num grad">88 &times; &middot; 19 projects</div>
+              <p class="spear-lab">one instruction &mdash; <em>&ldquo;prove it works before calling it done&rdquo;</em>
+                &mdash; taught <strong>88 separate times, in 19 projects that cannot see each other</strong>. Not
+                forgetfulness: a lesson learned in one project physically cannot reach the next one. The Brain can now
+                find all seven such lessons and show you the evidence for each<span class="spear-src">736 lessons &middot;
+                41 stores &middot; 284 about how you want work done</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">every fix is reversible</div>
-              <p class="spear-lab">nothing can be offered that can&rsquo;t be run and undone &mdash; each proposal carries
-                evidence it observed, a cost, plain English about what it touches, and a tested inverse, enforced by a
-                factory that throws rather than a review that can be skipped<span class="spear-src">ADR-027 &middot;
-                proven on a real 1,250-entry store</span></p>
+              <div class="spear-num grad">8/8 &rarr; 0/6</div>
+              <p class="spear-lab">in one session: rules that could <strong>interrupt</strong> were obeyed 8 times out
+                of 8. The rule that could only be <strong>read</strong> was obeyed 0 times out of 6. Same model, same
+                session, same stated intentions &mdash; the only variable was whether the knowledge could stop the
+                work<span class="spear-src">knowledge that cannot interrupt does not act</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">diagrams you can actually read</div>
-              <p class="spear-lab">two diagrams had shipped with labels rendering at 8px and 3px &mdash; present but
-                invisible. A gate now measures effective pixel size in the live page, so it can&rsquo;t happen
-                again<span class="spear-src">legibility, enforced</span></p>
+              <div class="spear-num grad">21 days</div>
+              <p class="spear-lab">the Brain held every fact needed to say <em>&ldquo;your learning system is installed,
+                and it is switched off&rdquo;</em> &mdash; for three weeks, and never said it. The data was never
+                missing. Nothing was structurally obliged to speak. This is the number 4.0 exists to
+                destroy<span class="spear-src">latency-to-surface &middot; the honest summary metric</span></p>
             </div>
             <div class="spear-card reveal-stagger">
-              <div class="spear-num grad">it keeps itself current</div>
-              <p class="spear-lab">Evergreen auto-update &mdash; run one command once and the Brain updates itself from
-                then on, verifying each bundle&rsquo;s signature before applying<span class="spear-src">run once, stay current</span></p>
+              <div class="spear-num grad">26 installed &middot; 0 on</div>
+              <p class="spear-lab">26 learning hooks registered on this machine. <strong>None enabled. None ever
+                executed.</strong> The harness&rsquo;s own self-evolution had already run and scored 0.285 &rarr; 0.765
+                &mdash; then kept nothing and went idle. Everything was installed, funded and switched
+                off<span class="spear-src">checked live, not recalled</span></p>
             </div>
           </div>
           <div class="v34-right">
@@ -540,8 +555,110 @@ npx ruvnet-brain@latest <span class="s">--update --auto</span></code></pre>
           </div>
         </div>
 
-        <p class="v2-fine">Every number on this page traces to something measured &mdash; <b>the 2.0 eval-gate
-          discipline now covers the whole surface</b>.</p>
+        <!-- THE RECEIPTS. The 3.5 band asserted its findings inside card copy, where a number can hide behind a
+             sentence. 4.0's whole argument IS the numbers, so they get the page's table treatment: stat-sized,
+             tabular, with the provenance of each stated next to it. Reuses .v2-score / .tbl unchanged. -->
+        <div class="v2-ledger">
+          <p class="tier tech">The receipts &mdash; every number below was read off a real machine on 2026-07-22</p>
+          <div class="v2-score">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>What was measured</th>
+                  <th class="nh">Number</th>
+                  <th class="moved-h">What it means</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Lessons sitting in your project memory stores</td>
+                  <td class="n">736</td>
+                  <td class="moved">across 41 separate projects &mdash; 284 of them are about <em>how you want work
+                    done</em>, which is almost never project-specific</td>
+                </tr>
+                <tr>
+                  <td>The most-repeated one</td>
+                  <td class="n">88&times;</td>
+                  <td class="moved">&ldquo;prove it works before calling it done&rdquo;, taught in 19 projects that
+                    have no way of seeing each other</td>
+                </tr>
+                <tr>
+                  <td>Version discipline, in this one repository</td>
+                  <td class="n">14&times;</td>
+                  <td class="moved">recorded fourteen times right here &mdash; and violated again the same day, across
+                    six behaviour-changing commits with no bump</td>
+                </tr>
+                <tr>
+                  <td>Rules that can interrupt vs. rules you only read</td>
+                  <td class="n">8/8 &middot; 0/6</td>
+                  <td class="moved">one session, one model. The gates that could stop the work held every single time;
+                    the prose rule held none</td>
+                </tr>
+                <tr>
+                  <td>Time to say &ldquo;your learning is switched off&rdquo;</td>
+                  <td class="n">21 days</td>
+                  <td class="moved">every fact needed to say it was present the entire time &mdash; nothing was
+                    obliged to speak</td>
+                </tr>
+                <tr>
+                  <td>Learning hooks on this machine</td>
+                  <td class="n">26 &rarr; 0</td>
+                  <td class="moved">26 registered, none enabled, none ever executed</td>
+                </tr>
+                <tr>
+                  <td>Harness self-evolution, the one time it ran</td>
+                  <td class="n">0.285 &rarr; 0.765</td>
+                  <td class="moved">a 168% lift across 16 variants on seven policy surfaces &mdash; it promoted none of
+                    them, and went idle</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Version history stays on the page rather than scrolling away with the release: someone landing here in
+             three months should still be able to read what each version actually changed. 3.5's four cards are moved
+             in verbatim — the copy was accurate when written and is still accurate now. -->
+        <details class="v2-details">
+          <summary>
+            <span class="chev" aria-hidden="true">&rsaquo;</span>
+            <span class="tier tech">Earlier &mdash; what 3.5 shipped: it stopped waiting to be asked</span>
+          </summary>
+          <div class="spear-grid" style="margin-top:var(--space-s)">
+            <div class="spear-card">
+              <div class="spear-num grad">it speaks first</div>
+              <p class="spear-lab">it scans what&rsquo;s actually on your machine and says the sentence nobody knew to ask
+                for &mdash; on the author&rsquo;s own machine, unprompted: <em>&ldquo;36 project stores are embedded but have
+                never been distilled &mdash; 6,858 memories sitting in those stores, teaching nothing&rdquo;</em><span
+                class="spear-src">observed, never a hardcoded feature list</span></p>
+            </div>
+            <div class="spear-card">
+              <div class="spear-num grad">every fix is reversible</div>
+              <p class="spear-lab">nothing can be offered that can&rsquo;t be run and undone &mdash; each proposal carries
+                evidence it observed, a cost, plain English about what it touches, and a tested inverse, enforced by a
+                factory that throws rather than a review that can be skipped<span class="spear-src">ADR-027 &middot;
+                proven on a real 1,250-entry store</span></p>
+            </div>
+            <div class="spear-card">
+              <div class="spear-num grad">diagrams you can actually read</div>
+              <p class="spear-lab">two diagrams had shipped with labels rendering at 8px and 3px &mdash; present but
+                invisible. A gate now measures effective pixel size in the live page, so it can&rsquo;t happen
+                again<span class="spear-src">legibility, enforced</span></p>
+            </div>
+            <div class="spear-card">
+              <div class="spear-num grad">it keeps itself current</div>
+              <p class="spear-lab">Evergreen auto-update &mdash; run one command once and the Brain updates itself from
+                then on, verifying each bundle&rsquo;s signature before applying<span class="spear-src">run once, stay current</span></p>
+            </div>
+          </div>
+        </details>
+
+        <p class="v2-fine"><b>What is true today, and what is not.</b> Every number above was read off a real machine,
+          not estimated: the lesson counts come from a miner that prints its evidence per lesson, and the hook and
+          self-evolution figures were checked live rather than recalled. What that miner does <b>not</b> yet do is
+          enforce &mdash; promoting a repeated lesson so every project inherits it, and making it interrupt at the
+          moment it applies, are specified and <b>not yet shipped</b>. This band claims the measurement, not the cure;
+          the rest of this page is unchanged and still <b>measured, never projected</b>.</p>
       </div>
     </section>
 

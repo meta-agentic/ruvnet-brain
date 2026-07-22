@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark light" />
-<title>RuvNet Brain — How to use it</title>
+<title>RuvNet Brain — the other 90%</title>
 <!-- Same version-free brain mark as the console. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2216%22 fill=%22%230b0d12%22 stroke=%22%232c3850%22 stroke-width=%221.5%22/><path d=%22M25 48 C17 48 11.5 41.5 13.5 34.5 C10 29 13 21 19 19 C21 12.5 29 9.5 35 12 C43 9 50.5 14.5 50.5 22 C55 26 55 34.5 50 38 C49 43.5 43 47.5 37 46.5 L31 47.5 Z%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%223.4%22 stroke-linejoin=%22round%22/><path d=%22M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5%22 fill=%22none%22 stroke=%22%23f0a830%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 opacity=%22.9%22/><circle cx=%2224%22 cy=%2227%22 r=%223.4%22 fill=%22%235ad6ff%22/><circle cx=%2240%22 cy=%2224.5%22 r=%223.4%22 fill=%22%23f4b13a%22/><circle cx=%2241%22 cy=%2236.5%22 r=%223.4%22 fill=%22%235fd38a%22/></svg>" />
 
@@ -25,6 +25,41 @@
 </head>
 <body>
 
+<!-- ============================================================================
+     RESTRUCTURED 2026-07-22 around ONE idea the owner stated: "you use RuVector
+     as a vector DB — here's the other 90%."
+
+     Three faults were named in the previous cut, and each one is answered here:
+
+     1. "It repeats MetaHarness too many times." It did — the word appeared six
+        times across four sections, and the ADR-076 figure was printed twice in
+        two different sections. Now: MetaHarness is named in exactly two places
+        (one item in the list, and the section that defines the word), and the
+        28.5%/98.1% figure is cited ONCE. Duplicating a cited figure is not just
+        repetitive, it doubles the surface an anti-fabrication gate has to guard
+        (see tests/unit/adr-citation-integrity.test.mjs, born from exactly that).
+
+     2. "It does not lead with what people MISS." It opened with reassurance
+        ("you don't have to learn the toolkit"). Reassurance is the wrong first
+        beat for someone who already owns the thing and is under-using it. The
+        page now leads with the ten capabilities most people never switch on.
+
+     3. "It reads as a feature list, not 'here is what you already own and are
+        not using'." A feature list says what a thing HAS. Every item below says
+        what it IS in one plain line, what it BUYS you, and — the part a feature
+        list never has — HOW YOU'D KNOW IF IT'S ON. That third line is what turns
+        a brochure into an inventory.
+
+     HONESTY CONSTRAINT that shaped every "how to tell" line: this page is static
+     and reads nothing off the machine (see the footer — that is the console's
+     job, not this page's). So no item may state a count, a status, or a
+     percentage. Each one hands you the real command or the real file path and
+     tells you what a NEGATIVE result looks like, so the page is exactly as
+     truthful on a bare machine with nothing installed as it is on a loaded one.
+     Every path and command printed below was run on this machine before it was
+     written down; none was recalled from memory.
+     ============================================================================ -->
+
 <a class="skip-link" href="#main">Skip to content</a>
 
 <header class="head">
@@ -36,7 +71,7 @@
         <path class="mk-branch" d="M31 47 L31 33 M31 33 L24 27 M31 33 L40 24.5 M31 33 L41 36.5" />
         <circle class="n2" cx="24" cy="27" r="4" /><circle class="n1" cx="40" cy="24.5" r="4" /><circle class="n3" cx="41" cy="36.5" r="4" />
       </svg>
-      <span class="brand-text">RuvNet Brain <span class="brand-sub">How to use it</span></span>
+      <span class="brand-text">RuvNet Brain <span class="brand-sub">the other 90%</span></span>
     </div>
     <div class="head-right">
       <a class="back-chip mono" href="./">‹ console</a>
@@ -56,22 +91,30 @@
 
 <main id="main" class="wrap">
 
-  <!-- ======================================================= HERO -->
+  <!-- ======================================================= HERO
+       The lead is now the gap, not the reassurance. The vector store is the part
+       everybody finds on their own — it is the thing with an obvious name and an
+       obvious API. Everything else got installed at the same time and is sitting
+       there unasked-for. That is the whole page in two sentences. -->
   <section class="intro">
     <div class="intro-grid">
       <div class="intro-copy">
         <p class="eyebrow">RuvNet Brain · the guide</p>
-        <h1>You don't have to learn the toolkit. <em>That's the design.</em></h1>
-        <p class="lede">The Brain looks like a lot of pieces — grounding, memory, gates, routing,
-        skills. Here's the whole trick: it arranges itself around the way you already work.
-        There are three depths of use, and the first one is <b>doing nothing</b>.</p>
+        <h1>You're using it as a vector database. <em>That's the smallest thing it does.</em></h1>
+        <p class="lede">Vectors in, neighbours out — that part is easy to find, so nearly everyone
+        stops there. What came with it is a <b>harness around the model you already pay for</b>:
+        hooks that learn from your edits, memory that returns on its own, gates that can refuse a
+        bad write, routing that quietly picks a cheaper model. Most of it ships switched off, or
+        simply never asked for. <b>Here's the rest of what you own.</b></p>
 
         <!-- Verbatim from the hackerspace transcript, with ONE correction. The transcript is
              machine speech-to-text and mis-renders the spoken product name "Ruflo" four
              different ways in one document — "root flow", "rooflow", "RootFlow", "Root Flow".
              That inconsistency is the ASR guessing at an unfamiliar proper noun. rUv said
              Ruflo; printing the transcript's guess would put a word in his mouth he never
-             said. Source: docs/Ruv_advice/Ruv hackerspace Transcript.txt (Thu, Jul 16, 2026). -->
+             said. Source: docs/Ruv_advice/Ruv hackerspace Transcript.txt (Thu, Jul 16, 2026).
+             It leads here because it is the counter-argument to this page's own thesis, in
+             rUv's voice: owning more is worthless if you have to load it all. You don't. -->
         <blockquote class="ruv-quote">
           <p>“I don't have to load 350 skills in Ruflo that 99% of which I never use.
           I can specifically learn and say that, for this particular task, I need a particular
@@ -83,8 +126,9 @@
       </div>
 
       <!-- The one metaphor, stated once and reused everywhere: three depth rings
-           around your prompt. Ring 1 is solid — it's always on. The outer rings
-           are dotted — they exist only when you reach for them. -->
+           around your prompt. Under the new thesis these rings answer the obvious
+           follow-up — "fine, so how do I switch the rest on?" — and the same three
+           colours key the ten items below, so the reader learns the code once. -->
       <figure class="hero-art">
         <!-- REBUILT 2026-07-17 (twice — both lessons kept). Lesson 1: the old
              640-unit viewBox rendered into a ~453px column, downscaling every
@@ -95,9 +139,15 @@
              column right, leader lines), which has no collisions by
              construction: ring 3's right edge peaks at x=226, the label column
              starts at x=235. Color/type/motion all live in tips.css under
-             `.hero-scene` so both themes and reduced-motion are honored. -->
+             `.hero-scene` so both themes and reduced-motion are honored.
+             2026-07-22: ONLY the punchline text changed, and deliberately to a
+             SHORTER string (29 chars -> 24) so the measured no-collision
+             geometry above still holds without re-deriving it. The old punch
+             ("most work never leaves ring 1") argued you can ignore the outer
+             rings — true of effort, but it is the opposite of this page's point,
+             which is that you already own them. -->
         <svg class="hero-scene" viewBox="0 0 460 300" role="img"
-             aria-label="Three concentric depth rings around a chat prompt reading 'just type'. Ring one, always on — grounding, memory and gates wrap every prompt; you do nothing. Ring two, say it — plain-English asks. Ring three, name it — commands, skills and tools you call directly. Most work never leaves ring one.">
+             aria-label="Three concentric depth rings around a chat prompt reading 'just type'. Ring one, always on — grounding, memory and gates wrap every prompt; you do nothing. Ring two, say it — plain-English asks. Ring three, name it — commands, skills and tools you call directly. You already own all three.">
 
           <!-- rings + prompt: the visual. On narrow phones this group is the WHOLE hero (the label
                column is hidden and the legend below the figure becomes the key), so it re-centers. -->
@@ -138,10 +188,10 @@
             <text class="hs-sub"        x="235" y="229">you do nothing</text>
 
             <!-- the punchline — the last thing the column says -->
-            <text class="hs-punch" x="235" y="253">most work never leaves ring 1</text>
+            <text class="hs-punch" x="235" y="253">you already own all three</text>
           </g>
         </svg>
-        <figcaption class="hero-cap mono">three depths · depth 1 wraps every prompt</figcaption>
+        <figcaption class="hero-cap mono">three ways in · depth 1 asks nothing of you</figcaption>
       </figure>
     </div>
 
@@ -153,40 +203,185 @@
     </p>
   </section>
 
-  <!-- =============================================== THE ARGUMENT
-       The page's thesis, drawn: the SAME prompt into plain Claude Code vs the same model
-       wrapped in the harness. This is architecture, not atmosphere — it exists to show how
-       the pieces hook together, which no amount of pretty art can do.
-       Scroll-wrapped: see .diagram-scroll in tips.css for why compressing it is not an option. -->
-  <section class="depth card rail-act" id="why" aria-labelledby="why-h">
+  <!-- ============================================== THE INVENTORY · THE LEAD
+       This section is the page. It runs FIRST because the reader's problem is not
+       "what is this" — they already installed it — but "what am I sitting on that
+       I never turned on".
+
+       Card colour is not decoration: it repeats the three-depth key from the hero
+       and answers "what would it cost me to switch this on" at a glance.
+         cyan  = already running once the plugin is wired — you do nothing
+         amber = one plain-English sentence away
+         green = one command or file away
+       rail-pay (the spectrum spine) is used because this list spans all three
+       depths at once, which is exactly what that rail means everywhere else.
+
+       Every "how to tell" below was executed on this machine on 2026-07-22 before
+       being printed, and every one of them also states what a NEGATIVE looks like.
+       That second half is the honesty load-bearer: without it, a bare machine
+       reads a list of checks and concludes it is broken. -->
+  <section class="depth card rail-pay" id="inventory" aria-labelledby="inv-h">
     <header class="depth-head">
       <div class="depth-title">
-        <span class="stage st-rec">the whole argument, in one picture</span>
-        <h2 id="why-h">Same model. Same prompt. <em>Everything around it.</em></h2>
-        <p class="q">rUv's lever isn't a smarter model — it's what wraps the one you already
-        have. Plain Claude Code sends your prompt straight at an expensive model and takes
-        whatever comes back. The harness grounds it, routes it to the cheapest model that can
-        actually do the job, hands back what your project already decided, inspects the write
-        before it lands, and checks it on the way out. You type the same thing either way.</p>
+        <span class="stage st-pay mono">the other 90%</span>
+        <h2 id="inv-h">Ten things you already own — <em>and probably aren't using</em></h2>
+        <p class="q">None of these is a new purchase; they arrived with what you installed. Each one
+        says what it is in one line, what it actually buys you, and how you'd know whether it's on.
+        The colour tells you the cost of switching it on:
+        <b>cyan</b> is already running, <b>amber</b> is one sentence away, <b>green</b> is one command away.</p>
       </div>
+      <span class="depth-num mono" aria-hidden="true">10</span>
     </header>
     <div class="depth-body">
-      <figure class="diagram-scroll" style="--dmin: 780px">
-        <img src="assets/harness-vs-plain.svg" width="1000" height="652"
-             alt="The same prompt sent two ways. Left, plain Claude Code: a bare wire to one
-             frontier model that costs the most on every task, with no grounding, no memory and
-             no gates, producing an unchecked answer. Right, the same model wrapped in the RuvNet
-             harness: the prompt passes through GROUND (cited, not guessed), ROUTE (cheapest
-             capable model, with the frontier model mostly idle), RECALL (prior decisions
-             return), GATE (inspects the write and can refuse it), and VERIFY (provenance and
-             safety gate), producing an answer that is grounded, cited and checked. Per agentic-flow ADR-076:
-             28.5% cheaper at 98.1% bar-compliance." decoding="async">
-        <figcaption class="mono">the left lane finishes first — and that's the problem</figcaption>
-      </figure>
+      <ul class="ambient-grid">
+
+        <li>
+          <span class="amb-ic ic-gr" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4"/><path d="M16.2 16.2a6 6 0 0 0 0-8.4"/><path d="M5.2 5.2a9.6 9.6 0 0 0 0 13.6"/><path d="M18.8 18.8a9.6 9.6 0 0 0 0-13.6"/></svg>
+          </span>
+          <b>01 · Self-learning hooks</b>
+          <p>Hooks that sit on your edits and commands and record what actually worked.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>Suggestions and routing shaped by your repo instead of generic defaults — it stops re-deriving how your project works every session.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <!-- Two styling traps in these cards, both found by measuring the render rather than reading
+               the CSS. (1) <em>, not <b>, for inline emphasis: `.ambient-grid b` is the CARD-TITLE rule
+               (fs-0, weight 650), so a <b> here silently renders LARGER than the line it sits in.
+               (2) The "how to tell" line is a <p>, not a `.peg-gloss`. As a gloss (fs--2) its nested
+               <code> — which is 0.86em — measured 9.5px at 390px, making the command you are meant to
+               TYPE the smallest text on the page. It is also the most valuable line on the card, so
+               fine-print treatment was wrong twice over. -->
+          <p>Run <code>ruflo hooks list</code>. Every row carries an <em>Enabled</em> and a <em>Last Executed</em> column — all “No” and “Never” means nothing is learning yet.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-gr" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4.5 19.5h15"/><rect x="6" y="12.5" width="3.4" height="7"/><rect x="10.8" y="8.5" width="3.4" height="11"/><rect x="15.6" y="5" width="3.4" height="14.5"/></svg>
+          </span>
+          <b>02 · Pretraining on your own repo</b>
+          <p>A one-shot pass that reads a repository and bootstraps patterns out of it.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>Day-one routing that already knows your layout and conventions, instead of a cold start it spends weeks recovering from.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p><code>ruflo hooks pretrain</code> runs it; <code>ruflo hooks metrics</code> shows what it took away. The counters live at <code>~/.claude-flow/neural/stats.json</code> — no file, no pretraining.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-cy" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 15.5 L11 10 L15 13 L18 6.5"/><circle cx="8" cy="15.5" r="1.8"/><circle cx="11" cy="10" r="1.8"/><circle cx="15" cy="13" r="1.8"/><circle cx="18" cy="6.5" r="1.8"/><path d="M4.5 4v16h16"/></svg>
+          </span>
+          <b>03 · Memory that comes back on its own</b>
+          <p>A per-project store of decisions, written as you work and surfaced when you return.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>You stop re-explaining the project. Last week's decision is already in the room before you ask for it.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p>Run <code>ruflo memory search "&lt;something you decided&gt;"</code> in the project. Rows back means it's recording; the store is <code>.swarm/memory.db</code> inside that project, not a global one.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-am" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12.5 3L6 13.2h4.6l-1 7.8 6.4-11h-4.7z"/></svg>
+          </span>
+          <b>04 · Routing to a cheaper model</b>
+          <p>A router that sends each task to the least expensive model that can actually do it.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>The expensive model sits idle on work that never needed it — and every route leaves a receipt, so the saving is counted rather than claimed.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <!-- The spoken phrase gets its own .say-wrap row rather than sitting inline in the gloss.
+               `.say` is only ever blockified by `.say-wrap`'s flex context; dropped inline into a
+               text run it stays display:inline, where its 7px vertical padding overflows the line
+               box and rides up into the line above instead of pushing it. Same fix in item 08. -->
+          <div class="say-wrap"><span class="say">“do this cheaper”</span></div>
+          <p>Receipts append to <code>~/.cache/ruvnet-brain/token-ledger.jsonl</code>; the console's savings card totals them. No file means nothing has been routed yet.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-cy" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+          </span>
+          <b>05 · Gates that can refuse a write</b>
+          <p>Checks that read a change before it lands, and can stop it outright.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>The bad edit never happens. You are not reviewing damage after the fact, which is the only kind of review that costs a whole afternoon.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p>Refusals are logged to <code>~/.cache/ruvnet-brain/gate-blocks.jsonl</code>; the console's gates card counts them. An empty log means nothing has been refused — <em>not</em> that nothing is armed.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-gr" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M6 3.5h7.5L18.5 8.5V20.5H6z"/><path d="M13.3 3.5V8.7H18.5"/><path d="M8.5 14.2l2.1 2.1 4-4.4"/></svg>
+          </span>
+          <b>06 · Your corrections, kept as rules</b>
+          <p>The things you've told it — “always do X”, “never do Y” — captured in one file.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>A correction you gave once stops being a correction you give weekly.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p>Open <code>~/.config/ruvnet-brain/lessons.json</code>. Each entry carries a status — one still marked <code>candidate</code> is recorded but <em>not yet in force</em>, which is the difference people miss.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-cy" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M20.4 14.3A8.5 8.5 0 0 1 9.7 3.6a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>
+          </span>
+          <b>07 · Jobs that run while you sleep</b>
+          <p>Scheduled background work that refreshes the knowledge, the model list and the routing.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>The stack is current when you sit down, without you remembering to update anything.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p>On macOS, <code>launchctl list | grep ruvnet</code>. The second column is each job's last exit code. Nothing listed means none are installed — which is a normal, healthy state, not a fault.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-am" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3.2M12 18.2v3.2M2.6 12h3.2M18.2 12h3.2"/></svg>
+          </span>
+          <b>08 · A harness policy actually in force</b>
+          <p>MetaHarness freezes the model and improves what wraps it; the winner gets written down.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>The wrapper keeps getting better on the model you already pay for — no retraining, no second subscription. (The word is explained further down.)</p>
+          <span class="ask-cap mono">how to tell</span>
+          <div class="say-wrap"><span class="say">“score my harness”</span></div>
+          <p><code>~/.claude-flow/harness-active-policy.json</code> holds the policy currently applied, or does not exist at all. Say the phrase above to see where yours stands.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-cy" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3.5" y="4.6" width="17" height="5.6" rx="1.6"/><rect x="3.5" y="13.8" width="17" height="5.6" rx="1.6"/><circle cx="7.4" cy="7.4" r="1"/><circle cx="7.4" cy="16.6" r="1"/></svg>
+          </span>
+          <b>09 · Tool servers it can already call</b>
+          <p>MCP servers registered once, globally, so every session can reach them.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>Searching rUv's real source, driving a browser, hitting the vector cache — from inside the conversation, with no copy-paste.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p><code>~/.claude.json</code> lists them under <code>mcpServers</code>. Careful: that proves they are <em>configured</em>. Nothing on disk proves a server is reachable, so nobody — including this page — should tell you they're connected.</p>
+        </li>
+
+        <li>
+          <span class="amb-ic ic-gr" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="4" y="13.4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.6"/></svg>
+          </span>
+          <b>10 · Skills already loaded in every project</b>
+          <p>Named commands installed at user scope, so they follow you into every repo.</p>
+          <span class="ask-cap mono">buys you</span>
+          <p>A whole disciplined workflow behind one word instead of a paragraph of instructions you retype.</p>
+          <span class="ask-cap mono">how to tell</span>
+          <p>Type <code>/</code> in Claude Code to see what's live; <code>~/.claude/settings.json</code> lists them under <code>enabledPlugins</code>. The board of five is at depth 3 below.</p>
+        </li>
+
+      </ul>
+      <p class="metaphor">It's the drawer of attachments that came with the appliance. Nothing here is
+      an upsell — the only thing missing was knowing they were in the box.</p>
     </div>
   </section>
 
-  <!-- ================================================ DEPTH 1 · AMBIENT -->
+  <div class="stop-here mono" role="note">that's the list — everything below is how each one switches on</div>
+
+  <!-- ================================================ DEPTH 1 · AMBIENT
+       Trimmed 2026-07-22. This section used to carry its own three-card grid of
+       grounding / memory / gates — the exact same three capabilities that are now
+       items 03 and 05 above, described twice on one page in two different voices.
+       That duplication was a large part of why the page read as a feature list.
+       The section keeps its job (explaining the cyan tier) and gives up its list. -->
   <section class="depth card rail-mirror" id="depth-1" aria-labelledby="d1-h">
     <figure class="depth-art" aria-hidden="true">
       <img src="assets/depth-1.webp" alt="" width="1584" height="672"
@@ -202,41 +397,21 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-mirror">Depth 1 · always on</span>
-        <h2 id="d1-h">It just works — do nothing</h2>
-        <p class="q">Type normally, like it's plain Claude. For most people, this is the whole product.</p>
+        <h2 id="d1-h">The cyan ones need nothing from you</h2>
+        <p class="q">Grounding, memory capture and the gates run on every prompt once the plugin is
+        wired — whether or not you think about them. Type normally, like it's plain Claude.</p>
       </div>
       <span class="depth-num mono" aria-hidden="true">01</span>
     </header>
     <div class="depth-body">
-      <ul class="ambient-grid">
-        <li>
-          <span class="amb-ic ic-cyan" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a2 2 0 0 1 2 2V19.5H7a2 2 0 0 1-2-2Z"/><path d="M5 17.5a2 2 0 0 0 2 2h10.5v-3"/><path d="m9 10 2.2 2.2L15.5 8"/></svg>
-          </span>
-          <b>Grounded answers</b>
-          <p>Any claim about rUv's tools is checked against his real source before it's asserted. No guessing.</p>
-        </li>
-        <li>
-          <span class="amb-ic ic-cyan" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M8 15.5 L11 10 L15 13 L18 6.5"/><circle cx="8" cy="15.5" r="1.8"/><circle cx="11" cy="10" r="1.8"/><circle cx="15" cy="13" r="1.8"/><circle cx="18" cy="6.5" r="1.8"/><path d="M4.5 4v16h16"/></svg>
-          </span>
-          <b>Project memory</b>
-          <p>Decisions from past sessions come back on their own as you work. You never re-explain the project.</p>
-        </li>
-        <li>
-          <span class="amb-ic ic-cyan" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
-          </span>
-          <b>Gates on every move</b>
-          <p>A wired install runs a stack of gates that read each move before it lands — several can stop a bad one outright. Your console shows <em>your</em> real count, live.</p>
-        </li>
-      </ul>
+      <p>This is the tier people are already getting and never notice, which is the point: the only
+      visible evidence is an answer that cites real source instead of guessing, a decision that comes
+      back without being re-explained, and a bad write that quietly doesn't happen. If you switch on
+      nothing else on this page, you still have this.</p>
       <p class="metaphor">Like a good spotter at the gym: silent on every rep, loud only when
       you're about to drop the bar.</p>
     </div>
   </section>
-
-  <div class="stop-here mono" role="note">you can stop here — everything below is optional depth</div>
 
   <!-- ================================================= DEPTH 2 · ASKED -->
   <section class="depth card rail-act" id="depth-2" aria-labelledby="d2-h">
@@ -254,7 +429,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-rec">Depth 2 · when you ask</span>
-        <h2 id="d2-h">Say what you want — plain English</h2>
+        <h2 id="d2-h">The amber ones are one sentence away</h2>
         <p class="q">No syntax to learn. These phrases are live triggers, verbatim from the shipped
         plugin — say one and the right machinery wakes up.</p>
       </div>
@@ -279,7 +454,7 @@
           </div>
         </div>
         <div class="ask-row">
-          <span class="ask-cap mono">tune the harness</span>
+          <span class="ask-cap mono">tune the wrapper</span>
           <div class="say-wrap">
             <span class="say">“score my harness”</span>
             <span class="say">“evolve my harness”</span>
@@ -313,7 +488,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-prove">Depth 3 · when you name it</span>
-        <h2 id="d3-h">Name it directly</h2>
+        <h2 id="d3-h">The green ones are one command away</h2>
         <p class="q">When you know exactly what you want, reach for it by name. This is the complete
         board — nothing hidden, nothing extra.</p>
       </div>
@@ -347,11 +522,46 @@
             <li><code>search_ruvnet</code><span class="peg-gloss">query rUv's real source (MCP tool)</span></li>
             <li><code>ruflo memory store</code><span class="peg-gloss">project memory, from the CLI</span></li>
             <li><code>ruflo memory search</code><span class="peg-gloss">recall it the same way</span></li>
+            <li><code>ruflo hooks list</code><span class="peg-gloss">the learning hooks, and whether they've ever run</span></li>
           </ul>
           <p class="peg-note">For when you want to touch the machinery yourself.</p>
         </div>
       </div>
       <p class="metaphor">Reaching for a specific tool on the pegboard — because you already know which one.</p>
+    </div>
+  </section>
+
+  <!-- =============================================== THE ARGUMENT
+       Moved BELOW the inventory (2026-07-22). It used to run second, before the
+       reader had any idea what they owned — an architecture diagram answering a
+       question nobody had asked yet. It lands better as the "why does wrapping
+       the model matter at all" backstop for the ten items above.
+       Scroll-wrapped: see .diagram-scroll in tips.css for why compressing it is
+       not an option. -->
+  <section class="depth card rail-act" id="why" aria-labelledby="why-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-rec">why wrapping the model is the whole lever</span>
+        <h2 id="why-h">Same model. Same prompt. <em>Everything around it.</em></h2>
+        <p class="q">rUv's lever isn't a smarter model — it's what wraps the one you already
+        have. Plain Claude Code sends your prompt straight at an expensive model and takes
+        whatever comes back. The harness grounds it, routes it to the cheapest model that can
+        actually do the job, hands back what your project already decided, inspects the write
+        before it lands, and checks it on the way out. You type the same thing either way.</p>
+      </div>
+    </header>
+    <div class="depth-body">
+      <figure class="diagram-scroll" style="--dmin: 780px">
+        <img src="assets/harness-vs-plain.svg" width="1000" height="652"
+             alt="The same prompt sent two ways. Left, plain Claude Code: a bare wire to one
+             frontier model that costs the most on every task, with no grounding, no memory and
+             no gates, producing an unchecked answer. Right, the same model wrapped in the RuvNet
+             harness: the prompt passes through GROUND (cited, not guessed), ROUTE (cheapest
+             capable model, with the frontier model mostly idle), RECALL (prior decisions
+             return), GATE (inspects the write and can refuse it), and VERIFY (provenance and
+             safety gate), producing an answer that is grounded, cited and checked." decoding="async">
+        <figcaption class="mono">the left lane finishes first — and that's the problem</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -362,13 +572,19 @@
        rUv wrote the same risk into ADR-076 himself: "'Meta-harness' is a newer term; the README must
        define it in the first screen so it doesn't read as jargon. Mitigation: the one-line 'freeze
        the model, evolve the harness' gloss + the four-pillar framing." This is that mitigation.
-       Every element of the diagram is grounded — 7 surfaces ADR-075, 4 pillars ADR-076, 28.5% ADR-076. -->
+
+       THE ONE PLACE THE WORD IS DEFINED, and the ONE place the 28.5%/98.1% figure is printed.
+       It previously appeared in this section AND again as a trade-note in the capstone — the same
+       cited number twice on one page. Beyond being repetitive, every extra copy of a cited figure
+       is another surface tests/unit/adr-citation-integrity.test.mjs has to guard, and that gate
+       exists precisely because this figure was once attributed to the wrong ADR (073, Proposed and
+       silent on the number, rather than 076, Accepted and stating it). One copy, one citation. -->
   <section class="depth card rail-prove" id="metaharness" aria-labelledby="mh-h">
     <header class="depth-head">
       <div class="depth-title">
         <span class="stage st-prove mono">the word nobody knows</span>
         <h2 id="mh-h">So what <em>is</em> MetaHarness?</h2>
-        <p class="depth-sub">The console offers to turn it on. Fair question: on for what? Here is the
+        <p class="depth-sub">Item 08 above offers to turn it on. Fair question: on for what? Here is the
         whole idea in one picture — you can't retrain the model, so evolve everything wrapped around it.</p>
       </div>
       <span class="depth-num mono" aria-hidden="true">☰</span>
@@ -392,36 +608,41 @@
       <p class="metaphor">The seven surfaces take turns changing. The model in the middle never moves —
       that's the whole trick, and it's why this works on the Claude you already have.</p>
       <p class="mh-cite mono">Grounded in rUv's own accepted ADRs — seven surfaces
-      <code>ADR-075</code> · four pillars <code>ADR-076</code> · the 28.5% figure <code>ADR-076</code>.
+      <code>ADR-075</code> · four pillars and the 28.5% figure <code>ADR-076</code>.
       Nothing here is inferred.</p>
     </div>
   </section>
 
   <!-- =================================================== CAPSTONE · THE PAYOFF
-       The crown of the page. Everything above EXPLAINED the mechanism (three depths, the
-       harness picture, MetaHarness). This section CROWNS it with value + momentum — the
-       reinforcement a new user is looking for: this was a good investment, the education ask
-       is small, the return is huge, and this is why the whole ecosystem is compounding.
+       The crown of the page. Everything above is inventory and mechanism; this is the
+       reinforcement — the education ask is small, the return is large.
        It reuses the .card / .depth-head idiom so it reads as the same page, and earns a
        SPECTRUM rail (rail-pay) because this is where all three depths pay off at once.
-       Every number is grounded: 28.5% / 98.1% = ADR-076; the download figures are the live
-       npm API, verified 2026-07-17 (attributed in-place). No hardcoded color — tokens only. -->
+
+       CUT 2026-07-22 — the momentum block (~1.48M downloads/month and five per-package
+       bars). Two reasons, and the first is the binding one: those were hardcoded literals
+       from a dated snapshot on a page that reads nothing at render time, which is exactly
+       the class of number this project has been burned by. Honest labelling ("not live")
+       made it defensible, not right. Second, ecosystem download counts are off-thesis:
+       how popular the packages are says nothing about what THIS reader owns and isn't
+       using, which is the only question the page now answers. If it comes back it should
+       fetch api.npmjs.org at load, or live on the console where numbers are derived. -->
   <section class="depth card rail-pay capstone" id="capstone" aria-labelledby="cap-h">
     <header class="depth-head">
       <div class="depth-title">
-        <span class="stage st-pay mono">depth 4 · the payoff</span>
+        <span class="stage st-pay mono">the payoff</span>
         <h2 id="cap-h">You're not learning a new tool. <em>You're multiplying the ones you already pay&nbsp;for.</em></h2>
-        <p class="depth-sub">The learning curve is small — most of it is depth 1, which is doing nothing.
-        The return is world-class output: grounded, cheaper, checked. It works the same whether you
-        write code or just describe what you want.</p>
+        <p class="depth-sub">The learning curve is small — most of the list above is cyan, which is
+        doing nothing. The return is world-class output: grounded, cheaper, checked. It works the same
+        whether you write code or just describe what you want.</p>
       </div>
       <span class="depth-num mono" aria-hidden="true">04</span>
     </header>
     <div class="depth-body">
 
-      <!-- PART 2 · the does / doesn't — effort you're spared vs power you gain.
-           Not feature-vs-feature: the left column is work you no longer do, the right is what
-           you get. The spine between them carries a transform arrow (→ on desktop, ↓ on mobile). -->
+      <!-- the does / doesn't — effort you're spared vs power you gain. Not feature-vs-feature:
+           the left column is work you no longer do, the right is what you get. The spine between
+           them carries a transform arrow (→ on desktop, ↓ on mobile). -->
       <div class="trade" role="group" aria-label="What the harness spares you, and what it gives you in return">
 
         <div class="trade-col trade-spared">
@@ -436,7 +657,7 @@
               <span class="trade-ic" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="4" width="6.6" height="6.6" rx="1.6"/><rect x="4" y="13.4" width="6.6" height="6.6" rx="1.6"/><rect x="13.4" y="13.4" width="6.6" height="6.6" rx="1.6"/></svg>
               </span>
-              <span class="trade-txt">You don't have to master 20 separate tools — it knows which one this task needs.</span>
+              <span class="trade-txt">You don't have to master the ten things above — it knows which one this task needs.</span>
             </li>
             <li>
               <span class="trade-ic" aria-hidden="true">
@@ -483,9 +704,7 @@
               <span class="trade-ic ic-am" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M12.5 3L6 13.2h4.6l-1 7.8 6.4-11h-4.7z"/></svg>
               </span>
-              <span class="trade-txt">The cheapest capable model on every task — the expensive one stays idle.
-                <span class="trade-note">28.5% cheaper at 98.1% bar-compliance · <code>ADR-076</code></span>
-              </span>
+              <span class="trade-txt">The cheapest capable model on every task — the expensive one stays idle.</span>
             </li>
             <li>
               <span class="trade-ic ic-gr" aria-hidden="true">
@@ -503,58 +722,8 @@
         </div>
       </div>
 
-      <!-- PART 3 · the momentum proof. A DATED SNAPSHOT of real npm figures (2026-07-17) — NOT live,
-           and honestly labelled as such (nothing on this page fetches). No trend/"climbing"/"compounding"
-           claim: we have no verified month-by-month points, so we assert none.
-           ~1.48M downloads/month across the RuvNet ecosystem (9 packages); the five largest,
-           to scale, are agentdb 660K · agentic-flow 372K · @ruvector/rvf 340K · claude-flow 91K
-           · ruv-swarm 12K (they sum to ~1.475M — nearly the whole total). Bars are scaled to the
-           per-package number (widest = agentdb at 100%). To make this genuinely live, fetch
-           api.npmjs.org/downloads/point/last-month/<pkg> at load — a documented follow-up. -->
-      <div class="momentum">
-        <div class="mo-head">
-          <div class="mo-hero">
-            <span class="mo-hero-num">~1.48M</span>
-            <span class="mo-hero-unit">downloads / month</span>
-          </div>
-          <span class="mo-climb">npm · snapshot 2026-07-17</span>
-        </div>
-        <p class="mo-cap">Across the RuvNet ecosystem — the tools this Brain grounds you in — nine packages
-        pull ~1.5M installs a month. The Brain is how you actually use all of it
-        without becoming an expert in each.</p>
-
-        <ul class="mo-bars" aria-label="Monthly npm downloads, the five largest RuvNet packages">
-          <li class="mo-bar">
-            <span class="mo-bar-name">agentdb</span>
-            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:100%"></span></span>
-            <span class="mo-bar-val">660K</span>
-          </li>
-          <li class="mo-bar">
-            <span class="mo-bar-name">agentic-flow</span>
-            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:56.4%"></span></span>
-            <span class="mo-bar-val">372K</span>
-          </li>
-          <li class="mo-bar">
-            <span class="mo-bar-name">@ruvector/rvf</span>
-            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:51.5%"></span></span>
-            <span class="mo-bar-val">340K</span>
-          </li>
-          <li class="mo-bar">
-            <span class="mo-bar-name">claude-flow</span>
-            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:13.8%"></span></span>
-            <span class="mo-bar-val">91K</span>
-          </li>
-          <li class="mo-bar">
-            <span class="mo-bar-name">ruv-swarm</span>
-            <span class="mo-bar-track"><span class="mo-bar-fill" style="--w:1.8%"></span></span>
-            <span class="mo-bar-val">12K</span>
-          </li>
-        </ul>
-        <p class="mo-source mono">the five largest of nine packages · npm downloads · snapshot 2026-07-17 (not live)</p>
-      </div>
-
-      <p class="capstone-close">This is why the ecosystem is compounding — and why leaning in pays off
-      fast. <b>Small ask, world-class return.</b> The console shows you all of it, live.</p>
+      <p class="capstone-close">Ten capabilities, one install, and most of them already running.
+      <b>Small ask, world-class return.</b> The console shows you which of them are actually on, live.</p>
     </div>
   </section>
 
@@ -599,8 +768,8 @@
 
   <!-- =================================================== GUIDE, NOT MIRROR -->
   <section class="closer" aria-label="Where to see live state">
-    <p class="closer-line">This page is the guide. The console is the mirror — what's installed,
-    what your AI learned, what the gates caught: <b>live, on page one</b>.</p>
+    <p class="closer-line">This page is the guide — it tells you what exists and how to check it.
+    The console is the mirror: which of the ten are on <b>right now, on this machine</b>.</p>
     <a class="btn-console" href="./">Open the console <span aria-hidden="true">→</span></a>
   </section>
 
@@ -608,8 +777,9 @@
 
 <footer class="foot">
   <div class="wrap foot-inner">
-    <p class="foot-line">RuvNet Brain · How to use it — a static guide, served locally from
-    <code>127.0.0.1</code>. Nothing here reads your machine; the console does that.</p>
+    <p class="foot-line">RuvNet Brain · the other 90% — a static guide, served locally from
+    <code>127.0.0.1</code>. Nothing here reads your machine; that's why every item hands you the
+    command to check it yourself. The console does the reading.</p>
   </div>
 </footer>
 

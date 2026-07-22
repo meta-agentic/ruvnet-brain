@@ -30,6 +30,7 @@ import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
 import { planFor } from './remedy-registry.mjs';
+import { auditAll as capabilityAuditAll } from './capability-registry.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -375,6 +376,7 @@ const CONSOLE_CACHE_PATH = path.join(HOME, '.cache/ruvnet-brain/console-cache.js
 const STATE_CACHE  = path.join(CONFIG_DIR, 'state-cache.json');
 const STACK_CACHE  = path.join(CONFIG_DIR, 'stack-audit-cache.json');
 const MEMORY_CACHE = path.join(CONFIG_DIR, 'memory-cache.json');
+const CAPABILITY_CACHE = path.join(CONFIG_DIR, 'capability-cache.json');
 const SELF = fileURLToPath(import.meta.url);
 let LAST_REFRESH_KICK = 0;
 function writeCache(file, at, data) {
@@ -1119,6 +1121,34 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         return serveCached(res, STATE_CACHE,
           () => { const st = gatherState(cwd, { fleet: false }); const { token, ...safe } = st; return { at: st.generatedAt, data: safe }; },
           (d) => ({ ...d, token: TOKEN }));
+      }
+      // ── /api/capabilities — "what do I own, and is it on?" ──────────────────────────────────────
+      //
+      // THE MISSING WIRE. capability-registry.mjs and capability-audit.mjs were both written, both
+      // tested, and had ZERO call sites — a parallel reviewer found it with one grep. The client
+      // referenced them only in COMMENTS. So the console could compute the single thing the owner
+      // has asked for all night ("a ton of people don't know what is or isn't turned on because
+      // it's very much a black box") and served it to nobody.
+      //
+      // That is this project's signature failure in its purest form: built, tested, unwired. It is
+      // the same shape as the recommendation with no executor, and the advocacy engine that
+      // rendered nowhere. Detection without delivery is a nicer way of doing nothing.
+      //
+      // Cached like the other heavy read-models — auditAll() shells out to real commands to derive
+      // each state, which is far too slow for a first paint but is exactly why the answers are
+      // trustworthy: every row is DERIVED on this machine, never asserted.
+      if (req.method === 'GET' && url === '/api/capabilities') {
+        return serveCached(res, CAPABILITY_CACHE, () => {
+          let rows = [];
+          try { rows = capabilityAuditAll(); } catch (e) {
+            // A failed audit must NOT render as "everything is off" — that is the precise lie this
+            // surface exists to kill. An error yields an explicit unknown, and says why.
+            rows = [{ key: 'audit', label: 'Capability audit', state: 'unknown', scope: 'machine',
+              whatItBuysYou: 'a clear picture of what you own and what is switched on',
+              evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
+          }
+          return { at: new Date().toISOString(), data: { rows } };
+        });
       }
       if (req.method === 'GET' && url === '/api/memory') {
         // THE THESIS, FINALLY CONNECTED (ADR-027, 2026-07-22).

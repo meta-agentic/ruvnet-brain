@@ -1589,3 +1589,81 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .tips-cta:hover, .tips-cta:hover .tc-arrow { transform: none; }
 }
+
+/* ============================== APPENDED · WHAT'S ON, WHAT'S OFF (2026-07-22) ==============================
+   Owner: "a ton of people don't know what is or isn't turned on because it's very much a black box."
+
+   THE ONE RULE THIS BLOCK EXISTS TO ENFORCE: "not checked" must never be mistakable for "off".
+   Colour alone cannot carry that — amber and grey collapse into each other in greyscale, in bright
+   sun, and for a red/green-deficient reader, and the moment they collapse the console is lying about
+   what it knows. So the third state is separated in a second, non-colour channel: its rail is DASHED
+   where the other two are solid, and its chip is the page's existing dashed `.tone-nt`. Squint, print
+   it, or drop the saturation to zero and the three are still three. */
+
+.cap-list {
+  margin-top: 14px; border: 1px solid var(--hair); border-radius: 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+}
+/* Same three-column grammar as .trust-row (name · plain words · status) — deliberately its own
+   class, because the trust card is free to change shape without silently reshaping this one.
+   That exact borrowing is what once hid the tips door on phones. */
+.cap-row {
+  display: grid; grid-template-columns: minmax(150px, 0.9fr) minmax(0, 2.1fr) auto;
+  gap: 6px 16px; padding: 14px 16px; align-items: start;
+  border-left: 3px solid transparent;
+}
+.cap-row + .cap-row { border-top: 1px solid var(--hair); }
+.cap-row.is-on      { border-left-color: var(--green); }
+.cap-row.is-off     { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 4%, transparent); }
+.cap-row.is-unknown { border-left-color: var(--hair-strong); border-left-style: dashed; }
+
+.cap-name { font-weight: 650; color: var(--ink); font-size: var(--fs--1); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cap-scope {
+  font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--hair); border-radius: 100px; padding: 1px 7px;
+}
+.cap-val { min-width: 0; font-size: var(--fs--1); color: var(--ink-2); line-height: 1.55; }
+.cap-buys { max-width: 62ch; margin: 0; font-size: inherit; }
+
+/* Evidence sits UNDER the claim and looks subordinate to it — it is the receipt, not the headline. */
+.cap-ev { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 4px; }
+.cap-ev li {
+  position: relative; padding-left: 15px;
+  font-size: 12.5px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere;
+}
+.cap-ev li::before { content: "·"; position: absolute; left: 4px; color: var(--faint); }
+.cap-ev-none { margin: 7px 0 0; font-size: 12.5px; }
+.cap-status { justify-self: end; }
+
+/* The key, stated before the rows so nobody has to reverse-engineer the colours from the data. */
+/* max-width:none is load-bearing, not tidying: the global `p { max-width: 70ch }` measures a prose
+   column, and this <p> is a horizontal key, so 70ch broke every entry onto its own line with half
+   the card empty beside it. Same override .lead-stat and .trust-val p already carry. */
+.cap-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  margin: 12px 0 0; max-width: none;
+  font-size: 11.5px; letter-spacing: 0.06em; color: var(--ink-2);
+}
+.cap-legend .cl-cap { color: var(--faint); letter-spacing: 0.2em; text-transform: uppercase; }
+.cap-legend .cl { display: inline-flex; align-items: center; gap: 7px; }
+.cap-legend .cl-key { width: 14px; height: 0; flex: none; border-top: 3px solid var(--hair-strong); border-radius: 3px; }
+.cap-legend .k-on { border-top-color: var(--green); }
+.cap-legend .k-off { border-top-color: var(--amber); }
+.cap-legend .k-unknown { border-top-style: dashed; }
+
+@media (max-width: 40em) {
+  /* Status rides up beside the name; the plain-words column takes the full width beneath both —
+     same reflow the trust rows use, so the two cards still read as one family on a phone. */
+  .cap-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .cap-val { grid-column: 1 / -1; order: 3; }
+}
+
+/* Forced-colours mode strips every custom colour, which would flatten all three states into one
+   identical row — the exact confusion this card exists to end. Re-separate them with border STYLE,
+   the one channel the high-contrast renderer preserves. */
+@media (forced-colors: active) {
+  .cap-row { border-left: 3px solid CanvasText; }
+  .cap-row.is-unknown { border-left-style: dotted; }
+  .cap-row.is-off { border-left-style: double; border-left-width: 4px; }
+}

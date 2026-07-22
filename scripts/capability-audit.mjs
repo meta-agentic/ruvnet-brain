@@ -31,7 +31,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { readLearnerState, verdict as learnerVerdict, STALE_DAYS } from './learning-enable.mjs';
+
+// NOTE: execFileSync was imported here and never used. It is deliberately not re-added. Shelling out
+// to `ruflo` for state is what made a read-only status check start a background daemon and write four
+// files into the user's HOME (see capability-registry.rufloBin) — an unused import of the tool that
+// causes that is an invitation, and this file is READ-ONLY by intent.
 
 const HOME = os.homedir();
 const DAY = 86_400_000;
@@ -167,61 +172,140 @@ export function detectFundedButIdle(repo = process.cwd()) {
   };
 }
 
-/** DETECTOR: rUv's learning hooks present but not enabled. Reports registration state, nothing more. */
-export function detectDisabledLearningHooks() {
-  const ruflo = (() => {
-    const p = path.join(HOME, '.npm-global/bin/ruflo');
-    if (fs.existsSync(p)) return p;
-    try {
-      const w = execFileSync('sh', ['-lc', 'command -v ruflo'], { encoding: 'utf8', timeout: 8000 }).trim();
-      return w && fs.existsSync(w) ? w : null;
-    } catch { return null; }
-  })();
-  if (!ruflo) return null;
+/**
+ * DETECTOR: is the learner actually learning?
+ *
+ * ⚠️ THIS DETECTOR PREVIOUSLY SHIPPED A FALSE ALARM, and the correction is the most instructive
+ * thing in this file.
+ *
+ * The first version parsed `ruflo hooks list` and reported "26 learning hooks installed and every
+ * one is switched off". That was WRONG, and it was reported to the owner as a headline finding —
+ * including as the answer to his direct question about whether learning was on.
+ *
+ * What actually happens: `ruflo hooks list --format json` returns `{name, type, status:"active"}`
+ * and contains NO `enabled` key. The CLI's table renderer draws a column keyed `enabled`, reads
+ * `undefined`, and prints "No" 26 times. `ruflo hooks enable` does not exist. The list is a MENU of
+ * available hooks, not a dashboard of enabled ones.
+ *
+ * Meanwhile the real signal said the opposite the whole time: ~/.claude-flow/neural/stats.json held
+ * 457 trajectories and 457 patterns, last adapted 106 minutes earlier — DURING the session in which
+ * we told the owner learning was off.
+ *
+ * This is exactly L01 (verify through a channel CAPABLE of observing the truth) committed inside the
+ * detector written to catch L01. A human-readable CLI table is a PRESENTATION, and presentations
+ * drift from their payloads. Read the state file, or read `--format json` — never scrape a table.
+ *
+ * ADR-028 sets the false-alarm rate at ZERO and calls it non-negotiable: one false alarm costs more
+ * trust than ten true findings earn. So this detector now reports only what a state file proves, and
+ * stays SILENT when it cannot tell.
+ */
+export function detectLearnerIdle() {
+  // DELEGATED, for the same reason capability-registry delegates: there must be exactly ONE reading
+  // of stats.json on this machine. The hand-rolled version here repeated the registry's schema-drift
+  // bug in its most damaging form — `Number(s.trajectoriesRecorded ?? 0)` yields 0 when rUv renames
+  // the field, and 0-and-0 fell straight into the IMPORTANT branch below. The result would have been
+  // an alarming "Your learner has never recorded anything" fired at every user at once, about a
+  // learner that was working perfectly. ADR-028 puts the acceptable false-alarm rate at ZERO and
+  // calls it non-negotiable; a detector that turns an upstream rename into a machine-wide accusation
+  // is the worst possible way to violate that.
+  //
+  // readLearnerState's `num()` returns null rather than 0 for an unreadable counter, so drift now
+  // arrives as UNKNOWN_SHAPE — and this detector stays SILENT on it, because "I cannot read the
+  // counters" is not a dormant capability and there is nothing for the user to act on.
+  const learner = readLearnerState({ home: HOME });
+  const v = learnerVerdict(learner);
+  const { trajectories, patterns } = learner;
 
-  let out = '';
-  try { out = execFileSync(ruflo, ['hooks', 'list'], { cwd: HOME, encoding: 'utf8', timeout: 20_000 }); }
-  catch { return null; }
+  // NO_LEARNER_STATE / CORRUPT / UNKNOWN_SHAPE: nothing provable, so say nothing. Silence here is
+  // correct — an audit that speaks up when it cannot see is how false alarms are manufactured.
+  if (v.code === 'INITIALISED_EMPTY') {
+    // A learner that has genuinely, measurably recorded nothing is dormant and worth saying so.
+    return {
+      id: 'capability:learner-never-ran',
+      title: 'Your learner has never recorded anything',
+      severity: 'IMPORTANT',
+      evidence: [
+        { observed: 'the learner\'s own state file exists, carries the counters this version understands, and both read 0' },
+      ],
+      why: 'The learning machinery is present and has never been fed, so nothing you do is being turned into reusable experience.',
+      detail: { trajectories, patterns },
+    };
+  }
 
-  const lines = out.split('\n').filter((l) => /^\|\s*\S/.test(l) && !/^\|\s*Name/.test(l));
-  const rows = lines.map((l) => l.split('|').map((c) => c.trim())).filter((c) => c.length > 3);
-  const total = rows.length;
-  const enabled = rows.filter((c) => /yes/i.test(c[3] || '')).length;
-  if (!total || enabled > 0) return null;
+  if (v.code === 'IDLE') {
+    // Recording, but nothing recently — a real, provable dormancy. STALE_DAYS is imported, not
+    // re-typed: this file used its own literal 7 while learning-enable used STALE_DAYS, which is two
+    // definitions of "idle" waiting to drift apart.
+    const idleDays = Math.floor(learner.ageMinutes / 1440);
+    return {
+      id: 'capability:learner-gone-quiet',
+      title: 'Your learner has gone quiet',
+      severity: 'SUGGESTED',
+      evidence: [
+        { observed: `${trajectories} trajectories and ${patterns} patterns recorded, but the last adaptation was ${idleDays} days ago (idle past ${STALE_DAYS})` },
+      ],
+      why: 'It learned before and stopped, so recent work is not becoming reusable experience.',
+      detail: { trajectories, patterns, idleDays },
+    };
+  }
 
-  return {
-    id: 'capability:enable-learning-hooks',
-    title: `${total} learning hooks are installed and every one is switched off`,
-    severity: 'IMPORTANT',
-    evidence: [
-      { observed: `${total} hooks are registered on this machine and ${enabled} are enabled` },
-      { observed: 'these are the hooks that record what worked so it can be reused — with all of them off, nothing is learned from your sessions' },
-    ],
-    why: 'Installed-but-dormant is a defect, not a neutral state: the work of installing was done and none of the benefit is being collected.',
-    detail: { total, enabled },
-  };
+  // Learning is live, or unreadable. Report NOTHING — a healthy machine must produce no findings at
+  // all, and an unreadable one must not be described as unhealthy.
+  return null;
 }
 
-export const DETECTORS = [detectDormantEvolution, detectFundedButIdle, detectDisabledLearningHooks];
+export const DETECTORS = [detectDormantEvolution, detectFundedButIdle, detectLearnerIdle];
 
-/** Run every detector. Never throws — an advisory surface must not break the thing that calls it. */
+/**
+ * Run every detector. Never throws — an advisory surface must not break the thing that calls it.
+ *
+ * BUT IT NO LONGER SWALLOWS THE FAILURE EITHER, and that distinction is the finding.
+ *
+ * The old `catch {}` was correct about one thing — a single broken detector must not silence the
+ * other two — and catastrophically wrong about what to do next. With all three detectors forced to
+ * throw (EACCES / bad JSON / ENOENT), this function returned `[]`, and `[]` is exactly what a
+ * perfectly healthy machine returns. The CLI then printed:
+ *
+ *     "No dormant capability found on this machine. That is a real answer, not a shrug —
+ *      every detector reports only what it observed here."
+ *
+ * Total instrument failure, rendered as a confident all-clear, with copy that explicitly forecloses
+ * the doubt. A newcomer whose file permissions differ from ours gets told their machine is fine by a
+ * system that could not see their machine at all. That is the unknown-as-a-measurement lie in its
+ * purest form — it just arrives as silence instead of as the word "off".
+ *
+ * So failures are now COUNTED and RETURNED. The caller is obliged to say how many of the checks
+ * actually ran before it characterises the result.
+ */
 export function auditCapabilities(repo = process.cwd()) {
   const findings = [];
+  const failures = [];
   for (const d of DETECTORS) {
-    try { const f = d(repo); if (f) findings.push(f); } catch { /* one broken detector must not silence the rest */ }
+    try { const f = d(repo); if (f) findings.push(f); }
+    catch (e) { failures.push({ detector: d.name || 'anonymous detector', reason: String(e?.message || e).split('\n')[0].slice(0, 120) }); }
   }
-  return findings;
+  return { findings, failures, ran: DETECTORS.length - failures.length, total: DETECTORS.length };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]).endsWith('capability-audit.mjs');
 if (invokedDirectly) {
-  const findings = auditCapabilities(argv.includes('--repo') ? argv[argv.indexOf('--repo') + 1] : process.cwd());
-  if (argv.includes('--json')) { console.log(JSON.stringify(findings, null, 2)); process.exit(0); }
+  const audit = auditCapabilities(argv.includes('--repo') ? argv[argv.indexOf('--repo') + 1] : process.cwd());
+  const { findings, failures, ran, total } = audit;
+  if (argv.includes('--json')) { console.log(JSON.stringify(audit, null, 2)); process.exit(0); }
+
+  // Broken instruments are reported BEFORE any verdict, because they change what the verdict means.
+  for (const f of failures) console.log(`\n  ! ${f.detector} could not run: ${f.reason}`);
 
   if (!findings.length) {
-    console.log('\n  No dormant capability found on this machine. That is a real answer, not a shrug —\n'
-      + '  every detector reports only what it observed here.\n');
+    // The all-clear is only offered when every check actually ran. Otherwise the honest line is that
+    // we could not look — never "nothing found", which reads identically and is not the same claim.
+    console.log(failures.length
+      ? `\n  ${ran} of ${total} checks ran, and they found nothing dormant. The ${failures.length} that\n`
+        + '  could not run are listed above — this is NOT an all-clear, because part of the machine\n'
+        + '  was not examined at all.\n'
+      : '\n  No dormant capability found on this machine. That is a real answer, not a shrug —\n'
+        + `  all ${ran} of ${total} checks ran, and every detector reports only what it observed here.\n`);
     process.exit(0);
   }
   const n = findings.length;

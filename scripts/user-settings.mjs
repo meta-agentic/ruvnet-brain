@@ -1,0 +1,540 @@
+// user-settings.mjs — how THIS user wants the brain to behave, stored where an update cannot eat it.
+//
+// THE ONE IDEA. Everybody uses this differently: some people want it to learn across every repo they
+// own, some want it to forget the moment they leave the directory, some want it to act, most want it
+// to shut up unless something is actually wrong. None of those are wrong, so none of them can be
+// hardcoded — but "make it configurable" is where products usually go murky, because a settings model
+// with vague labels and optimistic defaults is worse than no settings at all: the user believes they
+// are in control while the machine does something else.
+//
+// So this file holds three invariants, and each exists because of a specific way this project has
+// already been burned:
+//
+//   1. NOTHING THAT ACTS BEYOND THE CURRENT PROJECT MAY DEFAULT TO ON. Encoded as `escalates` per
+//      entry — a machine-checkable list of the values that write outside the directory you invoked us
+//      in. The default is asserted, by test, never to be one of them. This is the same move as
+//      lesson-store.makeLesson() and console-engine.makeRecommendation(): put the invariant in the
+//      type, not in a reviewer's memory, because a reviewer forgets and a constructor does not.
+//
+//   2. EVERY SETTING STATES ITS DOWNSIDE. `whyItMatters` explains the tradeoff and `downside` names
+//      the concrete cost of turning it up — required fields, both. A settings page that lists only
+//      benefits is a sales page, and it makes the safe choice feel like the timid one. If we cannot
+//      articulate what turning something on costs the user, we have not understood it well enough to
+//      offer it.
+//
+//   3. A SETTING DESTROYED BY AN UPDATE IS NOT A SETTING. Hence the storage location below, which is
+//      a checked fact rather than a hopeful one — see STORE_PATH.
+//
+// WHAT THIS FILE DELIBERATELY DOES NOT DO. It does not execute anything. It records intent and hands
+// back a validated object. Whether a given intent is HONOURED is the caller's job to prove, and per
+// house rule 2 a console must not render one of these as a live toggle until it has a real executor
+// and a real undo behind it — otherwise we have built a light switch wired to nothing, which is the
+// most expensive kind of lie because the user stops looking for the real problem.
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const HOME = os.homedir();
+
+/**
+ * WHERE IT LIVES, and why this exact directory — verified against bin/install.mjs, not assumed.
+ *
+ * `--update` extracts a fresh bundle and overwrites the cache directory entry-by-entry with
+ * `fs.rmSync(to, { recursive: true, force: true })` (install.mjs:410); `--uninstall` rmSync's the
+ * whole kb dir (install.mjs:1526). Anything under ~/.cache/ruvnet-brain is therefore transient by
+ * design. Grepping install.mjs for `.config/ruvnet-brain` returns ZERO hits — the installer has no
+ * code path that reads, writes, or deletes here at all.
+ *
+ * That is the entire argument for this path: not "it feels more permanent", but "the only program
+ * that deletes things cannot see it". Same reasoning, same directory, as lesson-store.STORE_PATH —
+ * a preference that does not survive the next release never compounds, and compounding is the point.
+ *
+ * Env override matches the RUVNET_LESSON_STORE idiom so tests never touch the real user's file.
+ */
+export const STORE_PATH = process.env.RUVNET_SETTINGS_FILE
+  || path.join(HOME, '.config', 'ruvnet-brain', 'settings.json');
+
+/** Bumped only when the on-disk shape changes incompatibly. Unknown/newer versions degrade to defaults. */
+export const SETTINGS_VERSION = 1;
+
+/**
+ * THE SCHEMA.
+ *
+ * `escalates` is the load-bearing field and the reason this is a data structure rather than four
+ * `if` statements: it lists the values of this setting that cause work OUTSIDE the project you are
+ * standing in. A value in `escalates` may be chosen, but may never be the default, and a test asserts
+ * exactly that. It also gives the console something honest to render — "this one reaches past this
+ * repo" is the sentence a user actually needs before clicking.
+ *
+ * `type` reuses the vocabulary already in onboarding-console.mjs CONFIG_SCHEMA ('enum' | 'bool') so a
+ * single renderer can handle both schemas without a translation layer.
+ *
+ * `options` for enums are ordered LEAST active → MOST active. That ordering is not cosmetic: it is
+ * what makes "conservative" mean something checkable rather than a claim in a comment.
+ */
+export const SETTINGS_SCHEMA = Object.freeze([
+  Object.freeze({
+    key: 'learningScope',
+    label: 'What it learns from',
+    type: 'enum',
+    options: Object.freeze(['off', 'project', 'user']),
+    default: 'project',
+    escalates: Object.freeze(['user']),
+    help: 'Whether what it learns stays in this project, compounds across every project you own, or is not kept at all.',
+    // DEFAULT = 'project', and this is the one default worth defending at length, because 'off' is
+    // technically more conservative and I did not choose it.
+    //
+    // The rule is "nothing that changes the MACHINE defaults to on". 'project' writes only into the
+    // directory you deliberately invoked us in — the same place your source, your .git and your
+    // node_modules already live. It changes nothing outside your own repo, so it does not engage the
+    // rule. 'user' does: a lesson learned in one client's repo would surface while you work in
+    // another's, which is a data-flow decision only the user can make, so it is opt-in.
+    //
+    // Defaulting the whole thing to 'off' would be conservatism theatre: memory would be silently
+    // absent, the console would truthfully report an empty store, and the user would conclude the
+    // product does not work rather than that they never switched it on.
+    whyItMatters: 'Project scope keeps everything it learns inside this repo, which is the narrowest setting where the thing still works at all. User scope is where it gets genuinely useful — a mistake corrected once is never repeated anywhere — but it means notes taken while working on one codebase can surface while you are working on a different one.',
+    downside: 'On "user", context crosses between unrelated projects: a client repo can teach the model something that shows up while you work for a different client. On "off", nothing is remembered between sessions and you will re-explain the same preferences indefinitely.',
+  }),
+
+  Object.freeze({
+    key: 'advocacy',
+    label: 'How much it volunteers',
+    type: 'enum',
+    options: Object.freeze(['off', 'important-only', 'all']),
+    default: 'important-only',
+    escalates: Object.freeze([]),   // speech only — no value of this setting writes anything anywhere
+    help: 'How often it interrupts with findings and suggestions you did not ask for.',
+    // DEFAULT = 'important-only', deliberately not 'off', and the reasoning is narrow enough to state
+    // exactly: this setting mutates NOTHING (hence `escalates: []`), so the conservative-defaults rule
+    // — which is about machine changes — does not bind here. The real risk is attention, not damage.
+    //
+    // And 'off' has its own failure mode, one this project has a standing order about: silence is not
+    // health. capability-audit surfaces findings like "your learner has gone quiet — 457 patterns
+    // recorded, nothing in 12 days" — a machine that is quietly not working. Suppressing that by
+    // default would make a broken install look identical to a healthy one, which is dishonesty by
+    // omission dressed up as politeness. The middle setting is the honest one: speak when something
+    // is actually wrong. (The example used to cite "26 learning hooks registered, 0 enabled" — that
+    // finding was itself the false alarm this whole audit was rebuilt to eliminate, so quoting it as
+    // a model of good advocacy was quietly teaching the wrong lesson.)
+    whyItMatters: 'Nothing here is pushed on you — every level is suggestions only, and none of them act. The middle setting exists so a genuinely broken install (a job that stopped running, hooks registered but switched off) can still reach you, because a quiet machine and a working machine look identical from the outside.',
+    downside: 'On "all" you will see routine observations you did not ask for, and the important ones get harder to spot in the noise. On "off" a real failure stays invisible until you go looking for it.',
+  }),
+
+  Object.freeze({
+    key: 'autoApply',
+    label: 'May it act on its own',
+    type: 'bool',
+    default: false,
+    escalates: Object.freeze([true]),
+    help: 'Whether it may apply a fix itself, or must always stop and ask you first.',
+    // DEFAULT = false, and this is the least negotiable default in the file. The executors this would
+    // unlock are real machine changes — reindexing stores, flushing and training on learning data,
+    // rewriting settings files. Every one of them is reversible today, which is exactly why it is
+    // tempting to default it on, and exactly the wrong reason: "we can undo it" is not consent.
+    //
+    // The user must be able to describe their machine without reading a changelog. Anything that
+    // edits it while they are not looking breaks that, no matter how good the edit was.
+    whyItMatters: 'Off, it can only ever propose — you read the change and click it yourself, so the machine is never modified without you present. On, routine fixes stop needing your attention, which matters if you are running long sessions unattended.',
+    downside: 'On, your machine changes while you are not watching. Each change is backed up and reversible, but you will find your setup different from how you left it and have to read a log to learn why.',
+  }),
+
+  Object.freeze({
+    key: 'newProjectDefaults',
+    label: 'Apply these choices to new projects',
+    type: 'bool',
+    default: false,
+    escalates: Object.freeze([true]),
+    help: 'Whether these same answers are reused automatically the next time you open a project that has never been set up.',
+    // DEFAULT = false. Turning this on means writing configuration into directories the user has not
+    // opened yet and never opted in for — a mutation whose blast radius is "every repo I touch from
+    // now on". That is precisely the shape of change that must be chosen out loud.
+    //
+    // Note the honest asymmetry: enabling this is a convenience for someone who has already decided
+    // how they like to work. It is a trap for someone still deciding, because a preference set once,
+    // early, silently becomes the policy for everything they do afterwards.
+    whyItMatters: 'Off, every new project starts neutral and asks you once. On, you answer these questions a single time and every future project inherits them, which is the difference between setting this up once and setting it up forty times.',
+    downside: 'On, a choice you made early — possibly before you understood it — is silently applied to projects you have not created yet, including ones where it is the wrong choice. You will not be asked again, so a bad default propagates quietly.',
+  }),
+]);
+
+const BY_KEY = new Map(SETTINGS_SCHEMA.map((s) => [s.key, s]));
+
+/** The shipped answer for every key. Callers get a fresh object — the schema itself stays frozen. */
+export function defaults() {
+  return Object.fromEntries(SETTINGS_SCHEMA.map((s) => [s.key, s.default]));
+}
+
+/** Does this value reach outside the project you are standing in? The question a console must render. */
+export function escalatesBeyondProject(key, value) {
+  const entry = BY_KEY.get(key);
+  return entry ? entry.escalates.includes(value) : false;
+}
+
+/**
+ * VALIDATE — total, never throws, and always returns a COMPLETE settings object.
+ *
+ * Total on purpose. This reads a file the user is explicitly invited to hand-edit (that is the point
+ * of storing it as readable JSON rather than a database), so malformed input is an expected state,
+ * not an exceptional one. The lesson-store precedent applies: re-validate on read, drop what cannot
+ * be honoured, keep the rest usable — a single bad key must not cost the user their other answers.
+ *
+ * What it will NOT do is guess. An unrecognised value falls back to that key's default and says so in
+ * `errors`, rather than being coerced into whatever is nearest. Silently reinterpreting a user's
+ * stated preference is worse than ignoring it, because they have no way to notice.
+ */
+export function validate(input) {
+  const values = defaults();
+  const errors = [];
+  const warnings = [];
+
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+    if (input !== undefined) errors.push({ key: null, reason: 'settings must be a JSON object; using defaults for everything' });
+    return { ok: false, values, errors, warnings };
+  }
+
+  for (const [key, raw] of Object.entries(input)) {
+    const entry = BY_KEY.get(key);
+    if (!entry) {
+      // Dropped, not preserved. Carrying unknown keys forward would let a typo'd setting live in the
+      // file forever looking like it does something.
+      warnings.push({ key, reason: 'not a known setting — ignored' });
+      continue;
+    }
+    if (entry.type === 'bool') {
+      if (typeof raw !== 'boolean') { errors.push({ key, reason: `expected true or false, got ${JSON.stringify(raw)} — using the default (${entry.default})` }); continue; }
+      values[key] = raw;
+    } else if (entry.type === 'enum') {
+      if (!entry.options.includes(raw)) { errors.push({ key, reason: `expected one of ${entry.options.join(' | ')}, got ${JSON.stringify(raw)} — using the default (${entry.default})` }); continue; }
+      values[key] = raw;
+    }
+  }
+  return { ok: errors.length === 0, values, errors, warnings };
+}
+
+/**
+ * LOAD — returns an envelope, not a bare object, because the caller has to be able to tell the
+ * difference between "the user chose the defaults" and "we could not read their choices".
+ *
+ * House rule 1 in a function signature: a console that renders these must be able to say which of
+ * those two it is looking at. Collapsing them into one plain object would force it to present a
+ * corrupt file as a deliberate configuration, which is exactly the class of fabricated status this
+ * repo has a standing order against.
+ */
+export function loadSettings(file = STORE_PATH) {
+  // `unreadable` is NOT a synonym for `!healthy`, and the difference is the whole point of the field.
+  //
+  //   unreadable = we could not recover the user's stored choices AT ALL (corrupt bytes, or a schema
+  //                from the future we refuse to guess at). What is in `values` is defaults we made up.
+  //   !healthy   = we read their choices fine and one of them was invalid. `values` is genuinely
+  //                theirs apart from the one key we fell back on.
+  //
+  // saveSettings keys off `unreadable` alone. Keying off `healthy` would be the obvious-looking fix
+  // and a worse bug: a single bad enum value would lock the user out of every future save, including
+  // the save that fixes it — a guard that causes the failure it was added to prevent.
+  const envelope = { path: file, exists: false, healthy: true, unreadable: false, values: defaults(), errors: [], warnings: [] };
+  let raw;
+  try { raw = fs.readFileSync(file, 'utf8'); }
+  catch { return envelope; }   // no file yet is the NORMAL state, not a fault — empty-first, house rule 3
+
+  envelope.exists = true;
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch (e) {
+    // Degrade, do not throw. A truncated write (full disk, killed process) must not make every
+    // surface that reads settings explode; it must make them fall back and say why.
+    envelope.healthy = false;
+    envelope.unreadable = true;
+    envelope.errors.push({ key: null, reason: `settings file is not valid JSON (${e.message}) — using defaults` });
+    return envelope;
+  }
+
+  if (parsed && typeof parsed === 'object' && typeof parsed.version === 'number' && parsed.version > SETTINGS_VERSION) {
+    // Written by a newer version than this code understands. Refuse to reinterpret it — an older
+    // reader guessing at a newer schema is how settings get silently downgraded on the next save.
+    envelope.healthy = false;
+    envelope.unreadable = true;
+    envelope.errors.push({ key: null, reason: `settings were written by a newer version (v${parsed.version} > v${SETTINGS_VERSION}) — using defaults rather than misreading them` });
+    return envelope;
+  }
+
+  const result = validate(parsed && typeof parsed === 'object' ? parsed.settings : undefined);
+  envelope.values = result.values;
+  envelope.errors = result.errors;
+  envelope.warnings = result.warnings;
+  envelope.healthy = result.ok;
+  return envelope;
+}
+
+/**
+ * MUTUAL EXCLUSION around read-modify-write, because the comment that used to sit on saveSettings
+ * claimed read-modify-write had solved the 2026-07-12 concurrent-clobber and it had not — it only
+ * narrowed the window. MEASURED: four writers each setting a different key, released simultaneously,
+ * lost at least one setting in 19 of 20 trials. Every writer returned `ok: true`. No error, no
+ * warning, no evidence — the user clicks four toggles and two of them quietly do not stick, which is
+ * the same silent-loss shape as the checkpoint clobber, on the surface whose entire job is to record
+ * what the user wants.
+ *
+ * `open(…, 'wx')` is the primitive: exclusive creation is atomic on POSIX and on Windows, and it
+ * needs no dependency. The alternative — a lockfile package — is not available to a script that must
+ * run from a bare install.
+ *
+ * STALE LOCKS ARE BROKEN, DELIBERATELY. A process killed mid-save leaves the lock file behind, and a
+ * guard that then wedges every future save forever is worse than the race it prevents. This repo has
+ * already retired two defensive wrappers (`-readonly`, `timeout`) for causing exactly the failures
+ * they were meant to guard against; a lock with no stale path would be the third. So the lock records
+ * its pid and mtime, and any lock older than STALE_LOCK_MS is taken over.
+ */
+const LOCK_WAIT_MS = 5000;    // total time a writer will queue before giving up and saying so
+const STALE_LOCK_MS = 30_000; // older than this and the holder is presumed dead, not slow
+
+/** Sleep without async. Atomics.wait on a throwaway buffer is the only dependency-free sync sleep. */
+function sleepSync(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
+  catch { /* SharedArrayBuffer unavailable — spin the remaining wait out rather than fail the save */ }
+}
+
+function withLock(file, fn) {
+  const lock = `${file}.lock`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  let fd = null;
+
+  for (;;) {
+    try { fd = fs.openSync(lock, 'wx'); break; }
+    catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      let age = 0;
+      try { age = Date.now() - fs.statSync(lock).mtimeMs; }
+      catch { continue; }   // vanished between open and stat — the holder just released it; retry
+      if (age > STALE_LOCK_MS) {
+        // Presumed-dead holder. Unlink and retry rather than write through the lock, so two
+        // simultaneous stale-breakers still serialise on the next exclusive create.
+        try { fs.unlinkSync(lock); } catch { /* someone else won the race to clear it — fine */ }
+        continue;
+      }
+      if (Date.now() > deadline) {
+        return { ok: false, timedOut: true, heldMs: age };
+      }
+      sleepSync(25);
+    }
+  }
+
+  try {
+    try { fs.writeSync(fd, `${process.pid} ${new Date().toISOString()}\n`); } catch { /* advisory only */ }
+    return { ok: true, value: fn() };
+  } finally {
+    try { fs.closeSync(fd); } catch { /* already closed */ }
+    try { fs.unlinkSync(lock); } catch { /* already cleared by a stale-breaker */ }
+  }
+}
+
+/**
+ * Write a file so that no reader — and no crash — can ever observe a half-written one.
+ *
+ * temp-in-the-same-directory + rename() is atomic on POSIX, so the settings file is either entirely
+ * the old content or entirely the new one. The previous code wrote in place with writeFileSync,
+ * which truncates first: a process killed between truncate and write leaves an empty settings file
+ * and the user's answers are gone with no backup step having failed.
+ *
+ * The temp name carries the pid so two concurrent writers cannot collide on it even in the moment
+ * before one of them takes the lock.
+ */
+function writeAtomic(file, body) {
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  let fd;
+  try {
+    fd = fs.openSync(tmp, 'wx');
+    fs.writeSync(fd, body);
+    // fsync before rename: rename is atomic with respect to readers, but without the flush a power
+    // loss can land the rename while the content is still in the page cache — an atomically-renamed
+    // empty file, which is precisely the outcome the rename was chosen to prevent.
+    try { fs.fsyncSync(fd); } catch { /* filesystem without fsync (some network mounts) — proceed */ }
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(tmp, file);
+  } finally {
+    if (fd !== null) { try { fs.closeSync(fd); } catch { /* nothing to close */ } }
+    if (fs.existsSync(tmp)) { try { fs.unlinkSync(tmp); } catch { /* leave the temp rather than throw over it */ } }
+  }
+}
+
+/** Backups this module has taken, newest last. The undo history, derived from disk rather than claimed. */
+export function listBackups(file = STORE_PATH) {
+  const dir = path.dirname(file);
+  const prefix = `${path.basename(file)}.bak-`;
+  try {
+    return fs.readdirSync(dir).filter((n) => n.startsWith(prefix)).sort().map((n) => path.join(dir, n));
+  } catch { return []; }
+}
+
+/**
+ * SAVE — backup first, merge, then write. Every clause here is a real failure, not defensiveness.
+ *
+ * BACKUP BEFORE WRITE, and refuse the write outright if the backup fails. A save that cannot be
+ * undone is not a save, it is an overwrite, and the user has no way to know which one they got.
+ *
+ * READ-MODIFY-WRITE rather than replace-wholesale, because two Claude Code sessions genuinely do run
+ * against one machine at once. That exact scenario destroyed a checkpoint on 2026-07-12: a second
+ * session's plain overwrite wiped the first session's state with no error and no evidence beyond a
+ * changed row id. A partial patch here therefore updates the keys it names and leaves every other
+ * answer standing.
+ *
+ * The `patch` is validated as a WHOLE-object merge against what is already on disk, so an invalid
+ * incoming value falls back to the stored answer's replacement rather than to the shipped default —
+ * a bad click must not quietly reset the three settings the user got right.
+ */
+export function saveSettings(patch, { file = STORE_PATH } = {}) {
+  // The directory must exist before the lock can be created in it — the lock lives beside the file.
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); }
+  catch (e) { return { ok: false, backup: null, values: defaults(), log: `refusing to write — could not create ${path.dirname(file)}: ${e.message}` }; }
+
+  // EVERYTHING from here is under the lock, and `before` is re-read INSIDE it. Reading before
+  // acquiring would reintroduce the exact race the lock exists to close: two writers could both read
+  // the same pre-state, both merge onto it, and the second rename would erase the first's key.
+  const held = withLock(file, () => saveLocked(patch, file));
+  if (held.timedOut) {
+    return {
+      ok: false,
+      backup: null,
+      values: loadSettings(file).values,
+      log: `another process is saving these settings and did not finish within ${LOCK_WAIT_MS}ms (lock held ${Math.round(held.heldMs)}ms) — nothing was written; try again`,
+    };
+  }
+  return held.value;
+}
+
+function saveLocked(patch, file) {
+  const before = loadSettings(file);
+
+  // REFUSE rather than silently downgrade. loadSettings already decided it could not recover these
+  // choices and said so in its own comment — "an older reader guessing at a newer schema is how
+  // settings get silently downgraded on the next save" — and then the next save did precisely that.
+  // MEASURED: a v2 file holding six deliberate choices, saved once by this v1 code after toggling one
+  // unrelated key, came back as v1 with four keys reset to defaults and two deleted outright, and the
+  // receipt said "saved; previous settings kept at …bak-…". A clean-looking success that destroyed
+  // three explicit decisions is worse than any error message.
+  //
+  // Note what is NOT done here: unknown keys are still dropped by validate(), by the deliberate
+  // decision documented there. Preserving them would be a second, weaker answer to this problem —
+  // refusing the write protects a newer file completely, whereas preserving keys would still rewrite
+  // its version stamp and re-interpret the keys we think we recognise.
+  if (before.unreadable) {
+    return {
+      ok: false,
+      backup: null,
+      values: before.values,
+      log: `refusing to write over settings this version cannot read (${before.errors[0]?.reason ?? 'unreadable file'}) — your file is untouched; nothing was saved`,
+    };
+  }
+
+  const merged = { ...before.values, ...(patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {}) };
+  const result = validate(merged);
+
+  // validate() falls back to the SHIPPED default, which is right for a cold read and wrong here: on a
+  // save, the honest fallback is what the user already had. Caught by its own test — a bad click on
+  // one control was silently resetting that control to factory rather than leaving it alone. Every
+  // value in `before.values` is already validated, so this cannot reintroduce a bad value.
+  for (const e of result.errors) {
+    if (e.key && Object.hasOwn(before.values, e.key)) result.values[e.key] = before.values[e.key];
+  }
+
+  let backup = null;
+  if (fs.existsSync(file)) {
+    // The timestamp is only millisecond-resolution, and two saves DO land in the same millisecond —
+    // measured, not theorised: six rapid saves produced five backups, because one copyFileSync
+    // overwrote another at an identical path. Silently, with no error. An undo history that drops a
+    // step without saying so is worse than none, since the user is relying on it. So the name is made
+    // unique before writing: one save, one backup, always.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    backup = `${file}.bak-${stamp}`;
+    // Zero-padded so listBackups()'s lexicographic sort still means "newest last" — unpadded, "-10"
+    // would sort BEFORE "-2" and revert-without-a-named-backup would restore the wrong one.
+    for (let n = 2; fs.existsSync(backup); n++) backup = `${file}.bak-${stamp}-${String(n).padStart(2, '0')}`;
+    // READ-THEN-WRITE, NOT copyFileSync — and this is not stylistic. Under sustained concurrent
+    // saving, copyFileSync WEDGED the process permanently: reproduced in 3 of 6 trials at 40 saves
+    // per writer with two writers, observed at 100% CPU for 4m38s with zero file progress, never
+    // returning and never throwing. macOS `sample` put 1473 of 1476 stack samples inside
+    // node::fs::CopyFile. A hung request handler that never recovers is not survivable on a surface
+    // people are told to click. `wx` additionally refuses to overwrite an existing backup, so the
+    // uniqueness loop above cannot be defeated by a racing writer between existsSync and the write.
+    try { fs.writeFileSync(backup, fs.readFileSync(file), { flag: 'wx' }); }
+    catch (e) { return { ok: false, backup: null, values: before.values, log: `refusing to write — backup failed: ${e.message}` }; }
+  }
+
+  const body = { version: SETTINGS_VERSION, updated: new Date().toISOString(), settings: result.values };
+  try {
+    writeAtomic(file, JSON.stringify(body, null, 2) + '\n');
+  } catch (e) {
+    return { ok: false, backup, values: before.values, log: `write failed: ${e.message}${backup ? `; your previous settings are at ${backup}` : ''}` };
+  }
+
+  // `existedBefore: false` is the undo instruction for the first-ever save: there is no backup to
+  // restore because there was no file, so reverting means REMOVING it. Without this flag, revert
+  // would have to guess, and a revert that guesses is not an undo.
+  return {
+    ok: true,
+    file,
+    backup,
+    existedBefore: before.exists,
+    values: result.values,
+    errors: result.errors,
+    warnings: result.warnings,
+    log: backup ? `saved; previous settings kept at ${backup.replace(HOME, '~')}` : 'saved (first time — reverting will remove the file)',
+  };
+}
+
+/**
+ * REVERT — the other half of the promise made by saveSettings.
+ *
+ * Restores a specific backup, or the most recent one when none is named. Passing the save receipt's
+ * `{ backup: null, existedBefore: false }` removes the file, returning the machine to genuinely
+ * having no settings rather than to a synthesised "defaults" file — those are different states and
+ * loadSettings() reports them differently, so revert must not blur them.
+ */
+export function revertSettings({ file = STORE_PATH, backup, existedBefore = true } = {}) {
+  const target = backup ?? listBackups(file).slice(-1)[0] ?? null;
+
+  if (!target) {
+    if (existedBefore === false || !fs.existsSync(file)) {
+      if (!fs.existsSync(file)) return { ok: true, log: 'nothing to revert — there are no settings on disk' };
+      try { fs.rmSync(file); return { ok: true, log: 'removed the settings file (there was none before this save)' }; }
+      catch (e) { return { ok: false, log: `could not remove ${file}: ${e.message}` }; }
+    }
+    return { ok: false, log: 'no backup available to restore' };
+  }
+  if (!fs.existsSync(target)) return { ok: false, log: `that backup is gone (${target})` };
+
+  // Same read-then-atomic-write as the save path, for the same two reasons: copyFileSync can wedge
+  // under contention (see saveSettings), and an in-place copy that is interrupted leaves the user
+  // with neither their old settings nor their new ones — during an UNDO, which is the one operation
+  // that must never be able to lose data.
+  try {
+    const bytes = fs.readFileSync(target);
+    withLock(file, () => writeAtomic(file, bytes));
+  } catch (e) { return { ok: false, log: `restore failed: ${e.message}` }; }
+  return { ok: true, restored: target, log: `restored your previous settings from ${path.basename(target)}` };
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
+// Read-only by default. Printing what is actually stored, plus the downside of every choice, is the
+// whole point — a settings model you cannot inspect from a terminal is one you have to trust.
+const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]).endsWith('user-settings.mjs');
+if (invokedDirectly) {
+  const state = loadSettings();
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify(state, null, 2));
+  } else {
+    console.log(`\n  Settings file: ${state.path.replace(HOME, '~')}${state.exists ? '' : '  (not created yet — showing defaults)'}\n`);
+    for (const s of SETTINGS_SCHEMA) {
+      const v = state.values[s.key];
+      const reach = escalatesBeyondProject(s.key, v) ? '  ← reaches outside this project' : '';
+      console.log(`  ${s.label}`);
+      console.log(`    now: ${JSON.stringify(v)}${v === s.default ? ' (default)' : ''}${reach}`);
+      console.log(`    ${s.help}`);
+      console.log(`    downside: ${s.downside}\n`);
+    }
+    for (const e of state.errors) console.log(`  ! ${e.key ?? 'file'}: ${e.reason}`);
+    for (const w of state.warnings) console.log(`  · ${w.key}: ${w.reason}`);
+  }
+}

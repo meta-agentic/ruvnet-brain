@@ -219,6 +219,35 @@
     </div>
   </details>
 
+  <!-- ============================================ 0b · WHAT'S ON, WHAT'S OFF
+       THE MURK, NAMED (owner, 2026-07-22): "a ton of people don't know what is or isn't turned on
+       because it's very much a black box." The stack card above answers "what is installed"; this
+       one answers the question people actually have, which is "and is any of it DOING anything".
+       Starts open on purpose — a card that answers the central complaint must not be behind a click.
+       Every row is rendered from /api/capabilities at runtime; there is deliberately not one
+       capability name in this markup, so a capability added server-side appears here with no HTML
+       change (and no chance of this file drifting into a stale hardcoded list). -->
+  <details class="card rail-mirror" id="card-capabilities" open>
+    <summary>
+      <span class="card-ic ic-mirror" aria-hidden="true">
+        <!-- two switches, one thrown each way — the card's whole question in one glyph -->
+        <svg viewBox="0 0 24 24"><rect x="2.6" y="4.2" width="18.8" height="7.2" rx="3.6"/><circle cx="17.8" cy="7.8" r="1.7"/><rect x="2.6" y="12.6" width="18.8" height="7.2" rx="3.6"/><circle cx="6.2" cy="16.2" r="1.7"/></svg>
+      </span>
+      <span class="card-head">
+        <span class="stage st-mirror">Mirror</span>
+        <h2>What's on, what's off</h2>
+        <span class="q">The black box, opened: every capability with its state, what it buys you, and the evidence we actually observed.</span>
+      </span>
+      <span class="chips" id="chips-capabilities"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-capabilities">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w80"></div><div class="sk-bar w65"></div></div>
+      <p class="loading-note">Checking each capability against this machine — local and read-only.
+      Anything we can't establish is reported as “not checked”, never as “off”.</p>
+    </div>
+  </details>
+
   <details class="card rail-mirror" id="card-activity" open>
     <summary>
       <span class="card-ic ic-mirror" aria-hidden="true">
@@ -427,6 +456,12 @@
       <line x1="197" y1="58" x2="203" y2="58" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round"/>
     </svg>
   </template>
+
+  <!-- No illo-capabilities template on purpose: spot illustrations are switched off page-wide
+       (.illo-box { display: none } — "the decorative doodle stole the width the data needs"), so
+       authoring a new one would ship a doodle this repo already decided against. The capability
+       card still wraps its body in withIllo() like every other section, for the shared
+       .sect-main layout; illoBox() simply returns null when no template exists. -->
 
   <!-- How it's wired: one prompt, two routes — the winding cache detour vs the straight binary -->
   <template id="illo-wiring">
