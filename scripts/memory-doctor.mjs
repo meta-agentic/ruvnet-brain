@@ -59,17 +59,55 @@ const NOISE_NS = new Set([
 //
 // Now: every query returns {ok, value} or {ok:false, err}. Unreadable is UNKNOWN, never zero, and
 // UNKNOWN is reported loudly rather than averaged into a reassuring number.
+// `mode=ro` ALONE CANNOT OPEN A RESTING WAL DATABASE, and that is not an edge case — it is the normal
+// state of every store nobody is currently using. A WAL database needs its -shm shared-memory segment
+// to be read, and a read-only connection is not allowed to create one, so SQLite returns CANTOPEN(14).
+//
+// MEASURED (fresh WAL db, same file, three ways):
+//     sidecars removed + mode=ro              -> Error: unable to open database file (14)
+//     sidecars present + mode=ro              -> 1
+//     sidecars removed + mode=ro&immutable=1  -> 1, and `ls` shows no -wal/-shm created
+//
+// This was live on the owner's own machine while it shipped: `.swarm/memory.db-{shm,wal}` had been
+// renamed `.CORRUPT-20260714-144824`, so every single read of the repo's 16MB store returned
+// unreadable, and the console reported memory distillation as permanently UNKNOWN on a healthy store.
+// Three retries two seconds apart cannot fix a structural refusal; they just make it slow.
+//
+// The fallback is `immutable=1`, and it is GATED, because immutable=1 promises SQLite the file will
+// not change underneath it — a promise nobody can keep about a database with a live writer, and
+// breaking it returns torn or stale rows rather than an error. So it is used ONLY when both sidecars
+// are absent, which is the observable signature of "no process has this open in WAL mode", and the
+// absence is re-checked AFTER the read so a writer that arrived mid-flight invalidates the result
+// instead of being reported as fact. A locked store still yields an honest unreadable.
+const walSidecarsPresent = (db) => fs.existsSync(`${db}-wal`) || fs.existsSync(`${db}-shm`);
+
 const q = (db, sql) => {
   // encodeURI, not raw interpolation: "Helix - Personal Health Intelligence Platform" has spaces,
   // and sqlite3 rejects the URI outright (error 14) rather than falling back to a plain path.
-  const uri = `file:${encodeURI(db)}?mode=ro`; // read-only: this process will never be a second writer
+  const base = `file:${encodeURI(db)}?mode=ro`; // read-only: this process will never be a second writer
+  const run = (uri) => execFileSync('sqlite3', [uri, sql], { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
-    return { ok: true, value: execFileSync('sqlite3', [uri, sql], { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] }).trim() };
+    return { ok: true, value: run(base) };
   } catch (e) {
     const err = String(e.stderr || e.message || '');
     // "no such table/column" is SCHEMA VARIANCE (an older store) — a real, reportable fact.
-    // Anything else means we could not read the database, and we must say so, not guess zero.
     if (/no such (table|column)/.test(err)) return { ok: true, value: null, missing: true };
+
+    // The resting-WAL case, and ONLY that case: a genuine open failure with no sidecars in sight.
+    if (/unable to open database file/i.test(err) && fs.existsSync(db) && !walSidecarsPresent(db)) {
+      try {
+        const value = run(`${base}&immutable=1`);
+        // A writer appearing between the check and the read means the immutability promise was false
+        // and the bytes we just read cannot be trusted. Report unreadable rather than publish them.
+        if (walSidecarsPresent(db)) return { ok: false, err: 'a writer opened the store mid-read' };
+        return { ok: true, value, viaImmutable: true };
+      } catch (e2) {
+        const err2 = String(e2.stderr || e2.message || '');
+        if (/no such (table|column)/.test(err2)) return { ok: true, value: null, missing: true };
+        return { ok: false, err: err2.split('\n')[0].slice(0, 60) };
+      }
+    }
+    // Anything else means we could not read the database, and we must say so, not guess zero.
     return { ok: false, err: err.split('\n')[0].slice(0, 60) };
   }
 };

@@ -119,10 +119,32 @@ export function readLearnerState({ home, now = Date.now() } = {}) {
   try { raw = fs.readFileSync(statsPath, 'utf8'); } catch { /* no learner on this machine yet */ }
   if (raw !== null) { try { parsed = JSON.parse(raw); } catch { /* present but corrupt */ } }
 
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  // `Number(v)` was the bug, not the guard around it. Number(null) === 0, Number('') === 0 and
+  // Number(false) === 0 are all finite, so the previous `Number.isFinite(Number(v))` accepted three
+  // non-numbers as a MEASURED ZERO — the precise substitution this function's docstring above forbids.
+  // MEASURED: `{"trajectoriesRecorded": null}` produced the verdict "the learner file exists and
+  // GENUINELY records 0 trajectories", the word "genuinely" attached to a value nobody ever counted.
+  // A counter is a counter only when it arrives as a JSON number.
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  // Timestamps are NOT counters and must not share their reader. `lastAdaptation` is written as epoch
+  // milliseconds today, but an upstream switch to ISO-8601 is the single most ordinary schema change
+  // there is — and under num() an ISO string returns null, which nulls `days`, which makes the IDLE
+  // branch unreachable. MEASURED: a learner idle 400 days reported "ON — the learner is accumulating"
+  // purely because its timestamp was a string. The staleness check evaporated on exactly the drift it
+  // was written to survive, so this reader accepts both shapes and still refuses everything else.
+  const ts = (v) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string' && v.trim()) {
+      const ms = Date.parse(v);
+      if (Number.isFinite(ms)) return ms;
+    }
+    return null;
+  };
+
   const trajectories = parsed ? num(parsed.trajectoriesRecorded) : null;
   const patterns = parsed ? num(parsed.patternsLearned) : null;
-  const lastMs = parsed ? num(parsed.lastAdaptation) : null;
+  const lastMs = parsed ? ts(parsed.lastAdaptation) : null;
 
   return {
     statsPath,
@@ -131,7 +153,8 @@ export function readLearnerState({ home, now = Date.now() } = {}) {
     trajectories,
     patterns,
     lastAdaptationMs: lastMs,
-    ageMinutes: lastMs ? Math.floor((now - lastMs) / 60000) : null,
+    // `lastMs ? …` treated epoch 0 as "no timestamp"; `=== null` is the only honest test for absence.
+    ageMinutes: lastMs === null ? null : Math.floor((now - lastMs) / 60000),
   };
 }
 
@@ -178,17 +201,34 @@ export function readSettingsWiring({ home } = {}) {
   // not an exceptional one. A structural surprise degrades to "not checked" — null, never 0, because
   // a count of 0 is a claim about their configuration and null is the truth about our reading of it.
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return { settingsPath, present: true, learningHooks: null };
-  const groups = (cfg.hooks && typeof cfg.hooks === 'object' && !Array.isArray(cfg.hooks)) ? cfg.hooks : {};
+  if (cfg.hooks !== undefined && (!cfg.hooks || typeof cfg.hooks !== 'object' || Array.isArray(cfg.hooks))) {
+    return { settingsPath, present: true, learningHooks: null };
+  }
+  const groups = cfg.hooks || {};
 
+  // AN UNREADABLE SUB-STRUCTURE POISONS THE COUNT, and it must. Guarding the iteration with
+  // `Array.isArray(x) ? x : []` stops the crash and then quietly SKIPS the malformed entry — so a
+  // settings.json with one hook group written as an object came back as a confident `0`, meaning
+  // "we looked everywhere and found no ruflo learning hooks." We did not look everywhere; we
+  // skipped the part we could not parse. That is this file's own thesis violated three lines below
+  // where it is stated, and its regression test caught it.
+  //
+  // A partially-read structure yields null ("not checked"), never a total. Losing the count of the
+  // entries we COULD read is the correct trade: an incomplete count presented as a complete one is
+  // the failure mode, and there is no honest way to render "at least 3" in a field documented as
+  // an exact number.
+  let unreadable = false;
   let count = 0;
   for (const entries of Object.values(groups)) {
-    for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!Array.isArray(entries)) { unreadable = true; continue; }
+    for (const entry of entries) {
+      if (entry?.hooks !== undefined && !Array.isArray(entry.hooks)) { unreadable = true; continue; }
       for (const h of Array.isArray(entry?.hooks) ? entry.hooks : []) {
         if (/\bruflo\b[^"]*\bhooks\b/.test(String(h?.command || ''))) count += 1;
       }
     }
   }
-  return { settingsPath, present: true, learningHooks: count };
+  return { settingsPath, present: true, learningHooks: unreadable ? null : count };
 }
 
 /** Derive the verdict from the evidence. Never asserted, never cached, never guessed. */
@@ -204,7 +244,31 @@ export function verdict(learner) {
   if (t === null && p === null) {
     return { code: 'UNKNOWN_SHAPE', headline: 'UNKNOWN — learner state file has no recognisable counters' };
   }
-  if ((t || 0) === 0 && (p || 0) === 0) {
+
+  // PARTIAL DRIFT IS STILL DRIFT. Upstream does not rename both counters in the same release, and the
+  // half-renamed case is the one that reaches users. Every line below needs BOTH numbers — to compare
+  // them against zero, and to print them — so one unread counter is one unanswerable question.
+  //
+  // The two failures this replaces were mirror images of the same coercion, and both were MEASURED on
+  // real bytes. `{trajectories_recorded: 457, patternsLearned: 0}` fell through `(t || 0) === 0` —
+  // null coerced to 0 — and reported "genuinely records 0 trajectories and 0 patterns" to a machine
+  // holding 457. Read the other way, `{trajectoriesRecorded: null, patternsLearned: 457}` reached the
+  // ON branch and rendered the literal string "null work sessions recorded and 457 patterns learned".
+  // A confident OFF and a printed "null" from one missing field.
+  //
+  // This is the guard num() exists to enable, placed where it survives: the `|| 0` three lines below
+  // it discarded null the instant it was produced, so the correct reader upstream bought nothing.
+  if (t === null || p === null) {
+    const missing = t === null ? 'trajectoriesRecorded' : 'patternsLearned';
+    const seen = t === null ? `patternsLearned=${p}` : `trajectoriesRecorded=${t}`;
+    return {
+      code: 'UNKNOWN_PARTIAL',
+      missingField: missing,
+      headline: `UNKNOWN — learner state file is half-readable (${seen}, but ${missing} is not a number this version can read)`,
+    };
+  }
+
+  if (t === 0 && p === 0) {
     return { code: 'INITIALISED_EMPTY', headline: 'INITIALISED BUT EMPTY — learner exists, has recorded nothing' };
   }
   const days = learner.ageMinutes === null ? null : Math.floor(learner.ageMinutes / 1440);

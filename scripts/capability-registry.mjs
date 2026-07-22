@@ -58,8 +58,34 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HOME = os.homedir();
+
+/**
+ * REPO is WHERE THIS CODE IS INSTALLED. It is NOT the user's project, and confusing the two was the
+ * single most damaging bug this file has shipped.
+ *
+ * Every `scope: PROJECT` detector used to read REPO, and `auditAll()` took no argument, so the two
+ * project-scoped rows always described the ruvnet-brain package directory no matter where the person
+ * running the console actually stood. Proven in both directions, and the second one is the harmful one:
+ *
+ *   from an empty folder:  "write-gates | ON | 6 gates can refuse a write, and 203 refusals have been
+ *                           recorded" — ruvnet-brain's own numbers, presented as the user's.
+ *   from a real project
+ *   holding a healthy
+ *   16MB memory store:     "memory-distillation | ABSENT | no memory store exists for this project
+ *                           yet" — plus a turnOn button offering to fix a problem they do not have.
+ *
+ * Anyone not standing inside a ruvnet-brain checkout — which is every user — got one of those two.
+ * `capability-audit.mjs` had this right from the start (process.cwd(), with a --repo override); the
+ * registry was the file that disagreed, so the registry is the file that changed.
+ *
+ * REPO survives for exactly one honest purpose: resolving the absolute path of scripts THIS package
+ * ships, so a turnOn command is runnable from wherever the user happens to be standing.
+ */
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DAY = 86_400_000;
+
+/** A turnOn command that runs a script from THIS package must name it absolutely. See REPO above. */
+const selfScript = (rel, args) => `node ${JSON.stringify(path.join(REPO, rel))}${args ? ` ${args}` : ''}`;
 
 /** The four states. 'absent' means "not installed here", which is NOT the same as "installed and off". */
 export const STATE = Object.freeze({ ON: 'on', OFF: 'off', UNKNOWN: 'unknown', ABSENT: 'absent' });
@@ -128,10 +154,24 @@ function lineCount(file) {
 function rufloBin() {
   const p = path.join(HOME, '.npm-global/bin/ruflo');
   if (fs.existsSync(p)) return p;
-  try {
-    const w = execFileSync('sh', ['-lc', 'command -v ruflo'], { encoding: 'utf8', timeout: 8000 }).trim();
-    return w && fs.existsSync(w) ? w : null;
-  } catch { return null; }
+
+  // NO LOGIN SHELL. This used to run `sh -lc 'command -v ruflo'`, and the `-l` sources the user's
+  // entire profile — every export, nvm/rbenv shim, and one-off line anyone has ever pasted into
+  // .profile — as the price of answering "is ruflo installed?". Arbitrary startup code executed by a
+  // page whose defining promise, stated four lines above, is that it only observes. Milder than the
+  // daemon spawn already removed from this file, and the same category of mistake.
+  //
+  // PATH lookup does the same job with no shell at all: resolving a name against directories, which
+  // is all `command -v` was ever wanted for here.
+  const exts = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const cand = path.join(dir, `ruflo${ext}`);
+      try { if (fs.existsSync(cand) && fs.statSync(cand).isFile()) return cand; } catch { /* unreadable PATH entry */ }
+    }
+  }
+  return null;
 }
 
 /**
@@ -149,6 +189,36 @@ function countHookCommands(groups) {
   for (const g of groups) {
     for (const h of Array.isArray(g?.hooks) ? g.hooks : []) {
       if (typeof h?.command === 'string' && h.command.trim()) n += 1;
+    }
+  }
+  return n;
+}
+
+/**
+ * Commands at a session boundary that plausibly PERSIST STATE — the only ones "session capture" is a
+ * true statement about.
+ *
+ * Deliberately a whitelist of named mechanisms rather than "any command": the boundary tells you when
+ * something runs, never what it does, and this row claims what it does. `echo done` at SessionEnd is
+ * a registered hook and captures nothing. Each pattern below is a real writer — the global autocapture
+ * hook, ruflo/claude-flow's own session and memory subcommands, agentdb, or a script whose name says
+ * it captures/persists — so a match is evidence, not a guess.
+ *
+ * Returns null (never 0) when any part of the structure is unparseable. See the caller: an incomplete
+ * count rendered as a complete one is the failure this whole file exists to refuse.
+ */
+const CAPTURE_COMMAND = /(agentdb|autocapture|auto-capture|session-end|session_end|sessionend|precompact|pre-compact|memory[\s_-]*(store|save|persist)|\bruflo\b[^"]*\b(memory|session|hooks)\b|claude-flow[^"]*\b(memory|session|hooks)\b|(capture|persist|snapshot|checkpoint)[\w-]*\.(mjs|js|sh|py))/i;
+
+function countCaptureCommands(groups) {
+  if (groups === undefined) return 0;          // nothing registered at this boundary is a real answer
+  if (!Array.isArray(groups)) return null;     // present but unreadable — not the same as absent
+  let n = 0;
+  for (const g of groups) {
+    if (g?.hooks !== undefined && !Array.isArray(g.hooks)) return null;
+    for (const h of Array.isArray(g?.hooks) ? g.hooks : []) {
+      const cmd = typeof h?.command === 'string' ? h.command.trim() : '';
+      if (!cmd) continue;
+      if (CAPTURE_COMMAND.test(cmd)) n += 1;
     }
   }
   return n;
@@ -221,20 +291,36 @@ export const CAPABILITIES = [
     scope: SCOPE.PROJECT,
     // VERIFIED: `ruflo memory distill --help` lists subcommands run | status | config.
     turnOn: { human: 'Mine this project\'s stored memories into reusable patterns', cmd: 'ruflo memory distill run' },
-    detect() {
-      const db = path.join(REPO, '.swarm/memory.db');
-      if (!fs.existsSync(db)) return row(STATE.ABSENT, `no memory store exists for this project yet (${path.relative(REPO, db)} is not present)`);
+    detect({ project = process.cwd() } = {}) {
+      const db = path.join(project, '.swarm/memory.db');
+      if (!fs.existsSync(db)) return row(STATE.ABSENT, `no memory store exists for this project yet (${path.join(path.basename(project), '.swarm/memory.db')} is not present)`);
       if (!helpers.memoryDoctor) return row(STATE.UNKNOWN, `the memory diagnostic could not be loaded (${helpers.memoryDoctorErr}) — distillation state not checked`);
 
       let d;
       try { d = helpers.memoryDoctor.diagnose(db); }
       catch (e) { return row(STATE.UNKNOWN, `the memory store could not be diagnosed: ${String(e?.message || e).slice(0, 60)}`); }
 
-      // THE TRANSIENT-LOCK CASE, and the entire reason this file states its rule twice. A store held
-      // by a concurrent writer reads as unreadable for one moment and healthy the next; `learns` is
-      // false in BOTH the dead case and the could-not-open case, so trusting it blindly turns a lost
-      // race into a false accusation. Observed live on this very repo — see the header.
-      if (d.unreadable) return row(STATE.UNKNOWN, `the memory store could not be opened (${d.unreadable}) — this is often a passing lock from another session, not a fault; re-check before acting`);
+      // THE UNREADABLE CASE, and the entire reason this file states its rule twice. `learns` is false
+      // in BOTH the dead case and the could-not-open case, so trusting it blindly turns a failed read
+      // into a false accusation. The STATE here was always right; the REASON was not.
+      //
+      // What this used to say, to every unreadable store without distinction: "this is often a passing
+      // lock from another session, not a fault; re-check before acting." That sentence generalised ONE
+      // real observation — a store that read unreadable and then healthy 90 seconds later, which was a
+      // genuine concurrent writer — into a blanket explanation for every failure mode. It was wrong on
+      // this very repo, whose WAL sidecars had been renamed to .CORRUPT-*: that store was structurally
+      // unopenable, re-checking would never have cleared it, and the console told its owner to wait.
+      // Advice that cannot work is worse than no advice, because the person takes it.
+      //
+      // The open failure itself is now handled properly in memory-doctor's q() (resting-WAL fallback),
+      // so what reaches here is a real lock or a real fault — and it says which it can distinguish
+      // rather than asserting one of them.
+      if (d.unreadable) {
+        const locked = /lock|busy|writer/i.test(String(d.unreadable));
+        return row(STATE.UNKNOWN, locked
+          ? `the memory store is currently held by another process (${d.unreadable}) — that is a passing lock, not a fault; re-checking in a moment should clear it`
+          : `the memory store could not be read (${d.unreadable}) — this is not a transient lock, so re-checking will not clear it; the store or its journal files need attention before distillation state can be established`);
+      }
       if (d.schemaless) return row(STATE.UNKNOWN, 'the store exists but has no memory_entries table (pre-AgentDB schema, never initialised) — nothing to distill yet, and nothing is broken');
       if (typeof d.total !== 'number') return row(STATE.UNKNOWN, 'the store opened but returned no countable rows — distillation state not established');
 
@@ -289,6 +375,11 @@ export const CAPABILITIES = [
           // The drift case, stated as the obstacle it is. NEVER "0 trajectories" — that is a claim
           // about the learner; this is a claim about our ability to read it.
           return row(STATE.UNKNOWN, 'the learner state file exists but carries no counters this version recognises — the field names have probably changed upstream, so whether it has learned anything cannot be read here');
+        case 'UNKNOWN_PARTIAL':
+          // HALF-DRIFT, and the half we cannot read decides the answer. Rendering the readable half
+          // as though it settled the question is how "null work sessions recorded and 457 patterns
+          // learned" reached a user's screen. One unread counter, one honest unknown.
+          return row(STATE.UNKNOWN, `the learner state file is only half-readable — ${v.missingField} is not a number this version recognises, so the counters cannot be compared and no verdict is drawn from the half that did parse`);
         case 'INITIALISED_EMPTY':
           return row(STATE.OFF, 'the learner file exists and genuinely records 0 trajectories and 0 patterns — it has been created but never fed');
         case 'IDLE':
@@ -305,7 +396,10 @@ export const CAPABILITIES = [
     whatItBuysYou: 'Reading and summarising work runs on a model that costs a fraction of the top-tier one, and each run leaves a receipt showing what it saved.',
     scope: SCOPE.MACHINE,
     // VERIFIED: `node scripts/route-cheap.mjs` prints its usage line requiring --task; script present in repo.
-    turnOn: { human: 'Route one read-only task through the cheap path', cmd: 'node scripts/route-cheap.mjs --task "<text>"' },
+    // ABSOLUTE, via selfScript(). `node scripts/route-cheap.mjs` is copy-pasteable only by someone
+    // already standing in a ruvnet-brain checkout; everyone else got `Cannot find module`. A real
+    // executor behind an unreachable path is a dead button with extra steps.
+    turnOn: { human: 'Route one read-only task through the cheap path', cmd: selfScript('scripts/route-cheap.mjs', '--task "<text>"') },
     detect() {
       const bin = path.join(HOME, '.npm-global/bin/agentic-flow');
       const installed = fs.existsSync(bin);
@@ -333,7 +427,7 @@ export const CAPABILITIES = [
     whatItBuysYou: 'A rule you have taught in three separate projects gets applied everywhere, instead of being re-taught project by project forever.',
     scope: SCOPE.USER,
     // VERIFIED: `lesson-promote.mjs --apply` exists (backs up first, reversible — see its header).
-    turnOn: { human: 'Promote the processes you have proven in several projects', cmd: 'node scripts/lesson-promote.mjs --apply' },
+    turnOn: { human: 'Promote the processes you have proven in several projects', cmd: selfScript('scripts/lesson-promote.mjs', '--apply') },
     detect() {
       if (!helpers.lessonPromote) return row(STATE.UNKNOWN, `the cross-project scanner could not be loaded (${helpers.lessonPromoteErr}) — promotion state not checked`);
       let result;
@@ -381,9 +475,12 @@ export const CAPABILITIES = [
     scope: SCOPE.MACHINE,
     // VERIFIED NULL: `ruflo metaharness --help` enumerates its subcommands and `evolve` is not among them.
     turnOn: null,
-    detect() {
+    detect({ project = process.cwd() } = {}) {
       const policy = path.join(HOME, '.claude-flow/harness-active-policy.json');
-      const archive = path.join(REPO, '.metaharness/archive.json');
+      // The archive is a per-project artifact even though the ACTIVE POLICY it feeds is machine-wide,
+      // so it is read from where the user stands. Reading it from REPO is what made a fresh machine
+      // appear to have run self-improvement it had never run.
+      const archive = path.join(project, '.metaharness/archive.json');
       const p = readJSON(policy);
       const haveArchive = fs.existsSync(archive);
 
@@ -405,21 +502,25 @@ export const CAPABILITIES = [
     scope: SCOPE.PROJECT,
     // Turning a gate on means hand-editing settings.json hook arrays — no single verified command.
     turnOn: null,
-    detect() {
+    detect({ project = process.cwd() } = {}) {
       if (!helpers.gates) return row(STATE.UNKNOWN, `the gate survey could not be loaded (${helpers.gatesErr}) — gate state not checked`);
       let survey;
-      try { survey = helpers.gates.gatesSurvey({ repo: REPO }); }
+      try { survey = helpers.gates.gatesSurvey({ repo: project }); }
       catch (e) { return row(STATE.UNKNOWN, `the gate survey failed (${String(e?.message || e).slice(0, 60)}) — gate state not checked`); }
 
       const s = survey?.summary || {};
       if (!s.armed) return row(STATE.ABSENT, 'no gates are wired on this machine or in this project');
-      if (!s.blocking) return row(STATE.OFF, `${s.armed} gates are wired but none of them can actually refuse anything — they are all advisory`);
+      // "1 gates are wired" shipped, because the plural on `refusal` was handled and the one on
+      // `gate` beside it was not. Small, but this surface is read by people deciding whether to
+      // trust it, and sloppy copy reads as sloppy measurement.
+      const gates = (n) => `${n} gate${n === 1 ? '' : 's'}`;
+      if (!s.blocking) return row(STATE.OFF, `${gates(s.armed)} ${s.armed === 1 ? 'is' : 'are'} wired but ${s.armed === 1 ? 'it cannot' : 'none of them can'} actually refuse anything — ${s.armed === 1 ? 'it is' : 'they are'} advisory`);
       // Receipts began only once the ledger was added, so "0 caught" is genuinely ambiguous between
       // "never fired" and "fired before we were counting". Say armed, and say the caveat.
       const caught = s.caughtTotal || 0;
       return row(STATE.ON, caught > 0
-        ? `${s.blocking} gates can refuse a write, and ${caught} refusal${caught === 1 ? '' : 's'} have been recorded (${s.caughtThisWeek || 0} this week)`
-        : `${s.blocking} gates can refuse a write; no refusals are recorded yet, which may mean nothing has warranted one`);
+        ? `${gates(s.blocking)} can refuse a write, and ${caught} refusal${caught === 1 ? ' has' : 's have'} been recorded (${s.caughtThisWeek || 0} this week)`
+        : `${gates(s.blocking)} can refuse a write; no refusals are recorded yet, which may mean nothing has warranted one`);
     },
   },
 
@@ -434,19 +535,40 @@ export const CAPABILITIES = [
       const r = readJSON(path.join(HOME, '.claude/settings.json'));
       if (r.missing) return row(STATE.ABSENT, 'no Claude Code settings file exists on this machine yet');
       if (r.err) return row(STATE.UNKNOWN, `the settings file could not be parsed (${r.err}) — capture hooks not checked`);
-      const hooks = r.value?.hooks || {};
+      const hooksRoot = r.value?.hooks;
+      if (hooksRoot !== undefined && (!hooksRoot || typeof hooksRoot !== 'object' || Array.isArray(hooksRoot))) {
+        return row(STATE.UNKNOWN, 'the settings file has a hooks section this version cannot interpret — capture hooks not counted');
+      }
+      const hooks = hooksRoot || {};
       // COUNT COMMANDS, NOT MATCHER GROUPS. See countHookCommands: `[{matcher:'.*',hooks:[]}]` has
       // length 1 and executes nothing, and the old `.length` check called that "both boundaries are
       // covered" — a fabricated ON on a machine that saves nothing.
-      const pre = countHookCommands(hooks.PreCompact);
-      const end = countHookCommands(hooks.SessionEnd);
+      //
+      // AND COUNT *CAPTURE* COMMANDS, NOT ANY COMMAND. The old count accepted whatever was wired at
+      // those two boundaries, so a shell logger and a terminal beep — neither of which saves a byte of
+      // session state — produced "Session capture: ON". MEASURED with exactly that pair. The boundary
+      // a command is attached to says WHEN it runs, never WHAT it does, and this row's whole claim is
+      // about what it does. A command is only counted when it names a mechanism known to persist state.
+      //
+      // A MALFORMED GROUP POISONS THE COUNT rather than being skipped — the same rule, and the same
+      // words, as learning-enable.readSettingsWiring, which documents at length why skipping an
+      // unparseable entry and reporting the remainder as a total is this project's signature lie.
+      // MEASURED: a PreCompact written as an object instead of an array was silently skipped and the
+      // row reported OFF — "nothing is saved when a session compacts" — about a machine whose capture
+      // hook we simply failed to parse. Identical structure to the bug fixed in that file, opposite
+      // treatment, same commit.
+      const pre = countCaptureCommands(hooks.PreCompact);
+      const end = countCaptureCommands(hooks.SessionEnd);
+      if (pre === null || end === null) {
+        return row(STATE.UNKNOWN, `the ${pre === null ? 'pre-compaction' : 'session-end'} hook list could not be parsed, so whether anything is registered there cannot be read — no conclusion is drawn from the half that did parse`);
+      }
       // "registered", never "capturing" — the same standard the MCP row holds itself to twenty lines
       // below. A settings entry proves a command is wired to fire; no local artifact proves it ever
       // ran or that it succeeded when it did, and claiming captured state from a config file would be
       // exactly the fabricated status this registry exists to refuse.
-      if (pre && end) return row(STATE.ON, 'a hook is registered at both boundaries: one before compaction and one at session end — registered, which is not the same as proven to have captured anything');
-      if (pre || end) return row(STATE.OFF, `a hook is registered only at ${pre ? 'the pre-compaction' : 'the session-end'} boundary — the other one loses its state`);
-      return row(STATE.OFF, 'no hook with a command is registered at either boundary, so nothing is saved when a session compacts or closes');
+      if (pre && end) return row(STATE.ON, 'a state-saving hook is registered at both boundaries: one before compaction and one at session end — registered, which is not the same as proven to have captured anything');
+      if (pre || end) return row(STATE.OFF, `a state-saving hook is registered only at ${pre ? 'the pre-compaction' : 'the session-end'} boundary — the other one loses its state`);
+      return row(STATE.OFF, 'no hook that saves session state is registered at either boundary, so nothing is kept when a session compacts or closes');
     },
   },
 
@@ -486,14 +608,42 @@ export const CAPABILITIES = [
       try { out = execFileSync('launchctl', ['list'], { encoding: 'utf8', timeout: 15_000 }); }
       catch (e) { return row(STATE.UNKNOWN, `could not list scheduled jobs (${String(e?.message || e).split('\n')[0].slice(0, 60)}) — nightly state not checked`); }
 
-      const jobs = out.split('\n')
+      // THIS ROW IS ABOUT THE NIGHTLY KNOWLEDGE-BASE REFRESH, so it counts the nightly refresh — not
+      // every launchd job whose label happens to start com.ruvnet. MEASURED on this machine: that
+      // prefix match reported "11 refresh jobs are loaded and every one last exited cleanly" while
+      // sweeping in goldie-weekly, npx-witness, issue-fix, npm-token-renew, issue-watch,
+      // routing-flywheel, brain-gists, npx-72h-verdict and nightly-watchdog. Exactly ONE of the
+      // eleven (brain-nightly) was the thing the sentence claimed to describe. Ten unrelated jobs
+      // were being offered as evidence for a capability none of them implements.
+      const NIGHTLY = /^com\.ruvnet\.[\w.-]*(nightly|refresh)/i;
+      const all = out.split('\n')
         .map((l) => l.split('\t'))
         .filter((c) => c.length >= 3 && /^com\.ruvnet\./.test(c[2] || ''))
         .map((c) => ({ label: c[2].trim(), exit: c[1] }));
-      if (!jobs.length) return row(STATE.ABSENT, 'no scheduled refresh jobs are loaded on this machine');
+      // The watchdog watches the refresh; it is not the refresh, and counting it inflates the answer.
+      const jobs = all.filter((j) => NIGHTLY.test(j.label) && !/watchdog/i.test(j.label));
+      if (!jobs.length) {
+        return row(STATE.ABSENT, all.length
+          ? `no nightly refresh job is loaded on this machine (${all.length} other RuvNet job${all.length === 1 ? '' : 's'} are scheduled, but none of them is the knowledge-base refresh)`
+          : 'no scheduled refresh jobs are loaded on this machine');
+      }
+
+      const name = (j) => j.label.replace('com.ruvnet.', '');
       const failing = jobs.filter((j) => j.exit !== '0' && j.exit !== '-');
-      if (failing.length) return row(STATE.OFF, `${jobs.length} refresh jobs are loaded but ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${j.label.replace('com.ruvnet.', '')}=${j.exit}`).join(', ')})`);
-      return row(STATE.ON, `${jobs.length} refresh jobs are loaded and every one last exited cleanly`);
+      if (failing.length) return row(STATE.OFF, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded, and ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${name(j)}=${j.exit}`).join(', ')})`);
+
+      // "-" IS NOT "0". launchd prints "-" for a job that has never run in this boot, and the old
+      // check lumped it in with success — so "every one last exited cleanly" could describe a job
+      // that has never executed once. That is the silence-reads-as-health failure the positive-
+      // confirmation standing order exists to kill, stated on the surface that is supposed to enforce it.
+      const neverRan = jobs.filter((j) => j.exit === '-');
+      if (neverRan.length === jobs.length) {
+        return row(STATE.UNKNOWN, `${jobs.length} nightly refresh job${jobs.length === 1 ? ' is' : 's are'} loaded (${jobs.map(name).slice(0, 3).join(', ')}) but ${jobs.length === 1 ? 'it has' : 'none has'} run since this machine last booted, so whether the refresh actually works here has not been demonstrated`);
+      }
+      if (neverRan.length) {
+        return row(STATE.ON, `${jobs.length} nightly refresh jobs are loaded; ${jobs.length - neverRan.length} last exited cleanly and ${neverRan.length} (${neverRan.map(name).slice(0, 3).join(', ')}) have not run since boot`);
+      }
+      return row(STATE.ON, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded (${jobs.map(name).slice(0, 3).join(', ')}), and every one last exited cleanly`);
     },
   },
 ];
@@ -505,10 +655,13 @@ export const CAPABILITIES = [
  * rather than a missing row, because a silently dropped capability is indistinguishable from one
  * that does not exist.
  */
-export function auditAll() {
+export function auditAll({ project = process.cwd() } = {}) {
+  // The default is the CALLER'S directory, not this package's. See the note on REPO: taking no
+  // argument at all is what made every project-scoped row describe the wrong folder.
+  const ctx = { project: path.resolve(project), home: HOME };
   return CAPABILITIES.map((c) => {
     let r;
-    try { r = c.detect(); }
+    try { r = c.detect(ctx); }
     catch (e) { r = row(STATE.UNKNOWN, `this check failed to run (${String(e?.message || e).split('\n')[0].slice(0, 70)})`); }
     // A detector returning something malformed must not silently become 'undefined' on the page.
     const state = Object.values(STATE).includes(r?.state) ? r.state : STATE.UNKNOWN;
@@ -523,6 +676,9 @@ export function auditAll() {
       turnOn: c.turnOn,
       state,
       evidence,
+      // WHICH project a project-scoped row is about, named rather than assumed. "no memory store
+      // exists for this project" is only checkable by a reader who can see which folder was read.
+      ...(c.scope === SCOPE.PROJECT ? { project: ctx.project } : {}),
     };
   });
 }
@@ -530,12 +686,17 @@ export function auditAll() {
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]).endsWith('capability-registry.mjs');
 if (invokedDirectly) {
-  const rows = auditAll();
+  // --project mirrors capability-audit.mjs's --repo: the project-scoped rows are about a directory,
+  // and the person running this must be able to say which one rather than inferring it.
+  const pi = process.argv.indexOf('--project');
+  const project = pi >= 0 && process.argv[pi + 1] ? path.resolve(process.argv[pi + 1]) : process.cwd();
+  const rows = auditAll({ project });
   if (process.argv.includes('--json')) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
 
   const MARK = { on: '●', off: '○', unknown: '?', absent: '·' };
   const off = rows.filter((r) => r.state === STATE.OFF);
-  console.log(`\n  ${rows.length} capabilities checked on this machine:\n`);
+  console.log(`\n  ${rows.length} capabilities checked on this machine`);
+  console.log(`  (project-scoped rows describe ${project.replace(HOME, '~')})\n`);
   for (const r of rows) {
     console.log(`  ${MARK[r.state]} ${r.label.padEnd(24)} ${r.state.toUpperCase()}  [${r.scope}]`);
     console.log(`      ${r.evidence}`);

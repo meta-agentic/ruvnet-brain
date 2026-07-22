@@ -216,8 +216,11 @@ export function detectLearnerIdle() {
   const v = learnerVerdict(learner);
   const { trajectories, patterns } = learner;
 
-  // NO_LEARNER_STATE / CORRUPT / UNKNOWN_SHAPE: nothing provable, so say nothing. Silence here is
-  // correct — an audit that speaks up when it cannot see is how false alarms are manufactured.
+  // NO_LEARNER_STATE / CORRUPT / UNKNOWN_SHAPE / UNKNOWN_PARTIAL: nothing provable, so say nothing.
+  // Silence here is correct — an audit that speaks up when it cannot see is how false alarms are
+  // manufactured. UNKNOWN_PARTIAL (one counter renamed upstream, one still readable) is deliberately
+  // in that list: the readable half cannot settle a question that needs both, and half a measurement
+  // is not grounds for telling somebody their learner is broken.
   if (v.code === 'INITIALISED_EMPTY') {
     // A learner that has genuinely, measurably recorded nothing is dormant and worth saying so.
     return {

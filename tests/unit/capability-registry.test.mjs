@@ -110,8 +110,27 @@ describe('turnOn is null-or-verified', () => {
     ]);
     for (const c of CAPABILITIES) {
       const cmd = c.turnOn?.cmd;
-      if (!cmd || /^node\s+scripts\//.test(cmd)) continue;
+      if (!cmd) continue;
+      // Scripts THIS package ships are exempt from the external-command pin — their existence is
+      // checked by the test below instead. The pattern must match the ABSOLUTE form now emitted by
+      // selfScript(): the old `^node\s+scripts/` only matched a relative path, which was itself the
+      // bug (a command that only runs from inside a ruvnet-brain checkout).
+      if (/^node\s+"?\//.test(cmd)) continue;
       expect(VERIFIED.has(cmd), `${c.key} ships an unverified command: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('points every self-hosted turnOn command at a script that actually exists', () => {
+    // The exemption above is only safe if something checks the path. `node scripts/lesson-promote.mjs`
+    // shipped as a relative path and threw `Cannot find module` for every user not standing in this
+    // repo — a real executor behind an unreachable path, which is a dead button with extra steps.
+    for (const c of CAPABILITIES) {
+      const cmd = c.turnOn?.cmd;
+      if (!cmd || !/^node\s/.test(cmd)) continue;
+      const m = cmd.match(/^node\s+"?([^"\s]+\.mjs)"?/);
+      if (!m) continue;
+      expect(path.isAbsolute(m[1]), `${c.key}: "${cmd}" only runs from inside this repo`).toBe(true);
+      expect(fs.existsSync(m[1]), `${c.key}: turnOn points at a script that does not exist: ${m[1]}`).toBe(true);
     }
   });
 

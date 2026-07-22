@@ -688,12 +688,17 @@ function renderStack(data) {
    the plain question "what is on right now", so a machine with nothing wrong looked identical to a
    machine nobody had checked. That is the black box: not missing data, missing a place to read it.
 
-   THREE STATES, AND THE THIRD IS THE WHOLE POINT.
-   ON (green) · OFF (amber) · UNKNOWN (grey, dashed, "not checked"). Rendering an unchecked
-   capability as OFF would be the console telling the user a fact it does not have — the precise lie
-   this project bans (a detector that didn't answer is not a detector that answered "no"). So UNKNOWN
-   is carried end-to-end and drawn in a different visual CHANNEL from OFF, not just a different hue:
-   dashed rail + dashed chip, so it survives greyscale, colour-blindness, and a squint from six feet.
+   FOUR STATES, AND THE ONES THAT ARE NOT "OFF" ARE THE WHOLE POINT.
+   ON (green) · OFF (amber) · UNKNOWN (grey, dashed, "not checked") · ABSENT (grey, "not installed").
+   Rendering an unchecked capability as OFF would be the console telling the user a fact it does not
+   have — the precise lie this project bans (a detector that didn't answer is not a detector that
+   answered "no"). ABSENT is the second half of that: "you do not have this" and "you have it and it
+   is switched off" are different sentences with different actions behind them, and collapsing them
+   sends people to turn on software they never installed. So both are carried end-to-end and drawn in
+   a different visual CHANNEL from OFF, not just a different hue: dashed rail + dashed chip for
+   unknown, solid-but-muted for absent, so they survive greyscale, colour-blindness, and a squint from
+   six feet. (This header said THREE for one commit after ABSENT shipped — a comment claiming the code
+   below it was simpler than it is.)
 
    DATA-DRIVEN, NO EXCEPTIONS. Not one capability name appears in this file or in index.html. Rows
    come from /api/capabilities and only from there; a capability added server-side shows up here with
@@ -1816,41 +1821,56 @@ function renderSavings(sv) {
   // container; paintCta(on) repaints it for the current state and is called again after a successful
   // save, so the toggle is visibly live, not just correct after a reload.
   const ctaSlot = el('div', { class: 'mh-cta' });
-  function paintCta(on) {
+  // A PREFERENCE IS NOT A CAPABILITY, and this chip claimed one while the Capabilities card measured
+  // the other. On a fresh machine the page said "✓ Smart routing: ON" here, "cheap-model-routing:
+  // absent — agentic-flow is not installed" there, and "Off by default" in the subtitle between them.
+  // The server now sends whether the tool is actually installed, so the chip can only ever say what
+  // is simultaneously true of the preference AND the machine.
+  const installed = !!(sv && sv.routingInstalled);
+
+  // A failed save must never read as a success. postJSON does NOT throw on a non-2xx — a 403 from a
+  // stale token (a known live case, handled explicitly elsewhere in this file) or an {ok:false} body
+  // both landed in the `else` branch, which wrote "Saved." into an aria-live region and announced it
+  // to screen readers while nothing had changed and the button re-enabled itself.
+  const failed = (btn, note) => ({ status, data }) => {
+    btn.disabled = false;
+    note.textContent = status === 403
+      ? 'The console was restarted — reload this page and try again.'
+      : `Couldn’t save${data && data.log ? ` — ${data.log}` : ' — change it under Settings.'}`;
+  };
+
+  function paintCta(state) {
     const note = el('span', { class: 'mh-enable-note', 'aria-live': 'polite' }, '');
-    if (on) {
+    const save = (btn, values, onOk) => async () => {
+      btn.disabled = true; note.textContent = 'saving…';
+      try {
+        const r = await postJSON('/api/save-config', values);
+        if (r.ok && r.data && r.data.ok) onOk();
+        else failed(btn, note)(r);
+      } catch { btn.disabled = false; note.textContent = 'Couldn’t save — change it under Settings.'; }
+    };
+
+    if (state === 'auto') {
       const offBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Turn off');
-      offBtn.addEventListener('click', async () => {
-        offBtn.disabled = true; note.textContent = 'saving…';
-        try {
-          const { data } = await postJSON('/api/save-config', { values: { routing: 'off' } });
-          if (data && data.ok) paintCta(false);
-          else { offBtn.disabled = false; note.textContent = 'Saved.'; }
-        } catch (e) {
-          offBtn.disabled = false;
-          note.textContent = 'Couldn’t save — change it under Settings.';
-        }
-      });
+      offBtn.addEventListener('click', save(offBtn, { values: { routing: 'off' } }, () => paintCta('off')));
       ctaSlot.replaceChildren(
-        chip('✓ Smart routing: ON', 'green', 'Cheap, mechanical tasks route to smaller models automatically'),
+        installed
+          ? chip('✓ Smart routing: ON', 'green', 'You chose smart routing, and agentic-flow is installed to carry it out')
+          : chip('Smart routing: chosen, not installed', 'wait', 'You chose smart routing, but agentic-flow is not installed on this machine, so nothing is being routed yet'),
         offBtn, note);
-    } else {
-      const enableBtn = el('button', { class: 'mh-enable', type: 'button' }, 'Turn on smart routing');
-      enableBtn.addEventListener('click', async () => {
-        enableBtn.disabled = true; note.textContent = 'saving…';
-        try {
-          const { data } = await postJSON('/api/save-config', { values: { routing: 'auto' } });
-          if (data && data.ok) paintCta(true);
-          else { enableBtn.disabled = false; note.textContent = 'Saved.'; }
-        } catch (e) {
-          enableBtn.disabled = false;
-          note.textContent = 'Couldn’t save — turn it on under Settings.';
-        }
-      });
-      ctaSlot.replaceChildren(enableBtn, note);
+      return;
     }
+
+    const enableBtn = el('button', { class: 'mh-enable', type: 'button' }, 'Turn on smart routing');
+    enableBtn.addEventListener('click', save(enableBtn, { values: { routing: 'auto' } }, () => paintCta('auto')));
+    ctaSlot.replaceChildren(
+      // "not chosen" and "chosen off" are different facts, and only one of them is a decision.
+      state === 'off'
+        ? chip('Smart routing: off', 'grey', 'You turned smart routing off')
+        : chip('Smart routing: not chosen yet', 'wait', 'Nobody has answered this yet — it is neither on nor off'),
+      enableBtn, note);
   }
-  paintCta(sv && sv.routing === 'auto');
+  paintCta(sv && (sv.routing === 'auto' ? 'auto' : sv.routing === 'off' ? 'off' : null));
   // Stuart: "If you haven't ever seen MetaHarness, you have no idea what the word means, and you have
   // no idea what you should expect it to do. Saying 'do you want to use it or not' without any visual
   // explaining what it does is a little challenging." He is right — this card asked for a decision
@@ -1987,7 +2007,16 @@ function renderSettings(cfg) {
     return;
   }
   const values = cfg.values || {};
+  // What the project would pick FOR you, kept strictly apart from what you actually picked. The
+  // server sends these separately for exactly that reason — see gatherConfig.
+  const defaults = cfg.defaults || {};
+  // Shown wherever a control is sitting on a recommendation rather than on a stored answer.
+  const notChosen = (rec) => el('span', { class: 'field-unset' },
+    'Not chosen yet — this shows the recommended setting (', el('b', {}, String(rec)), '), not your machine’s.');
+  const unsetCount = cfg.schema.filter((f) => !f.secret && f.type !== 'secret'
+    && (values[f.key] === null || values[f.key] === undefined)).length;
   setChips('chips-settings', [chip(`${cfg.schema.length} options`, 'grey'),
+    unsetCount ? chip(`${unsetCount} not chosen yet`, 'wait') : null,
     cfg.exists === false ? chip('not created yet', 'wait') : null].filter(Boolean));
 
   const form = el('form', { class: 'settings-form', novalidate: true });
@@ -2047,24 +2076,36 @@ function renderSettings(cfg) {
       ctl.append(isSet ? buildSetRow() : buildInput());
       collectors[f.key] = () => ({ secret: true, include: !!(input && input.value.trim()), value: input ? input.value.trim() : undefined });
     } else if (f.type === 'bool') {
+      // NOT CHOSEN IS NOT OFF. The server sends null when the user has never answered this question,
+      // and a bare unchecked switch states "off" — a claim about their machine that nobody made. The
+      // control still has to sit somewhere, so it sits on the RECOMMENDED value and says, in words,
+      // that this is a recommendation and not their current setting.
+      const chosen = values[f.key] === true || values[f.key] === false;
+      const rec = defaults[f.key] === true;
       const input = el('input', { type: 'checkbox', 'aria-labelledby': labId, 'aria-describedby': helpId, onchange: refreshDirty });
-      input.checked = values[f.key] === true;
+      input.checked = chosen ? values[f.key] === true : rec;
       initial[f.key] = input.checked;
       ctl.append(el('label', { class: 'switch' }, input, el('span', { class: 'track', 'aria-hidden': 'true' })));
+      if (!chosen) ctl.append(notChosen(rec ? 'on' : 'off'));
       collectors[f.key] = () => ({ include: true, value: input.checked });
     } else if (f.type === 'enum' && Array.isArray(f.options)) {
       const name = `seg-${f.key}`;
       const seg = el('div', { class: 'seg', role: 'radiogroup', 'aria-labelledby': labId, 'aria-describedby': helpId });
       const inputs = [];
+      const chosen = typeof values[f.key] === 'string' && f.options.includes(values[f.key]);
+      const rec = f.options.includes(defaults[f.key]) ? defaults[f.key] : f.options[0];
       for (const opt of f.options) {
         const input = el('input', { type: 'radio', name, value: opt, onchange: refreshDirty });
-        input.checked = values[f.key] === opt;
+        input.checked = chosen ? values[f.key] === opt : opt === rec;
         inputs.push(input);
         seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, segLabel(f.key, opt))));
       }
+      // Falling back to options[0] and saying nothing is how "routing: auto" appeared to be the
+      // user's setting on a machine whose config file did not exist.
       if (!inputs.some((i) => i.checked) && inputs[0]) inputs[0].checked = true;
       initial[f.key] = inputs.find((i) => i.checked)?.value;
       ctl.append(seg);
+      if (!chosen) ctl.append(notChosen(segLabel(f.key, rec)));
       collectors[f.key] = () => ({ include: true, value: inputs.find((i) => i.checked)?.value });
     } else {
       const input = el('input', {
@@ -2112,13 +2153,29 @@ function renderSettings(cfg) {
       } else if (data && data.ok) {
         const undoBtn = data.undoToken ? el('button', {
           class: 'btn btn-undo btn-sm', type: 'button',
+          // try/catch, because this is an async onclick with a network call in it. Without one, a
+          // dropped connection rejected the promise, left the button permanently disabled and printed
+          // NOTHING — the user is looking at a dead undo button with no idea whether it ran. The
+          // server's own explanation is shown verbatim on failure: "this undo has already been used"
+          // and "your settings were saved again after this point" are the two cases people will
+          // actually hit, and both are worth reading.
           onclick: async (ev) => {
-            ev.currentTarget.disabled = true;
-            const r = await postJSON('/api/undo', { undoToken: data.undoToken });
-            resultSlot.replaceChildren(el('div', { class: `form-note ${r.data?.ok ? 'n-ok' : 'n-err'}`, role: 'status' },
-              r.data?.ok
-                ? 'Settings restored from the backup. Reload to see the restored values.'
-                : 'Undo didn’t complete — the backup file still exists, nothing is lost.'));
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            try {
+              const r = await postJSON('/api/undo', { undoToken: data.undoToken });
+              const ok = r.ok && r.data?.ok;
+              if (!ok) btn.disabled = false;
+              resultSlot.replaceChildren(el('div', { class: `form-note ${ok ? 'n-ok' : 'n-err'}`, role: 'status' },
+                ok
+                  ? 'Settings restored from the backup. Reload to see the restored values.'
+                  : (r.status === 403 ? TOKEN_MSG
+                    : `Undo didn’t complete — ${r.data?.log || 'the backup file still exists, nothing is lost.'}`)));
+            } catch (err) {
+              btn.disabled = false;
+              resultSlot.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+                `Undo couldn’t reach the console server: ${err.message || err}. Nothing was changed.`));
+            }
           },
         }, 'Undo save') : null;
         resultSlot.replaceChildren(el('div', { class: 'form-note n-ok', role: 'status' },
@@ -2133,8 +2190,12 @@ function renderSettings(cfg) {
         }
         announce('Settings saved.');
       } else {
+        // The server says WHY — a rejected value names itself ("routing: expected one of auto, off").
+        // Swallowing that left the user re-clicking a button that would fail identically every time.
         resultSlot.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
-          'Save didn’t complete. Your file was not changed without its backup.'));
+          data && data.log
+            ? `Save didn’t complete — ${data.log}`
+            : 'Save didn’t complete. Your file was not changed without its backup.'));
         refreshDirty();
       }
     } catch (err) {
@@ -2576,26 +2637,42 @@ const MOCK_STACK = {
   ],
 };
 
-/* Capability fixture — ?mock=1 ONLY, never a default. It exists so the three states can be seen
-   side by side while styling: the whole design claim is that "not checked" is visually unmistakable
-   from "off", and that claim is unfalsifiable without all three on screen at once. Shapes match the
-   contract exactly, including the [{ observed }] evidence records capability-audit.mjs emits. */
+/* Capability fixture — ?mock=1 ONLY, never a default. It exists so all FOUR states can be seen side
+   by side while styling: the whole design claim is that "not checked" is visually unmistakable from
+   "off" AND from "not installed", and that claim is unfalsifiable without every state on screen at
+   once. Shapes match the contract exactly, including the [{ observed }] evidence records
+   capability-audit.mjs emits and the {human, cmd} turnOn the registry ships.
+
+   THE FIRST ROW USED TO CARRY A RETIRED LIE. Its evidence read "26 hooks are registered on this
+   machine and 0 are enabled" — the exact false finding that was traced to a field-name bug in
+   ruflo's table renderer and removed from every detector in this repo. Left in a fixture, it was
+   still the reference image someone would style against, and the sentence a screenshot would show.
+   A retired falsehood preserved as a design sample is how it gets reintroduced. */
 const MOCK_CAPABILITIES = {
   rows: [
     {
-      key: 'mock:learning-hooks', label: 'Learning hooks', state: 'OFF', scope: 'machine',
-      whatItBuysYou: 'Records what worked in your sessions so the next one starts from it instead of from nothing.',
-      evidence: [{ observed: '26 hooks are registered on this machine and 0 are enabled' }],
+      key: 'mock:cross-project-lessons', label: 'Cross-project lessons', state: 'OFF', scope: 'user',
+      whatItBuysYou: 'A rule you have taught in three separate projects gets applied everywhere, instead of being re-taught project by project forever.',
+      evidence: [{ observed: '4 processes you have taught in multiple separate projects are still trapped at project level' }],
+      turnOn: { human: 'Promote the processes you have proven in several projects', cmd: 'node scripts/lesson-promote.mjs --apply' },
+    },
+    {
+      key: 'mock:learning-hooks', label: 'Learning hooks', state: 'UNKNOWN', scope: 'machine',
+      whatItBuysYou: 'Your AI writes down which approach actually worked and reuses it next time, instead of solving the same problem from scratch every session.',
+      evidence: [{ observed: 'ruflo is installed, but whether its learning hooks are switched on cannot be read from it — its hook list is a static catalog, not a state readout' }],
+      turnOn: null,
+    },
+    {
+      key: 'mock:cheap-routing', label: 'Cheap-model routing', state: 'ABSENT', scope: 'machine',
+      whatItBuysYou: 'Reading and summarising work runs on a model that costs a fraction of the top-tier one, and each run leaves a receipt showing what it saved.',
+      evidence: [{ observed: 'agentic-flow is not installed and no routing receipts exist, so cheap routing has never been set up here' }],
+      turnOn: { human: 'Route one read-only task through the cheap path', cmd: 'node scripts/route-cheap.mjs --task "<text>"' },
     },
     {
       key: 'mock:harness-champion', label: 'Harness champion policy', state: 'ON', scope: 'machine',
       whatItBuysYou: 'Runs your agents on the best-scoring policy found so far rather than the stock one.',
       evidence: [{ observed: 'a champion policy is active, applied 6 days ago' }],
-    },
-    {
-      key: 'mock:recall-quality', label: 'Recall quality', state: 'UNKNOWN', scope: 'project',
-      whatItBuysYou: 'Tells you whether what your AI stored can actually be found again when it matters.',
-      evidence: [{ observed: 'no probe has run this session, so nothing was measured either way' }],
+      turnOn: null,
     },
   ],
 };

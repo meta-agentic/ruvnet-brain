@@ -79,7 +79,18 @@ export function gatesSurvey({ repo } = {}) {
 
   const all = [...machine, ...plugin];
   const blocking = all.filter((g) => g.blocking);
-  const blocks = gateBlocks();
+
+  // THE LEDGER IS MACHINE-WIDE; THIS SURVEY IS ABOUT ONE PROJECT. Every catch ever recorded on the
+  // machine used to be counted here, so standing in an empty folder produced "203 refusals have been
+  // recorded" — this repo's history, attributed to a project that has never run a gate. Each record
+  // carries the `cwd` it was caught in, so when a project is named, only its own catches count.
+  //
+  // KNOWN LIMIT, stated rather than hidden: `cwd` is a basename, so two projects sharing a folder
+  // name share a count. That is a real ambiguity and it is narrow; attributing the whole machine's
+  // history to whichever directory you happen to be standing in was neither.
+  const here = repo ? path.basename(path.resolve(repo)) : null;
+  const allBlocks = gateBlocks();
+  const blocks = here ? allBlocks.filter((b) => b.cwd === here) : allBlocks;
 
   // Same gate, same event, wired both machine-wide AND by the plugin — it runs twice on every
   // matching call. Harmless to correctness (these gates are idempotent) but it is real duplicated

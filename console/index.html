@@ -248,6 +248,56 @@
     </div>
   </details>
 
+  <!-- ===================================== 2b · WHAT "PROACTIVE" MEANS (the L0-L5 ladder)
+       The product's central adjective was used everywhere and defined nowhere: a grep of this whole
+       console for "proactive" returned zero hits across index.html, app.js and tips.html, while
+       docs/adr/0028 had specified a five-level ladder and named the level this build has actually
+       reached. A word the user is asked to trust, with no way to find out what it commits us to.
+
+       STATIC MARKUP, ON PURPOSE. This is the one card that must render before any fetch resolves and
+       on a machine where nothing is installed — same reasoning as .stage-legend. It describes what
+       the SOFTWARE is, not what the machine has, so hydrating it from an endpoint would make the
+       definition of our own claim contingent on a network call succeeding.
+
+       Closed by default, and placed directly under the card it explains. No version literal appears
+       here by design (a CI gate greps for one); the level marker is prose, and it moves when the
+       ladder is actually climbed — not when a number is bumped. -->
+  <details class="card rail-mirror" id="card-proactive">
+    <summary>
+      <span class="card-ic ic-mirror" aria-hidden="true">
+        <!-- a rising flight of steps: the ladder itself, five treads, one of them marked -->
+        <svg viewBox="0 0 24 24"><path d="M2.5 20.5h4v-4h4v-4h4v-4h4v-4"/><circle cx="10.5" cy="12.5" r="1.6"/></svg>
+      </span>
+      <span class="card-head">
+        <span class="stage st-mirror">Mirror</span>
+        <h2>What “proactive” means here</h2>
+        <!-- "Five levels" over a six-rung L0-L5 list, and a tooltip saying "the top TWO are not
+             built" directly above fineprint saying "L3, L4 and L5 are not built". Three separate
+             counts of the same ladder on one card. ADR-0028 is the authority and says six rungs,
+             L0-L5, with three unbuilt; this now matches it and the fineprint below. -->
+        <span class="q">Six levels, L0 to L5, and an honest marker of which one this build has actually reached.</span>
+      </span>
+      <span class="chips"><span class="chip tone-nt" title="Where this build sits on the ladder below — L3, L4 and L5 are not built.">at level 2 of 5</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body">
+      <p>“Proactive” is the claim this whole product rests on, so here is exactly what it commits us
+      to — and where it currently stops.</p>
+      <ol class="ladder">
+        <li class="lv done"><b>L0 · Reactive</b><span>Answers when you ask. A question gets a grounded, cited answer.</span></li>
+        <li class="lv done"><b>L1 · Observant</b><span>Notices and displays the state of your machine — the card above this one.</span></li>
+        <li class="lv here"><b>L2 · Advocating</b><span>Finds a dormant capability, proposes the fix, applies it once you consent, and can undo it. Every suggestion resolves to one working executor and one real undo. <b>This build is here.</b></span></li>
+        <li class="lv todo"><b>L3 · Contextual</b><span>Speaks up inside your working session, at the moment it matters, without you opening this page.</span></li>
+        <li class="lv todo"><b>L4 · Anticipatory</b><span>Works out what you are trying to do and names the better path before you commit to the worse one.</span></li>
+        <li class="lv todo"><b>L5 · Compounding</b><span>Checks whether its own advice was right, and promotes what held up so every project inherits it.</span></li>
+      </ol>
+      <p class="fineprint">L3, L4 and L5 are <b>not built</b>, and this page will not imply otherwise —
+      each level is a falsifiable test, not a mood, and the top three do not pass yet. The card above
+      is L1 doing its job; anything with an undo behind it is L2. Full definitions and the tests each
+      level has to pass: <code>docs/adr/0028</code>.</p>
+    </div>
+  </details>
+
   <details class="card rail-mirror" id="card-activity" open>
     <summary>
       <span class="card-ic ic-mirror" aria-hidden="true">
@@ -288,16 +338,26 @@
   </details>
 
 
-  <!-- ==================================== 3 · SMART ROUTING (MetaHarness) -->
-  <details class="card rail-prove" id="card-savings" open>
+  <!-- ==================================== 3 · SMART ROUTING (MetaHarness)
+       NOT `open`, and no longer titled with a proper noun. A newcomer used to meet this card
+       expanded, headed "MetaHarness", claiming to be "one of the stack's most powerful pieces" and
+       instructing them to "turn it on" — an unexplained name, a superlative, and an imperative, all
+       before a single word of explanation (the gloss lived inside the body, below the fold of the
+       pitch). That is the pattern the never-pushy standing order exists to ban.
+
+       It is also a ranking error: a card ASKING FOR A DECISION was outranking the cards REPORTING
+       STATE. State first, choices second — the user decides after they can see their machine, not
+       before. The engine keeps its real name inside the body, where naming it is information rather
+       than a hurdle. -->
+  <details class="card rail-prove" id="card-savings">
     <summary>
       <span class="card-ic ic-prove" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M3.5 12h5c3.5 0 3.5-5.5 7-5.5h4.5"/><path d="M8.5 12c3.5 0 3.5 5.5 7 5.5H20"/><path d="m17.5 3.8 3 2.7-3 2.7"/><path d="m17.5 14.8 3 2.7-3 2.7"/></svg>
       </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>MetaHarness</h2>
-        <span class="q">One of the stack's most powerful pieces. Its smart model routing ships off by default — turn it on and see what it saves you.</span>
+        <h2>Smart model routing</h2>
+        <span class="q">Cheap tasks go to cheap models, and every routing decision leaves a receipt. Off by default — rUv would rather you chose it. (The engine is called MetaHarness; it's explained inside.)</span>
       </span>
       <span class="chips" id="chips-savings"><span class="chip tone-wait">…</span></span>
       <span class="chev" aria-hidden="true">›</span>

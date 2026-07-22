@@ -37,6 +37,8 @@ import { utilization } from './router-utilization.mjs';
 import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
 import { learnings } from './learnings.mjs';
 import { gatesSurvey } from './gates.mjs';
+// The write-safety primitives, borrowed rather than re-implemented. See saveConfig for why.
+import { withLock, writeAtomic, LOCK_WAIT_MS } from './user-settings.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -335,19 +337,46 @@ const CONFIG_SCHEMA = [
   { key: 'routing', label: 'Token-smart routing', type: 'enum', options: ['auto', 'off'], help: 'Send cheap, mechanical tasks to smaller, cheaper models automatically.' },
   { key: 'qeFleet', label: 'On-demand QE test fleet', type: 'bool', help: 'Let RuvNet Brain spin up an Agentic-QE test fleet when you ask it to.' },
 ];
+/**
+ * NOT-CHOSEN IS ITS OWN ANSWER, and collapsing it into "on" was this file's version of the exact lie
+ * the whole console was built to kill.
+ *
+ * `nightly: cfg.nightly !== false` and `routing: cfg.routing === 'off' ? 'off' : 'auto'` both derive
+ * ON from the ABSENCE of a key. On a machine with no config file at all — the empty-first case the
+ * bar names explicitly — that produced three contradictory answers to one question in a single render:
+ *
+ *   Savings card       ->  green chip "✓ Smart routing: ON"
+ *   Capabilities card  ->  "cheap-model-routing: absent — agentic-flow is not installed and no
+ *                           routing receipts exist"
+ *   That card's own
+ *   subtitle           ->  "Off by default — rUv would rather you chose it"
+ *
+ * Worse, these two keys are PREFERENCES, not switches: nothing outside this console reads either one
+ * (grepped — the only readers are gatherConfig and the savings CTA). So "ON" was not even reporting a
+ * setting that did something; it was reporting a default the user had never seen, about a feature
+ * that was not installed.
+ *
+ * `null` means the person has not chosen. It is rendered as "not chosen", never as on and never as
+ * off, and the Settings form shows the shipped default beside it as a recommendation rather than as
+ * a fact about their machine.
+ */
 function gatherConfig() {
   const cfg = readJSON(CONFIG_PATH) || {};
   const hasKey = !!(cfg.openrouterKey && String(cfg.openrouterKey).length > 8) || !!process.env.OPENROUTER_API_KEY;
+  const bool = (v) => (v === true ? true : v === false ? false : null);
   return {
     path: CONFIG_PATH.replace(HOME, '~'),
     exists: fs.existsSync(CONFIG_PATH),
     values: {
       openrouterKey: hasKey,                               // boolean only — never the secret itself
-      provider: cfg.provider || 'auto',                    // model house — 'auto' detects from keys
-      nightly: cfg.nightly !== false,                      // default on
-      routing: cfg.routing === 'off' ? 'off' : 'auto',     // default auto
-      qeFleet: cfg.qeFleet === true,                       // default off
+      provider: typeof cfg.provider === 'string' && cfg.provider ? cfg.provider : null,
+      nightly: bool(cfg.nightly),
+      routing: cfg.routing === 'off' ? 'off' : cfg.routing === 'auto' ? 'auto' : null,
+      qeFleet: bool(cfg.qeFleet),
     },
+    // What the project would pick FOR you, kept separate from what you actually picked. The form can
+    // then say "recommended: on" without ever claiming that is the current state.
+    defaults: { provider: 'auto', nightly: true, routing: 'auto', qeFleet: false },
     schema: CONFIG_SCHEMA,
   };
 }
@@ -769,8 +798,14 @@ function gatherState(cwd, { fleet = true } = {}) {
   const savings = gatherSavings();
   const cfgNow = readJSON(CONFIG_PATH) || {};
   // issue #20: the Savings card's "Turn on smart routing" CTA must reflect what was actually saved —
-  // same default rule gatherConfig() uses below, so this and the Settings tab never disagree.
-  savings.routing = cfgNow.routing === 'off' ? 'off' : 'auto';
+  // same tri-state rule gatherConfig() uses below, so this and the Settings tab never disagree. null
+  // means never chosen, and the card must say that rather than paint a green ON chip over a default.
+  savings.routing = cfgNow.routing === 'off' ? 'off' : cfgNow.routing === 'auto' ? 'auto' : null;
+  // A PREFERENCE IS NOT A CAPABILITY. Saving routing:'auto' records an intention; it does not install
+  // agentic-flow, and the Savings card claiming "Smart routing: ON" while the Capabilities card said
+  // "not installed" — in the same render — was the contradiction that made the whole page untrustworthy.
+  // The card now carries the same measurement the capability row uses, so the two cannot disagree.
+  savings.routingInstalled = fs.existsSync(path.join(HOME, '.npm-global/bin/agentic-flow'));
   try { savings.routerEngine = gatherRouterEngine(); } catch { savings.routerEngine = null; }
   try {
     const cat = loadCatalog();
@@ -960,34 +995,195 @@ function apply(ids) {
   }
   return { results };
 }
-function saveConfig(values) {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  const prev = readJSON(CONFIG_PATH) || {};
-  let backup = null;
-  if (fs.existsSync(CONFIG_PATH)) { backup = `${CONFIG_PATH}.bak-${stamp()}`; fs.copyFileSync(CONFIG_PATH, backup); fs.chmodSync(backup, 0o600); }
-  const undoToken = journalUndo({ kind: 'restore-config', backup, existed: fs.existsSync(CONFIG_PATH) });
-  const next = { ...prev };
+/**
+ * VALIDATE AGAINST THE SCHEMA THAT IS ALREADY DECLARED. Without this, `/api/save-config` wrote
+ * whatever arrived: MEASURED, `{routing:'banana', nightly:'yes-please', provider:{evil:1}}` landed in
+ * the config file verbatim, and gatherConfig then read `routing:'banana'` as "not off" and rendered
+ * it as ON. Every one of these keys has its type and its allowed values stated ten lines up in
+ * CONFIG_SCHEMA; nothing was consulting them.
+ *
+ * Rejected values are REPORTED, not silently dropped and not silently coerced — a bad value must not
+ * quietly become a different setting than the one the user believes they chose.
+ */
+function validateConfigPatch(values) {
+  const clean = {};
+  const rejected = [];
   for (const s of CONFIG_SCHEMA) {
     const v = values?.[s.key];
     if (v === undefined || v === null) continue;
-    if (s.secret) { if (typeof v === 'string' && v.trim() && v !== '••••') next[s.key] = v.trim(); } // only overwrite a secret when a real new value is typed
-    else next[s.key] = v;
+    if (s.secret) {
+      // Only overwrite a secret when a real new value is typed — '••••' is the masked placeholder
+      // the form echoes back, and treating it as a new key would destroy the stored one.
+      if (typeof v === 'string' && v.trim() && v !== '••••') clean[s.key] = v.trim();
+      else if (typeof v !== 'string') rejected.push({ key: s.key, reason: 'expected a string' });
+      continue;
+    }
+    if (s.type === 'bool') {
+      if (typeof v === 'boolean') clean[s.key] = v;
+      else rejected.push({ key: s.key, reason: `expected true or false, got ${JSON.stringify(v)}` });
+      continue;
+    }
+    if (s.type === 'enum') {
+      if (typeof v === 'string' && s.options.includes(v)) clean[s.key] = v;
+      else rejected.push({ key: s.key, reason: `expected one of ${s.options.join(', ')}, got ${JSON.stringify(v)}` });
+      continue;
+    }
+    if (typeof v === 'string') clean[s.key] = v;
+    else rejected.push({ key: s.key, reason: 'expected a string' });
   }
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
-  try { fs.chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort on non-posix */ }
-  return { ok: true, backup: backup ? backup.replace(HOME, '~') : null, undoToken };
+  // Keys not in the schema never reach disk. The old writer only ever copied schema keys either, but
+  // it did so while trusting their values, which is the half of the job that mattered.
+  return { clean, rejected };
 }
+
+/**
+ * SAVE — the writer users actually reach, and now the one that is actually safe.
+ *
+ * This function used to be the counter-example to the entire user-settings.mjs module sitting beside
+ * it: that file has a lock, an atomic rename, an exclusive-create backup and a from-the-future
+ * refusal, all tested — and ZERO non-test callers, while this truncating, unlocked, unvalidated
+ * writeFileSync served every click on the page. The hardening was real and unreachable.
+ *
+ * Now it borrows those primitives directly rather than growing a second, weaker copy of them:
+ *   withLock      two Claude Code sessions on one machine is the normal case, not the exotic one, and
+ *                 read-modify-write without a lock loses whichever key the loser wrote.
+ *   read-inside   `prev` is re-read INSIDE the lock; reading before acquiring reintroduces the race.
+ *   writeAtomic   writeFileSync truncates first, so a crash mid-write leaves an EMPTY config and the
+ *                 user's answers are gone having passed the backup step successfully.
+ *   backup 'wx'   exclusive creation, so a racing writer cannot overwrite the backup this save's undo
+ *                 token points at.
+ */
+function saveConfig(values) {
+  try { fs.mkdirSync(CONFIG_DIR, { recursive: true }); }
+  catch (e) { return { ok: false, log: `could not create ${CONFIG_DIR.replace(HOME, '~')}: ${e.message}` }; }
+
+  const { clean, rejected } = validateConfigPatch(values);
+  // Nothing valid to write is not a save. Saying "Saved." here would be the dead-button failure with
+  // a receipt attached.
+  if (!Object.keys(clean).length) {
+    return {
+      ok: false,
+      rejected,
+      log: rejected.length
+        ? `nothing was saved — ${rejected.map((r) => `${r.key}: ${r.reason}`).join('; ')}`
+        : 'nothing was saved — no recognised settings were supplied',
+    };
+  }
+
+  const held = withLock(CONFIG_PATH, () => {
+    const existed = fs.existsSync(CONFIG_PATH);
+    const prev = readJSON(CONFIG_PATH) || {};
+
+    let backup = null;
+    if (existed) {
+      const base = `${CONFIG_PATH}.bak-${stamp()}`;
+      backup = base;
+      for (let n = 2; fs.existsSync(backup); n++) backup = `${base}-${String(n).padStart(2, '0')}`;
+      try { fs.writeFileSync(backup, fs.readFileSync(CONFIG_PATH), { flag: 'wx', mode: 0o600 }); }
+      catch (e) { return { ok: false, log: `refusing to write — backup failed: ${e.message}` }; }
+    }
+
+    const next = { ...prev, ...clean };
+    try { writeAtomic(CONFIG_PATH, JSON.stringify(next, null, 2) + '\n'); }
+    catch (e) { return { ok: false, backup, log: `write failed: ${e.message}${backup ? `; your previous settings are at ${backup.replace(HOME, '~')}` : ''}` }; }
+    try { fs.chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort on non-posix */ }
+
+    // The undo token is journalled only AFTER the write succeeded. Recording an undo for a save that
+    // never happened hands the user a button that would revert a change they never made.
+    const undoToken = journalUndo({ kind: 'restore-config', backup, existed });
+    return { ok: true, backup: backup ? backup.replace(HOME, '~') : null, undoToken, rejected };
+  });
+
+  if (held.timedOut) {
+    return {
+      ok: false,
+      rejected,
+      log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — nothing was written; try again`,
+    };
+  }
+  return held.value;
+}
+/** Read the append-only undo journal. Malformed lines are skipped; they are not entries. */
+function readUndoJournal() {
+  if (!fs.existsSync(UNDO_JOURNAL)) return [];
+  try {
+    return fs.readFileSync(UNDO_JOURNAL, 'utf8').split('\n').filter(Boolean)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { return []; }
+}
+
+/**
+ * An undo is spent once it is used. The journal is append-only, so "spent" is itself an appended
+ * record rather than a mutation — same reason the project-state checkpoint is append-only.
+ */
+function markUndoConsumed(token) {
+  try { fs.appendFileSync(UNDO_JOURNAL, JSON.stringify({ consumed: token, at: new Date().toISOString() }) + '\n'); }
+  catch { /* the restore already happened; failing to record it must not un-happen it */ }
+}
+
 function undo(undoToken) {
   if (!fs.existsSync(UNDO_JOURNAL)) return { ok: false, log: 'no undo history' };
-  const entry = fs.readFileSync(UNDO_JOURNAL, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).find((e) => e.token === undoToken);
+  const journal = readUndoJournal();
+  const entry = journal.find((e) => e.token === undoToken);
   if (!entry) return { ok: false, log: 'that undo token was not found' };
+
+  // ONE UNDO, ONCE. The token was never consumed, so the same button replayed forever: clicking it
+  // twice re-restored a backup over whatever the user had done in between, and reported success both
+  // times. An undo you can accidentally apply to a state it was not computed against is a data-loss
+  // button wearing a safety label.
+  if (journal.some((e) => e.consumed === undoToken)) {
+    return { ok: false, log: 'that undo has already been used — it cannot be applied twice, because what it would restore is no longer what came before' };
+  }
+
   if (entry.kind === 'restore-config') {
-    if (entry.backup && fs.existsSync(entry.backup)) { fs.copyFileSync(entry.backup, CONFIG_PATH); return { ok: true, log: 'restored your previous settings' }; }
-    if (!entry.existed && fs.existsSync(CONFIG_PATH)) { fs.rmSync(CONFIG_PATH); return { ok: true, log: 'removed the settings file (there was none before)' }; }
+    // A LATER SAVE MAKES THIS UNDO WRONG, and this was the worst defect on the page. MEASURED: save A,
+    // save B, then click A's undo — the console reported "restored your previous settings" and B's
+    // choices were silently gone, because A's backup predates B entirely. Reachable in a single
+    // screen: saving Settings shows an undo button, clicking "Turn on smart routing" is a second save
+    // through the same endpoint, and A's undo then reverts routing while the CTA still reads ON.
+    //
+    // An undo can only speak for the last write. If something was written after it, the honest answer
+    // is to refuse and say so — restoring anyway would be destroying newer data while claiming to
+    // protect older data.
+    const laterSave = journal.some((e) => e.kind === 'restore-config' && e.at > entry.at && e.token !== undoToken);
+    if (laterSave) {
+      return { ok: false, log: 'your settings were saved again after this point, so this undo would wipe out that newer save — nothing was changed. Use the undo from the most recent save, or restore a backup by hand.' };
+    }
+
+    if (entry.backup && fs.existsSync(entry.backup)) {
+      // Locked and atomic, matching the save path. A half-written config during an UNDO leaves the
+      // user with neither their old settings nor their new ones.
+      let held;
+      try {
+        const bytes = fs.readFileSync(entry.backup);
+        held = withLock(CONFIG_PATH, () => writeAtomic(CONFIG_PATH, bytes));
+      } catch (e) { return { ok: false, log: `restore failed: ${e.message} — your backup at ${entry.backup.replace(HOME, '~')} is intact` }; }
+      if (held.timedOut) return { ok: false, log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — NOTHING was restored and your backup is intact; try again` };
+      try { fs.chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort on non-posix */ }
+      markUndoConsumed(undoToken);
+      return { ok: true, log: 'restored your previous settings' };
+    }
+
+    if (!entry.existed && fs.existsSync(CONFIG_PATH)) {
+      // The first-ever-save case: undo means removing the file. Guarded by the same later-save check
+      // above — without it, this branch DELETED THE WHOLE CONFIG including every choice made after,
+      // and reported "removed the settings file (there was none before)" as if that were harmless.
+      let held;
+      try { held = withLock(CONFIG_PATH, () => { fs.rmSync(CONFIG_PATH); return true; }); }
+      catch (e) { return { ok: false, log: `could not remove the settings file: ${e.message}` }; }
+      if (held.timedOut) return { ok: false, log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — nothing was removed; try again` };
+      markUndoConsumed(undoToken);
+      return { ok: true, log: 'removed the settings file (there was none before this save)' };
+    }
     return { ok: false, log: 'no backup available to restore' };
   }
+  // EVERY branch below marks its token consumed on success, for the reason spelled out on the
+  // restore-config branch above: these all copy a saved snapshot over a live file, so replaying one
+  // re-applies an old state over whatever the user has done since. The replay guard at the top of
+  // this function covers all kinds; these calls are what arm it.
   if (entry.kind === 'reinstall-version' && entry.pkg && entry.prevVersion) {
     const r = spawnSync('npm', ['install', '-g', '--prefix', NPM_PREFIX, `${entry.pkg}@${entry.prevVersion}`], { encoding: 'utf8', timeout: 15 * 60 * 1000 });
+    if (r.status === 0) markUndoConsumed(undoToken);
     return { ok: r.status === 0, log: r.status === 0 ? `reinstalled ${entry.pkg}@${entry.prevVersion}` : (r.stderr || '').slice(-800) };
   }
   if (entry.kind === 'restore-backup' && entry.project) {
@@ -1000,6 +1196,7 @@ function undo(undoToken) {
       baks.sort();
       fs.copyFileSync(path.join(path.dirname(target), baks[baks.length - 1]), target); restored++;
     }
+    if (restored > 0) markUndoConsumed(undoToken);
     return { ok: restored > 0, log: restored ? `restored ${restored} settings file(s) from backup` : 'no reconcile backups found to restore' };
   }
   // THE BRANCH THAT DID NOT EXIST. `repair:memory-index` journalled kind 'restore-memory-backup'
@@ -1016,6 +1213,7 @@ function undo(undoToken) {
     const from = path.join(dir, baks[baks.length - 1]);
     try { fs.copyFileSync(from, entry.db); }
     catch (e) { return { ok: false, log: `could not restore ${from.replace(HOME, '~')}: ${e.message}` }; }
+    markUndoConsumed(undoToken);
     return { ok: true, log: `restored your memory store from the snapshot taken before the repair (${baks[baks.length - 1]})` };
   }
   // Fleet distillation touches a set of stores discovered at run time, so its executor writes a

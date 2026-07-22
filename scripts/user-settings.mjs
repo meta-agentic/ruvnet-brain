@@ -223,17 +223,22 @@ export function validate(input) {
  * repo has a standing order against.
  */
 export function loadSettings(file = STORE_PATH) {
-  // `unreadable` is NOT a synonym for `!healthy`, and the difference is the whole point of the field.
+  // `fromFuture` is a NARROW flag and its narrowness is the entire design. It marks the one state in
+  // which saving would DESTROY RECOVERABLE DATA, and nothing else:
   //
-  //   unreadable = we could not recover the user's stored choices AT ALL (corrupt bytes, or a schema
-  //                from the future we refuse to guess at). What is in `values` is defaults we made up.
-  //   !healthy   = we read their choices fine and one of them was invalid. `values` is genuinely
-  //                theirs apart from the one key we fell back on.
+  //   fromFuture = the file is perfectly valid and intact; we simply do not understand its schema
+  //                because a NEWER build wrote it. Their real choices are sitting there, readable by
+  //                the version that made them. Overwriting = deleting live data. → REFUSE.
+  //   corrupt    = the bytes are not JSON. Their choices are already GONE; there is nothing left to
+  //                protect. Refusing here would strand the user forever with a broken file and no way
+  //                to fix it from the console. → RECOVER: back the wreckage up and write a good file.
+  //   !healthy   = we read their choices fine and one value was invalid. Entirely normal. → PROCEED.
   //
-  // saveSettings keys off `unreadable` alone. Keying off `healthy` would be the obvious-looking fix
-  // and a worse bug: a single bad enum value would lock the user out of every future save, including
-  // the save that fixes it — a guard that causes the failure it was added to prevent.
-  const envelope = { path: file, exists: false, healthy: true, unreadable: false, values: defaults(), errors: [], warnings: [] };
+  // The tempting version of this fix was one flag for "could not read it" covering both corrupt and
+  // fromFuture. That is wrong, and its own test caught it: recovery from a truncated write is a
+  // CONTRACT here, and a blanket refusal breaks the only path out of it. "Can we still recover their
+  // intent from this file?" is the question — not "can we parse it?"
+  const envelope = { path: file, exists: false, healthy: true, fromFuture: false, values: defaults(), errors: [], warnings: [] };
   let raw;
   try { raw = fs.readFileSync(file, 'utf8'); }
   catch { return envelope; }   // no file yet is the NORMAL state, not a fault — empty-first, house rule 3
@@ -244,8 +249,9 @@ export function loadSettings(file = STORE_PATH) {
   catch (e) {
     // Degrade, do not throw. A truncated write (full disk, killed process) must not make every
     // surface that reads settings explode; it must make them fall back and say why.
+    // NOT fromFuture: these bytes are unrecoverable, so there is nothing here for a refusal to
+    // protect. saveSettings backs the wreckage up and writes a clean file — recovery, not overwrite.
     envelope.healthy = false;
-    envelope.unreadable = true;
     envelope.errors.push({ key: null, reason: `settings file is not valid JSON (${e.message}) — using defaults` });
     return envelope;
   }
@@ -254,7 +260,7 @@ export function loadSettings(file = STORE_PATH) {
     // Written by a newer version than this code understands. Refuse to reinterpret it — an older
     // reader guessing at a newer schema is how settings get silently downgraded on the next save.
     envelope.healthy = false;
-    envelope.unreadable = true;
+    envelope.fromFuture = true;
     envelope.errors.push({ key: null, reason: `settings were written by a newer version (v${parsed.version} > v${SETTINGS_VERSION}) — using defaults rather than misreading them` });
     return envelope;
   }
@@ -286,7 +292,7 @@ export function loadSettings(file = STORE_PATH) {
  * they were meant to guard against; a lock with no stale path would be the third. So the lock records
  * its pid and mtime, and any lock older than STALE_LOCK_MS is taken over.
  */
-const LOCK_WAIT_MS = 5000;    // total time a writer will queue before giving up and saying so
+export const LOCK_WAIT_MS = 5000;    // total time a writer will queue before giving up and saying so
 const STALE_LOCK_MS = 30_000; // older than this and the holder is presumed dead, not slow
 
 /** Sleep without async. Atomics.wait on a throwaway buffer is the only dependency-free sync sleep. */
@@ -295,7 +301,11 @@ function sleepSync(ms) {
   catch { /* SharedArrayBuffer unavailable — spin the remaining wait out rather than fail the save */ }
 }
 
-function withLock(file, fn) {
+// EXPORTED because the console's own writer needs them. These were written, tested and hardened here
+// while `/api/save-config` — the only writer any user can actually reach — kept using a truncating
+// writeFileSync with no lock and no validation. Write-safety that lives in a module nothing calls is
+// not write-safety; it is a test suite. See saveConfig in onboarding-console.mjs.
+export function withLock(file, fn) {
   const lock = `${file}.lock`;
   const deadline = Date.now() + LOCK_WAIT_MS;
   let fd = null;
@@ -303,7 +313,17 @@ function withLock(file, fn) {
   for (;;) {
     try { fd = fs.openSync(lock, 'wx'); break; }
     catch (e) {
-      if (e.code !== 'EEXIST') throw e;
+      // A filesystem error (EACCES on a read-only directory, EROFS, ENOSPC) is NOT contention, and
+      // must not be thrown out of a function whose callers are all documented to return a receipt
+      // rather than raise. It broke the read-only-directory test by turning a clean "refusing to
+      // write — backup failed" into an EACCES stack trace out of saveSettings.
+      //
+      // Proceeding unlocked is safe here, and provably so rather than hopefully: the lock lives in
+      // the SAME directory as the settings file, so a directory that refuses a new lock entry will
+      // equally refuse the backup and the temp file. The real operation fails a moment later with the
+      // accurate message about what actually could not be done. Better a truthful error from the step
+      // that matters than an accurate-but-obscure one about a lock the user never asked for.
+      if (e.code !== 'EEXIST') return { ok: true, unlocked: true, value: fn() };
       let age = 0;
       try { age = Date.now() - fs.statSync(lock).mtimeMs; }
       catch { continue; }   // vanished between open and stat — the holder just released it; retry
@@ -340,7 +360,7 @@ function withLock(file, fn) {
  * The temp name carries the pid so two concurrent writers cannot collide on it even in the moment
  * before one of them takes the lock.
  */
-function writeAtomic(file, body) {
+export function writeAtomic(file, body) {
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
   let fd;
   try {
@@ -407,7 +427,7 @@ export function saveSettings(patch, { file = STORE_PATH } = {}) {
 function saveLocked(patch, file) {
   const before = loadSettings(file);
 
-  // REFUSE rather than silently downgrade. loadSettings already decided it could not recover these
+  // REFUSE rather than silently downgrade. loadSettings already decided it could not interpret these
   // choices and said so in its own comment — "an older reader guessing at a newer schema is how
   // settings get silently downgraded on the next save" — and then the next save did precisely that.
   // MEASURED: a v2 file holding six deliberate choices, saved once by this v1 code after toggling one
@@ -415,11 +435,16 @@ function saveLocked(patch, file) {
   // receipt said "saved; previous settings kept at …bak-…". A clean-looking success that destroyed
   // three explicit decisions is worse than any error message.
   //
+  // ONLY the from-the-future case. A corrupt file deliberately falls through to the recovery path
+  // below: there is no live data left in it to protect, and a refusal there would leave the user with
+  // a broken settings file and no way to repair it from the console — a guard that traps the person
+  // it was written for. See the flag's definition in loadSettings.
+  //
   // Note what is NOT done here: unknown keys are still dropped by validate(), by the deliberate
   // decision documented there. Preserving them would be a second, weaker answer to this problem —
   // refusing the write protects a newer file completely, whereas preserving keys would still rewrite
   // its version stamp and re-interpret the keys we think we recognise.
-  if (before.unreadable) {
+  if (before.fromFuture) {
     return {
       ok: false,
       backup: null,
@@ -509,10 +534,25 @@ export function revertSettings({ file = STORE_PATH, backup, existedBefore = true
   // under contention (see saveSettings), and an in-place copy that is interrupted leaves the user
   // with neither their old settings nor their new ones — during an UNDO, which is the one operation
   // that must never be able to lose data.
+  //
+  // AND THE RECEIPT IS CHECKED. withLock returns {ok:false, timedOut:true} WITHOUT EVER CALLING fn
+  // when another process holds a fresh lock — so discarding its result meant a revert that wrote
+  // nothing still reported "restored your previous settings from …bak-…". MEASURED against a held
+  // lock: 5017ms elapsed, receipt said ok:true, file byte-for-byte unchanged. saveSettings has
+  // checked `held.timedOut` since the day it was written; revert was the copy that forgot, which put
+  // the fabricated-success bug inside the one operation whose entire promise is that it really
+  // happened. A failed undo the user is told succeeded is worse than an undo button that isn't there.
+  let held;
   try {
     const bytes = fs.readFileSync(target);
-    withLock(file, () => writeAtomic(file, bytes));
+    held = withLock(file, () => writeAtomic(file, bytes));
   } catch (e) { return { ok: false, log: `restore failed: ${e.message}` }; }
+  if (held.timedOut) {
+    return {
+      ok: false,
+      log: `another process is writing these settings and did not finish within ${LOCK_WAIT_MS}ms (lock held ${Math.round(held.heldMs)}ms) — NOTHING was restored and your backup at ${path.basename(target)} is intact; try again`,
+    };
+  }
   return { ok: true, restored: target, log: `restored your previous settings from ${path.basename(target)}` };
 }
 
