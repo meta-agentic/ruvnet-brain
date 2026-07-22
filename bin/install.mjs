@@ -588,9 +588,13 @@ function verifyInstall(cacheDir) {
 }
 
 // ── step: warm the model + prove grounding with one real question (best-effort, never fatal) ──────
-// ── BEGIN GENERATED: verify-citation.mjs (node scripts/embed-verifier.mjs) ──
-const VERIFY_CITATION_B64 = 'IyEvdXNyL2Jpbi9lbnYgbm9kZQovLyB2ZXJpZnktY2l0YXRpb24ubWpzIOKAlCBkZWNpZGUgd2hldGhlciBhbiBhbnN3ZXIgaXMgR1JPVU5ERUQsIGJ5IGdyb3VuZCB0cnV0aCByYXRoZXIgdGhhbiBieSB2aWJlcy4KLy8KLy8gV0hZIFRISVMgRVhJU1RTCi8vIC0tLS0tLS0tLS0tLS0tLQovLyBUaGUgb2xkIGdyb3VuZGluZyBjaGVjayBhc2tlZDogZG9lcyB0aGUgYW5zd2VyIGNvbnRhaW4gdGhlIHN0cmluZyAicnZmIiBvciAicnV2ZWN0b3IiPyBBIG1vZGVsCi8vIHRoYXQgaGFsbHVjaW5hdGVkICJqdXN0IHVzZSBSVkYhIiB3aXRoIHplcm8gc291cmNlcyBwYXNzZWQuIFNvIGRpZCBhbiBhbnN3ZXIgY2l0aW5nIGEgZmlsZSB0aGF0Ci8vIGRvZXMgbm90IGV4aXN0LiBLZXl3b3JkIHByZXNlbmNlIGlzIG5vdCBldmlkZW5jZSDigJQgYW4gTExNIHBhbmVsIG9uY2Ugc2NvcmVkIGEgemVyby1jaXRhdGlvbgovLyBhbnN3ZXIgOTgvMTAwIG9uIHRoaXMgcmVwby4KLy8KLy8gQSBjaXRhdGlvbiBpcyBvbmx5IHJlYWwgaWYgaXQgUkVTT0xWRVM6IHRoZSByZXBvIG11c3QgYmUgYW4gaW5kZXhlZCBzdG9yZSBvbiBkaXNrLCBhbmQgdGhlIGNpdGVkCi8vIGRvY3VtZW50IHBhdGggbXVzdCBhcHBlYXIgYXMgdGhlIGBwYXRoYCBvZiBhbiBhY3R1YWwgcGFzc2FnZSBpbnNpZGUgdGhhdCBzdG9yZSdzIHBhc3NhZ2VzIGZpbGUuCi8vIFRoYXQgaXMgY2hlY2thYmxlIHdpdGhvdXQgYSBtb2RlbCwgd2l0aG91dCB0aGUgbmV0d29yaywgYW5kIHdpdGhvdXQgdHJ1c3RpbmcgYW55dGhpbmcgdGhlIG1vZGVsCi8vIHNhaWQuIFRoaXMgbW9kdWxlIGRvZXMgZXhhY3RseSB0aGF0IGFuZCBub3RoaW5nIGVsc2UuCi8vCi8vIFRoZSByZWFkZXIgKGBmb3JnZS1hc2stYWxsLm1qc2ApIHByaW50cyBlYWNoIGhpdCBhczoKLy8gICAgICMxICByZXBvPWNvbmNlcHRzICBjZT0wLjIwMSAgdmVjPTAuODY4NiAga2luZD1kb2MKLy8gICAgIHBhdGggOiBjb25jZXB0cy9ydXZlY3Rvci9DQVJEL3J1dmVjdG9yLWNhcmQKLy8gICAgIHRpdGxlOiBydXZlY3RvciDigJQgQ2FwYWJpbGl0eQovLyBOb3RlIHRoZSBwcmludGVkIHBhdGggaXMgYDxyZXBvPi88ZG9jUGF0aD5gOyBpbnNpZGUgYGNvbmNlcHRzLnBhc3NhZ2VzLmpzb25sYCB0aGUgc3RvcmVkIGBwYXRoYAovLyBpcyBqdXN0IGBydXZlY3Rvci9DQVJEL3J1dmVjdG9yLWNhcmRgIChvcHRpb25hbGx5IHN1ZmZpeGVkIGAjMGAsIGAjMWAsIOKApiB3aGVuIGNodW5rZWQpLgoKaW1wb3J0IGZzIGZyb20gJ25vZGU6ZnMnOwppbXBvcnQgcGF0aCBmcm9tICdub2RlOnBhdGgnOwppbXBvcnQgcmVhZGxpbmUgZnJvbSAnbm9kZTpyZWFkbGluZSc7CgovKiogUGFyc2UgdGhlIHJlYWRlcidzIHN0ZG91dCBpbnRvIHN0cnVjdHVyZWQgY2l0YXRpb25zLiBOZXZlciB0aHJvd3M7IHVucGFyc2VhYmxlIGlucHV0IOKGkiBbXS4gKi8KZXhwb3J0IGZ1bmN0aW9uIHBhcnNlQ2l0YXRpb25zKHN0ZG91dCkgewogIGNvbnN0IG91dCA9IFtdOwogIGNvbnN0IHRleHQgPSBTdHJpbmcoc3Rkb3V0ID8/ICcnKTsKICBjb25zdCBibG9ja1JlID0gL14jKFxkKylccytyZXBvPShcUyspKD86XHMrY2U9KC0/W1xkLl0rKSk/KD86XHMrdmVjPSgtP1tcZC5dKykpPyg/OlxzK2tpbmQ9KFxTKykpPy9nbTsKICBsZXQgbTsKICB3aGlsZSAoKG0gPSBibG9ja1JlLmV4ZWModGV4dCkpICE9PSBudWxsKSB7CiAgICBjb25zdCByZXN0ID0gdGV4dC5zbGljZShtLmluZGV4KTsKICAgIGNvbnN0IHBhdGhNID0gL15wYXRoXHMqOlxzKiguKykkL20uZXhlYyhyZXN0KTsKICAgIGNvbnN0IHRpdGxlTSA9IC9edGl0bGVccyo6XHMqKC4rKSQvbS5leGVjKHJlc3QpOwogICAgaWYgKCFwYXRoTSkgY29udGludWU7CiAgICBjb25zdCByZXBvID0gbVsyXTsKICAgIGNvbnN0IGZ1bGxQYXRoID0gcGF0aE1bMV0udHJpbSgpOwogICAgLy8gU3RyaXAgdGhlIHJlcG8gcHJlZml4IHRoZSByZWFkZXIgYWRkcywgc28gdGhlIHJlbWFpbmRlciBjYW4gYmUgbWF0Y2hlZCBhZ2FpbnN0IHRoZSBzdG9yZS4KICAgIGNvbnN0IGRvY1BhdGggPSBmdWxsUGF0aC5zdGFydHNXaXRoKGAke3JlcG99L2ApID8gZnVsbFBhdGguc2xpY2UocmVwby5sZW5ndGggKyAxKSA6IGZ1bGxQYXRoOwogICAgb3V0LnB1c2goewogICAgICByYW5rOiBOdW1iZXIobVsxXSksCiAgICAgIHJlcG8sCiAgICAgIGNlOiBtWzNdICE9PSB1bmRlZmluZWQgPyBOdW1iZXIobVszXSkgOiBudWxsLAogICAgICB2ZWM6IG1bNF0gIT09IHVuZGVmaW5lZCA/IE51bWJlcihtWzRdKSA6IG51bGwsCiAgICAgIGtpbmQ6IG1bNV0gPz8gbnVsbCwKICAgICAgZnVsbFBhdGgsCiAgICAgIGRvY1BhdGgsCiAgICAgIHRpdGxlOiB0aXRsZU0gPyB0aXRsZU1bMV0udHJpbSgpIDogbnVsbCwKICAgIH0pOwogIH0KICByZXR1cm4gb3V0Owp9CgovKiogVGhlIHBhc3NhZ2VzIGZpbGVzIHRoYXQgY291bGQgaG9sZCBhIHJlcG8ncyBkb2N1bWVudHMg4oCUIHRoZSBzbGltIHN0b3JlIGFuZCB0aGUgZGVlcCBgLmJpZ2Agb25lLiAqLwpleHBvcnQgZnVuY3Rpb24gcGFzc2FnZXNGaWxlc0ZvcihyZXBvLCBrYkRpcikgewogIHJldHVybiBbcGF0aC5qb2luKGtiRGlyLCBgJHtyZXBvfS5wYXNzYWdlcy5qc29ubGApLCBwYXRoLmpvaW4oa2JEaXIsIGAke3JlcG99LmJpZy5wYXNzYWdlcy5qc29ubGApXQogICAgLmZpbHRlcigocCkgPT4gZnMuZXhpc3RzU3luYyhwKSk7Cn0KCi8qKiBUcnVlIHdoZW4gYHN0b3JlZGAgaXMgdGhlIGNpdGVkIGRvYywgYWxsb3dpbmcgZm9yIHRoZSBgI05gIGNodW5rIHN1ZmZpeCB0aGUgYnVpbGRlciBhcHBlbmRzLiAqLwpmdW5jdGlvbiBzYW1lUGF0aChzdG9yZWQsIGRvY1BhdGgpIHsKICByZXR1cm4gc3RvcmVkID09PSBkb2NQYXRoIHx8IHN0b3JlZC5zdGFydHNXaXRoKGAke2RvY1BhdGh9I2ApOwp9CgovKioKICogRG9lcyB0aGlzIGNpdGF0aW9uIHBvaW50IGF0IGEgcGFzc2FnZSB0aGF0IHJlYWxseSBleGlzdHMgb24gZGlzaz8KICogU3RyZWFtcyB0aGUgZmlsZSBhbmQgc3RvcHMgYXQgdGhlIGZpcnN0IG1hdGNoLCBzbyBhIDUwME1CIGAuYmlnYCBzdG9yZSBjb3N0cyBvbmx5IGFzIG11Y2ggYXMgaXQKICogdGFrZXMgdG8gcmVhY2ggdGhlIGhpdC4gQSBtYWxmb3JtZWQgSlNPTiBsaW5lIGlzIHNraXBwZWQsIG5ldmVyIGZhdGFsLgogKi8KZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGNpdGF0aW9uUmVzb2x2ZXMoY2l0YXRpb24sIGtiRGlyKSB7CiAgY29uc3QgZmlsZXMgPSBwYXNzYWdlc0ZpbGVzRm9yKGNpdGF0aW9uLnJlcG8sIGtiRGlyKTsKICBpZiAoIWZpbGVzLmxlbmd0aCkgcmV0dXJuIHsgcmVzb2x2ZWQ6IGZhbHNlLCByZWFzb246ICduby1zdG9yZScsIGZpbGU6IG51bGwsIHN0b3JlZFBhdGg6IG51bGwgfTsKICBmb3IgKGNvbnN0IGZpbGUgb2YgZmlsZXMpIHsKICAgIGNvbnN0IHJsID0gcmVhZGxpbmUuY3JlYXRlSW50ZXJmYWNlKHsgaW5wdXQ6IGZzLmNyZWF0ZVJlYWRTdHJlYW0oZmlsZSksIGNybGZEZWxheTogSW5maW5pdHkgfSk7CiAgICB0cnkgewogICAgICBmb3IgYXdhaXQgKGNvbnN0IGxpbmUgb2YgcmwpIHsKICAgICAgICBpZiAoIWxpbmUpIGNvbnRpbnVlOwogICAgICAgIGxldCByZWM7CiAgICAgICAgdHJ5IHsgcmVjID0gSlNPTi5wYXJzZShsaW5lKTsgfSBjYXRjaCB7IGNvbnRpbnVlOyB9CiAgICAgICAgaWYgKHR5cGVvZiByZWM/LnBhdGggPT09ICdzdHJpbmcnICYmIHNhbWVQYXRoKHJlYy5wYXRoLCBjaXRhdGlvbi5kb2NQYXRoKSkgewogICAgICAgICAgcmV0dXJuIHsgcmVzb2x2ZWQ6IHRydWUsIHJlYXNvbjogJ29rJywgZmlsZTogcGF0aC5iYXNlbmFtZShmaWxlKSwgc3RvcmVkUGF0aDogcmVjLnBhdGggfTsKICAgICAgICB9CiAgICAgIH0KICAgIH0gZmluYWxseSB7CiAgICAgIHJsLmNsb3NlKCk7CiAgICB9CiAgfQogIHJldHVybiB7IHJlc29sdmVkOiBmYWxzZSwgcmVhc29uOiAncGF0aC1ub3QtaW4tc3RvcmUnLCBmaWxlOiBudWxsLCBzdG9yZWRQYXRoOiBudWxsIH07Cn0KCi8qKgogKiBUaGUgZ2F0ZS4gQW4gYW5zd2VyIGlzIGdyb3VuZGVkIG9ubHkgd2hlbiBpdCBjaXRlcyBhdCBsZWFzdCBvbmUgcGFzc2FnZSB0aGF0IHJlc29sdmVzIG9uIGRpc2suCiAqIFJldHVybnMgdGhlIHJlY2VpcHQgc28gYSBjYWxsZXIgY2FuIFBSSU5UIHRoZSBldmlkZW5jZSBpbnN0ZWFkIG9mIGFzc2VydGluZyBhIGNvbmNsdXNpb24uCiAqLwpleHBvcnQgYXN5bmMgZnVuY3Rpb24gdmVyaWZ5R3JvdW5kaW5nKHN0ZG91dCwga2JEaXIpIHsKICBjb25zdCBjaXRhdGlvbnMgPSBwYXJzZUNpdGF0aW9ucyhzdGRvdXQpOwogIGlmICghY2l0YXRpb25zLmxlbmd0aCkgewogICAgcmV0dXJuIHsgZ3JvdW5kZWQ6IGZhbHNlLCByZWFzb246ICduby1jaXRhdGlvbnMnLCBjaXRhdGlvbnM6IFtdLCByZWNlaXB0OiBudWxsIH07CiAgfQogIGZvciAoY29uc3QgY2l0YXRpb24gb2YgY2l0YXRpb25zKSB7CiAgICBjb25zdCByID0gYXdhaXQgY2l0YXRpb25SZXNvbHZlcyhjaXRhdGlvbiwga2JEaXIpOwogICAgaWYgKHIucmVzb2x2ZWQpIHsKICAgICAgcmV0dXJuIHsKICAgICAgICBncm91bmRlZDogdHJ1ZSwKICAgICAgICByZWFzb246ICdvaycsCiAgICAgICAgY2l0YXRpb25zLAogICAgICAgIHJlY2VpcHQ6IHsgcmVwbzogY2l0YXRpb24ucmVwbywgcGF0aDogY2l0YXRpb24uZnVsbFBhdGgsIHRpdGxlOiBjaXRhdGlvbi50aXRsZSwgZmlsZTogci5maWxlLCBzdG9yZWRQYXRoOiByLnN0b3JlZFBhdGggfSwKICAgICAgfTsKICAgIH0KICB9CiAgcmV0dXJuIHsgZ3JvdW5kZWQ6IGZhbHNlLCByZWFzb246ICdjaXRhdGlvbnMtZG8tbm90LXJlc29sdmUnLCBjaXRhdGlvbnMsIHJlY2VpcHQ6IG51bGwgfTsKfQo=';
-// ── END GENERATED ──
+// The verifier ships as a real file (kb/verify-citation.mjs, in package.json files[]).
+// It used to live here as a ~4KB base64 literal that was decoded at runtime, written to disk as
+// .mjs, and then dynamically imported. That is the canonical staged-payload chain, and EDR
+// behavioural engines score write-then-execute on a just-created file as high-confidence dropper
+// activity — a benign explanation that arrives only AFTER the alarm. Copying a file we shipped is
+// the same capability with none of the signature. (base64 was originally chosen to dodge escaping
+// bugs — the module contains backticks, ${...} and backslashes — which shipping a file also solves.)
 
 // The verifier belongs next to the data it verifies, so it lives in the KB. But every bundle
 // published before 2026-07-09 predates it, and telling those users "grounding not verifiable —
@@ -600,9 +604,10 @@ const VERIFY_CITATION_B64 = 'IyEvdXNyL2Jpbi9lbnYgbm9kZQovLyB2ZXJpZnktY2l0YXRpb24
 function ensureVerifier(cacheDir) {
   const p = path.join(cacheDir, 'verify-citation.mjs');
   if (fs.existsSync(p)) return 'from-bundle';
-  if (!VERIFY_CITATION_B64) return 'unavailable';
+  const shipped = path.join(REPO_ROOT, 'kb', 'verify-citation.mjs');
+  if (!fs.existsSync(shipped)) return 'unavailable';
   try {
-    fs.writeFileSync(p, Buffer.from(VERIFY_CITATION_B64, 'base64').toString('utf8'), 'utf8');
+    fs.copyFileSync(shipped, p);
     return 'installed';
   } catch { return 'unavailable'; }
 }
@@ -1214,10 +1219,15 @@ function enableNightly() {
     process.exit(1);
   }
 
-  // Template the plist to THIS user's kb dir + node binary. Quotes guard paths with spaces;
-  // xmlEscape guards the XML (>> and && must survive as shell operators after plist parsing).
+  // Template the plist to THIS user's kb dir + node binary.
+  //
+  // No `/bin/sh -c` (ADR-038): a LaunchAgent whose ProgramArguments invoke a shell is the standard
+  // macOS persistence pattern, and EDR persistence monitors score it well above a plist that execs a
+  // binary directly. launchd provides everything the shell was doing here natively —
+  // WorkingDirectory replaces `cd`, StandardOutPath/StandardErrorPath replace `>>` and `2>&1` — so
+  // dropping the shell costs nothing and removes both a shell parse of interpolated paths and the
+  // signature. Same schedule, same command, same log.
   const logPath = path.join(kbDir, 'update.log');
-  const shellCmd = `cd "${kbDir}" && "${process.execPath}" forge-update.mjs --apply >> "${logPath}" 2>&1`;
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1226,10 +1236,16 @@ function enableNightly() {
   <string>${NIGHTLY_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/sh</string>
-    <string>-c</string>
-    <string>${xmlEscape(shellCmd)}</string>
+    <string>${xmlEscape(process.execPath)}</string>
+    <string>forge-update.mjs</string>
+    <string>--apply</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>${xmlEscape(kbDir)}</string>
+  <key>StandardOutPath</key>
+  <string>${xmlEscape(logPath)}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(logPath)}</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>

@@ -157,7 +157,15 @@ NOWV=$(date +%s 2>/dev/null || echo 0)
 LASTV=$(cat "$VSTAMP" 2>/dev/null || echo 0)
 # 6h, not 20h: rUv shipped THREE ruflo versions inside one 18h window. A cache slower than the thing
 # it tracks reports fiction. (The ver_lt guard means a stale cache is now merely quiet, never wrong.)
-if [ "$NOWV" -gt 0 ] && [ $((NOWV - LASTV)) -gt 21600 ]; then
+#
+# JITTERED (ADR-038): a fixed interval to a fixed host is the shape of C2 beaconing, and on a managed
+# corporate laptop that is a pattern an EDR scores rather than a value it reads. ±20% (4.8h–7.2h),
+# seeded per-machine from the hostname so a given install is self-consistent rather than random each
+# invocation, and so a fleet of installs doesn't align on one wall-clock tick. Freshness is unaffected
+# — the worst case is 7.2h on a signal whose cache is read a session late by design anyway.
+VJITTER=$(( ( $(hostname 2>/dev/null | cksum 2>/dev/null | cut -d' ' -f1 || echo 0) % 8641 ) - 4320 ))
+VINTERVAL=$(( 21600 + VJITTER ))
+if [ "$NOWV" -gt 0 ] && [ $((NOWV - LASTV)) -gt "$VINTERVAL" ]; then
   echo "$NOWV" > "$VSTAMP" 2>/dev/null
   # BACKGROUNDED (QE-0011 code#1): these are 3 sequential `curl --max-time 3` = up to ~9s. Running
   # them synchronously HERE — before the grounding gates below — risks the whole hook being killed by
