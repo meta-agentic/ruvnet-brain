@@ -26,6 +26,11 @@ let lastMemory = null;            // last rendered memory card, so the late flee
 const renderedRecIds = new Set();
 let stateRecsSettled = false;
 let stackRecsSettled = false;
+// Health advocacy (ADR-027) hydrates from /api/memory, the slowest source. Until it has answered,
+// the chip must NOT claim "none needed" — that would tell the user their machine is clean while the
+// one check that actually looks at their learning state is still running. Silence read as an
+// all-clear is the exact failure this ADR exists to end.
+let healthRecsSettled = false;
 const found = {};                 // pieces of the "we looked at your computer" ribbon
 
 /* --------------------------------------------------------------- helpers */
@@ -837,8 +842,8 @@ const BADGE_OK = `
 
 function updateRecsChip() {
   const n = renderedRecIds.size;
-  if (!stateRecsSettled && !stackRecsSettled) { setChips('chips-recs', [chip('…', 'wait')]); return; }
-  if (n === 0 && stateRecsSettled && stackRecsSettled) {
+  if (!stateRecsSettled && !stackRecsSettled && !healthRecsSettled) { setChips('chips-recs', [chip('…', 'wait')]); return; }
+  if (n === 0 && stateRecsSettled && stackRecsSettled && healthRecsSettled) {
     setChips('chips-recs', [chip('none needed', 'green')]);
   } else {
     setChips('chips-recs', [chip(`${n} proposal${n === 1 ? '' : 's'}`, n ? 'amber' : 'wait')]);
@@ -848,7 +853,7 @@ function updateRecsChip() {
 function maybeRecsEmpty() {
   const emptyBox = $('#recs-empty');
   if (!emptyBox) return;
-  if (stateRecsSettled && stackRecsSettled && renderedRecIds.size === 0) {
+  if (stateRecsSettled && stackRecsSettled && healthRecsSettled && renderedRecIds.size === 0) {
     emptyBox.hidden = false;
     emptyBox.replaceChildren(el('div', { class: 'recs-empty' },
       withIllo('recs',
@@ -861,6 +866,7 @@ function maybeRecsEmpty() {
 
 function recsSettled(source, ok) {
   if (source === 'state') stateRecsSettled = true;
+  if (source === 'health') healthRecsSettled = true;
   if (source === 'stack') {
     stackRecsSettled = true;
     const pending = $('#recs-pending');
@@ -892,9 +898,14 @@ function addRecommendations(recs, source) {
     renderedRecIds.add(rec.id);
     nodes.push(buildRecCard(rec));
   }
-  // Stack updates (sync:/repair:) arrive from the slow audit AFTER wiring recs — but they outrank
-  // them (machine-wide blast radius), so they go to the top instead of queueing at the bottom.
-  if (source === 'stack' && list.firstChild) list.prepend(...nodes);
+  // Ordering is by BLAST RADIUS, not arrival time — the slow sources arrive last and matter most.
+  //
+  // 'health' outranks even stack updates. A store holding thousands of memories that teach your AI
+  // nothing, or a corrupt memory index, is a bigger deal than a version being one behind — and it is
+  // the one thing the user cannot discover for themselves, because nothing else on the machine says
+  // it out loud. That is the entire premise of ADR-027: knowing which question to ask is the scarce
+  // resource, so the answer nobody knew to ask for goes first.
+  if ((source === 'health' || source === 'stack') && list.firstChild) list.prepend(...nodes);
   else list.append(...nodes);
   if (dropped) {
     list.append(el('p', { class: 'fineprint' },
@@ -2142,7 +2153,16 @@ async function loadMemoryFleet() {
       lastMemory = { ...lastMemory, fleet: m.fleet };
       renderMemory(lastMemory);
     }
-  } catch { /* the fleet list is a bonus — memory health is already rendered */ }
+    // ADR-027: the brain advocates rather than waiting to be asked. These are the recommendations
+    // derived from what the fleet scan just SAW — a corrupt index, a starving learner, stores full
+    // of memories that have never been distilled into anything reusable. They were built and
+    // schema-gated for a full day before anything rendered them.
+    if (m && Array.isArray(m.recommendations)) addRecommendations(m.recommendations, 'health');
+    recsSettled('health', true);
+  } catch {
+    // An advocacy failure must be VISIBLE as a failure, never as an all-clear.
+    recsSettled('health', false);
+  }
 }
 
 async function loadStack({ skipCache = false } = {}) {

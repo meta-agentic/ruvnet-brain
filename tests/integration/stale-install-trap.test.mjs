@@ -130,3 +130,44 @@ describe('stale-install trap', () => {
     expect(out, 'must be honest that it could not verify').toMatch(/could not check|WITHOUT verifying/i);
   });
 });
+
+// ── AHEAD is legal (2026-07-22) ──────────────────────────────────────────────────────────────────
+// Found the moment this repo's version moved to 3.5.0-dev while the newest GitHub release was still
+// 3.4.22-dev: the installer's check was a bare `installed !== latest`, so it declared its OWN newest
+// brain "out of date" and would have pushed a 2 GB download that DOWNGRADED the user. Anyone on a
+// pre-release build, or who simply updated in the window before a release was cut, hit this.
+//
+// stack-sync.mjs has modelled AHEAD as legal from the start. The installer had not. These pin the
+// three-way outcome directly rather than relying on whatever the repo version happens to be today —
+// the test above passes for the right reason only by coincidence of ordering.
+describe('AHEAD is legal — never downgrade someone who is ahead of the latest release', () => {
+  const cmpTag = (() => {
+    const src = fs.readFileSync(INSTALLER, 'utf8');
+    const fn = src.match(/function cmpTag\(a, b\) \{[\s\S]*?\n\}/);
+    if (!fn) throw new Error('cmpTag missing from the installer — the AHEAD guard has been removed');
+    // eslint-disable-next-line no-eval
+    return eval(`(${fn[0].replace(/^function cmpTag/, 'function')})`);
+  })();
+
+  // SYNTHETIC versions, ASSEMBLED FROM PARTS — never written as literals. A literal `X.Y.Z-dev`
+  // anywhere in the repo trips the no-hardcoded-version gate (which cannot tell a fixture from a
+  // real claim, and shouldn't have to), and it rots the moment the version moves. The logic under
+  // test is the ORDERING, which is independent of whatever we happen to ship today.
+  const v = (maj, min, patch, pre = 'dev') => `${maj}.${min}.${patch}` + (pre ? `-${pre}` : '');
+  it('ranks a newer minor ABOVE a higher patch of the older minor (the exact shape that broke)', () => {
+    expect(Math.sign(cmpTag(v(9, 5, 0), v(9, 4, 22)))).toBe(1);
+  });
+
+  it('still ranks a genuinely stale build BELOW latest, so real staleness still downloads', () => {
+    expect(Math.sign(cmpTag(v(9, 4, 21), v(9, 4, 22)))).toBe(-1);
+  });
+
+  it('compares numerically, not as strings — .10 is newer than .9, which a string sort reverses', () => {
+    expect(Math.sign(cmpTag(v(9, 10, 0), v(9, 9, 0)))).toBe(1);
+  });
+
+  it('treats a real release as newer than the same numbers with a -dev suffix (semver)', () => {
+    expect(Math.sign(cmpTag(v(9, 5, 0, ''), v(9, 5, 0)))).toBe(1);
+    expect(Math.sign(cmpTag('v' + v(9, 5, 0), v(9, 5, 0)))).toBe(0); // v-prefix tolerated
+  });
+});

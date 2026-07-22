@@ -881,6 +881,33 @@ async function doctor() {
 // no env — every field is generic. The user still writes and posts the actual feedback themselves.
 const DISCUSSIONS_URL = `https://github.com/${REPO}/discussions`;
 
+/**
+ * Compare two release tags. Returns >0 if a is newer, <0 if older, 0 if equal.
+ *
+ * Local to this file on purpose: bin/install.mjs is the ONLY file that runs before anything is
+ * installed, so it may not import from scripts/ (which isn't in the npm `files` list). Duplicating
+ * ~10 lines is the correct trade against an installer that cannot run.
+ *
+ * Prerelease handling matters here because every tag this project ships is `X.Y.Z-dev`. Numeric
+ * parts compare numerically (so 3.10.0 > 3.9.0, which a string compare gets backwards), and a
+ * release WITHOUT a prerelease suffix outranks the same numbers WITH one, per semver.
+ */
+function cmpTag(a, b) {
+  const parse = (v) => {
+    const [core, pre = ''] = String(v).replace(/^v/, '').split('-');
+    return { nums: core.split('.').map((n) => parseInt(n, 10) || 0), pre };
+  };
+  const A = parse(a), B = parse(b);
+  for (let i = 0; i < Math.max(A.nums.length, B.nums.length); i++) {
+    const d = (A.nums[i] || 0) - (B.nums[i] || 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
+  }
+  if (A.pre === B.pre) return 0;
+  if (!A.pre) return 1;   // 3.5.0 is newer than 3.5.0-dev
+  if (!B.pre) return -1;
+  return A.pre > B.pre ? 1 : -1;
+}
+
 function installedBrainVersion(cacheDir) {
   // Same read the telemetry ping uses: the bundle stamps its Release tag into SOURCE.json.
   // "unknown" is honest for a locally-built or pre-stamping bundle — never guess a tag.
@@ -2417,6 +2444,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // that is what happened, instead of implying everything is up to date.
   const alreadyInstalled = fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs'));
   let staleSkip = false;
+  let ahead = false;
   let installedTag = null;
   let latestTag = null;
   let resolvedRelease = null;   // reused below so the release is resolved at most once
@@ -2437,12 +2465,28 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
     } catch { latestTag = null; }
     const norm = (v) => (v == null || v === 'unknown' ? null : String(v).replace(/^v/, ''));
     const a = norm(installedTag), b = norm(latestTag);
-    // Different (or unknowable-installed) => it is NOT current => download. Same => genuinely skip.
-    staleSkip = Boolean(b && (a === null || a !== b));
+    // BEHIND => download. SAME => skip. AHEAD => skip, and say so honestly.
+    //
+    // This was a bare `a !== b`, which treats "newer than the latest release" as staleness. Anyone
+    // running a pre-release or dev build — or who simply updated in the window before a release was
+    // cut — was told "Brain is out of date" and pushed through a 2 GB download that would DOWNGRADE
+    // them. Found 2026-07-22 the moment this repo's own version moved to 3.5.0-dev ahead of the
+    // 3.4.22-dev release: the installer immediately declared its own newest brain stale.
+    //
+    // stack-sync.mjs has modelled AHEAD as legal from the start ("AHEAD is legal and produces NO
+    // recommendation — that modelling choice is what makes the alpha-vs-latest downgrade war
+    // structurally impossible"). The installer never learned the same lesson. It has now.
+    ahead = Boolean(a && b && cmpTag(a, b) > 0);
+    staleSkip = Boolean(b && (a === null || (a !== b && !ahead)));
   }
 
   if (alreadyInstalled && !FLAG_FORCE && !staleSkip) {
-    if (latestTag) {
+    if (latestTag && ahead) {
+      // Never silently imply equality when the user is AHEAD — that would be a small lie, and it is
+      // the one that hides a downgrade. Skipping is right; misdescribing why is not.
+      step('Brain already current — skipping the download', `installed ${installedTag} is NEWER than the latest release (${latestTag})`);
+      ok(`found an up-to-date brain at ${cacheDir} — nothing to download, and we will never downgrade you`);
+    } else if (latestTag) {
       step('Brain already current — skipping the download', `installed ${installedTag} matches the latest release`);
       ok(`found an up-to-date brain at ${cacheDir}`);
     } else {

@@ -1121,7 +1121,28 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
           (d) => ({ ...d, token: TOKEN }));
       }
       if (req.method === 'GET' && url === '/api/memory') {
-        return serveCached(res, MEMORY_CACHE, () => ({ at: new Date().toISOString(), data: { fleet: scanFleet() } }));
+        // THE THESIS, FINALLY CONNECTED (ADR-027, 2026-07-22).
+        //
+        // buildHealthRecommendations() has existed since the ADR was written and was reachable ONLY
+        // from apply() — i.e. only once a user clicked something that was never displayed. The brain
+        // could see a corrupt store, a starving learner, and a fleet of memory stores that teach it
+        // nothing, and it said none of it out loud. Every word in ADR-027 about the brain advocating
+        // was true of the code and invisible to the person in front of it.
+        //
+        // It rides /api/memory rather than /api/state because it needs the fleet scan (100+ SQLite
+        // stores at ~90ms each) and a `ruflo hooks intelligence --status` round-trip. That is far too
+        // slow for first paint, and this endpoint already hydrates late for exactly that reason. The
+        // fleet computed here is handed straight to the recommendation builder instead of being
+        // re-read from cache, so the advice is derived from the same scan the user is looking at.
+        return serveCached(res, MEMORY_CACHE, () => {
+          const fleet = scanFleet();
+          let recommendations = [];
+          try {
+            const health = scoreMemoryHealth({ project: path.basename(cwd), probes: probeMemory(cwd) });
+            recommendations = buildHealthRecommendations({ memory: health, learning: { ...observeLearning(), fleet } });
+          } catch { /* advocacy is advisory — it may never break the page that shows your machine */ }
+          return { at: new Date().toISOString(), data: { fleet, recommendations } };
+        });
       }
       if (req.method === 'GET' && url === '/api/stack') {
         return serveCached(res, STACK_CACHE, () => ({ at: new Date().toISOString(), data: gatherStack() }));
@@ -1181,7 +1202,23 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
     // writes each cache the moment it is ready (state first — it is what the page paints first).
     try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe); } catch { /* leave the old cache in place */ }
     try { writeCache(STACK_CACHE, new Date().toISOString(), gatherStack()); } catch { /* keep prior */ }
-    try { writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet: scanFleet() }); } catch { /* keep prior */ }
+    // Must compute the SAME shape the /api/memory handler does — fleet AND recommendations.
+    //
+    // This wrote fleet-only, so the background refresh silently ERASED the advocacy the handler had
+    // just produced: the first request returned 2 recommendations, the refresh landed, and every
+    // request after it returned 0. The page would have shown the thesis once and then quietly
+    // stopped, which is indistinguishable from "your machine is fine" — the precise failure ADR-027
+    // exists to end, reintroduced by a cache writer that knew about half the payload. Caught by
+    // polling the live endpoint twice instead of once.
+    try {
+      const fleet = scanFleet();
+      let recommendations = [];
+      try {
+        const health = scoreMemoryHealth({ project: path.basename(process.cwd()), probes: probeMemory(process.cwd()) });
+        recommendations = buildHealthRecommendations({ memory: health, learning: { ...observeLearning(), fleet } });
+      } catch { /* advisory only */ }
+      writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet, recommendations });
+    } catch { /* keep prior */ }
     process.exit(0);
   }
   else if (args.includes('--serve') || args.length === 0) {

@@ -3,7 +3,7 @@ id: ADR-027
 title: The brain advocates, it does not wait — capability advocacy + the death of passive signals
 status: Proposed
 date: 2026-07-21
-updated: 2026-07-21
+updated: 2026-07-22
 authors: [Stuart Kerr, Claude Code]
 tags: [strategy, learning, proactivity, agentdb, sona, reasoningbank, console, health]
 supersedes: []
@@ -197,6 +197,48 @@ console had `patterns` and `learns` on every fleet entry the entire time and nev
 - The capture queue drains on a heartbeat; the learner stops starving.
 - New failure mode to watch: advocacy that fires too often becomes noise, and noise is how a real
   alarm gets ignored. Dismissal state is therefore part of the design, not an afterthought.
+
+## Implementation status (updated 2026-07-22, v3.5.0-dev)
+
+**Still Proposed, and the reason is one sentence: the engine is built and it does not render.**
+
+Landed in 3.5.0-dev:
+
+- **The Remedy Registry** (`scripts/remedy-registry.mjs`) makes principle 2 structural rather than
+  aspirational. Building it exposed that the prohibition was already being violated by the code that
+  declared it: `learning:enable-fleet` — this ADR's own North Star recommendation — was constructed,
+  schema-validated, and offered with **no executor at all**, and `repair:memory-index` promised an
+  undo the console had no branch for. Detection without a remedy was not a risk to guard against; it
+  had already shipped twice. A closure test now proves every offerable id resolves to exactly one
+  runnable remedy with a real inverse, and was verified to fail on both known-bad cases.
+- **A real executor for the North Star case**, wired to rUv's ADR-174 distillation
+  (`ruflo memory distill run`) rather than anything of ours — the remedy `memory-doctor.mjs` had been
+  printing in plain text since the day it was written while the console stayed silent about it.
+  Proven on a real 1,250-entry store: repair → 1250 rows intact → distill → 0 to 507 patterns,
+  507 episodes, 495 causal edges, then undo → back to 0.
+- **Principle 3, partially**: `--distill-fleet` refuses corrupt stores and names them, so repair is
+  correctly ordered before learning.
+
+NOT landed, and this is what keeps it Proposed:
+
+- **Recommendations are not rendered anywhere.** `buildHealthRecommendations()` is reachable only
+  from `apply()`. Every claim in this document about the brain *advocating* is therefore still
+  design intent: a user opening the console sees the same surface they saw before this ADR existed.
+  The thesis is unshipped. Verification items 2, 3 and 4 below cannot pass until this changes.
+- **Score-delta alarms** (principle 3, second bullet) are not built — there is still no persisted
+  baseline, so a cliff and a drift remain indistinguishable.
+- **The adversarial review (verification item 5) has not been recorded.** A cross-model hostile
+  review was started on 2026-07-21 and was killed before returning a verdict. This ADR has therefore
+  NOT met its own standing requirement that an ADR and its DDD be attacked before acceptance
+  (principle 6), and it may not move to Accepted until that runs and its findings are written down —
+  including anything it defeats.
+
+Version note: this work is **3.5.0-dev**, a minor. It adds a subsystem and new capability; it is not
+a patch, and the six commits that introduced it were all mislabelled `fix(...)` at patch level with
+no version bump at all — caught by the owner, not by us, which is itself a miss of the standing rule
+that any behaviour-changing push bumps the version in the same commit. It is deliberately NOT 4.0.0:
+a major marks the release where the product becomes a different thing to the person using it, and
+until advocacy renders, it is not.
 
 ## Verification (what must be true before this is Accepted)
 

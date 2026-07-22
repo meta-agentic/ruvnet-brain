@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.4.22-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.4.22--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.5.0-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.5.0--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -56,7 +56,28 @@
 
 ---
 
-## What's new in 3.4 — the invisible work, made visible (and readable)
+## What's new in 3.5 — it stopped waiting to be asked
+
+**Shipped 2026-07-22.** For three weeks this thing had indexed rUv's entire learning stack — ReasoningBank, SONA, MoE, the ADR-174 distillation pipeline — and could have answered any question about any of it. It never once said the only sentence that mattered:
+
+> *"Your learning system is installed, and it is switched off."*
+
+Stuart found it himself. The measurement: **1,884 captured events sat undelivered** while the learner held 5 trajectories and hadn't trained in six days. Draining the queue took it to 412 in one command. Three weeks of learning had been sitting there, available for the asking, and nobody knew to ask.
+
+**That gap is the product.** A brain that waits to be asked is a search box with good manners. 3.5 is the version where it speaks first.
+
+- **It now tells you what you own and aren't using.** On the author's machine, unprompted, from a real scan: *"36 project stores are embedded but have never been distilled — 6,858 memories sitting in those stores, teaching nothing."* Every recommendation is built from what was actually **observed on your machine** — never a hardcoded list of cool features, which would rot the week rUv ships again.
+- **Detection without a remedy is now structurally impossible.** The console used to detect a corrupt memory store, score it 49/100, render it into a card, and offer nothing. Stuart's verdict: *"the fact that it didn't recommend a fix is unconscionable."* Every recommendation now carries evidence, a cost, a plain-English impact, and a **real, tested undo** — enforced by a factory that throws, not by a code review that can be skipped.
+- **It stopped lying in four specific ways.** It claimed `ruflo` wasn't installed to anyone whose npm prefix wasn't the author's. It answered *"nothing to undo"* about a database repair for which it held a backup. It reported a distillation that wrote 684 patterns as having done nothing (the check used a read-only connection that can't see another process's WAL). And its installer threw away the stderr that explained every crash — so a missing module and a slow download looked identical. All four found by running the thing rather than trusting it.
+- **Every offered fix is provably runnable and reversible.** The remedy registry makes the id→executor→inverse binding a single value, and a closure test drives the real builders to prove nothing can be *offered* that cannot be *run* and *undone*. It found that this ADR's own headline recommendation had **no executor at all** — it rendered as a button that answered "Unknown recommendation id." Proven to fail on both known-bad cases before being trusted.
+- **It stopped writing into your repos** ([#36](https://github.com/stuinfla/ruvnet-brain/issues/36)) and **stopped hiding the error that explains a failure** ([#37](https://github.com/stuinfla/ruvnet-brain/issues/37)) — both reported by users, both fixed at root cause, with an upstream report filed to rUv for the two bugs that turned out to be his.
+
+The honest limit: this is **3.5, not 4.0**. The advocacy surface is live and the engine behind it is proven, but score-delta alarms aren't built and ADR-027 has not yet survived its own required adversarial review. A major version marks the release where the product becomes a different thing to the person using it. This is the release where it starts talking.
+
+<details>
+<summary><b>Earlier &#8212; what 3.4 shipped</b> &#183; the invisible work, made visible and readable. <i>Expand for the receipts.</i></summary>
+
+## 3.4 — the invisible work, made visible (and readable)
 
 **Shipped 2026-07-17.** 3.3 made every card lead with a point. Then Stuart looked at the two pages meant to *teach* the stack and scored them 55/100: the graphics were mediocre, the one page that should show how the pieces fit was a wall of text, and two diagrams were literally unreadable. 3.4 is the fix — the harness's invisible work, finally drawn, and drawn so you can actually read it.
 
@@ -246,6 +267,7 @@ claude plugin install ruvnet-brain@ruvnet-brain --scope user
 
 Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
+</details>
 </details>
 
 **Then just ask.** _“How does Ruflo orchestrate agent swarms, and what implements it?”_ The hook grounds the turn, Claude calls `search_ruvnet`, and it answers from cited source — down to the function body.
