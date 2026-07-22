@@ -144,7 +144,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/../scripts/continuation-gate.mjs\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/continuation-gate.mjs\""
           }
         ]
       }

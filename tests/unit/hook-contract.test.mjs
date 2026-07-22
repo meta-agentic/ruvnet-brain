@@ -38,7 +38,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const CONTINUATION_GATE = path.join(ROOT, 'scripts/continuation-gate.mjs');
+const CONTINUATION_GATE = path.join(ROOT, 'plugin/scripts/continuation-gate.mjs');
 const LESSON_HOOKS = path.join(ROOT, 'plugin/scripts/lesson-hooks.sh');
 const PLUGIN_HOOKS_JSON = path.join(ROOT, 'plugin/hooks/hooks.json');
 
@@ -180,6 +180,39 @@ describe('registry hygiene', () => {
             // 3000 read as seconds is 50 minutes — indistinguishable from unbounded.
             expect(h.timeout, `${event} timeout ${h.timeout} looks like milliseconds`).toBeLessThanOrEqual(120);
           }
+        }
+      }
+    }
+  });
+
+  /**
+   * THE PACKAGING TEST — the one that would have caught a hook that never ran anywhere.
+   *
+   * `${CLAUDE_PLUGIN_ROOT}` is the INSTALLED plugin directory, and installation FLATTENS `plugin/`
+   * to the root. So `plugin/scripts/x.sh` installs as `scripts/x.sh`, and anything referenced as
+   * `${CLAUDE_PLUGIN_ROOT}/../scripts/...` points at the versions directory — outside the plugin.
+   *
+   * continuation-gate.mjs was registered exactly that way. It resolved fine from a dev checkout
+   * (where `plugin/../scripts/` is the repo's own scripts dir) and crashed with exit 1 and a node
+   * stack trace in every installed copy. It had therefore NEVER run for any user, while SECURITY.md
+   * documented the outside-the-plugin path as a deliberate quirk. Documented is not working.
+   *
+   * This asserts every registry path exists relative to the plugin root, which is what the harness
+   * substitutes. It fails on any hook that cannot be found where its own registration says it is.
+   */
+  it('every registered command exists relative to the plugin root (packaged layout)', () => {
+    const pluginRoot = path.join(ROOT, 'plugin');
+    for (const [event, entries] of Object.entries(reg.hooks)) {
+      for (const m of entries) {
+        for (const h of m.hooks ?? []) {
+          const match = h.command.match(/\$\{CLAUDE_PLUGIN_ROOT\}(\/[^"\s]*)/);
+          if (!match) continue;
+          const resolved = path.join(pluginRoot, match[1]);
+          expect(
+            resolved.startsWith(pluginRoot),
+            `${event}: ${h.command} escapes the plugin root — it will not exist once installed`,
+          ).toBe(true);
+          expect(fs.existsSync(resolved), `${event}: missing file ${resolved}`).toBe(true);
         }
       }
     }
