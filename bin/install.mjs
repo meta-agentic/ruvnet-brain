@@ -699,7 +699,7 @@ const DEMO_QUESTIONS = [
     why: 'shows it grounding in Ruflo (the real orchestration engine) instead of guessing at a generic pattern',
   },
 ];
-function runDemo() {
+async function runDemo() {
   printBanner('demo');
   const cacheDir = process.env.RUVNET_BRAIN_KB || path.join(os.homedir(), '.cache', 'ruvnet-brain', 'kb');
   const ask = path.join(cacheDir, 'forge-ask-all.mjs');
@@ -750,6 +750,47 @@ function runDemo() {
   console.log(`\n${c.green('─'.repeat(64))}`);
   console.log(`  ${c.bold('That\'s it — no cloud calls, no API key, just your local brain.')}`);
   console.log(`${c.green('─'.repeat(64))}`);
+  // ── SCOPE + UPGRADE CONVERSATION ────────────────────────────────────────────────────────────
+  //
+  // The owner, 2026-07-22: "Normally this happens on a per-user basis, which lets learning,
+  // intelligence, access and software versions stay updated across ALL your projects. Only choose
+  // per-project if this is something you absolutely only use in one place. Our strong
+  // recommendation is per-user — but we always want YOU to be the arbiter of how things run on
+  // your machine."
+  //
+  // And, critically, for people who already have it installed: "That's only going to help people
+  // newly installing. It needs to be smart enough when it comes up to say version 4 is here, here
+  // are your choices."
+  //
+  // Both modules were BUILT AND WIRED TO NOTHING until this was added — the seventh instance of
+  // built-tested-unwired in one session, which is why scripts/wired-check.mjs now gates the release.
+  //
+  // Read-only here by design: this INFORMS and never changes scope on its own. P3 (nudge, never
+  // force) and P4 (the user is the arbiter). Fail-silent, because an informational block must never
+  // break an install that otherwise succeeded.
+  try {
+    const { detectCurrentScope, explainChoice, RECOMMENDED } = await import(new URL('../scripts/install-scope.mjs', import.meta.url).href);
+    const current = detectCurrentScope();
+    if (current && current.scope !== RECOMMENDED) {
+      console.log(`\n${c.dim('  ── how this is set up on your machine ──')}`);
+      for (const line of String(explainChoice({ current: current.scope })).split('\n').slice(0, 12)) {
+        console.log(`  ${line}`);
+      }
+    }
+  } catch { /* informational only — never break an install */ }
+
+  try {
+    const { shouldNotify, noticeFor } = await import(new URL('../scripts/upgrade-notice.mjs', import.meta.url).href);
+    const v = wrapperVersion();
+    if (v && shouldNotify(v)) {
+      const notice = noticeFor(v);
+      if (notice) {
+        console.log('');
+        for (const line of String(notice).split('\n').slice(0, 14)) console.log(`  ${line}`);
+      }
+    }
+  } catch { /* informational only */ }
+
   console.log(`\n  Now try it for real: open Claude Code in any project and ask it something about`);
   console.log(`  RuVector, Ruflo, AgentDB, or SPARC — it'll ground the same way, automatically.`);
   console.log(`  Run this demo again any time:  ${c.bold('npx ruvnet-brain --demo')}`);
@@ -2570,6 +2611,39 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // out what we did — which is precisely the position the 2026-07-20 corporate-machine reporter was
   // left in. Derived from disk, so it can only ever describe what is actually there.
   try { printFootprint(); } catch { /* a summary must never break a finished install */ }
+
+  // ── SCOPE + UPGRADE, on the path a real user actually takes ─────────────────────────────────
+  //
+  // These two blocks were first added inside runDemo(), which only runs with --demo — so almost
+  // nobody would have seen them. Caught by running the install path instead of reasoning about it
+  // (P1: verify through the USER'S path, never your own). printFootprint() is the right neighbour:
+  // it already exists to tell someone exactly what is now on their machine.
+  //
+  // Read-only and fail-silent. This INFORMS; it never changes scope on its own. P3 (nudge, never
+  // force) and P4 (the user is the arbiter of their own machine).
+  try {
+    const { detectCurrentScope, explainChoice, RECOMMENDED } = await import(new URL('../scripts/install-scope.mjs', import.meta.url).href);
+    const current = detectCurrentScope();
+    if (current && current.scope !== RECOMMENDED) {
+      console.log(`\n${c.dim('  ── how this is set up on your machine ──')}`);
+      for (const line of String(explainChoice({ current: current.scope })).split('\n').slice(0, 12)) console.log(`  ${line}`);
+    }
+  } catch { /* informational only */ }
+
+  try {
+    const { shouldNotify, noticeFor, recordNotified } = await import(new URL('../scripts/upgrade-notice.mjs', import.meta.url).href);
+    const v = wrapperVersion();
+    if (v && shouldNotify(v)) {
+      const notice = noticeFor(v);
+      if (notice) {
+        console.log('');
+        for (const line of String(notice).split('\n').slice(0, 14)) console.log(`  ${line}`);
+        // Record it so this fires at most once per minor version — the anti-nag rule is only real
+        // if the "already told them" state is actually written.
+        try { recordNotified(v); } catch { /* best effort */ }
+      }
+    }
+  } catch { /* informational only */ }
 })().catch((e) => {
   die(e && e.message ? e.message : String(e));
 });

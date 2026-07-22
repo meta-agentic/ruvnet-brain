@@ -50,6 +50,18 @@ console.log(`\n${c.b('RuvNet Brain — release / definition-of-done')} ${c.dim('
 step('A', 'version single-source-of-truth agrees across every surface');
 runOrDie('version sync', process.execPath, ['scripts/sync-version.mjs', '--check']);
 
+// WIRED-CHECK — refuses to ship a module with zero callers.
+//
+// Added 2026-07-22 after this project shipped built-tested-unwired code SEVEN times in one session
+// (capability-registry, capability-audit, lesson-gate's five triggers, anticipate.sh,
+// advocacy-outcomes, lesson-promote's demotion, continuation-gate's global path). Every one had
+// passing tests, because a test imports the module directly — the one caller that proves nothing
+// about whether the product uses it. Every one was found by a human running grep, hours later.
+//
+// Seven repetitions of one mistake is not a discipline problem; discipline is what failed. So it
+// becomes a gate, on the ship path, where this repo's gates run 8/8 against prose's 0/6.
+runOrDie('wired (no orphan modules)', process.execPath, ['scripts/wired-check.mjs', '--check']);
+
 // A2. Stable Spine restart classifier (ADR-023, red-team finding 18): diff the boot-frozen SHELL
 // (hooks.json, hook-shim, MCP server, .mcp.json, skills/, commands/) against the previous release
 // tag and SAY OUT LOUD whether this release needs a restart. The classification is computed, never

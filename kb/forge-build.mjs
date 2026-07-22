@@ -399,10 +399,15 @@ for (let i = 0; i < chunks.length; i += BATCH) {
     fs.writeSync(fd, JSON.stringify({ id: c.id, text: c.text, path: c.path, title: c.title }) + '\n');
     passageLines++;
     meta[c.id] = { path: c.path, kind: c.kind, title: c.title, chunk: `${c.chunk}/${c.of}`, preview: c.preview };
+    // No `metadata` field: @ruvector/rvf never persisted per-vector metadata (upstream
+    // ruvnet/RuVector#704 — "SDK silently drops metadata"), and 0.3.0 turned that silent
+    // drop into a hard RvfError rather than keep lying about it. Retrieval has always read
+    // the richer `<name>.meta.json` sidecar written on the line above (full title, chunk/of,
+    // preview) — this field was a truncated copy that nothing ever read back. Dropping it is
+    // a functional no-op. Re-add ONLY once the SDK returns metadata durably on query.
     return {
       id: c.id,
       vector: Array.from(out.data.slice(j * dim, (j + 1) * dim)),
-      metadata: { path: c.path, kind: c.kind, title: c.title.slice(0, 120), chunk: c.chunk },
     };
   });
   const r = await db.ingestBatch(ingestBatch);
