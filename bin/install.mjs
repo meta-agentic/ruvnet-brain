@@ -643,7 +643,26 @@ async function smokeQuery(cacheDir) {
   const out = `${r.stdout || ''}`;
   if (r.status !== 0 || !out.trim()) {
     warn('no answer came back (first-run model download or offline) — the brain is installed; it\'ll warm on your first real question');
-    return { ran: true, grounded: false, reason: 'no-answer' };
+    // SHOW THE ACTUAL ERROR (issue #37 bug 2, Agentist-Elder, 2026-07-21).
+    //
+    // This captured stderr and then threw it away, so every hard failure — a crash, a missing
+    // module, a bad model path — arrived looking identical to a slow first-run download. That is
+    // exactly how a total grounding outage (a static import of a module missing from the bundle,
+    // crashing before any model code ran) presented as the reassuring line above and cost the
+    // reporter a full debugging session to attribute. Their words, and they are right: this
+    // wrapper "will hide the *next* breakage too, whatever it is."
+    //
+    // A diagnostic that discards the diagnosis is worse than no diagnostic, because it reads as
+    // information. Print it. Truncated, because a stack trace is not a friendly install screen —
+    // but never hidden.
+    const err = `${r.stderr || ''}`.trim();
+    if (err) {
+      const lines = err.split('\n');
+      info(c.dim('  the reader reported:'));
+      for (const line of lines.slice(0, 12)) info(c.dim(`    ${line.slice(0, 200)}`));
+      if (lines.length > 12) info(c.dim(`    … ${lines.length - 12} more line(s)`));
+    }
+    return { ran: true, grounded: false, reason: 'no-answer', stderr: err.slice(0, 4000) };
   }
 
   const verifier = await loadCitationVerifier(cacheDir);
@@ -709,6 +728,12 @@ function runDemo() {
     const out = `${r.stdout || ''}`.trim();
     if (r.status !== 0 || !out) {
       warn(`no answer came back — the local model may still be warming up (run this again in a moment)`);
+      // Same discarded-diagnosis bug as smokeQuery() — see the note there (issue #37 bug 2).
+      const err = `${r.stderr || ''}`.trim();
+      if (err) {
+        info(c.dim('  the reader reported:'));
+        for (const line of err.split('\n').slice(0, 8)) info(c.dim(`    ${line.slice(0, 200)}`));
+      }
       continue;
     }
     // Show the top hit's actual citation (repo/path/title + the start of its real cited text) —
@@ -732,14 +757,20 @@ function runDemo() {
 }
 
 // ── token meter one-liner for --doctor (ADR-0011 token_cost_efficiency) ──────────────────────────
-// The hooks + MCP server append one JSON line per fire to .ruvnet-brain/token-ledger.jsonl in the
-// project they run in (see scripts/token-report.mjs for the full breakdown). This summarizes what
-// was MEASURED yesterday+today in the cwd --doctor is run from — measured bytes, estimated tokens
-// (bytes/4, stated as an estimate). Fail-silent by design: a meter problem never reddens a checkup.
+// The hooks + MCP server append one JSON line per fire to a SINGLE user-level ledger at
+// ~/.cache/ruvnet-brain/token-ledger.jsonl (see scripts/token-report.mjs for the full breakdown).
+// It used to be written per-CWD, which scattered hidden .ruvnet-brain/ directories through users'
+// project trees and dirtied their git status — issue #36. Each line now carries a `cwd` field, so
+// the per-project view survives without writing anything into a project.
+// Fail-silent by design: a meter problem never reddens a checkup.
 function meterSummaryLine() {
   try {
-    const ledger = path.join(process.cwd(), '.ruvnet-brain', 'token-ledger.jsonl');
-    if (!fs.existsSync(ledger)) return 'meter: no data yet (this project has no .ruvnet-brain/token-ledger.jsonl — it appears after the first hook/MCP fire)';
+    const canonical = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'ruvnet-brain', 'token-ledger.jsonl');
+    const legacy = path.join(process.cwd(), '.ruvnet-brain', 'token-ledger.jsonl');
+    // Read the legacy per-project ledger only if it exists and the canonical one does not — an
+    // existing user's measurements should not disappear the day the location changes.
+    const ledger = fs.existsSync(canonical) || !fs.existsSync(legacy) ? canonical : legacy;
+    if (!fs.existsSync(ledger)) return 'meter: no data yet (appears after the first hook/MCP fire)';
     const since = new Date();
     since.setHours(0, 0, 0, 0);
     since.setDate(since.getDate() - 1); // start of yesterday, local time

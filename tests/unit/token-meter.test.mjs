@@ -24,10 +24,18 @@ const REPORT = path.join(REPO_ROOT, 'scripts/token-report.mjs');
 const MCP_SERVER = path.join(REPO_ROOT, 'kb/forge-mcp-all.mjs');
 const PLUGIN_ROOT = path.join(REPO_ROOT, 'plugin');
 
-let tmp; // the fake project dir (cwd of every hook fire — where the ledger lands)
+let tmp; // the fake project dir (cwd of every hook fire — where the ledger must NOT land)
 let tmpHome; // isolated HOME so machine-global caches/stamps never leak in
 
-const ledgerPath = () => path.join(tmp, '.ruvnet-brain', 'token-ledger.jsonl');
+// The ledger is USER-LEVEL, not per-CWD (issue #36, mamd69, 2026-07-21). Writing it relative to the
+// shell's working directory scattered hidden .ruvnet-brain/ folders into users' project trees —
+// three on one machine, including inside an unrelated git repo and a deep docs subdirectory, each
+// showing up as untracked and dirtying `git status`. These tests previously asserted that broken
+// behaviour, so they had to change with it: the ledger now lands in ONE place, and `noStrayDirs()`
+// pins the property the issue was actually about.
+const ledgerPath = () => path.join(tmpHome, '.cache', 'ruvnet-brain', 'token-ledger.jsonl');
+/** Nothing may ever create a .ruvnet-brain directory inside a project tree. */
+const noStrayDirs = () => !fs.existsSync(path.join(tmp, '.ruvnet-brain'));
 const readLedgerLines = () =>
   fs.readFileSync(ledgerPath(), 'utf8').split('\n').filter((l) => l.trim());
 
@@ -54,7 +62,7 @@ function runGroundHook(prompt, { env = {} } = {}) {
     input: JSON.stringify({ prompt }),
     encoding: 'utf8',
     timeout: 15000,
-    env: { ...process.env, HOME: tmpHome, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, RUVNET_AUTONOMOUS: '', ...env },
+    env: { ...process.env, HOME: tmpHome, XDG_CACHE_HOME: path.join(tmpHome, '.cache'), CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, RUVNET_AUTONOMOUS: '', ...env },
   });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -64,7 +72,7 @@ function runSessionHook({ env = {} } = {}) {
     cwd: tmp,
     encoding: 'utf8',
     timeout: 15000,
-    env: { ...process.env, HOME: tmpHome, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ...env },
+    env: { ...process.env, HOME: tmpHome, XDG_CACHE_HOME: path.join(tmpHome, '.cache'), CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ...env },
   });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -123,13 +131,18 @@ describe('ground-ruvnet.sh — every fire appends one honest ledger line', () =>
 
   // win32: chmod cannot revoke write permission on a Windows directory, so the read-only-cwd
   // scenario is unconstructible there — the ledger write succeeds and the test asserts a fiction.
-  it.skipIf(process.platform === 'win32')('a read-only cwd cannot break the hook: still exit 0, directives still emitted, just no ledger', () => {
+  // Premise updated with issue #36's fix, and the outcome got BETTER. This used to assert that a
+  // read-only project directory silently cost you the ledger line — an unavoidable consequence of
+  // writing into the project. Now nothing is written there at all, so a read-only cwd costs nothing:
+  // the hook still runs, still emits, still meters, and still creates no directory in the project.
+  it.skipIf(process.platform === 'win32')('a read-only cwd cannot break the hook — and no longer costs the ledger line either', () => {
     fs.chmodSync(tmp, 0o555);
     const out = runGroundHook('implement the retry workflow');
     fs.chmodSync(tmp, 0o755);
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/APPLY THE PLAYBOOK/);
-    expect(fs.existsSync(ledgerPath())).toBe(false);
+    expect(noStrayDirs()).toBe(true);          // nothing written into the project, read-only or not
+    expect(fs.existsSync(ledgerPath())).toBe(true); // and metering survives, because it lives elsewhere
   });
 });
 
@@ -168,7 +181,7 @@ describe('forge-mcp-all.mjs — one mcp ledger line per search_ruvnet call (empt
       input: req + '\n',
       encoding: 'utf8',
       timeout: 60000,
-      env: { ...process.env, KB_DIR: kbEmpty, ...env },
+      env: { ...process.env, HOME: tmpHome, XDG_CACHE_HOME: path.join(tmpHome, '.cache'), KB_DIR: kbEmpty, ...env },
     });
     fs.rmSync(kbEmpty, { recursive: true, force: true });
     return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
@@ -184,6 +197,7 @@ describe('forge-mcp-all.mjs — one mcp ledger line per search_ruvnet call (empt
     const rpc = JSON.parse(out.stdout.trim().split('\n')[0]);
     const responseText = rpc.result.content[0].text;
     const entry = JSON.parse(readLedgerLines()[0]);
+    expect(noStrayDirs(), 'the MCP server wrote a .ruvnet-brain/ dir into the project (issue #36)').toBe(true);
     expect(entry).toMatchObject({ source: 'mcp', tool: 'search_ruvnet', k: 3 });
     expect(Number.isNaN(Date.parse(entry.ts))).toBe(false);
     expect(entry.bytes).toBe(responseText.length);
@@ -199,12 +213,15 @@ describe('forge-mcp-all.mjs — one mcp ledger line per search_ruvnet call (empt
 
 describe('token-report.mjs — aggregates the ledger into per-class count / p50 / p95 / est tokens', () => {
   function runReport(args) {
-    const r = spawnSync('node', [REPORT, ...args], { cwd: tmp, encoding: 'utf8', timeout: 15000 });
+    const r = spawnSync('node', [REPORT, ...args], {
+      cwd: tmp, encoding: 'utf8', timeout: 15000,
+      env: { ...process.env, HOME: tmpHome, XDG_CACHE_HOME: path.join(tmpHome, '.cache') },
+    });
     return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
   }
 
   it('computes nearest-rank p50/p95, per-class token estimates (bytes/4), the session total, and skips malformed lines without dying', () => {
-    fs.mkdirSync(path.join(tmp, '.ruvnet-brain'), { recursive: true });
+    fs.mkdirSync(path.dirname(ledgerPath()), { recursive: true });
     fs.writeFileSync(
       ledgerPath(),
       [
@@ -217,7 +234,7 @@ describe('token-report.mjs — aggregates the ledger into per-class count / p50 
         '',
       ].join('\n'),
     );
-    const out = runReport([]); // no --ledger: reads cwd's .ruvnet-brain/token-ledger.jsonl, like a user would
+    const out = runReport([]); // no --ledger: reads the canonical user-level ledger, like a user would
     expect(out.status).toBe(0);
     // hook:build — 4 fires, p50 of [100,200,300,400] = 200 (nearest-rank), p95 = 400, 1000 bytes ≈ 250 tokens
     expect(out.stdout).toMatch(/hook:build\s+4\s+200\s+400\s+1000\s+250/);
@@ -232,5 +249,41 @@ describe('token-report.mjs — aggregates the ledger into per-class count / p50 
     const out = runReport(['--ledger', path.join(tmp, 'does-not-exist.jsonl')]);
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/meter: no data yet/);
+  });
+});
+
+// ── issue #36 regression (mamd69, 2026-07-21) ────────────────────────────────────────────────────
+// "Hooks write .ruvnet-brain/token-ledger.jsonl into the shell CWD, scattering into project subdirs
+// and dirtying git repos." They found three strays on one machine — one in an unrelated git repo,
+// one in a deep docs subdirectory. The property that was violated is simple and worth pinning
+// directly rather than inferring it from the ledger assertions above: NO writer may ever create a
+// directory inside a project tree, no matter what the CWD happens to be when it fires.
+describe('issue #36 — no writer may create .ruvnet-brain/ in a project tree', () => {
+  it('a hook firing from a deep subdirectory leaves the tree completely untouched', () => {
+    const deep = path.join(tmp, 'repo', 'docs', 'guides', 'deep');
+    fs.mkdirSync(deep, { recursive: true });
+    const r = spawnSync('bash', [GROUND_HOOK], {
+      cwd: deep, // the exact repro: a step that cd'd into a subfolder before the hook fired
+      input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'implement the retry workflow' }),
+      encoding: 'utf8', timeout: 30000,
+      env: { ...process.env, HOME: tmpHome, XDG_CACHE_HOME: path.join(tmpHome, '.cache'), CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, RUVNET_AUTONOMOUS: '' },
+    });
+    expect(r.status).toBe(0);
+    // Not one stray directory anywhere beneath the project — not at the root, not in the subdir.
+    const strays = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        if (!e.isDirectory()) continue;
+        if (e.name === '.ruvnet-brain') strays.push(path.join(d, e.name));
+        else walk(path.join(d, e.name));
+      }
+    };
+    walk(tmp);
+    expect(strays, `stray directories created in the project tree: ${strays.join(', ')}`).toEqual([]);
+    // …and the measurement still happened, in the one place it belongs.
+    expect(fs.existsSync(ledgerPath())).toBe(true);
+    // The cwd is preserved as a field, so per-project reporting survives the move.
+    const last = JSON.parse(readLedgerLines().pop());
+    expect(last.cwd).toBe(fs.realpathSync(deep));
   });
 });

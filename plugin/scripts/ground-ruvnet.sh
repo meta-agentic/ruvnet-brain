@@ -356,10 +356,22 @@ if [ -n "$METER_TMP" ]; then
   [ "${AUTON:-0}" -eq 1 ] && METER_CLASS="${METER_CLASS}+auton"
   METER_CLASS="${METER_CLASS#+}"
   [ -z "$METER_CLASS" ] && METER_CLASS="none"
-  mkdir -p .ruvnet-brain 2>/dev/null && \
-    printf '{"ts":"%s","source":"hook","class":"%s","bytes":%d}\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_CLASS" "$METER_BYTES" \
-      >> .ruvnet-brain/token-ledger.jsonl 2>/dev/null
+  # ONE fixed, user-level ledger — never a directory in whatever the CWD happened to be.
+  #
+  # Issue #36 (mamd69, 2026-07-21): this wrote `.ruvnet-brain/token-ledger.jsonl` relative to the
+  # shell's CWD at hook-fire time. Any step that `cd`s into a subfolder therefore created a stray
+  # hidden directory THERE — they found three on one machine, including one inside an unrelated
+  # git repo and one buried in a deep docs subdirectory, each dirtying `git status` as an untracked
+  # file. A user-level tool must not write into a user's project working trees. That is the whole
+  # complaint and it is completely correct.
+  #
+  # The per-project breakdown the old layout gave us is kept — as a `cwd` FIELD on each line, which
+  # is strictly better: same analysis, no scattering, and it survives the directory being deleted.
+  METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
+  mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
+    printf '{"ts":"%s","source":"hook","class":"%s","bytes":%d,"cwd":"%s"}\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_CLASS" "$METER_BYTES" "$(pwd 2>/dev/null | sed 's/"/\\"/g')" \
+      >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
 fi
 
 exit 0

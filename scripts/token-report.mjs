@@ -12,13 +12,19 @@
 //   node scripts/token-report.mjs --ledger <path>       # explicit ledger (tests use this)
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const argv = process.argv.slice(2);
 const ledgerIdx = argv.indexOf('--ledger');
+// The canonical ledger is user-level (issue #36 — writing per-CWD scattered hidden directories into
+// users' project trees). A legacy per-project ledger is still READ when one exists and the canonical
+// one does not, so nobody's existing measurements silently vanish in the move.
+const CANONICAL_LEDGER = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'ruvnet-brain', 'token-ledger.jsonl');
+const LEGACY_LEDGER = path.join(process.cwd(), '.ruvnet-brain', 'token-ledger.jsonl');
 const LEDGER =
   ledgerIdx !== -1 && argv[ledgerIdx + 1]
     ? argv[ledgerIdx + 1]
-    : path.join(process.cwd(), '.ruvnet-brain', 'token-ledger.jsonl');
+    : (fs.existsSync(CANONICAL_LEDGER) || !fs.existsSync(LEGACY_LEDGER) ? CANONICAL_LEDGER : LEGACY_LEDGER);
 
 // Nearest-rank percentile on a pre-sorted ascending array — the standard textbook definition,
 // chosen because it always returns a value that actually occurred (no interpolation to invent one).

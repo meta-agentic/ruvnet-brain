@@ -277,6 +277,9 @@ function gatherSavings() {
   const files = [
     path.join(HOME, '.claude/metaharness/routing-receipts.jsonl'),
     path.join(HOME, '.cache/ruvnet-brain/metaharness-receipts.jsonl'),
+    // Canonical user-level ledger (issue #36 — the hooks no longer scatter per-CWD copies).
+    path.join(HOME, '.cache/ruvnet-brain/token-ledger.jsonl'),
+    // Legacy location, still read so an existing user's history is not orphaned by the move.
     path.join(REPO, 'plugin/scripts/.ruvnet-brain/token-ledger.jsonl'),
   ];
   const receipts = [];

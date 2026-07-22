@@ -30,16 +30,25 @@ import(new URL('./brain-alarm.mjs', import.meta.url).href)
 
 // ── TOKEN METER (ADR-0011 token_cost_efficiency): one JSON line per search_ruvnet call recording
 // the REAL size (chars) of the response text handed back to the model — appended to the SAME
-// per-project ledger the plugin hooks write (.ruvnet-brain/token-ledger.jsonl in this process's
-// cwd, which the plugin proxy inherits from the Claude Code session; read it with
+// user-level ledger the plugin hooks write (~/.cache/ruvnet-brain/token-ledger.jsonl; read it with
 // scripts/token-report.mjs). RUVNET_BRAIN_METER=0 disables. Fully guarded: metering must NEVER
 // break, delay, or surface into a query — any failure here is swallowed silently.
+//
+// This wrote to `process.cwd()/.ruvnet-brain/` — and an MCP server inherits its cwd from the Claude
+// Code session, so it scattered hidden directories through users' project trees exactly like the
+// two shell hooks did (issue #36, mamd69). The reporter found the hooks; this third writer had the
+// same bug and was not in their report. Fixing only what was reported would have left the symptom
+// alive and made the fix look wrong. The cwd is kept as a FIELD, so per-project analysis survives
+// without writing anything into a project.
 function meterLog(entry) {
   try {
     if (process.env.RUVNET_BRAIN_METER === '0') return;
-    const dir = path.join(process.cwd(), '.ruvnet-brain');
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const dir = process.env.XDG_CACHE_HOME
+      ? path.join(process.env.XDG_CACHE_HOME, 'ruvnet-brain')
+      : path.join(home, '.cache', 'ruvnet-brain');
     fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(path.join(dir, 'token-ledger.jsonl'), JSON.stringify(entry) + '\n');
+    fs.appendFileSync(path.join(dir, 'token-ledger.jsonl'), JSON.stringify({ ...entry, cwd: process.cwd() }) + '\n');
   } catch { /* never let metering break a query */ }
 }
 

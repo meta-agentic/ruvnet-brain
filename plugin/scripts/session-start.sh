@@ -397,9 +397,12 @@ if [ -n "$METER_TMP" ]; then
   cat "$METER_TMP" 2>/dev/null
   METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
   rm -f "$METER_TMP" 2>/dev/null
-  mkdir -p .ruvnet-brain 2>/dev/null && \
-    printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d}\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" \
-      >> .ruvnet-brain/token-ledger.jsonl 2>/dev/null
+  # ONE fixed, user-level ledger — see the full note in ground-ruvnet.sh (issue #36, mamd69).
+  # Writing relative to CWD scattered hidden .ruvnet-brain/ directories into users' project trees.
+  METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
+  mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
+    printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$(pwd 2>/dev/null | sed 's/"/\\"/g')" \
+      >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
 fi
 exit 0
