@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/anticipate.sh\" 2>&1 || true"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/anticipate.sh\" || true"
           }
         ]
       }
