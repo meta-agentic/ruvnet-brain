@@ -43,6 +43,15 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" UserPromptSubmit 2>&1 || true"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/anticipate.sh\" 2>&1 || true"
+          }
+        ]
       }
     ],
     "PreToolUse": [

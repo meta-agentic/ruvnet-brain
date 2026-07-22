@@ -249,8 +249,28 @@ export function loadLessons(file = STORE_PATH) {
     // Re-validate on READ, not just on write. A hand-edited store is expected (the user must be able
     // to edit and delete these); a malformed entry must be dropped loudly rather than acted upon.
     const out = [];
+    const dropped = [];
     for (const l of raw.lessons || []) {
-      try { out.push(makeLesson(l)); } catch { /* skip the invalid entry, keep the rest usable */ }
+      // SKIP THE BAD ROW, BUT NEVER SILENTLY. An adversarial review proved that a schema change
+      // (ADR-035 proposes new enforcement values the current enum rejects) would take this store
+      // from 16 lessons to 0 with NO error and exit 0 — output indistinguishable from "no lessons
+      // apply". Every ratified rule the owner had personally approved would vanish, and the first
+      // symptom would be the model quietly misbehaving again.
+      //
+      // A store that empties itself quietly is the worst possible failure here, because the whole
+      // product promise is "you should never have to tell me twice."
+      try { out.push(makeLesson(l)); } catch (e) {
+        dropped.push({ id: l && l.id, why: String(e && e.message || e) });
+      }
+    }
+    if (dropped.length) {
+      // stderr, not stdout: a hook's stdout may be a JSON protocol channel, and corrupting it would
+      // turn a data-integrity warning into a broken tool call.
+      process.stderr.write(
+        `\n  ⚠ lesson store: ${dropped.length} of ${(raw.lessons || []).length} lesson(s) could not be loaded and were IGNORED.\n`
+        + dropped.slice(0, 5).map((d) => `      ${d.id || '(no id)'} — ${d.why.slice(0, 120)}\n`).join('')
+        + `      Your rules are still in the file; they are not being applied. This is usually a schema change.\n\n`,
+      );
     }
     return out;
   } catch { return []; }

@@ -197,3 +197,40 @@ describe('qualitative — the promoted block carries its own evidence, readably'
     expect(block).toMatch(/BEGIN ruvnet-brain/); // fenced, so regeneration is safe
   });
 });
+
+// ── ADR-030 §5: demotion must be STICKY (added 2026-07-22) ──────────────────────────────────────
+// Verified 2026-07-22 that `lesson-promote.mjs` contained ZERO references to `demoted`: the user
+// could click delete on a wrongly-promoted rule and the very next mining run would propose it
+// again. ADR-030 §5 names this exactly — "a one-click demote that the next nightly silently undoes
+// is worse than no demote at all, because the user stops trusting the control and, correctly, stops
+// using it." The requirement was written down and not implemented, which is this project's
+// signature failure shape.
+describe('demotion is sticky — a rejected theme is never re-proposed', () => {
+  it('drops exactly the demoted theme and leaves every other one alone', () => {
+    seed({
+      'proj-a': { 'feedback_v1': { desc: 'always bump the version on release' } },
+      'proj-b': { 'feedback_v2': { desc: 'always bump the version on release' } },
+      'proj-c': { 'feedback_t1': { desc: 'verify before claiming done' } },
+      'proj-d': { 'feedback_t2': { desc: 'prove it works, never assert' } },
+    });
+    const lessons = collectLessons(tmp);
+    const before = analyze(lessons);
+    expect(before.promotable.length, 'fixture must produce ≥2 themes or this proves nothing').toBeGreaterThanOrEqual(2);
+
+    const rejected = new Set([before.promotable[0].key]);
+    const after = analyze(lessons, { rejected });
+
+    expect(after.promotable.some((t) => rejected.has(t.key)), 'a demoted theme must never return').toBe(false);
+    expect(after.promotable.length, 'and demotion must not suppress anything else').toBe(before.promotable.length - 1);
+  });
+
+  it('an empty rejection set changes nothing — stickiness must not leak into the default path', () => {
+    seed({
+      'proj-a': { 'feedback_v1': { desc: 'always bump the version on release' } },
+      'proj-b': { 'feedback_v2': { desc: 'always bump the version on release' } },
+    });
+    const lessons = collectLessons(tmp);
+    expect(analyze(lessons, { rejected: new Set() }).promotable.length)
+      .toBe(analyze(lessons).promotable.length);
+  });
+});

@@ -118,13 +118,43 @@ export function collectLessons(root = PROJECTS) {
  * codebase; promoting them would be a category error and would leak one client's details into every
  * other project's context.
  */
-export function analyze(lessons, { minProjects = MIN_PROJECTS } = {}) {
+/**
+ * Themes the user has explicitly rejected. Read from the lesson store's demoted rows.
+ *
+ * WITHOUT THIS, DEMOTION WAS THEATRE. `lesson-ratify.mjs --demote` set a flag the miner never
+ * looked at, so the next mining run would re-propose the exact rule the user had just deleted.
+ * ADR-030 §5 states the requirement plainly — "a one-click demote that the next nightly silently
+ * undoes is worse than no demote at all, because the user stops trusting the control and, correctly,
+ * stops using it" — and the code did not implement it. Verified 2026-07-22: zero references to
+ * `demoted` in this file.
+ *
+ * Read defensively: the store may be absent, locked, or from a newer schema. A miner that throws
+ * because it could not read an optional file is worse than one that proposes a rejected theme.
+ */
+function demotedThemeKeys() {
+  try {
+    const file = process.env.RUVNET_LESSON_STORE
+      || path.join(os.homedir(), '.config', 'ruvnet-brain', 'lessons.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return new Set(
+      (raw.lessons || [])
+        .filter((l) => l && l.demoted === true && typeof l.themeKey === 'string')
+        .map((l) => l.themeKey),
+    );
+  } catch { return new Set(); }
+}
+
+export function analyze(lessons, { minProjects = MIN_PROJECTS, rejected = null } = {}) {
+  // Injectable for tests; defaults to the real store so the CLI honours real demotions.
+  const demoted = rejected instanceof Set ? rejected : demotedThemeKeys();
   const eligible = lessons.filter((l) => l.type === 'feedback');
   const themes = [];
   for (const t of THEMES) {
     const hits = eligible.filter((l) => t.match.test(l.text));
     if (!hits.length) continue;
     const projects = [...new Set(hits.map((h) => h.project))].sort();
+    // A theme the user has demoted is NEVER re-proposed. Sticky across every future run.
+    if (demoted.has(t.key)) continue;
     themes.push({
       key: t.key,
       label: t.label,
