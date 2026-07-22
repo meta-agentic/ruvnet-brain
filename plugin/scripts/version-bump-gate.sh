@@ -61,6 +61,23 @@ V_HEAD=$(ver_at HEAD); V_UP=$(ver_at "$UP")
 [ -n "$V_HEAD" ] && [ -n "$V_UP" ] || exit 0   # can't read either side → fail open
 [ "$V_HEAD" != "$V_UP" ] && exit 0             # bumped → pass
 
+# ── LESSON STORE CONSULTATION (ADR-030 L3, wired 2026-07-22) ────────────────────────────────────
+# This gate hardcoded its own message for months while lesson L05 — the identical rule, recorded 52
+# times across 4 projects — sat in a store that nothing read. A grep for `lessonsFor` across every
+# gate returned zero: lessons were mined, weighted, trust-boundaried, and consumed by nobody.
+#
+# Now the store speaks here. Today every lesson is an unratified candidate, so this ADDS the lesson's
+# own words and evidence to the refusal below rather than changing whether it fires. The day the
+# owner ratifies L05, the same wire starts refusing on the lesson's authority instead of on this
+# script's hardcoded copy — with no change to this file. Enforcement is data, not a rewrite.
+#
+# Fails open by construction: any error, missing store, or absent node exits this block silently. A
+# gate that blocks a push because it could not read a config file is a gate people switch off.
+LESSON_GATE="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)/scripts/lesson-gate.mjs"
+if [ -f "$LESSON_GATE" ] && command -v node >/dev/null 2>&1; then
+  LESSON_OUT="$(node "$LESSON_GATE" --trigger ship 2>/dev/null || true)"
+fi
+
 read -r -d '' MSG <<EOF || true
 ⛔ BLOCKED — this push carries $AHEAD commit(s) but NO version increment ($SRC still $V_UP).
 
@@ -75,6 +92,9 @@ Before pushing:
 
 (Stuart, 2026-07-13: "that's not negotiable." Deliberate override, say why out loud:
 RUVNET_SKIP_VERSION_GATE=1)
+${LESSON_OUT:+
+── from your own lesson store ─────────────────────────────────────────────
+$LESSON_OUT}
 EOF
 bash "$(dirname "${BASH_SOURCE[0]}")/gate-receipt.sh" version-bump-gate "push" "commits carried no version bump — an update nothing can see" 2>/dev/null || true
 printf '%s\n' "$MSG" >&2

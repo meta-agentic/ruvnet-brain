@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.6.1-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.6.1--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.7.0-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.7.0--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -56,7 +56,25 @@
 
 ---
 
-## What's new in 3.6 — it can finally show you what you own
+## What's new in 3.7 — your lessons can now refuse your work
+
+**Shipped 2026-07-22.** 3.6 made the machine legible. 3.7 closes the loop: a lesson you taught is
+read by a gate at the moment it applies, and — once you ratify it — **refuses the action**.
+
+- **`lesson-gate.mjs`** — a gate asks the store "what applies right now?" and gets your own words
+  back, with the evidence and how many times you had to say it. Wired into the real pre-push gate.
+- **`lesson-ratify.mjs`** — see every lesson, ratify it, or delete it. **Demotion is sticky**: it
+  survives every future mining run, because a reject the nightly quietly undoes is worse than none.
+- **The model cannot ratify its own rules.** Lessons it inferred about itself are quarantined and
+  can never block, no matter what is asked of them — closing an injection path an adversarial
+  review found, where a hallucinated session summary could have become a blocking gate.
+- Proven end to end: before ratification the ship gate informs (exit 0); after ratifying the
+  version-discipline lesson it **refuses** (exit 1). Same wire, no code change — enforcement is data.
+
+<details>
+<summary><b>Earlier &#8212; what 3.6 shipped</b> &#183; it could finally show you what you own. <i>Expand.</i></summary>
+
+## 3.6 — it can finally show you what you own
 
 **Shipped 2026-07-22.** 3.5 made the brain speak. 3.6 makes it *legible*: a console panel that
 answers the question the owner has been asking for weeks — **"what is actually turned on?"**
@@ -297,6 +315,7 @@ claude plugin install ruvnet-brain@ruvnet-brain --scope user
 
 Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
+</details>
 </details>
 </details>
 </details>
