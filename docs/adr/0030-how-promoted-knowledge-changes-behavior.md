@@ -238,14 +238,20 @@ pieces; nothing turned a promoted lesson into an interruption, so nothing change
 
 ## Verification (what must be true before this is Accepted)
 
-1. ❌ A promoted lesson demonstrably changes behaviour at its decision point — shown by the gate
-   firing on a case it would previously have let through, proven against known-bad first.
+1. ✅ **DONE (2026-07-22, v3.7.0-dev).** A promoted lesson demonstrably changes behaviour at its
+   decision point. `scripts/lesson-gate.mjs` reads the store; the version-bump gate now appends the
+   lesson's own words to its refusal. Proven by exit code: before ratification the ship trigger
+   exits 0 (informs); after the owner ratified 9 user-stated lessons, five triggers exit 1 and
+   refuse. A model-inferred lesson passed through `--ratify` stays `checklist` and CANNOT become
+   `block` — the trust boundary holds under the exact bulk action that would defeat it.
 2. ❌ Measured context cost of the constitution + per-gate retrieval is **below** today's baseline.
    The claim above is a calculation, not a measurement, and must not be repeated as fact until
    instrumented.
 3. ❌ A promoted lesson survives `npx ruvnet-brain --update` and a nightly refresh (shared with
    ADR-029 #3).
-4. ❌ The management surface lists every promoted lesson with provenance, and demotion is sticky
-   across a subsequent mining run.
+4. ⚠️ PARTIAL (2026-07-22). `scripts/lesson-ratify.mjs --list` shows every lesson with trigger,
+   force, provenance, weight and evidence; `--demote` sets a sticky flag the miner must honour.
+   Still ❌: demotion stickiness has NOT been proven across an actual subsequent mining run, and
+   the surface is a CLI rather than part of the console. Both remain open.
 5. ❌ Adversarial cross-model review recorded, per ADR-027 principle 6 — still outstanding for
    ADR-027, 028, 029 and this one.

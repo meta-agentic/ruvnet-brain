@@ -34,6 +34,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" UserPromptSubmit 2>&1 || true"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -76,6 +85,24 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "^(Write|Edit|MultiEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-write 2>&1 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" PreToolUse-bash 2>&1 || true"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -98,6 +125,26 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" learn-flush || true",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/../scripts/continuation-gate.mjs\" 2>&1 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/lesson-hooks.sh\" Stop 2>&1 || true"
           }
         ]
       }

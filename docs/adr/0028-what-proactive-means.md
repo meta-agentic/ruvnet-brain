@@ -54,7 +54,16 @@ every fleet entry the entire time — but because nothing was structurally oblig
 | **L4 Anticipatory** | Infers the user's **goal** and surfaces the capability that serves *that* goal before they hit the wall. | Given a stated task with a known better RuvNet path, the brain names that path before the user commits to the worse one. |
 | **L5 Compounding** | Learns whether its own advocacy was right, and **promotes validated lessons to a global store** so every project inherits them. | A lesson validated in project A demonstrably changes behaviour in project B, and survives a nightly refresh. |
 
-**Where we are: L2, as of v3.5.0-dev.** L0 and L1 shipped earlier. L3, L4 and L5 are unbuilt.
+**Where we are: L3, as of v3.7.0-dev** (updated 2026-07-22 05:40). L0–L2 shipped earlier.
+
+**L3 landed** and is the one level with a falsifiable proof rather than a description:
+`scripts/lesson-gate.mjs` consults the lesson store at a decision point, and
+`scripts/lesson-ratify.mjs` is the human control over what may enforce. Measured end to end —
+before ratification the ship gate exits 0 (informs); after the owner ratified, five gates
+(ship, assert-fact, write-code, claim-done, mutate-machine) exit 1 and **refuse the action**.
+Same wire, no code change: enforcement is data.
+
+**L4 and L5 remain unbuilt.** 4.0 is not claimable until both land with the five test classes green.
 
 **4.0 is defined as L3 + L4 + L5 shipped and measured.** Not L2 polished. This is the entire content
 of the version decision, and it is why v3.5.0-dev was deliberately not called 4.0.

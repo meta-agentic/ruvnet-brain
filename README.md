@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.7.0-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.7.0--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.8.1-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.8.1--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -56,7 +56,26 @@
 
 ---
 
-## What's new in 3.7 — your lessons can now refuse your work
+## What's new in 3.8 — the gate that fires when you stop
+
+**Shipped 2026-07-22.** Every gate in this project fires on an **action** — a write, a push, a
+claim. That is what makes it enforceable. But **stopping is the absence of an action**, so the most
+expensive failure of the night had no trigger at all, and a system built to prevent it did not.
+
+- **`continuation-gate.mjs`** runs when a turn ends. If work you committed to is unfinished, it
+  makes that the last thing in context. It cannot force another turn — claiming otherwise would be
+  the fabrication this project exists to kill — but it removes the silence that let a stop pass
+  unnoticed.
+- **Project-scoped ledgers.** Three simultaneous projects never see each other's commitments; a
+  "you didn't finish X" fired in a repo that never heard of X is a false alarm, and ADR-028 fixes
+  the false-alarm rate at zero.
+- **Installed machine-wide**, merged into existing hooks rather than replacing them, with a backup
+  taken first — that file governs every project on the machine.
+
+<details>
+<summary><b>Earlier &#8212; what 3.7 shipped</b> &#183; your lessons can now refuse your work. <i>Expand.</i></summary>
+
+## 3.7 — your lessons can now refuse your work
 
 **Shipped 2026-07-22.** 3.6 made the machine legible. 3.7 closes the loop: a lesson you taught is
 read by a gate at the moment it applies, and — once you ratify it — **refuses the action**.
@@ -315,6 +334,7 @@ claude plugin install ruvnet-brain@ruvnet-brain --scope user
 
 Registers the `search_ruvnet` MCP tool, the grounding skill, and the `UserPromptSubmit` enforcement hook — globally, at user scope. The plugin expects the brain at `~/.cache/ruvnet-brain/kb` (or point `RUVNET_BRAIN_KB` at your own copy). The first install may show a one-time trust prompt for the hook.
 
+</details>
 </details>
 </details>
 </details>
