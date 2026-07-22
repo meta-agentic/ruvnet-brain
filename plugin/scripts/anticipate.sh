@@ -186,6 +186,32 @@ function writeState(st) {
 
 const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 
+// ── outcome ledger (L5) ─────────────────────────────────────────────────────────────────────────
+// Loaded lazily and wrapped: the ledger is an improvement mechanism, never a dependency of the
+// thing it measures. If it is missing or throws, advocacy still works and simply learns nothing —
+// which is the current state, and is strictly better than a hook that fails because a log failed.
+function recordOutcome(action, id, extra) {
+  if (!id) return;
+  // SYNCHRONOUS BY NECESSITY. The first version did a dynamic import() and fired the record into a
+  // promise — but quit() calls process.exit(0), which kills the process before that promise ever
+  // resolves. Result: the ledger stayed EMPTY while the code looked correct and every test of the
+  // hook passed. Caught only by checking the ledger file itself, which is the one channel capable
+  // of observing whether a write happened (L01).
+  //
+  // The ledger is append-only JSONL, so a synchronous append IS the native operation. The two
+  // validity checks record() enforces are replicated here rather than imported, because importing
+  // ESM synchronously is not possible and a detached spawn would add latency to every prompt.
+  try {
+    if (!VALID_ACTIONS.has(action)) return;
+    if (typeof id !== 'string' || !id || id.length > 200) return;
+    const file = process.env.RUVNET_ADVOCACY_OUTCOMES
+      || path.join(os.homedir(), '.config', 'ruvnet-brain', 'advocacy-outcomes.jsonl');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, JSON.stringify({ id, action, at: new Date().toISOString(), ...(extra || {}) }) + '\n');
+  } catch { /* the ledger measures advocacy; it must never break it */ }
+}
+const VALID_ACTIONS = new Set(['offered', 'applied', 'dismissed', 'ignored']);
+
 // ── dismiss / undismiss / status ────────────────────────────────────────────────────────────────
 if (MODE === 'dismiss' || MODE === 'undismiss' || MODE === 'status') {
   const st = readState();
@@ -198,6 +224,22 @@ if (MODE === 'dismiss' || MODE === 'undismiss' || MODE === 'status') {
     out.push(`state file:                     ${STATE_FILE.replace(os.homedir(), '~')}`);
     quit();
   }
+  // FEED THE OUTCOME LEDGER. Until now advocacy-outcomes.mjs had ZERO callers: a dismissal changed
+  // whether we speak, and taught the system nothing about WHETHER WE SHOULD HAVE. That is L5
+  // (compounding) with its input disconnected — the ledger could compute precision forever over an
+  // empty file. ADR-028 sets precision >= 0.60 as the line between advocating and nagging, and it
+  // was unmeasurable because nothing recorded the denominator.
+  //
+  // Best-effort by construction: a failure here must never break the user's dismiss. Losing one
+  // outcome row is a small loss; refusing to silence something the user asked to silence is a
+  // large one.
+  // ONLY a dismissal is an outcome. --undismiss means "I changed my mind, keep offering it" — it is
+  // a correction of a previous signal, NOT evidence the user acted on the suggestion. Recording it
+  // as `applied` would inflate precision (applied ÷ offered), which is the metric ADR-028 uses to
+  // decide whether we are advocating or nagging. A system that games its own success metric is
+  // worse than one with no metric, because the number then actively misleads.
+  if (MODE === 'dismiss') recordOutcome('dismissed', ARG);
+
   if (MODE === 'dismiss') dismissed.add(ARG); else dismissed.delete(ARG);
   st.dismissed = [...dismissed];
   // Report what actually happened on disk. Claiming success on a failed write is the exact
@@ -308,6 +350,11 @@ if (why.length > MAX_WHY) {
 }
 const buys = typeof best.row.whatItBuysYou === 'string' ? best.row.whatItBuysYou.trim() : '';
 const payoff = buys && !why.includes(buys) ? ` It buys them: ${buys}` : '';
+
+// RECORD THE DENOMINATOR. precision = acted-on / OFFERED, and without this line the denominator is
+// always zero — the metric ADR-028 uses to separate "advocating" from "nagging" would be
+// permanently unmeasurable while appearing to be implemented.
+recordOutcome('offered', best.row.key, { severity: best.row.severity || 'normal', scope: best.row.scope });
 
 out.push(`[RuvNet Brain — anticipating] "${best.row.label}" is installed here and switched OFF, and it serves this turn: ${why}${payoff} Offer it ONCE, in one plain sentence (${cmd}), then drop it and get on with the actual work — it will not be raised again. If they decline: ${SELF} --dismiss ${best.row.key}`);
 quit();

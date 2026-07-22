@@ -442,8 +442,18 @@ describe('anticipate.sh — footprint', () => {
     // The project directory the user is standing in is untouched — no .ruvnet-brain, no stray dot-dir.
     expect(tree(work)).toEqual(beforeWork);
 
-    // In HOME, exactly one file: the state store. Not a temp file, not a log, not a daemon pid.
-    expect(tree(home)).toEqual([path.join('.config', 'ruvnet-brain', 'anticipate-state.json')]);
+    // In HOME, exactly TWO files and no others — both under .config/ruvnet-brain, both deliberate.
+    // Not a temp file, not a log, not a daemon pid.
+    //
+    // The outcome ledger was ADDED on 2026-07-22 and this assertion caught it, which is the point:
+    // a footprint change must be a decision someone wrote down, never a thing that quietly appears.
+    // It is here because L5 (does advocacy actually help?) was previously unmeasurable — the ledger
+    // had zero callers, so precision = applied ÷ offered had no denominator and would have read 0
+    // forever while looking implemented.
+    expect(tree(home).sort()).toEqual([
+      path.join('.config', 'ruvnet-brain', 'advocacy-outcomes.jsonl'),
+      path.join('.config', 'ruvnet-brain', 'anticipate-state.json'),
+    ].sort());
   });
 
   it('keeps the state file bounded as sessions accumulate', () => {
