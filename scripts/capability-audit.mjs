@@ -101,6 +101,28 @@ export function detectDormantEvolution(repo = process.cwd()) {
   const promotedCount = improvements.filter((r) => r.promoted).length;
   const surfaces = [...new Set(rows.map((r) => r.surface).filter(Boolean))];
 
+  // ALSO read the MACHINE-WIDE champion, not just this repo's archive.
+  //
+  // The first version of this detector read only ./.metaharness/archive.json and reported "none of
+  // the improvements were kept" — true of that archive, and misleading about the machine, because
+  // ~/.claude-flow/harness-active-policy.json held a champion promoted a week LATER by a different
+  // run. Stating a repo-scoped fact in machine-scoped language is the same confident-but-wrong
+  // shape this whole audit exists to catch, so it gets caught here too.
+  let champion = null;
+  try {
+    const cp = path.join(HOME, '.claude-flow', 'harness-active-policy.json');
+    if (fs.existsSync(cp)) {
+      const c = JSON.parse(fs.readFileSync(cp, 'utf8'));
+      if (c && c.championId) {
+        champion = {
+          id: String(c.championId).slice(0, 20),
+          tier: c.provenanceTier || 'unknown',
+          appliedDaysAgo: c.appliedAt ? Math.round(daysSince(c.appliedAt)) : null,
+        };
+      }
+    }
+  } catch { /* absent or unreadable — report the repo-scoped truth alone */ }
+
   // Only a capability that DEMONSTRATED value and then stopped is worth interrupting someone about.
   if (!(idleDays > 3 && best.score > (baseline?.score ?? 0))) return null;
 
@@ -111,7 +133,10 @@ export function detectDormantEvolution(repo = process.cwd()) {
     evidence: [
       { observed: `harness self-evolution ran in this repo and reached a score of ${best.score} from a baseline of ${baseline?.score ?? 0}` },
       { observed: `${surfaces.length} policy surfaces were explored (${surfaces.slice(0, 4).join(', ')}${surfaces.length > 4 ? '…' : ''})` },
-      { observed: `it has been idle for ${Math.round(idleDays)} days, and ${promotedCount === 0 ? `NONE of the ${improvements.length} improvements were kept — they all plateaued at the same score, so the promotion rule could not choose between them` : `${promotedCount} of ${improvements.length} improvements were kept`}` },
+      { observed: `this repo's run has been idle ${Math.round(idleDays)} days, and ${promotedCount === 0 ? `NONE of its ${improvements.length} improvements were kept — they all plateaued at the same score, so the promotion rule could not choose between them` : `${promotedCount} of ${improvements.length} improvements were kept`}` },
+      champion
+        ? { observed: `machine-wide, a champion policy IS active (${champion.id}…, provenance ${champion.tier}, applied ${champion.appliedDaysAgo} days ago) — so evolution is not entirely dead, it is just not running HERE` }
+        : { observed: 'no machine-wide champion policy is active either — nothing from any run is currently in force' },
     ],
     // Never overstate. A plateau is a known, documented condition with a known fix — say which.
     why: promotedCount === 0

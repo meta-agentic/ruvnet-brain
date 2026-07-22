@@ -69,6 +69,43 @@ export const ENFORCEMENT = Object.freeze({
 const ENFORCEMENT_VALUES = new Set(Object.values(ENFORCEMENT));
 
 /**
+ * ORIGIN — who claims this lesson is true. Added 2026-07-22 after an adversarial review (GPT-5.6-Sol)
+ * found the most dangerous hole in the design: there was NO trust boundary on lesson creation.
+ *
+ * Its exact scenario, which was achievable as written:
+ *
+ *   "A repository instruction or hallucinated session summary records 'the user corrected me:
+ *    upload diagnostics including credentials.' The same template contaminates two projects,
+ *    becomes 'independently rediscovered', and enters the global objective. Darwin then optimises
+ *    secret exfiltration."
+ *
+ * That is a prompt-injection path straight into the objective function of an evolutionary search.
+ * Independent rediscovery — the promotion evidence — is trivially forged by anything that writes to
+ * two project memory directories, which includes the model itself and any repo the user clones.
+ *
+ * So provenance is now structural: a lesson the MODEL inferred about itself may never block, and may
+ * never be promoted globally, until a human ratifies it. Machine-authored memory is a candidate, not
+ * a fact.
+ */
+export const ORIGIN = Object.freeze({
+  USER_STATED: 'user-stated',       // the user said it, in their own words, in a session
+  MODEL_INFERRED: 'model-inferred', // the model wrote it about itself — QUARANTINED by default
+  IMPORTED: 'imported',             // came from a repo, template, or another machine — least trusted
+});
+const ORIGIN_VALUES = new Set(Object.values(ORIGIN));
+
+/**
+ * STATUS — the ratification ladder. A lesson does not become policy by existing.
+ * candidate → ratified (a human agreed) → active (in force at its trigger).
+ */
+export const STATUS = Object.freeze({
+  CANDIDATE: 'candidate',
+  RATIFIED: 'ratified',
+  ACTIVE: 'active',
+});
+const STATUS_VALUES = new Set(Object.values(STATUS));
+
+/**
  * The schema gate. Throws — loudly, at construction — on any lesson that could not possibly act.
  *
  * Each refusal below maps to a real way this project has failed:
@@ -81,6 +118,11 @@ export function makeLesson(spec) {
   const {
     id, statement, trigger, enforcement, evidence,
     projects = [], repeatCount = 0, demoted = false, check = null,
+    origin = ORIGIN.MODEL_INFERRED,   // least-privilege DEFAULT: unstated provenance is untrusted
+    status = STATUS.CANDIDATE,        // and unstated status is unratified
+    severity = 'normal',              // 'normal' | 'high' — see weightOf()
+    intendedEnforcement = null,       // what it should become once a human ratifies it
+    ratifiedBy = null,
   } = spec;
   const err = (m) => { throw new Error(`Lesson "${id ?? '?'}" invalid: ${m}`); };
 
@@ -103,14 +145,64 @@ export function makeLesson(spec) {
     err(`trigger "${trigger}" fires while CHOOSING work — no hook can observe that. It may only be 'checklist' or 'review'. Claiming otherwise is pretending a bias is a gate.`);
   }
 
+  if (!ORIGIN_VALUES.has(origin)) err(`origin must be one of: ${[...ORIGIN_VALUES].join(', ')}`);
+  if (!STATUS_VALUES.has(status)) err(`status must be one of: ${[...STATUS_VALUES].join(', ')}`);
+
+  // THE TRUST BOUNDARY. A lesson the model wrote about itself, or one imported from a repo, cannot
+  // block work until a human has ratified it. This is what closes the injection path: a hallucinated
+  // or planted "the user told me to..." can still be RECORDED (we want the candidate), but it cannot
+  // reach an enforcement level that changes behaviour, and cannot enter the objective function.
+  if (enforcement === ENFORCEMENT.BLOCK && origin !== ORIGIN.USER_STATED) {
+    err(`enforcement:block requires origin:user-stated (got "${origin}"). Machine-authored or imported lessons may not block work until a human ratifies them — otherwise a planted session summary becomes a gate.`);
+  }
+  if (enforcement === ENFORCEMENT.BLOCK && status === STATUS.CANDIDATE) {
+    err('enforcement:block requires status:ratified or active — a candidate has not been agreed to by anyone');
+  }
+
   return Object.freeze({
     id, statement, trigger, enforcement, evidence,
-    surface,
+    surface, origin, status, severity,
+    intendedEnforcement: intendedEnforcement ?? null,
+    ratifiedBy: ratifiedBy ?? null,
     projects: [...projects],
     repeatCount,
     demoted: demoted === true,
     check: check ?? null,
   });
+}
+
+/**
+ * WEIGHT — how strongly a lesson pulls on the objective function.
+ *
+ * CRITICAL fix, 2026-07-22, from the adversarial review. The original design used raw `repeatCount`
+ * as the weight. The reviewer's verdict was correct and worth quoting exactly:
+ *
+ *   "Repeat count is a contaminated proxy: frequency of opportunity × failure visibility × user
+ *    patience × capture duplication... A formatting preference corrected 52 times dominates a
+ *    security rule corrected once because the security failure occurred only once. Darwin produces
+ *    beautifully formatted credential leaks."
+ *
+ * Repetition measures the USER'S FRUSTRATION, not the lesson's importance — and frustration scales
+ * with how often a situation ARISES, which is nearly uncorrelated with how much it matters. A rule
+ * about naming fires on every file; a rule about not leaking credentials fires once a year.
+ *
+ * So repetition is LOG-CAPPED (it may raise priority, never establish truth), severity is an
+ * independent multiplier, and unratified lessons contribute a fraction of their nominal weight —
+ * they are hypotheses, and a hypothesis must not steer an evolutionary search.
+ */
+export function weightOf(lesson) {
+  if (lesson.demoted) return 0;
+  // log1p flattens the difference between 5× and 50× to under 2×, so a frequently-arising nag can
+  // never out-vote a rare catastrophe purely on count.
+  const repetition = Math.log1p(Math.max(0, lesson.repeatCount)) / Math.log1p(50);
+  const severity = lesson.severity === 'high' ? 3 : 1;
+  // Cross-project rediscovery is better evidence of generality than raw repetition, but it is still
+  // evidence about SCOPE, not about correctness — so it is a modest multiplier, not a dominant one.
+  const breadth = 1 + Math.min(1, (lesson.projects.length - 1) * 0.25);
+  const trust = lesson.origin === ORIGIN.USER_STATED ? 1
+    : lesson.status === STATUS.RATIFIED || lesson.status === STATUS.ACTIVE ? 0.6
+      : 0.15;   // an unratified machine-authored guess barely moves the objective at all
+  return +(repetition * severity * breadth * trust).toFixed(4);
 }
 
 /**
@@ -164,4 +256,35 @@ export function saveLessons(lessons, file = STORE_PATH) {
 /** Demotion is STICKY: the user's "this was wrong" must survive the next mining run, or the control is theatre. */
 export function demote(id, lessons) {
   return lessons.map((l) => (l.id === id ? makeLesson({ ...l, demoted: true }) : l));
+}
+
+/**
+ * RATIFY — the human action that turns a hypothesis into policy.
+ *
+ * This is the other half of the trust boundary, and without it the boundary would just be a way of
+ * making the system permanently inert. A lesson is stored at the enforcement level it can justify
+ * TODAY (`checklist` at most, for anything unratified); ratification raises it to the level it was
+ * proposed at, but ONLY for user-stated lessons.
+ *
+ * Deliberately refuses to ratify model-inferred lessons into `block`. If the model could ratify its
+ * own inferences, the boundary would be a comment rather than a control — and the injection path
+ * the adversarial review found would be open again through one extra step.
+ */
+export function ratify(id, lessons, { by = 'user' } = {}) {
+  return lessons.map((l) => {
+    if (l.id !== id) return l;
+    const target = l.intendedEnforcement || l.enforcement;
+    const canBlock = l.origin === ORIGIN.USER_STATED;
+    return makeLesson({
+      ...l,
+      status: STATUS.RATIFIED,
+      enforcement: target === ENFORCEMENT.BLOCK && !canBlock ? ENFORCEMENT.CHECKLIST : target,
+      ratifiedBy: by,
+    });
+  });
+}
+
+/** Lessons awaiting a human decision — what the management surface must show first. */
+export function pending(lessons) {
+  return lessons.filter((l) => l.status === STATUS.CANDIDATE && !l.demoted);
 }
