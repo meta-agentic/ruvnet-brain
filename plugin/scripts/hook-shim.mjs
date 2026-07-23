@@ -45,6 +45,7 @@ const TABLE = {
   'design-wall':      { file: 'design-wall.sh',      interpreter: 'bash', mode: 'blocking' },
   'learn-capture':    { file: 'learn-capture.sh',    interpreter: 'bash', mode: 'advisory' },
   'learn-flush':      { file: 'learn-flush.mjs',     interpreter: 'node', mode: 'advisory' },
+  'md-stamp':         { file: 'md-stamp.mjs',        interpreter: 'node', mode: 'advisory' },
 };
 
 const hookId = process.argv[2];

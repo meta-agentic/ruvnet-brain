@@ -124,6 +124,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" md-stamp || true",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionEnd": [
