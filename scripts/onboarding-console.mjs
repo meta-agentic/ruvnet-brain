@@ -34,7 +34,7 @@ import { auditAll as capabilityAuditAll } from './capability-registry.mjs';
 // L5 (ADR-028): the audit is the one place that observes live capability state, so it is where an
 // OFFERED-then-now-`on` transition becomes an APPLIED — the numerator of the precision metric that
 // tells the owner whether advocacy is landing or nagging. Both are pure reads/appends and never throw.
-import { reconcileApplied, precision as advocacyPrecision } from './advocacy-outcomes.mjs';
+import { reconcileApplied, reconcileIgnored, pendingOffers, precision as advocacyPrecision } from './advocacy-outcomes.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -471,6 +471,41 @@ const STATE_CACHE  = path.join(CONFIG_DIR, 'state-cache.json');
 const STACK_CACHE  = path.join(CONFIG_DIR, 'stack-audit-cache.json');
 const MEMORY_CACHE = path.join(CONFIG_DIR, 'memory-cache.json');
 const CAPABILITY_CACHE = path.join(CONFIG_DIR, 'capability-cache.json');
+
+/**
+ * THE THIRD OUTCOME, WIRED (ADR-028 L5). `ignored` had ZERO callers: precision = applied ÷
+ * (applied+dismissed+ignored) silently shrank its own denominator, the mirror image of the
+ * "record only the applies" fabrication advocacy-outcomes.mjs's own header names. This is the
+ * caller advocacy-outcomes.mjs's own docs ask for: it computes staleness (the ledger deliberately
+ * does not — see reconcileIgnored()'s header), this file only ever verifies the staleness ledger
+ * already has evidence for.
+ *
+ * THE RULE, AND WHY IT IS THE CHEAP ONE TO DEFEND: an offer is `ignored` once it has been PENDING
+ * (never applied nor dismissed) for at least `IGNORE_AFTER_MS` AND the audit, run again right now,
+ * still finds the capability `off`. Both halves are load-bearing:
+ *   - "still off" rules out the one honest reason silence could mean something OTHER than a miss —
+ *     the user already acted and reconcileApplied() simply has not been called yet in THIS request
+ *     (it always runs first, immediately above, in the same audit pass).
+ *   - "pending ≥ IGNORE_AFTER_MS" is wall-clock time, not a session count, because THIS endpoint has
+ *     no session concept of its own (it is a cached HTTP read-model, polled on whatever cadence the
+ *     console page happens to be open) — inventing a session counter here would be evidence this
+ *     file does not have. 24h is a full day of the capability sitting there, in the one place a user
+ *     would see it (the console, `/api/capabilities`'s own consumer), still off, with no dismiss and
+ *     no apply — long enough that "hasn't looked yet" stops being the more likely explanation.
+ * A day is also symmetric with anticipate.sh's own once-per-project-per-day fallback session key, so
+ * the two surfaces do not disagree about what "already had a fair chance to react" means.
+ *
+ * PURE (besides the ledger read `pendingOffers()` performs) — `now` is a parameter so a test can
+ * pass a fixed instant instead of asserting against a moving `Date.now()`.
+ */
+const IGNORE_AFTER_MS = 24 * 60 * 60 * 1000;
+export function findStaleOffers(rows, { file, now = Date.now() } = {}) {
+  const stillOff = new Set((Array.isArray(rows) ? rows : []).filter((r) => r && r.state === 'off').map((r) => r.key));
+  return pendingOffers({ file })
+    .filter((p) => stillOff.has(p.id) && typeof p.at === 'string' && (now - Date.parse(p.at)) >= IGNORE_AFTER_MS)
+    .map((p) => p.id);
+}
+
 const SELF = fileURLToPath(import.meta.url);
 let LAST_REFRESH_KICK = 0;
 function writeCache(file, at, data) {
@@ -1405,12 +1440,18 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         return serveCached(res, CAPABILITY_CACHE, () => {
           let rows = [];
           let reconciled = [];
+          let reconciledIgnored = [];
           try {
             rows = capabilityAuditAll();
             // Credit APPLIED for anything we offered that the user has since switched on. Derived from
             // this live audit, never guessed; safe on a read (idempotent — a resolved offer is no
             // longer pending) and it never throws.
             reconciled = reconcileApplied(rows);
+            // THE DENOMINATOR'S MISSING THIRD (ADR-028 L5): an offer that has sat PENDING, still off,
+            // for a full day is `ignored` — see findStaleOffers() above for the staleness rule and why
+            // it is this file's decision, not advocacy-outcomes.mjs's. Runs AFTER reconcileApplied so a
+            // capability the user just switched on is never miscounted as ignored in the same pass.
+            reconciledIgnored = reconcileIgnored(findStaleOffers(rows));
           } catch (e) {
             // A failed audit must NOT render as "everything is off" — that is the precise lie this
             // surface exists to kill. An error yields an explicit unknown, and says why.
@@ -1419,9 +1460,10 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
               evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
           }
           // The precision the owner asked "is my advocacy landing?" of. null (not 0) until enough
-          // offers have resolved — an honest "not yet judgeable", never a fabricated score.
+          // offers have resolved — an honest "not yet judgeable", never a fabricated score. Computed
+          // AFTER both reconciles above so a freshly-resolved applied/ignored is reflected in it.
           const prec = advocacyPrecision();
-          return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled } } };
+          return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled, reconciledIgnored } } };
         });
       }
       if (req.method === 'GET' && url === '/api/memory') {

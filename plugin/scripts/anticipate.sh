@@ -40,17 +40,22 @@
 # NEVER DAEMONIZES. The registry's own comment records the bill for getting this wrong: one call to
 # an earlier auditAll() left a live `node cli.js daemon start --foreground` running and wrote four
 # files into HOME. auditAll() is now read-only (it LOCATES ruflo, never executes it), and this hook
-# adds no execution of its own — it imports two modules and does filesystem reads.
+# adds no execution of its own — it imports three modules (goal-match, capability-registry,
+# advocacy-outcomes) and does filesystem reads.
 #
 # CONTRACT: always exit 0. stdout on exit 0 is injected verbatim into the model's context, so the
 # single line printed here is phrased as an instruction to the model, matching ground-ruvnet.sh.
-# The ONLY path this writes to is the state file under ~/.config/ruvnet-brain/.
+# The only paths this writes to are the state file and the outcomes ledger, both under
+# ~/.config/ruvnet-brain/.
 #
 # CLI (the "silence it" instruction we print must actually work — house rule: never render a
-# control without a real executor AND a real undo):
-#   anticipate.sh --dismiss <capability-key>     stop raising it, permanently   (the executor)
-#   anticipate.sh --undismiss <capability-key>   start raising it again         (the undo)
-#   anticipate.sh --status                       what is dismissed / said this session
+# control without a real executor AND a real undo). SUPPRESSION IS SEVERITY-WEIGHTED (2026-07-23):
+# --dismiss is not a single permanent mute at every severity — see advocacy-outcomes.mjs's
+# DISMISSAL_BUDGET. A routine finding is silenced by its first --dismiss; a high-severity one needs
+# three before it goes fully quiet, because one distracted click must not bury a serious finding.
+#   anticipate.sh --dismiss <capability-key>     record a decline; silences it once its budget is spent
+#   anticipate.sh --undismiss <capability-key>   reset the budget — it can be raised again    (the undo)
+#   anticipate.sh --status                       the dismissal ledger + what was said this session
 # Kill switch for the whole hook: RUVNET_ANTICIPATE=0
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -66,11 +71,21 @@ SELF_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 CODE_ROOT=$(CDPATH='' cd -- "$SELF_DIR/../.." 2>/dev/null && pwd)
 [ -n "$CODE_ROOT" ] || exit 0
 
-# Both module paths are env-overridable, matching the RUVNET_LESSON_STORE / RUVNET_SETTINGS_FILE
+# All THREE module paths are env-overridable, matching the RUVNET_LESSON_STORE / RUVNET_SETTINGS_FILE
 # idiom already used across this repo — so tests never load the real registry or touch a real user's
 # state, and a future relocation needs no edit here.
 GOAL_MATCH="${RUVNET_GOAL_MATCH:-$CODE_ROOT/scripts/goal-match.mjs}"
 CAP_REGISTRY="${RUVNET_CAPABILITY_REGISTRY:-$CODE_ROOT/scripts/capability-registry.mjs}"
+# THE SINGLE SUPPRESSION POLICY (2026-07-23). Until this build this file decided "is X suppressed"
+# with its OWN local dismissed-Set in anticipate-state.json — one dismissal muted forever, no
+# severity, no budget — while advocacy-outcomes.mjs's shouldStillOffer()/DISMISSAL_BUDGET (a nag dies
+# on 1 dismissal, a high-severity finding needs 3, with a state-change reprieve) sat completely
+# uncalled. Two thresholds for one decision is the exact hazard named below for the confidence floor;
+# the fix is the same shape — wire this module the IDENTICAL env-var-with-a-default way as the two
+# above, NOT a hardcoded `../scripts` path, so it resolves correctly whether this file runs from a dev
+# checkout or the Stable Spine's `<gen>/plugin/scripts/anticipate.sh` (both keep `scripts/` as a
+# sibling of `plugin/`, per this file's own CODE_ROOT comment above).
+ADVOCACY_MODULE="${RUVNET_ADVOCACY_OUTCOMES_MODULE:-$CODE_ROOT/scripts/advocacy-outcomes.mjs}"
 
 # ── Subcommands (dismiss/undismiss/status) run the same node program in a different mode ─────────
 MODE="suggest"
@@ -102,6 +117,17 @@ else
   EVENT=""
 fi
 
+# advocacy-outcomes.mjs is the single suppression policy for EVERY mode below (suggest AND
+# dismiss/undismiss/status), so all four now need it, not suggest alone. Same fast-path discipline as
+# GOAL_MATCH/CAP_REGISTRY above — a missing module is not guessed around. `suggest` degrades to the
+# existing silent contract; the CLI modes get one honest line on stderr, because a control (--dismiss)
+# reporting nothing when it did nothing is the "dead button" failure this file's header warns against.
+if [ ! -f "$ADVOCACY_MODULE" ]; then
+  if [ "$MODE" = "suggest" ]; then exit 0; fi
+  echo "advocacy-outcomes module not found at $ADVOCACY_MODULE — cannot read or write the dismissal ledger" >&2
+  exit 0
+fi
+
 # ── The one node process ─────────────────────────────────────────────────────────────────────────
 # The program is fed to node on stdin by a QUOTED heredoc, and the payload travels in the
 # environment — so no temp file is created anywhere and neither the JS nor the user's prompt is ever
@@ -120,6 +146,7 @@ RUVNET_ANTICIPATE_EVENT="$EVENT" \
 RUVNET_ANTICIPATE_SELF="$SELF_DIR/anticipate.sh" \
 RUVNET_GOAL_MATCH="$GOAL_MATCH" \
 RUVNET_CAPABILITY_REGISTRY="$CAP_REGISTRY" \
+RUVNET_ADVOCACY_OUTCOMES_MODULE="$ADVOCACY_MODULE" \
   node --input-type=module 2>/dev/null <<'JS' &
 import fs from 'node:fs';
 import os from 'node:os';
@@ -138,7 +165,12 @@ const SELF = process.env.RUVNET_ANTICIPATE_SELF || 'anticipate.sh';
 const STATE_FILE = process.env.RUVNET_ANTICIPATE_STATE
   || path.join(os.homedir(), '.config', 'ruvnet-brain', 'anticipate-state.json');
 
-const STATE_VERSION = 1;
+// v2 (2026-07-23): dropped the local `dismissed` array — see "THE SINGLE SUPPRESSION POLICY" below.
+// Any v1 file on disk (which HAD one) simply fails the version check and resets to v2 defaults; no
+// suppression history is lost by that, because every dismissal made through --dismiss was ALREADY
+// being double-written into the outcomes ledger too (the two-writes-one-decision bug this build
+// fixes) — the ledger the new policy reads is already populated with that same history.
+const STATE_VERSION = 2;
 // Per-capability "once per session" is the ADR-027 rule. This ceiling bounds the WORST case on top
 // of it: with eleven capabilities in the registry, "once each" is still eleven interruptions in one
 // session, which is a nag by any honest reading of the precision floor.
@@ -168,7 +200,7 @@ function readState() {
     // re-offer once; the alternative is a hook that crashes on a file a future version wrote.
     if (j && typeof j === 'object' && j.version === STATE_VERSION) return j;
   } catch { /* absent or unreadable — defaults */ }
-  return { version: STATE_VERSION, dismissed: [], sessions: {} };
+  return { version: STATE_VERSION, sessions: {} };
 }
 
 /** Atomic write, entirely INSIDE the config dir. Returns false on any failure — never throws. */
@@ -186,67 +218,101 @@ function writeState(st) {
 
 const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 
-// ── outcome ledger (L5) ─────────────────────────────────────────────────────────────────────────
-// Loaded lazily and wrapped: the ledger is an improvement mechanism, never a dependency of the
-// thing it measures. If it is missing or throws, advocacy still works and simply learns nothing —
-// which is the current state, and is strictly better than a hook that fails because a log failed.
-function recordOutcome(action, id, extra) {
-  if (!id) return;
-  // SYNCHRONOUS BY NECESSITY. The first version did a dynamic import() and fired the record into a
-  // promise — but quit() calls process.exit(0), which kills the process before that promise ever
-  // resolves. Result: the ledger stayed EMPTY while the code looked correct and every test of the
-  // hook passed. Caught only by checking the ledger file itself, which is the one channel capable
-  // of observing whether a write happened (L01).
-  //
-  // The ledger is append-only JSONL, so a synchronous append IS the native operation. The two
-  // validity checks record() enforces are replicated here rather than imported, because importing
-  // ESM synchronously is not possible and a detached spawn would add latency to every prompt.
-  try {
-    if (!VALID_ACTIONS.has(action)) return;
-    if (typeof id !== 'string' || !id || id.length > 200) return;
-    const file = process.env.RUVNET_ADVOCACY_OUTCOMES
-      || path.join(os.homedir(), '.config', 'ruvnet-brain', 'advocacy-outcomes.jsonl');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.appendFileSync(file, JSON.stringify({ id, action, at: new Date().toISOString(), ...(extra || {}) }) + '\n');
-  } catch { /* the ledger measures advocacy; it must never break it */ }
+// ── THE SINGLE SUPPRESSION POLICY (2026-07-23) ──────────────────────────────────────────────────
+// Until this build, this file kept its OWN dismissed-Set in anticipate-state.json as a second,
+// disconnected gate: one call to --dismiss muted a capability FOREVER, at every severity, while
+// advocacy-outcomes.mjs's shouldStillOffer()/DISMISSAL_BUDGET (a nag dies on 1 dismissal, a
+// high-severity finding needs 3, with a state-change reprieve) sat completely uncalled — the exact
+// "two thresholds for one decision" hazard the confidence-floor comment above already names for a
+// different value. It also hand-rolled its OWN ledger writer (recordOutcome(), removed here) rather
+// than call record() — a second, unimported copy of the same validation, which is the write-side
+// half of the identical mistake.
+//
+// From here on, advocacy-outcomes.mjs — loaded ONCE, used in every mode — is the only place "is X
+// suppressed" or "record what happened" is decided; nothing else in this file keeps a shadow copy
+// of that answer. Wired the SAME env-var-with-a-default way as RUVNET_GOAL_MATCH/
+// RUVNET_CAPABILITY_REGISTRY above (see ADVOCACY_MODULE in the bash section), not a hardcoded path.
+let advocacy = null;
+const ADVOCACY_MODULE_PATH = process.env.RUVNET_ADVOCACY_OUTCOMES_MODULE || '';
+if (ADVOCACY_MODULE_PATH) {
+  try { advocacy = await import(pathToFileURL(ADVOCACY_MODULE_PATH).href); } catch { advocacy = null; }
 }
-const VALID_ACTIONS = new Set(['offered', 'applied', 'dismissed', 'ignored']);
+if (!advocacy || typeof advocacy.shouldStillOffer !== 'function' || typeof advocacy.record !== 'function') {
+  // SILENCE RULE 4 for `suggest` — no suppression policy available, no speech, same as a missing
+  // matcher/registry. The CLI modes get one honest line instead: a control (--dismiss) that reports
+  // nothing when it did nothing is the "dead button" failure this file's header warns against.
+  if (MODE === 'suggest') quit();
+  out.push(`advocacy-outcomes module unavailable (${ADVOCACY_MODULE_PATH || 'RUVNET_ADVOCACY_OUTCOMES_MODULE unset'}) — cannot record or check the dismissal ledger`);
+  quit();
+}
+const {
+  record, shouldStillOffer, outcomesFor, summarize, pendingOffers,
+  ACTIONS, DISMISSAL_BUDGET, weightClass, stateHashOf,
+} = advocacy;
+const OUTCOMES_FILE = process.env.RUVNET_ADVOCACY_OUTCOMES
+  || path.join(os.homedir(), '.config', 'ruvnet-brain', 'advocacy-outcomes.jsonl');
+/** Recording an outcome must never break the hook it measures — same contract recordOutcome() had. */
+function safeRecord(spec) {
+  try { return record(spec, { file: OUTCOMES_FILE }); } catch (e) { return { ok: false, reason: e.message }; }
+}
 
 // ── dismiss / undismiss / status ────────────────────────────────────────────────────────────────
 if (MODE === 'dismiss' || MODE === 'undismiss' || MODE === 'status') {
   const st = readState();
-  const dismissed = new Set(strings(st.dismissed));
+  const sessions = st.sessions && typeof st.sessions === 'object' ? st.sessions : {};
+
   if (MODE === 'status') {
-    const said = Object.values(st.sessions && typeof st.sessions === 'object' ? st.sessions : {})
-      .flatMap((s) => strings(s?.said));
-    out.push(`dismissed (never raised again): ${dismissed.size ? [...dismissed].join(', ') : 'none'}`);
+    const said = Object.values(sessions).flatMap((s) => strings(s?.said));
+    const rows = summarize({ file: OUTCOMES_FILE }).filter((r) => r.offered > 0);
+    const ledger = rows.length
+      ? rows.map((r) => `${r.id}: ${r.suppressed ? 'suppressed' : 'active'} (applied ${r.applied}, dismissed ${r.dismissed}, ignored ${r.ignored})`).join(' | ')
+      : 'none';
+    out.push(`dismissal ledger:               ${ledger}`);
     out.push(`raised in recent sessions:      ${said.length ? [...new Set(said)].join(', ') : 'none'}`);
     out.push(`state file:                     ${STATE_FILE.replace(os.homedir(), '~')}`);
+    out.push(`outcomes ledger:                ${OUTCOMES_FILE.replace(os.homedir(), '~')}`);
     quit();
   }
-  // FEED THE OUTCOME LEDGER. Until now advocacy-outcomes.mjs had ZERO callers: a dismissal changed
-  // whether we speak, and taught the system nothing about WHETHER WE SHOULD HAVE. That is L5
-  // (compounding) with its input disconnected — the ledger could compute precision forever over an
-  // empty file. ADR-028 sets precision >= 0.60 as the line between advocating and nagging, and it
-  // was unmeasurable because nothing recorded the denominator.
-  //
-  // Best-effort by construction: a failure here must never break the user's dismiss. Losing one
-  // outcome row is a small loss; refusing to silence something the user asked to silence is a
-  // large one.
-  // ONLY a dismissal is an outcome. --undismiss means "I changed my mind, keep offering it" — it is
-  // a correction of a previous signal, NOT evidence the user acted on the suggestion. Recording it
-  // as `applied` would inflate precision (applied ÷ offered), which is the metric ADR-028 uses to
-  // decide whether we are advocating or nagging. A system that games its own success metric is
-  // worse than one with no metric, because the number then actively misleads.
-  if (MODE === 'dismiss') recordOutcome('dismissed', ARG);
 
-  if (MODE === 'dismiss') dismissed.add(ARG); else dismissed.delete(ARG);
-  st.dismissed = [...dismissed];
-  // Report what actually happened on disk. Claiming success on a failed write is the exact
-  // "asserted, not derived" failure this project keeps paying for.
-  if (!writeState(st)) out.push(`could not write ${STATE_FILE.replace(os.homedir(), '~')} — nothing changed`);
-  else if (MODE === 'dismiss') out.push(`dismissed: "${ARG}" will not be raised again (undo: ${SELF} --undismiss ${ARG})`);
-  else out.push(`un-dismissed: "${ARG}" can be raised again`);
+  if (MODE === 'undismiss') {
+    // A RESET is the ledger's own undo: a CHECKPOINT, never a deletion (advocacy-outcomes.mjs).
+    // Everything before it stays on the record — precision is never laundered — only the suppression
+    // arithmetic starts counting again after it.
+    const res = safeRecord({ id: ARG, action: ACTIONS.RESET });
+    out.push(res.ok
+      ? `un-dismissed: "${ARG}" can be raised again`
+      : `could not record the reset (${res.reason}) — nothing changed`);
+    quit();
+  }
+
+  // MODE === 'dismiss'. Severity is whatever the LEDGER already knows about this id — the CLI call
+  // has no fresh row to read (--dismiss runs standalone, without re-auditing the capability), and
+  // guessing 'normal' when history already says 'high' would let one distracted click silence a
+  // high-severity finding in a single shot, the exact failure DISMISSAL_BUDGET exists to prevent.
+  //
+  // TWO SOURCES, because neither alone covers every dismissal in the sequence. The offer's own
+  // severity lives in the PENDING `offered` record, but the moment THIS dismissal resolves it, it is
+  // no longer pending — so pendingOffers() only ever sees it before the FIRST dismissal.
+  // outcomesFor().lastSeverity only reads resolved records (applied/dismissed/ignored — deliberately
+  // NOT `offered`, so a mere show never counts as evidence), so it only ever has an answer from the
+  // SECOND dismissal onward. Together they cover every dismissal; genuinely unknown (neither source
+  // has ever seen this id) resolves to 'normal' — the quieter class, same direction as weightClass()'s
+  // own documented default.
+  const pendingSeverity = pendingOffers({ file: OUTCOMES_FILE }).find((p) => p.id === ARG)?.severity;
+  const priorSeverity = pendingSeverity || outcomesFor(ARG, { file: OUTCOMES_FILE }).lastSeverity || 'normal';
+  const res = safeRecord({ id: ARG, action: ACTIONS.DISMISSED, severity: priorSeverity });
+  if (!res.ok) { out.push(`could not record the dismissal (${res.reason}) — nothing changed`); quit(); }
+
+  // HONEST MESSAGE. Whether it "will not be raised again" now genuinely depends on the budget, not
+  // on the mere fact that --dismiss was called — saying so unconditionally would repeat the false
+  // "never again" promise the old permanent dismissed-Set made regardless of severity.
+  const cls = weightClass(priorSeverity);
+  const budget = DISMISSAL_BUDGET[cls];
+  const spent = outcomesFor(ARG, { file: OUTCOMES_FILE }).dismissed;
+  const stillMayReturn = shouldStillOffer(ARG, { severity: priorSeverity, file: OUTCOMES_FILE });
+  out.push(stillMayReturn
+    ? `acknowledged: "${ARG}" dismissed (${spent}/${budget} for a ${cls}-severity finding) — a single click cannot bury a high-severity finding, so it may still resurface until the budget is spent. Dismiss again to move it toward silence, or ${SELF} --undismiss ${ARG} to restore it now.`
+    : `dismissed: "${ARG}" will not be raised again (undo: ${SELF} --undismiss ${ARG})`);
   quit();
 }
 
@@ -297,7 +363,6 @@ const sid = typeof ev.session_id === 'string' && ev.session_id.trim()
   : `fallback:${process.cwd()}:${new Date().toISOString().slice(0, 10)}`;
 
 const st = readState();
-const dismissed = new Set(strings(st.dismissed));
 const sessions = st.sessions && typeof st.sessions === 'object' ? st.sessions : {};
 const said = new Set(strings(sessions[sid]?.said));
 if (said.size >= MAX_PER_SESSION) quit();
@@ -318,7 +383,19 @@ try { rows = auditAll({ project: process.cwd() }) || []; } catch { quit(); }
 // SILENCE RULE 1. 'off' is the only state that has earned a sentence: installed, and switched off.
 // 'unknown' is a detector saying it could not tell — advocating on it would be fabricating a fault,
 // which is precisely the "26 hooks off" incident. 'absent' means there is nothing to turn on.
-const dormant = rows.filter((r) => r && r.state === 'off' && !dismissed.has(r.key) && !said.has(r.key));
+//
+// SUPPRESSION is shouldStillOffer() — the ledger's severity-weighted budget — not a local Set. A row
+// carries no `severity` field today (neither auditAll() nor matchGoal() emit one, confirmed live), so
+// `null` is passed and shouldStillOffer() falls back to whatever it last recorded for this id (or
+// 'normal' if it has never seen one); a `severity` DOES flow through the moment a future registry
+// adds it, because record()/shouldStillOffer() already accept it. `stateHash` comes from the row's
+// own real, measured `evidence` string — never fabricated — so the high-severity state-change
+// reprieve can fire the moment a dismissal is ever recorded WITH a hash (see --dismiss's own comment
+// on why it cannot supply one today).
+const dormant = rows.filter((r) => {
+  if (!r || r.state !== 'off' || said.has(r.key)) return false;
+  return shouldStillOffer(r.key, { severity: r.severity || null, stateHash: stateHashOf(r.evidence), file: OUTCOMES_FILE });
+});
 if (!dormant.length) quit();
 
 let matches = [];
@@ -356,7 +433,6 @@ sessions[sid] = { said: [...said], ts: Date.now() };
 st.sessions = Object.fromEntries(
   Object.entries(sessions).sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0)).slice(0, KEEP_SESSIONS),
 );
-st.dismissed = [...dismissed];
 if (!writeState(st)) quit();   // cannot remember having spoken → do not speak
 
 // Only real, derived values reach this line: `label`, `whatItBuysYou` and `turnOn` come straight
@@ -384,9 +460,20 @@ const payoff = buys && !why.includes(buys) ? ` It buys them: ${buys}` : '';
 // RECORD THE DENOMINATOR. precision = acted-on / OFFERED, and without this line the denominator is
 // always zero — the metric ADR-028 uses to separate "advocating" from "nagging" would be
 // permanently unmeasurable while appearing to be implemented.
-recordOutcome('offered', best.row.key, { severity: best.row.severity || 'normal', scope: best.row.scope });
+//
+// NOTE what is deliberately absent: `scope: best.row.scope`. An earlier version passed it here, but
+// `best.row.scope` is the CAPABILITY's scope (machine/project/user, from capability-registry.mjs) —
+// a different field entirely from the ledger's own `scope:'forever'` (a permanent-silence marker,
+// valid only on a dismissal). record() validates this strictly and would have THROWN on every single
+// offer the moment this file started calling it instead of a hand-rolled, unvalidated writer — caught
+// here rather than in production.
+safeRecord({
+  id: best.row.key, action: ACTIONS.OFFERED,
+  severity: best.row.severity || 'normal',
+  stateHash: stateHashOf(best.row.evidence),
+});
 
-out.push(`[RuvNet Brain — anticipating] "${best.row.label}" is installed here and switched OFF, and it serves this turn: ${why}${payoff} Offer it ONCE, in one plain sentence (${cmd}), then drop it and get on with the actual work — it will not be raised again. If they decline: ${SELF} --dismiss ${best.row.key}`);
+out.push(`[RuvNet Brain — anticipating] "${best.row.label}" is installed here and switched OFF, and it serves this turn: ${why}${payoff} Offer it ONCE, in one plain sentence (${cmd}), then drop it and get on with the actual work. If they decline: ${SELF} --dismiss ${best.row.key} (each decline moves it toward silence, faster for a routine finding than a serious one)`);
 quit();
 JS
 NODE_PID=$!
