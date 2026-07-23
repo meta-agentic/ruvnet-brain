@@ -116,6 +116,14 @@ esac
 ARGS=()
 for t in $TRIGGERS; do ARGS+=(--trigger "$t"); done
 
+# Session identity for the gate's per-session frequency cap (scripts/lesson-gate.mjs) — extracted from
+# the same payload via the shared parser, never a hand-rolled regex. A missing/empty id just means the
+# gate falls back to a cwd+day key, so the cap stays bounded either way; it is never a hard requirement.
+if [ -f "$HOOK_INPUT_JS" ]; then
+  SID=$(printf '%s' "$INPUT" | node "$HOOK_INPUT_JS" field session_id 2>/dev/null) || SID=""
+  [ -n "$SID" ] && ARGS+=(--session "$SID")
+fi
+
 # THE FIX for the mutate-machine false-positive nag: `mutate-machine` fired on EVERY Bash call — `ls`,
 # `grep`, `git status` included — because this dispatcher requested the trigger unconditionally, with
 # no inspection of the command at all (there was nothing here to inspect it WITH). The gate now takes

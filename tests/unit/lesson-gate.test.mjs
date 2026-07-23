@@ -28,7 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const GATE = path.join(ROOT, 'scripts', 'lesson-gate.mjs');
 const DISPATCH = path.join(ROOT, 'plugin', 'scripts', 'lesson-hooks.sh');
 
-let dir, storePath, optInPath;
+let dir, storePath, optInPath, gateStatePath;
 
 /** A lesson the store will accept as blocking: user-stated, ratified, and carrying a real check.
  *  makeLesson refuses any weaker combination, so this mirrors what the live store actually holds. */
@@ -57,7 +57,8 @@ function writeOptIn(ids) {
 function runGate(args, env = {}) {
   const r = spawnSync(process.execPath, [GATE, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath, ...env },
+    env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath,
+      RUVNET_LESSON_GATE_STATE: gateStatePath, ...env },
   });
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -66,7 +67,8 @@ function runGate(args, env = {}) {
 function runDispatch(event, env = {}) {
   const r = spawnSync('bash', [DISPATCH, event], {
     encoding: 'utf8',
-    env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath, ...env },
+    env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath,
+      RUVNET_LESSON_GATE_STATE: gateStatePath, ...env },
   });
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -75,6 +77,7 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lesson-gate-'));
   storePath = path.join(dir, 'lessons.json');
   optInPath = path.join(dir, 'blocking-optin.json');
+  gateStatePath = path.join(dir, 'gate-state.json');   // per-test → the frequency cap starts fresh, never the real home
 });
 afterEach(() => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } });
 
@@ -448,5 +451,74 @@ describe('CLI mode stays backward compatible', () => {
     const { code, stdout } = runGate([]);
     expect(code).toBe(0);
     expect(stdout).toContain('--trigger');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('PER-SESSION FREQUENCY CAP: a reminder stops repeating; a refusal never does', () => {
+  /** A pure-advisory (cappable) lesson — enforcement:checklist, like the T03/T05/T06 fixtures above.
+   *  Neither block nor block-capable, so the frequency cap governs it. Carries a unique marker so the
+   *  test can tell "shown" from "suppressed" by looking at the injected context. */
+  // The statement must be a real actionable sentence (loadLessons rejects a bare token as "must say
+  // what to DO, specifically"), so the marker is embedded in one. ADVMARK<x> is what the test greps for.
+  const advisory = (marker) => blockLesson({
+    id: `ADV-${marker}`,
+    statement: `Verify the change through a capable channel before you claim ADVMARK${marker} is done.`,
+    trigger: 'claim-done', enforcement: 'checklist', check: null,
+  });
+  const fireAdvisory = (sid, env = {}) =>
+    runGate(['--event', 'PreToolUse', '--trigger', 'claim-done', '--session', sid], env);
+  const ctxOf = (r) => { try { return JSON.parse(r.stdout).hookSpecificOutput.additionalContext; } catch { return ''; } };
+
+  test('THE INVARIANT: an opted-in BLOCK lesson refuses EVERY time, far past the cap', () => {
+    // This is the load-bearing test. The cap must never touch a refusal — if capExempt were removed,
+    // the block would be suppressed after MAX_SHOWS and this loop's later iterations would exit 0.
+    writeStore([blockLesson()]);                             // enforcement:block, user-stated, ratified
+    writeOptIn(['T01-verify-with-a-capable-channel']);       // opted in → it actually refuses
+    for (let i = 0; i < 6; i += 1) {                          // 6 >> MAX_SHOWS (default 3)
+      const r = runGate(['--event', 'PreToolUse', '--trigger', 'claim-done', '--session', 'blk'],
+        { RUVNET_LESSON_MAX_SHOWS: '2' });
+      expect(r.code).toBe(2);                                // refuses, every single time
+      expect(r.stderr).toContain('channel capable of observing');
+    }
+  });
+
+  test('a pure-advisory lesson stops repeating after MAX_SHOWS in the same session', () => {
+    writeStore([advisory('A')]);
+    const env = { RUVNET_LESSON_MAX_SHOWS: '2' };
+    expect(ctxOf(fireAdvisory('s', env))).toContain('ADVMARKA');   // show 1 of 2
+    expect(ctxOf(fireAdvisory('s', env))).toContain('ADVMARKA');   // show 2 of 2
+    expect(ctxOf(fireAdvisory('s', env))).not.toContain('ADVMARKA'); // capped — silent now
+    expect(ctxOf(fireAdvisory('s', env))).not.toContain('ADVMARKA'); // stays silent
+  });
+
+  test('the cap is PER-SESSION — a different session_id starts fresh', () => {
+    writeStore([advisory('B')]);
+    const env = { RUVNET_LESSON_MAX_SHOWS: '1' };
+    expect(ctxOf(fireAdvisory('one', env))).toContain('ADVMARKB');      // session one, show 1
+    expect(ctxOf(fireAdvisory('one', env))).not.toContain('ADVMARKB'); // session one, capped
+    expect(ctxOf(fireAdvisory('two', env))).toContain('ADVMARKB');      // session two — fresh, shows
+  });
+
+  test('FAIL-OPEN — when the state file cannot be written, it shows every time, never suppresses', () => {
+    writeStore([advisory('C')]);
+    // Make the state path unwritable: put a FILE where the state\'s parent directory would need to be,
+    // so mkdirSync/writeFileSync both fail and no count is ever persisted.
+    const wall = path.join(dir, 'wall');
+    fs.writeFileSync(wall, 'x');
+    const env = { RUVNET_LESSON_GATE_STATE: path.join(wall, 'state.json'), RUVNET_LESSON_MAX_SHOWS: '1' };
+    expect(ctxOf(fireAdvisory('fo', env))).toContain('ADVMARKC');   // shows
+    expect(ctxOf(fireAdvisory('fo', env))).toContain('ADVMARKC');   // and STILL shows — never suppressed
+  });
+
+  test('the CLI mode (no --event) is never capped — a human asking sees everything', () => {
+    writeStore([advisory('D')]);
+    const env = { RUVNET_LESSON_MAX_SHOWS: '1' };
+    // Same session-less CLI call many times: every one prints the advisory, because the cap is a
+    // hook-mode concern and a human at a terminal explicitly asked.
+    for (let i = 0; i < 4; i += 1) {
+      const r = runGate(['--trigger', 'claim-done'], env);
+      expect(r.stdout).toContain('ADVMARKD');
+    }
   });
 });

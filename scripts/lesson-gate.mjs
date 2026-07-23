@@ -96,6 +96,10 @@ const triggers = allArgs('--trigger');
 const event = arg('--event');          // the real Claude Code event name → hook mode
 const quiet = argv.includes('--quiet');
 const json = argv.includes('--json');
+// Session identity for the per-session frequency cap (below). The dispatcher passes the harness's
+// real session_id; a caller that predates this (or a manual run) gets a cwd+day fallback so the cap
+// is still BOUNDED — at worst it repeats an advisory once per project per day — rather than unbounded.
+const session = arg('--session');
 // NOT `arg('--command')`: that helper treats a falsy VALUE the same as an ABSENT flag
 // (`argv[i+1] ? ... : d`), so a real event whose command happens to be "" would silently fall back to
 // the unfiltered default — precisely the false-nag path this fix exists to close. Presence of the flag,
@@ -303,6 +307,52 @@ try { lessons = loadLessons(); } catch { process.exit(EXIT_ALLOW); }   // never 
 
 const optedIn = loadBlockingOptIn();
 
+/**
+ * THE PER-SESSION FREQUENCY CAP — because a true advisory repeated verbatim on every matching event is
+ * the nag ADR-030 bans (measured 2026-07-22: the mutate-machine advisory rendered on every Bash call of
+ * a session). anticipate.sh already caps its own nudges per session; this is the same discipline for the
+ * lesson gate. A PURE-ADVISORY lesson is shown at most MAX_SHOWS times per session, then stays silent
+ * until a new session.
+ *
+ * THE LOAD-BEARING INVARIANT: anything BLOCK-related is NEVER capped. A lesson the user opted into as a
+ * block — and even a block-CAPABLE lesson the user has not yet opted into — is exempt. The cap governs a
+ * reminder, never a refusal, and never the visibility of a refusal the user could choose to turn on.
+ * Suppressing a block to "reduce noise" would silently disable the one control this file exists to honour.
+ *
+ * FAIL-OPEN: any error reading or writing the state degrades to the pre-cap behaviour (show it), never to
+ * suppression — a gate that goes quiet because it could not read a JSON file is worse than a repeat.
+ */
+const GATE_STATE_PATH = process.env.RUVNET_LESSON_GATE_STATE
+  || path.join(os.homedir(), '.config', 'ruvnet-brain', 'lesson-gate-state.json');
+const MAX_SHOWS = (() => {
+  const n = Number(process.env.RUVNET_LESSON_MAX_SHOWS);
+  return Number.isInteger(n) && n > 0 ? n : 3;
+})();
+const KEEP_SESSIONS = 20;   // bound the state file to the most-recent sessions, same as anticipate.sh
+const SID = (typeof session === 'string' && session.trim())
+  ? session.trim()
+  : `fallback:${process.cwd()}:${new Date().toISOString().slice(0, 10)}`;
+/** A lesson that can EVER refuse is exempt from the frequency cap — active block or merely block-capable. */
+const capExempt = (l) => l.enforcement === ENFORCEMENT.BLOCK || l.intendedEnforcement === ENFORCEMENT.BLOCK;
+function readGateState() {
+  try { const s = JSON.parse(fs.readFileSync(GATE_STATE_PATH, 'utf8')); return s && typeof s === 'object' ? s : {}; }
+  catch { return {}; }
+}
+function writeGateState(st) {
+  try {
+    fs.mkdirSync(path.dirname(GATE_STATE_PATH), { recursive: true });
+    fs.writeFileSync(GATE_STATE_PATH, JSON.stringify(st));
+    return true;
+  } catch { return false; }
+}
+/** How many times THIS session has already surfaced a given advisory lesson (0 if never). */
+function shownCount(st, id) {
+  const c = st?.sessions?.[SID]?.shown?.[id];
+  return Number.isInteger(c) && c > 0 ? c : 0;
+}
+// Read ONCE, up front — the same snapshot gates the filter and seeds the write below.
+const gateState = event ? readGateState() : {};
+
 // Merge every requested decision point into one ranked, de-duplicated list. A lesson registered at
 // two triggers must appear once, or the model reads the same correction twice and learns to skim.
 /**
@@ -382,7 +432,13 @@ for (const t of effectiveTriggers) {
  * to read the rest.
  */
 const NUDGE_CHAR_BUDGET = Number(process.env.RUVNET_NUDGE_BUDGET) || 1200;
-const ranked = [...candidates].sort((a, b) => (b.repeatCount || 0) - (a.repeatCount || 0));
+// PER-SESSION FREQUENCY CAP (hook mode only — a human running the CLI asked to see everything). Drop a
+// PURE-ADVISORY lesson already shown MAX_SHOWS times this session; a block-capable lesson passes untouched
+// (capExempt), so a refusal the user opted into is never silenced to reduce noise.
+const capped = event
+  ? candidates.filter((l) => capExempt(l) || shownCount(gateState, l.id) < MAX_SHOWS)
+  : candidates;
+const ranked = [...capped].sort((a, b) => (b.repeatCount || 0) - (a.repeatCount || 0));
 const inForce = [];
 let spent = 0;
 for (const l of ranked) {
@@ -392,7 +448,7 @@ for (const l of ranked) {
   if (inForce.length && spent + cost > NUDGE_CHAR_BUDGET) continue;
   inForce.push(l); spent += cost;
 }
-const trimmed = candidates.length - inForce.length;
+const trimmed = capped.length - inForce.length;
 
 /**
  * BLOCKING = four conditions, all required. The user's opt-in is necessary and NOT sufficient.
@@ -475,6 +531,29 @@ if (json) {
 }
 
 if (event) {
+  // RECORD what this session is about to SURFACE, so the frequency cap can act next time. Only
+  // pure-advisory lessons count toward their own cap; block-capable lessons are exempt (capExempt) and
+  // never recorded. Skipped when nothing will render (quiet with no block). Best-effort and fail-open —
+  // a lost write repeats an advisory once more, it never suppresses one. Persisted BEFORE the streams
+  // are touched, so a crash mid-emit under-counts (safe) rather than over-counts.
+  const willRender = blocking.length > 0 || (inForce.length > 0 && !quiet);
+  if (willRender) {
+    const st = gateState && typeof gateState === 'object' ? gateState : {};
+    st.sessions = st.sessions && typeof st.sessions === 'object' ? st.sessions : {};
+    const prev = st.sessions[SID] && typeof st.sessions[SID] === 'object' ? st.sessions[SID] : {};
+    const shown = prev.shown && typeof prev.shown === 'object' ? { ...prev.shown } : {};
+    for (const l of inForce) {
+      if (capExempt(l)) continue;
+      shown[l.id] = (Number.isInteger(shown[l.id]) && shown[l.id] > 0 ? shown[l.id] : 0) + 1;
+    }
+    st.sessions[SID] = { shown, ts: Date.now() };
+    // Bound the file to the most-recent sessions, same discipline as anticipate.sh.
+    st.sessions = Object.fromEntries(
+      Object.entries(st.sessions).sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0)).slice(0, KEEP_SESSIONS),
+    );
+    writeGateState(st);
+  }
+
   // HOOK MODE — the streams are the contract, so nothing else may touch them.
   if (blocking.length) {
     // Exit 2: stdout is ignored by the harness, stderr becomes the model's error message. Writing
