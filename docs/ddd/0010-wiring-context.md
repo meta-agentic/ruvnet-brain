@@ -1,31 +1,32 @@
 # DDD-0010 — The Wiring bounded context
 
-Governs **ADR-037** (provable wiring).
+Governs **ADR-037** (the wiring gate cannot fail).
 
 **Status**: Proposed (2026-07-22)
+
+> Rewritten 2026-07-22 after adversarial review. The first draft modelled an `Exemption` entity with
+> a `{path, human}` invoker taxonomy; review proved that category empty at fixpoint, and it is gone.
+> One thing from the first draft survived intact and turned out to be the most useful line in the
+> document — see **Reachability** below.
 
 ---
 
 ## Why this context exists separately
 
-Quality (DDD/ADR-011, the verified-quality program) answers *"is this code correct?"* — it reasons
-about **behaviour under test**.
+Quality (ADR-011) answers *"is this code correct?"* Wiring answers *"does the product reach it at
+all?"*
 
-Wiring answers a question tests structurally cannot: *"does the product invoke this at all?"* It
-reasons about **reachability on a real user path**.
+The seam is real: all seven of the 2026-07-22 incidents had passing tests. But the first draft
+overstated why, claiming tests "structurally cannot" prove wiring. That is false and review caught
+it. A **unit** test that imports the target proves nothing — it is the one caller whose existence is
+guaranteed by its own file. An **integration** test that drives the release path, the CLI registry,
+or the installed product absolutely can prove reachability. The limitation belongs to the tests this
+repo happened to write, not to testing.
 
-The seam matters because these two look identical from inside a test suite and diverge completely in
-production. All seven of the original 2026-07-22 incidents had **passing tests**. A test imports the
-module directly — it is the one caller whose existence proves nothing, because the test would pass
-just as green if every other caller in the repository vanished. Correctness and reachability were
-treated as one property, and the gap between them is where the project shipped seven features that
-did nothing.
-
-The distinction generalises beyond this repo, which is why it earns its own context rather than
-living inside Quality: **coverage measures whether code was exercised; wiring measures whether the
-product reaches it.** `agentic-qe` ships coverage analysis
-(`agentic-qe/.opencode/skills/qe-coverage-analysis.yaml`, retrieved 2026-07-22) and answers the first
-question well. It does not answer the second, and no amount of the first implies the second.
+Corrected: *coverage measures whether code was exercised by a harness; wiring measures whether the
+**product** reaches it.* `agentic-qe` ships coverage analysis
+(`agentic-qe/.opencode/skills/qe-coverage-analysis.yaml`, retrieved 2026-07-22 — external repo,
+unverifiable from inside this one) and answers the first well. Neither implies the other.
 
 ---
 
@@ -33,20 +34,35 @@ question well. It does not answer the second, and no amount of the first implies
 
 | Term | Precise meaning | Explicitly NOT |
 |---|---|---|
-| **Caller** | A non-test, non-self reference from a place the product actually executes | any mention of the module's name |
-| **Wired** | Has at least one Caller | built · tested · documented · shipped |
-| **Shippable module** | A first-party module expected to be reached by the product | every file in `scripts/` |
-| **Exemption** | A recorded claim that a module needs no Caller, with a named Invoker | permission to skip the gate |
-| **Invoker** | *Either* a path the gate can verify mentions the module, *or* the literal `human` | a sentence describing who runs it |
-| **Provable exemption** | Invoker is a path; the gate confirms it exists and references the module | a reason that sounds checkable |
-| **Unprovable exemption** | `invoker: 'human'` — no file invokes it because a person does | an excuse, or a place to hide |
-| **Held** | Built, correct to keep, knowingly unwired, with a stated bar to clear | standalone |
-| **Search root** | A directory the caller scan actually reads | everywhere callers might live |
-| **Blind spot** | A place callers genuinely live that is not a Search root | a module that is truly unwired |
+| **Caller** | A reference that would **execute** the module, from a place the product runs | **any mention of the module's name** |
+| **Reachability** | Existence of a Caller | correctness · coverage · having tests |
+| **Wired** | Has ≥1 Caller | built · tested · documented · shipped |
+| **Inventory** | The set of modules the audit considers at all | everything first-party |
+| **Invisible module** | First-party executable outside the Inventory | a module that is unwired |
+| **Exempt** | Recorded as needing no Caller, with a reason | proven to need no Caller |
+| **Held** | Built, kept, knowingly unwired, with a stated bar | exempt |
+| **Predicate** | The rule deciding whether a reference is a Caller | the search roots |
 
-The last two carry the whole ADR. Before ADR-037 the gate had a Blind spot (`.github/`, root
-`package.json`) and no vocabulary to name it — so four Blind-spot cases were recorded as Exemptions,
-which is the only word the gate offered. **A missing term forced a false statement.**
+### The Caller definition is the whole document
+
+That row — *Caller is **explicitly not** any mention of the module's name* — was written in draft 1
+and is correct. `callersOf()` implements **precisely** "any mention of the module's name."
+
+**The domain model disclaimed the implementation, in writing, and the contradiction sat unnoticed
+while an entire ADR was written about a different part of the system.** Draft 1 read its own glossary
+and still went after the allowlist. A model that names the right invariant does nothing if nobody
+diffs it against the code.
+
+### Invisible ≠ unwired
+
+An unwired module is *reported*. An invisible one is never considered, prints nothing, and appears in
+no count. Measured 2026-07-22: **40 of 129 first-party executables are Invisible** — including
+`plugin/scripts/anticipate.sh`, one of the seven founding failures.
+
+The allowlist governs 25 modules inside the visible 69%, each carrying a written justification. The
+Inventory silently excludes 40, with no entry, no reason, and no output. **The larger hole is the one
+nobody had to write a sentence to justify** — which is why "where can code hide" beats "what does the
+allowlist say" as the organising question of this context.
 
 ---
 
@@ -54,22 +70,31 @@ which is the only word the gate offered. **A missing term forced a false stateme
 
 ### `WiringAudit` (aggregate root)
 
-Owns the judgement of the whole repository at one moment. Invariants:
+Every module in the Inventory resolves to exactly one of **wired · exempt · held · unwired**, and the
+four counts sum to the Inventory size. Printing that sum is the invariant, not a nicety: today
+`STANDALONE` modules are never printed in any run, so the audit's own output cannot be reconciled
+against what it examined.
 
-- Every shippable module resolves to exactly one of: **wired**, **exempt**, **held**, **unwired**.
-- No module may be silently absent from the audit. Held work is printed on every run, pass or fail —
-  an unwired feature nobody can see is how a gap becomes permanent.
-- The audit fails if any module is **unwired**, or if any **exemption is unprovable while claiming a
-  path Invoker**.
+Invariants:
+- The four states are exhaustive and mutually exclusive.
+- Counts sum to the Inventory. A run that cannot show this is not an audit.
+- **The Inventory is itself reportable.** A module excluded by file type or directory must be
+  countable, or the aggregate is lying by omission rather than by assertion — the harder lie to see.
 
-### `Exemption` (entity, identified by module base name)
+### `Exemption` (value, not entity)
 
-- Invariant: `invoker` is either an existing path referencing the module, or exactly `'human'`.
-- Invariant: **no duplicate identity.** Two entries for one module is a contradiction, not an
-  override — JavaScript's last-wins silently discarded one on 2026-07-22 and nothing noticed.
-- An Exemption whose path Invoker stops referencing the module becomes **invalid**, and invalidity is
-  a gate failure, not a warning. This is the mechanism by which a stale exemption cannot age into
-  folklore.
+Reduced deliberately from draft 1's entity. An exemption is a **name plus a human-written reason**,
+carrying no machine-checkable structure, because review proved the checkable form vacuous: an invoker
+the scanner can verify makes the module *wired*, so the exemption is never consulted; an invoker it
+cannot verify means the search roots are wrong.
+
+Invariant: **no duplicate names.** Two entries for one module is a contradiction, not an override.
+
+The honest consequence: an exemption's reason is **prose, and prose is not verification.** Draft 1
+tried to fix that with a schema. The truth is simpler and less comfortable — the reasons were written
+by an author who never ran the check, in the same commit as the gate, and no type system detects
+that. The mitigation is (a) needing far fewer exemptions once the Predicate is correct, and (b)
+printing every one on every run so they stay visible.
 
 ---
 
@@ -77,22 +102,23 @@ Owns the judgement of the whole repository at one moment. Invariants:
 
 | Event | Meaning | Consumer |
 |---|---|---|
-| `ModuleFoundUnwired` | Built, tested, reached by nothing | release path — refuses |
-| `ExemptionInvalidated` | A named path Invoker no longer invokes the module | release path — refuses, naming the claim |
+| `ModuleFoundUnwired` | In the Inventory, no Caller | release path — refuses |
 | `DuplicateExemptionDetected` | One module claimed twice | release path — refuses |
-| `HeldWorkReported` | Deliberately unwired work, with its bar | the human, every run |
+| `ExemptSetReported` | The full exempt list, every run | the human |
+| `InventoryReported` | What was examined, and what was excluded | the human |
+| `HeldWorkReported` | Deliberately unwired work, with its bar | the human |
 
-`ExemptionInvalidated` is the event that did not exist before ADR-037, and its absence is precisely
-why four false claims survived. An exemption could only ever be created, never falsified.
+The last two are new and carry the correction. Draft 1 had no vocabulary for "examined nothing" as
+distinct from "examined and found nothing" — so a gate reporting **62/62 wired, exit 0** read as
+health when it was silence.
 
 ---
 
 ## Anti-corruption boundary
 
-Wiring does **not** decide whether a module is *worth* keeping — that is a product judgement, and a
-gate that made it would start deleting things. It decides only whether the product reaches it, and
-reports. Removal is always a human act.
+Wiring does not judge whether a module is *worth* keeping — that is a product decision, and a gate
+making it would start deleting things. It reports reachability. Removal is a human act.
 
-Wiring also does not consume test results, deliberately. Accepting "it has tests" as evidence of
-reachability is the exact inference that produced the seven incidents, so the boundary refuses that
-input by design rather than by convention.
+Wiring does not consume unit-test results as evidence of reachability. Not because tests cannot prove
+it — the corrected framing above concedes integration tests can — but because *importing a module is
+not the product reaching it*, and accepting that inference is what produced the seven incidents.
