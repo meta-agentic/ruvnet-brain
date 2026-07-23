@@ -1,7 +1,7 @@
 {
-  "brainVersion": "3.9.10-dev",
-  "generated": "2026-07-21T23:39:20.782Z",
-  "generatedHuman": "Tue, 21 Jul 2026 23:39:20 GMT",
+  "brainVersion": "3.9.18-dev",
+  "generated": "2026-07-23T08:06:20.581Z",
+  "generatedHuman": "Thu, 23 Jul 2026 08:06:20 GMT",
   "coverage": {
     "built": 69,
     "catalogued": 192,
@@ -13,7 +13,7 @@
       "name": "RuView",
       "tier": "T0",
       "stars": 75658,
-      "builtFromSha": "aa7cb449bca922384f06c04b8f6f181104f3c2d0",
+      "builtFromSha": "d9dfea2dac02b06376a277b245d6a0937b4269c8",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -213,7 +213,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "219cb61a96f92b935cdcc1ef8efeb468e4bc007f",
+      "builtFromSha": "f4bf7a4af1fdf0ec1caa878c15fa5761ae2ff177",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -301,7 +301,7 @@
       "name": "musica",
       "tier": "T2",
       "stars": 17,
-      "builtFromSha": "9ab2f57bc679f3be2772a56e6444e6d023481dcd",
+      "builtFromSha": "e6fa3d4190cba6a11a4bea7ad9dbf8280165d9fc",
       "latestRemoteSha": null,
       "status": "built"
     },
