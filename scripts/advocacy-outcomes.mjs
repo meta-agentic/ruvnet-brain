@@ -62,6 +62,7 @@ const HOME = os.homedir();
  * counting again after it.
  */
 export const ACTIONS = Object.freeze({
+  OFFERED: 'offered',
   APPLIED: 'applied',
   DISMISSED: 'dismissed',
   IGNORED: 'ignored',
@@ -69,7 +70,16 @@ export const ACTIONS = Object.freeze({
 });
 const ACTION_VALUES = new Set(Object.values(ACTIONS));
 
-/** The three that are OFFERS. `reset` is a user action on the ledger, not a recommendation shown. */
+/**
+ * `OFFERED` is the PENDING marker: the card was shown, and nothing has become of it yet. It is NOT a
+ * resolution and never enters the precision denominator (that would let merely showing a card move
+ * the metric). It exists for one reason — so `reconcileApplied()` can tell "we suggested this and the
+ * user then turned it on" (an APPLIED) apart from "it was already on". Formalising it here also ends a
+ * real schema drift: `anticipate.sh` was already writing `action:'offered'` through its own inline
+ * recorder, while the canonical `record()` below rejected that action — so every offered row it wrote
+ * was inert, counted by nothing. Now both writers speak one vocabulary and `record()` accepts it.
+ */
+/** The three RESOLUTIONS. `offered` is pending (not a resolution); `reset` is a ledger checkpoint. */
 const OFFER_ACTIONS = new Set([ACTIONS.APPLIED, ACTIONS.DISMISSED, ACTIONS.IGNORED]);
 
 /**
@@ -402,6 +412,66 @@ export function shouldStillOffer(id, {
     return true;
   }
   return false;
+}
+
+/**
+ * The pending offer for one id, or null. Pending = the most recent `offered` (since the last reset)
+ * has no resolution after it. Ordered by file position, not `at`, for the same clock-skew reason as
+ * liveRecords().
+ */
+function pendingOffer(id, all) {
+  const mine = liveRecords(id, all);
+  let idx = -1;
+  for (let i = mine.length - 1; i >= 0; i--) {
+    if (mine[i].action === ACTIONS.OFFERED) { idx = i; break; }
+  }
+  if (idx === -1) return null;                                  // never offered since the last reset
+  for (let i = idx + 1; i < mine.length; i++) {
+    if (OFFER_ACTIONS.has(mine[i].action)) return null;         // already resolved
+  }
+  return mine[idx];
+}
+
+/**
+ * THE NUMERATOR, DERIVED — not asserted. precision = applied ÷ (applied+dismissed+ignored), and until
+ * now `applied` was recorded by nothing, so the number could only ever be 0 (once a dismissal landed)
+ * or null. That is the inverse of the fabrication this file warns about in its header: not a beautiful
+ * 1.0 from recording only the applies, but a permanent 0.0 from recording none of them — advocacy that
+ * looks like pure nagging no matter how well it lands.
+ *
+ * The honest signal for "the user acted on our suggestion" is a state transition we can OBSERVE: a
+ * capability we OFFERED, still pending, is now measured `on`. That is an APPLIED. We do not guess and
+ * we do not credit an offer the user resolved some other way — only a pending offer whose capability
+ * the audit now reports on. A capability that was already on when we offered it cannot go on again, so
+ * it cannot be double-counted; and a dismissed or ignored offer is no longer pending, so turning it on
+ * later (for reasons of their own) is not miscredited to us.
+ *
+ * NEVER THROWS — surfaces call it. Its writes go through record(), which returns a receipt on I/O
+ * failure rather than throwing; a lost applied costs one row, never the caller.
+ *
+ * @param {Array<{key?:string,id?:string,state?:string}>} auditRows  the capability audit (auditAll()'s output)
+ * @returns {string[]} the ids reconciled to `applied` this call
+ */
+export function reconcileApplied(auditRows, { file = OUTCOMES_PATH } = {}) {
+  if (!Array.isArray(auditRows)) return [];
+  let all;
+  try { all = loadOutcomes(file); } catch { return []; }
+  const done = [];
+  for (const row of auditRows) {
+    if (!row || typeof row !== 'object') continue;
+    const id = typeof row.key === 'string' ? row.key : (typeof row.id === 'string' ? row.id : '');
+    if (!id) continue;
+    if (row.state !== 'on') continue;                          // only a real, now-observed on-state
+    const offer = pendingOffer(id, all);
+    if (!offer) continue;                                       // nothing pending to credit
+    const res = record({ id, action: ACTIONS.APPLIED, severity: offer.severity ?? null, project: offer.project ?? null }, { file });
+    if (res.ok) {
+      done.push(id);
+      // keep the in-call view consistent so a duplicate id in auditRows can't be applied twice
+      all.push({ id, action: ACTIONS.APPLIED, at: res.row.at, project: res.row.project, severity: res.row.severity, stateHash: null, scope: null });
+    }
+  }
+  return done;
 }
 
 /**

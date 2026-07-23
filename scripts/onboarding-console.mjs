@@ -31,6 +31,10 @@ import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
 import { planFor } from './remedy-registry.mjs';
 import { auditAll as capabilityAuditAll } from './capability-registry.mjs';
+// L5 (ADR-028): the audit is the one place that observes live capability state, so it is where an
+// OFFERED-then-now-`on` transition becomes an APPLIED — the numerator of the precision metric that
+// tells the owner whether advocacy is landing or nagging. Both are pure reads/appends and never throw.
+import { reconcileApplied, precision as advocacyPrecision } from './advocacy-outcomes.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -1338,14 +1342,24 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       if (req.method === 'GET' && url === '/api/capabilities') {
         return serveCached(res, CAPABILITY_CACHE, () => {
           let rows = [];
-          try { rows = capabilityAuditAll(); } catch (e) {
+          let reconciled = [];
+          try {
+            rows = capabilityAuditAll();
+            // Credit APPLIED for anything we offered that the user has since switched on. Derived from
+            // this live audit, never guessed; safe on a read (idempotent — a resolved offer is no
+            // longer pending) and it never throws.
+            reconciled = reconcileApplied(rows);
+          } catch (e) {
             // A failed audit must NOT render as "everything is off" — that is the precise lie this
             // surface exists to kill. An error yields an explicit unknown, and says why.
             rows = [{ key: 'audit', label: 'Capability audit', state: 'unknown', scope: 'machine',
               whatItBuysYou: 'a clear picture of what you own and what is switched on',
               evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
           }
-          return { at: new Date().toISOString(), data: { rows } };
+          // The precision the owner asked "is my advocacy landing?" of. null (not 0) until enough
+          // offers have resolved — an honest "not yet judgeable", never a fabricated score.
+          const prec = advocacyPrecision();
+          return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled } } };
         });
       }
       if (req.method === 'GET' && url === '/api/memory') {

@@ -12,7 +12,11 @@ relates: [ADR-024, ADR-027, ADR-028, ADR-0013, ADR-020]
 
 **Status**: Proposed (2026-07-22)
 
-Governed DDD: `docs/ddd/0006-capability-context.md`
+**Updated 2026-07-22** — reconciled to the advocacy-dial adversarial duel (Fable 5 + GPT-5.6); the
+converged design and the decisions it forced are in §"Adversarial review and the reconciled design".
+Governing DDD-0004 moved to v1.1.0 in the same pass.
+
+Governed DDD: `docs/ddd/0006-capability-context.md` (capability surface) · `docs/ddd/0004-advocacy-context.md` (the advocacy dial)
 
 ADR-027 said dormant-but-installed is a defect. ADR-028 said a page you must visit is not
 proactivity. Neither said **what a capability's state actually is, how you are allowed to know it,
@@ -256,6 +260,60 @@ degrades into "once per restart", which is a nag with extra steps.
   in-session channel would spend. It does not build the channel. Per ADR-028 that is 4.0 work, and
   claiming it here would repeat the exact error ADR-027 made when it declared advocacy shipped while
   `buildHealthRecommendations()` was reachable only from `apply()`.
+
+## Adversarial review and the reconciled design (2026-07-22)
+
+Per the standing cross-model rule, this ADR and DDD-0004 were attacked by two models on disjoint
+axes. They converged, and the convergence changed the design. Each claim below was re-verified
+against the source before acceptance — the models' line citations were leads, not facts.
+
+**1. One dial cannot govern every unprompted utterance — split into three channels.** Both reviewers,
+independently. The `off/important-only/all` enum now governs **advocacy only**. **Alarms**
+(`HealthDegraded`, `IntegrityFailed`, dead nightly) bypass the dial and always speak — verified: the
+brain-health GONG at `session-start.sh:47-60` runs unconditionally, and muting it via `silent` would
+make a broken install look healthy. **Promotion** (the Console first-load offer `session-start.sh:85-88`,
+the router nudge, "what's new") is one-time onboarding, silenced by anything below `all`, and never
+repeats. This is what resolves the otherwise-unresolvable `silent`-vs-GONG contradiction. Modelled in
+DDD-0004 §"The three channels".
+
+**2. The setting is DEAD, two ways, and both must be fixed or the dial is theater.**
+(a) No emitter reads it — verified: `anticipate.sh` is wired at `hooks.json:52` as bare
+`bash … || true`, the one hook that bypasses `hook-shim.mjs`, and gates only on its own kill-switch.
+(b) **Two disconnected stores** — the setting lives in `~/.config/ruvnet-brain/settings.json`
+(`user-settings.mjs:55`) while the console reads/writes `~/.claude/ruvnet-brain/config.json`
+(`onboarding-console.mjs:48`), and `advocacy` is absent from the console schema. A rendered dial would
+write a store the runtime never reads. **Decision: unify on one settings module/path** before the dial
+is wired; the console imports it, the enforcement runtime reads it.
+
+**3. The enforcement chokepoint is structural, not conventional.** Every advocacy/promotion emitter
+routes through one runtime that reads the level + DismissalLedger and alone emits; a raw `echo` is a
+protocol violation, dropped not forwarded. Proven by a registry test (the `hook-contract` failsafe
+shape) that fails if any such emitter is wired off-runtime, asserting on real process stdout — not the
+runtime's structured output, which would be a test with no teeth. DDD-0004 §"The enforcement chokepoint".
+
+**4. `observationHash` specified** (both converged): `SHA-256` over canonical JSON of
+`{v, detectorId, findingId, state, severity, material-bands}`, excluding timestamps/prose/paths; a
+per-detector `compare()` decides "materially worse". Full spec in DDD-0004 aggregate 4.
+
+**5. The default posture is `ask-at-install`.** The reviewers split — Fable: default `important-only`
+(speaks out of the box); GPT-5.6: ask once at install, recommend Important, **preselect nothing**,
+and stay silent until answered, because unprompted-by-default speech "treats missing consent as
+permission to interrupt." **Decision: GPT-5.6's posture.** It is the faithful reading of the owner's
+"recommend on but do not force it on users," and Fable's one objection ("silence is not health") is
+already answered by decision 1 — alarms bypass the dial, so a broken brain still gongs even at unset.
+`important-only` remains the *recommended* value; it is not applied until the user is asked.
+
+**6. Tone is a current fail.** Emitters say "this is now yours to fix", "MANDATE (non-negotiable)",
+"HARD RULE" (`session-start.sh:38-43,67-73`) — command-and-scold. The rewrite is fact + impact +
+optional action + one-tap dismiss.
+
+### Verification items this settles or adds
+
+- Item 5 (a `silent` user gets zero unprompted advocacy but the panel is complete) is now testable
+  against a real chokepoint, and the test must read process stdout, not structured output.
+- Item 6 (DismissalLedger) has a concrete `observationHash` to build against.
+- **New:** a `hooks.json` contract test proving no advocacy/promotion emitter is wired off the runtime.
+- **New:** a store-unification test proving the console and the runtime read the same file.
 
 ## Consequences
 

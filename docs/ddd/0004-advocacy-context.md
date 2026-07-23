@@ -1,8 +1,16 @@
 # DDD-0004 — The Advocacy bounded context
 
-Updated: 2026-07-21 18:30:00 EDT | Version 1.0.0
+Updated: 2026-07-22 13:40:00 EDT | Version 1.1.0
 Created: 2026-07-21 18:30:00 EDT
-Governs: ADR-027 (Capability advocacy + the death of passive signals)
+Governs: ADR-027 (Capability advocacy + the death of passive signals), ADR-032 (the capability surface + advocacy dial)
+
+> **v1.1.0 (2026-07-22) — reconciled to the advocacy-dial duel.** Fable 5 and GPT-5.6 independently
+> attacked ADR-032 + this context and converged (see ADR-032 §"Adversarial review"). Three findings
+> changed the model and are folded in below as §"The three channels", §"The enforcement chokepoint",
+> and a precise `observationHash` spec under DismissalLedger. The v1.0.0 body is unchanged and still
+> correct; these are additions, not corrections. The one thing the duel proved WRONG in the earlier
+> plan — a single `advocacy` level governing every kind of unprompted speech — is stated and retired
+> in §"The three channels".
 
 ## Why a bounded context at all
 
@@ -51,6 +59,48 @@ either build the Remedy or we say plainly that it needs a human and name the exa
 never do is render an alarming number and walk away — which is precisely what "memory 49/100,
 store is corrupt" did for an unknown number of days.
 
+## The three channels (v1.1.0 — the duel's central correction)
+
+The earlier plan had ONE `advocacy` setting (`off / important-only / all`) govern every unprompted
+utterance. Both reviewers rejected it independently, for the same reason: three DIFFERENT kinds of
+speech, with three DIFFERENT consent bars, were being forced through one knob — which produced an
+unresolvable contradiction (a `silent` user must still be told their brain is broken) and made the
+one setting either unsafe or useless. The model now names three channels:
+
+| Channel | What it is | Governed by | May a user silence it? |
+|---|---|---|---|
+| **Alarm** | The brain is broken *right now* — `HealthDegraded`, `IntegrityFailed`, a dead nightly. A fact about a failure, not an opinion. | Nothing. Always speaks. | No. Silence here = a broken install that looks healthy. |
+| **Advocacy** | A `Finding` with a `Remedy` the user did not ask for — the Observation→Finding→Remedy flow this context owns. | The `advocacy` dial. | Yes — that is the dial's entire job. |
+| **Promotion** | First-run onboarding: "open the Console once", the router offer, "what's new". Not steady-state. | A one-time onboarding flow, silenced by anything below `all`. | Yes, and it never repeats regardless. |
+
+**The invariant that makes the dial safe (ADR-032): the level governs INTERRUPTION, never
+AVAILABILITY.** The capability panel always renders every capability in every state at every level —
+it is a *pull* surface, and pulling it is consent. The dial decides only what may speak *unprompted*.
+So `silent` is genuinely silent AND cannot hide a fact from a user who opens the panel. Both halves
+are load-bearing; either alone is the failure.
+
+`Alarm` is therefore lifted OUT of the `advocacy` dial entirely. `HealthDegraded` / `IntegrityFailed`
+(already domain events above) are alarms by definition and bypass the dial. This is what resolves the
+`silent`-vs-GONG contradiction: a user at `silent` still hears an outage, because an outage was never
+advocacy.
+
+## The enforcement chokepoint (v1.1.0 — seams, not components)
+
+The dial is worthless if any hook can forget to consult it — and the audit that motivated this proved
+exactly that: emitters spoke unprompted while reading no setting at all. A per-hook check is the same
+class of bug as the Stop-hook incident (a forgotten guard). So the invariant is structural:
+
+> **Every unprompted utterance passes through ONE runtime that reads the level and the DismissalLedger
+> and alone decides whether bytes reach the user. An emitter returns a structured candidate
+> (`{channel, findingId, severity, observationHash, copy}`); it never writes user-facing bytes
+> directly. Raw text from an emitter is a protocol violation — dropped, not forwarded.**
+
+This is enforceable for RuvNet Brain's own hooks (not arbitrary third-party hooks), and it is proven
+by a registry test that fails if any advocacy/promotion emitter is wired to anything other than the
+runtime — the same shape as the `hook-contract` failsafe test shipped 2026-07-22. A test that asserts
+on the runtime's structured output instead of the real process stdout would be a test with no teeth:
+the assertion must read what the user's terminal would actually receive.
+
 ## Aggregates
 
 **1. CapabilityAudit** (root)
@@ -74,6 +124,20 @@ store is corrupt" did for an unknown number of days.
   so a materially worse state re-offers rather than staying silent forever.
 - Rationale: without this, advocacy degrades into nagging, and nagging is how a real alarm gets
   trained out of a user's attention.
+- **`observationHash` (v1.1.0, both reviewers converged on this shape):**
+  `SHA-256` over the RFC-8785 canonical JSON of `{v, detectorId, findingId, state, severity, material}`.
+  `material` holds detector-owned *semantic bands*, not raw values — `{enabled, total}` bucketed for
+  disabled-hooks, a staleness *threshold band* for a quiet learner, an integrity status/error-code for
+  corruption. **Excluded on purpose:** timestamps, session ids, mtimes, evidence ordering, prose, and
+  absolute `$HOME` paths — anything that changes without the problem changing. Get this wrong in either
+  direction and the ledger fails: include a timestamp and "once per observation" degrades to "once per
+  restart" (a nag); key on the bare capability name (what `anticipate.sh:243` does today) and a
+  worsening problem is silenced forever.
+- **Re-offer rule:** each detector supplies `compare(old, new)` over its own severity band. A
+  *materially worse* band re-opens the Finding; equal or better stays silent. Hash inequality **alone**
+  never implies worsening — only the detector's `compare` may, because only it knows which direction of
+  its band matters to the user. A dismissed Finding still renders in the panel, marked dismissed: the
+  user silenced it, they did not make it untrue.
 
 ## Domain events
 
