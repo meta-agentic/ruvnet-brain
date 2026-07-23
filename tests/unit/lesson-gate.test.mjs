@@ -395,7 +395,13 @@ describe('mutate-machine: narrowed to commands that PLAUSIBLY mutate outside thi
       const r = spawnSync('bash', [DISPATCH, 'PreToolUse-bash'], {
         input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd } }),
         encoding: 'utf8',
-        env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath, ...env },
+        // RUVNET_LESSON_GATE_STATE isolated per-test, same as runGate/runDispatch above. Without it this
+        // helper read the REAL ~/.config gate-state, and once the frequency cap (3.9.28) started counting
+        // block-capable advisories too (3.9.29), repeated suite runs accumulated the fixture lesson past
+        // MAX_SHOWS in the shared fallback session and this test flaked to empty stdout. A test that
+        // depends on how many times the suite ran today is not a test.
+        env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath,
+          RUVNET_LESSON_GATE_STATE: gateStatePath, ...env },
       });
       return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
     }

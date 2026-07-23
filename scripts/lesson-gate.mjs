@@ -108,6 +108,14 @@ const session = arg('--session');
 const commandIdx = argv.indexOf('--command');
 const command = commandIdx >= 0 ? (argv[commandIdx + 1] ?? '') : null;
 
+// CANDIDATE MODE (ADR-040 / DDD-0004 "the enforcement chokepoint"). Set by unprompted-runtime.mjs on
+// every producer child. When on, hook mode writes ZERO user-facing bytes and NEVER exits 2 itself:
+// it emits ONE JSON candidate per line on stdout and lets the runtime — the SOLE writer of user bytes
+// — turn a `block` candidate into the real exit 2 + stderr and an `advisory` candidate into the
+// nudge. Unset (every direct/legacy/CLI invocation, and every existing test), behaviour is byte-for-
+// byte unchanged, exit-2 block semantics included. Purely additive.
+const EMIT_CANDIDATES = process.env.RUVNET_EMIT_CANDIDATES === '1';
+
 /**
  * THE MUTATE-MACHINE PREDICATE — narrows "about to change something outside this repo" to commands
  * that plausibly do that, instead of firing on every Bash call.
@@ -556,6 +564,30 @@ if (event) {
       Object.entries(st.sessions).sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0)).slice(0, KEEP_SESSIONS),
     );
     writeGateState(st);
+  }
+
+  // CANDIDATE MODE — emit JSON candidates, let the runtime own the real streams and the exit code.
+  // A block DOMINATES exactly as in the stream contract below: when any opted-in block is in force we
+  // emit only the block candidate and no advisory. The `copy` of each candidate is byte-identical to
+  // what the legacy path would have written (renderBody() to stderr for a block; the advisory preamble
+  // + renderBody() as additionalContext for a nudge), so the runtime's delivered bytes match. The
+  // frequency-cap persist above already ran, so persist-before-speak holds here too.
+  if (EMIT_CANDIDATES) {
+    if (blocking.length) {
+      process.stdout.write(JSON.stringify({
+        channel: 'lesson', effect: 'block', copy: renderBody(), hookEventName: event,
+      }) + '\n');
+    } else if (inForce.length && !quiet) {
+      process.stdout.write(JSON.stringify({
+        channel: 'lesson', effect: 'advisory', hookEventName: event,
+        copy: [
+          'Your own recorded corrections apply at this moment. These are advisory — they do not',
+          'refuse anything, and you may proceed. Weigh them and say so if you go another way.',
+          renderBody(),
+        ].join('\n'),
+      }) + '\n');
+    }
+    process.exit(EXIT_ALLOW);
   }
 
   // HOOK MODE — the streams are the contract, so nothing else may touch them.

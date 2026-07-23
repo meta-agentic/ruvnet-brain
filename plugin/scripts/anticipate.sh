@@ -157,6 +157,14 @@ const MODE = process.env.RUVNET_ANTICIPATE_MODE || 'suggest';
 const ARG = process.env.RUVNET_ANTICIPATE_ARG || '';
 const SELF = process.env.RUVNET_ANTICIPATE_SELF || 'anticipate.sh';
 
+// CANDIDATE MODE (ADR-040 / DDD-0004 "the enforcement chokepoint"). Set by unprompted-runtime.mjs on
+// every producer child. When on, this hook writes ZERO user-facing prose: it emits ONE advocacy
+// candidate as a JSON line and lets the runtime — the SOLE writer of user bytes — enforce the dial,
+// the DismissalLedger, and the OFFERED denominator centrally. Unset (every direct/legacy invocation),
+// behaviour is byte-for-byte unchanged. Purely additive: it only swaps the shape of the ONE line this
+// hook would already have decided to speak, at the very end, after the persist-first write below.
+const EMIT_CANDIDATES = process.env.RUVNET_EMIT_CANDIDATES === '1';
+
 // Same directory, and for the same reason, as user-settings.mjs STORE_PATH and lesson-store's
 // STORE_PATH: bin/install.mjs rmSync's ~/.cache/ruvnet-brain on --update and --uninstall, and has
 // ZERO code paths that touch ~/.config/ruvnet-brain. The argument for this path is not that it
@@ -467,9 +475,33 @@ if (why.length > MAX_WHY) {
 const buys = typeof best.row.whatItBuysYou === 'string' ? best.row.whatItBuysYou.trim() : '';
 const payoff = buys && !why.includes(buys) ? ` It buys them: ${buys}` : '';
 
-// RECORD THE DENOMINATOR. precision = acted-on / OFFERED, and without this line the denominator is
-// always zero — the metric ADR-028 uses to separate "advocating" from "nagging" would be
-// permanently unmeasurable while appearing to be implemented.
+// The one line this hook has decided to speak, built once. In legacy mode it is printed verbatim; in
+// candidate mode it becomes the `copy` of the advocacy candidate. Byte-identical either way.
+const COPY = `[RuvNet Brain — anticipating] "${best.row.label}" is installed here and switched OFF, and it serves this turn: ${why}${payoff} Offer it ONCE, in one plain sentence (${cmd}), then drop it and get on with the actual work. If they decline: ${SELF} --dismiss ${best.row.key} (each decline moves it toward silence, faster for a routine finding than a serious one)`;
+
+if (EMIT_CANDIDATES) {
+  // CANDIDATE MODE: emit ONE advocacy candidate, no prose. The runtime honours the dial + the
+  // DismissalLedger on this candidate and records the OFFERED denominator centrally — so this path
+  // deliberately does NOT safeRecord(OFFERED) here (doing so would double-count precision's
+  // denominator once the runtime records it too). severity + observationHash travel on the candidate
+  // so the runtime's shouldStillOffer()/record() see the identical inputs this hook used;
+  // observationHash maps to the ledger's stateHash. findingId is REQUIRED (the runtime drops an
+  // advocacy candidate without one). The persist-first write above already ran.
+  out.push(JSON.stringify({
+    channel: 'advocacy',
+    effect: 'advisory',
+    copy: COPY,
+    hookEventName: 'UserPromptSubmit',
+    findingId: best.row.key,
+    severity: best.row.severity || 'normal',
+    observationHash: stateHashOf(best.row.evidence),
+  }));
+  quit();
+}
+
+// RECORD THE DENOMINATOR (legacy/direct path only — see the candidate branch above for why this must
+// not also run under the runtime). precision = acted-on / OFFERED, and without this line the
+// denominator is always zero.
 //
 // NOTE what is deliberately absent: `scope: best.row.scope`. An earlier version passed it here, but
 // `best.row.scope` is the CAPABILITY's scope (machine/project/user, from capability-registry.mjs) —
@@ -483,7 +515,7 @@ safeRecord({
   stateHash: stateHashOf(best.row.evidence),
 });
 
-out.push(`[RuvNet Brain — anticipating] "${best.row.label}" is installed here and switched OFF, and it serves this turn: ${why}${payoff} Offer it ONCE, in one plain sentence (${cmd}), then drop it and get on with the actual work. If they decline: ${SELF} --dismiss ${best.row.key} (each decline moves it toward silence, faster for a routine finding than a serious one)`);
+out.push(COPY);
 quit();
 JS
 NODE_PID=$!

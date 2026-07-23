@@ -1,9 +1,23 @@
 # DDD-0004 — The Advocacy bounded context
 
-Updated: 2026-07-23 09:00:00 EDT | Version 1.2.0
+Updated: 2026-07-23 14:30:00 EDT | Version 1.3.0
 Created: 2026-07-21 18:30:00 EDT
-Governs: ADR-027 (Capability advocacy + the death of passive signals), ADR-032 (the capability surface + advocacy dial)
+Governs: ADR-027 (Capability advocacy + the death of passive signals), ADR-032 (the capability surface + advocacy dial), ADR-040 (what the advocacy dial actually governs)
 
+> **v1.3.0 (2026-07-23) — the enforcement chokepoint is narrowed to a DELIVERY seam, and the v1.1.0
+> registry-test promise is honestly retracted as unbuilt-until-now.** ADR-040's Fable-5 vs GPT-5.6 duel
+> corrected two errors baked into v1.1.0's §"The enforcement chokepoint". First, the section spoke as if
+> ONE runtime enforcing ONE consent policy governed "every unprompted utterance" — it does not and must
+> not: the seam is a cross-context *delivery* mechanism that owns the bytes, but each channel keeps its
+> OWN policy (advocacy reads dial+ledger, LESSON keeps its own frequency cap + blocking opt-in per
+> ADR-030, alarm bypasses suppression entirely). Folding lessons under the advocacy dial was a
+> modelling error (a ratified lesson is the user's own opted-in words, not something the brain
+> volunteers). Second — and this is the retraction — v1.1.0 claimed the invariant was "proven by a
+> registry test"; that test **did not exist** when v1.1.0 was written. It exists now, at
+> `tests/integration/unprompted-speech-registry.test.mjs`, and this section no longer describes a world
+> the code lacks. The seam itself is `plugin/scripts/unprompted-runtime.mjs` (see the rewritten section
+> below). The v1.0.0/v1.1.0/v1.2.0 bodies are otherwise unchanged and still correct.
+>
 > **v1.2.0 (2026-07-23) — the DismissalLedger got a single, real implementation, and the enforcement
 > chokepoint's own example of the bug it was written against is fixed.** Two things had ZERO
 > production callers: `advocacy-outcomes.mjs`'s `shouldStillOffer()`/`DISMISSAL_BUDGET` (the
@@ -97,22 +111,60 @@ are load-bearing; either alone is the failure.
 `silent`-vs-GONG contradiction: a user at `silent` still hears an outage, because an outage was never
 advocacy.
 
-## The enforcement chokepoint (v1.1.0 — seams, not components)
+## The enforcement chokepoint (v1.3.0 — ONE delivery seam, per-channel policy)
 
 The dial is worthless if any hook can forget to consult it — and the audit that motivated this proved
 exactly that: emitters spoke unprompted while reading no setting at all. A per-hook check is the same
-class of bug as the Stop-hook incident (a forgotten guard). So the invariant is structural:
+class of bug as the Stop-hook incident (a forgotten guard). So the invariant is structural — but it is
+narrower than v1.1.0 stated, and the narrowing is the whole point of ADR-040's duel. This is **one
+delivery seam that owns the bytes, NOT one shared consent policy.**
 
-> **Every unprompted utterance passes through ONE runtime that reads the level and the DismissalLedger
-> and alone decides whether bytes reach the user. An emitter returns a structured candidate
-> (`{channel, findingId, severity, observationHash, copy}`); it never writes user-facing bytes
-> directly. Raw text from an emitter is a protocol violation — dropped, not forwarded.**
+> **Every *advocacy and promotion* unprompted utterance passes through ONE runtime seam that alone
+> writes the user-facing bytes for unprompted hooks. Producers (`anticipate.sh`, `lesson-gate.mjs`)
+> run under it as CAPTURED child processes and return structured candidates
+> (`{channel, effect, copy, hookEventName}`; advocacy/promotion additionally carry
+> `{findingId, severity, observationHash}`) — they never write to the real user streams themselves.
+> Raw bytes from a producer on an advisory path are a protocol violation — dropped, not forwarded.**
 
-This is enforceable for RuvNet Brain's own hooks (not arbitrary third-party hooks), and it is proven
-by a registry test that fails if any advocacy/promotion emitter is wired to anything other than the
-runtime — the same shape as the `hook-contract` failsafe test shipped 2026-07-22. A test that asserts
-on the runtime's structured output instead of the real process stdout would be a test with no teeth:
-the assertion must read what the user's terminal would actually receive.
+The seam is `plugin/scripts/unprompted-runtime.mjs`. `hook-shim.mjs` invokes it under the single id
+`unprompted-speech` with the Claude Code event name as argv; the runtime spawns the real producer(s)
+for that event with `stdio: 'pipe'` (**never** `'inherit'`), reads their candidate lines, applies
+per-channel policy, and writes the final envelope to the real process streams itself. A producer run
+with `RUVNET_EMIT_CANDIDATES=1` emits candidate JSON and zero user-facing bytes; unset, it behaves
+exactly as before (this is purely additive).
+
+**It is a cross-context DELIVERY seam, not one consent policy.** The seam owns *how bytes reach the
+user*; it does not flatten three different consent bars into one. Each channel keeps its own policy,
+and the runtime dispatches on the candidate's `channel`:
+
+| Channel | Policy the seam applies | Consent owner |
+|---|---|---|
+| **advocacy** | Honors the `advocacy` dial (`.settings.advocacy`) AND the DismissalLedger (`shouldStillOffer`) — anticipate's own logic, now enforced centrally on the candidate. | The advocacy dial + ledger (this context). |
+| **promotion** | Onboarding policy + advocacy level. | The one-time onboarding flow. |
+| **lesson** | **NEVER the advocacy dial.** Lesson frequency cap + blocking opt-in only — `lesson-gate.mjs` already owns this (ADR-030). A `block` effect exits 2 with reason on stderr and byte-empty stdout. | The lesson channel's own cap + opt-in. |
+| **alarm** | Always delivered; bypasses all suppression. | Nobody — an outage was never advocacy. |
+
+Lessons living OUTSIDE the dial is deliberate and load-bearing: a ratified lesson is the user's own
+opted-in words, not something the brain volunteers, so forcing it under an "advocacy volume" knob
+mis-models it (ADR-040 §Decision; the lesson channel's controls are ADR-030's). The seam gives every
+channel the same *byte-ownership* guarantee without giving them the same *consent* rule.
+
+Delivery contract the runtime enforces: advisory candidates deliver as exit 0 with
+`{hookSpecificOutput:{hookEventName, additionalContext}}` on stdout; blocks deliver as exit 2 with the
+reason on stderr and stdout empty; invalid JSON, an unknown channel, or raw non-JSON bytes on an
+advisory path are silently dropped — which is what makes "raw bytes are a protocol violation"
+mechanically true rather than aspirational.
+
+**Honest retraction (v1.3.0).** v1.1.0 asserted this invariant was already "proven by a registry test
+that fails if any advocacy/promotion emitter is wired to anything other than the runtime." That was
+not true when it was written: **the seam and the test did not exist** — v1.1.0 described a world the
+code did not implement, the exact stale-plan failure this repo punishes (ADR-040 raised precisely
+this). It is true now. The registry test lives at
+`tests/integration/unprompted-speech-registry.test.mjs`; it asserts on the real process stdout a
+user's terminal would receive (asserting on the runtime's structured output instead would be a test
+with no teeth), and it FAILS if a bare unprompted line (e.g. `bash rogue-emitter.sh || true`) is added
+to `hooks.json` off the seam. This is enforceable for RuvNet Brain's own hooks, not arbitrary
+third-party hooks.
 
 ## Aggregates
 

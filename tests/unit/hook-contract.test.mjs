@@ -47,7 +47,15 @@ function fireHook(cmd, args, payload, env = {}) {
   const r = spawnSync(cmd, args, {
     input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    // A FRESH lesson gate-state per call: lesson-hooks runs the frequency cap (3.9.28-29), and without
+    // isolation these invocations wrote the user's REAL ~/.config gate-state and accumulated a fixture
+    // lesson past MAX_SHOWS across suite runs. A unique temp path per call keeps every fire at count 0 —
+    // deterministic, and it never touches the developer's real config.
+    env: {
+      ...process.env,
+      RUVNET_LESSON_GATE_STATE: path.join(os.tmpdir(), `hc-gs-${process.pid}-${Math.random().toString(36).slice(2)}.json`),
+      ...env,
+    },
     timeout: 15000,
   });
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
@@ -238,28 +246,32 @@ describe('registry hygiene', () => {
    * running in every already-open session until each user restarts — it cannot be hotfixed. That
    * un-recallability is exactly why this belongs in a gate and not in a review checklist.
    *
-   * The three BLOCKING hooks are the deliberate exception and are named explicitly, never inferred:
+   * The four BLOCKING hooks are the deliberate exception and are named explicitly, never inferred:
    * their exit codes ARE their contract (see hooks.json `_note` — mode:'blocking' in the shim's
    * dispatch table). `|| true` on those would silently disarm every wall in the product, so the
    * assertion is two-sided: advisory hooks MUST have it, blocking hooks MUST NOT. A one-sided test
    * would pass on a registry that had disarmed all three.
    *
-   * WHY THE LIST HAS FOUR ENTRIES, NOT THE THREE THE `_note` NAMES. The registry `_note` calls out
-   * three blocking hooks — the shim-dispatched walls. `lesson-hooks.sh` is a fourth, and it is
-   * blocking-capable by DESIGN rather than by dispatch table: `lesson-hooks.sh:134` is
-   * `[ "$CODE" -eq 2 ] && exit 2`, propagating a block only when a ratified lesson genuinely refuses
-   * (ADR-035's "the block is the exception"). This test was written with the three-name list and
-   * immediately flagged all three lesson-hooks registrations as unguarded. The code was right and
-   * the test was wrong: wrapping them in `|| true` is precisely the disarm the next assertion
-   * exists to prevent, and it is the same `|| true` ADR-035 documents as having turned "the gate is
-   * broken" into "the gate is silent" once already.
+   * THE LIST IS FOUR SHIM-DISPATCHED WALLS, and the fourth is `unprompted-speech` (ADR-040 /
+   * DDD-0004). Until the 4.0 reroute the fourth entry was `lesson-hooks.sh` — a bare producer wired
+   * straight into hooks.json that was blocking-capable by DESIGN (`lesson-hooks.sh:134` is
+   * `[ "$CODE" -eq 2 ] && exit 2`). That bare wiring is now GONE: the unprompted producers
+   * (anticipate + lesson-hooks) are spawned in candidate mode by `unprompted-runtime.mjs`, and the
+   * ONLY thing hooks.json points at for them is `hook-shim.mjs unprompted-speech <CCEvent>`, a
+   * mode:'blocking' entry in the shim's table. So the opted-in lesson refusal (exit 2) still
+   * propagates — but through the runtime, exactly like route-dispatch's wall, which is why
+   * unprompted-speech joins the other three here and `lesson-hooks.sh` leaves (leaving it on the list
+   * would be a STALE exemption — it is no longer registered — and the assertion below now proves that).
    *
-   * It needs no failsafe because it already fails OPEN internally on every non-deliberate path —
-   * verified at the real door 2026-07-22: no event → 0, no gate file → 0, no node → 0, malformed
-   * stdin → 0. Exit 2 is reachable only from a real refusal. That is the correct shape for a
-   * blocking hook: unguarded at the registry, defensive on the inside.
+   * unprompted-speech needs no `|| true` for the same reason the other three don't and MUST NOT have
+   * one: the runtime fails toward SILENCE internally on every non-deliberate path (unknown event → 0,
+   * no producers → 0, rogue raw bytes → 0, invalid candidate → 0), and exit 2 is reachable only from a
+   * real, user-opted-in lesson block — proven at the real door by
+   * tests/integration/unprompted-speech-registry.test.mjs. Unguarded at the registry, defensive on
+   * the inside — the correct shape for a blocking hook. A `|| true` here would silently disarm every
+   * opted-in refusal, the exact disarm the next assertion exists to prevent.
    */
-  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'lesson-hooks.sh']);
+  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'unprompted-speech']);
   const isBlocking = (cmd) => BLOCKING.some((b) => cmd.includes(b));
 
   it('gives every ADVISORY hook a `|| true` failsafe — a hook error must never reach the user', () => {
@@ -278,7 +290,7 @@ describe('registry hygiene', () => {
     ).toEqual([]);
   });
 
-  it('leaves the three BLOCKING hooks unguarded — `|| true` there would disarm every wall', () => {
+  it('leaves the BLOCKING hooks unguarded — `|| true` there would disarm every wall', () => {
     const disarmed = [];
     for (const [event, entries] of Object.entries(reg.hooks)) {
       for (const m of entries) {

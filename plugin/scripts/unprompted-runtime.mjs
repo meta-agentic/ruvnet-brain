@@ -1,0 +1,311 @@
+#!/usr/bin/env node
+// unprompted-runtime.mjs — THE enforcement chokepoint for unprompted speech (ADR-040 / DDD-0004 §"The
+// enforcement chokepoint"). This is the CORE of the 4.0 dial-scope work. Read this header as the
+// contract every producer, test, and later hooks.json rewrite must build to.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// WHY THIS FILE EXISTS. DDD-0004 states the invariant verbatim: "Every unprompted utterance passes
+// through ONE runtime that reads the level and the DismissalLedger and alone decides whether bytes
+// reach the user. An emitter returns a structured candidate; it never writes user-facing bytes
+// directly. Raw text from an emitter is a protocol violation — dropped, not forwarded." Until this
+// build no such runtime existed: anticipate.sh read the dial itself, lesson-gate read no dial at all,
+// and both were wired BARE in hooks.json (`bash … || true`) instead of through the shim. This file is
+// that ONE runtime. It is the SOLE writer of user-facing bytes for unprompted hooks.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE SEAM (build to THIS — do not invent a parallel one).
+//
+// INVOCATION. hook-shim.mjs dispatches this file under the single id 'unprompted-speech', forwarding
+// the Claude Code event name as argv:
+//     node hook-shim.mjs unprompted-speech <CCEventName>   →   node unprompted-runtime.mjs <CCEventName>
+// <CCEventName> is the token hooks.json passes (a real CC event like "UserPromptSubmit", or an
+// internal sub-event like "PreToolUse-bash"/"PreToolUse-write" that distinguishes which producer to
+// run — the same tokens lesson-hooks.sh already switches on). The CC hook JSON payload arrives on this
+// process's stdin, exactly as it would for a bare hook.
+//
+// PRODUCER CANDIDATE MODE. For the given event the runtime spawns the real producer(s) as CAPTURED
+// child processes (stdio piped, NEVER inherited) with env RUVNET_EMIT_CANDIDATES=1 and the payload on
+// their stdin. A producer in candidate mode writes ZERO user-facing bytes and instead prints ONE JSON
+// object per line to stdout:
+//     {"channel":"advocacy|promotion|lesson|alarm","effect":"advisory|block","copy":"<text>","hookEventName":"<CCevent>"}
+// advocacy/promotion candidates additionally carry: "findingId","severity","observationHash".
+// With RUVNET_EMIT_CANDIDATES unset a producer behaves EXACTLY as today (its own CLI/direct output) —
+// candidate mode is purely additive. The runtime captures every producer's stdout, discards its
+// stderr, and never lets a producer touch the real process streams.
+//
+// PER-CHANNEL POLICY (applied by the runtime to each parsed candidate, keyed on the candidate's own
+// `channel`, never on which producer emitted it):
+//   advocacy  → honour the advocacy dial (settings `.settings.advocacy`) AND the DismissalLedger
+//               (advocacy-outcomes.shouldStillOffer). Off ⇒ dropped. Suppressed ⇒ dropped. On delivery
+//               the runtime records the OFFERED denominator centrally via advocacy-outcomes.record.
+//               The real modules are reused — suppression is NOT hand-rolled here.
+//   promotion → onboarding policy + advocacy level: delivered only at advocacy `all` (DDD-0004's
+//               "silenced by anything below all"); the once-per-install / never-repeat part is the
+//               promotion producer's own job (it emits a candidate only when it is due).
+//   lesson    → NEVER the advocacy dial. The lesson producer (lesson-gate via lesson-hooks) owns its
+//               frequency cap, project scope, and blocking opt-in. `effect:'advisory'` is delivered as
+//               a nudge; `effect:'block'` becomes exit 2 with the reason on stderr and byte-empty
+//               stdout — an opted-in refusal is never swallowed.
+//   alarm     → always delivered. Not gated by anything. Silence here = a broken install looking healthy.
+//
+// DELIVERY (the runtime writes the final envelope to the REAL streams, itself):
+//   advisory → exit 0, stdout = {"hookSpecificOutput":{"hookEventName":…, "additionalContext":…}}.
+//   block    → exit 2, reason on stderr, stdout byte-empty.
+// A block (only ever from the lesson channel) dominates: if any block survives policy, advisories are
+// discarded and the runtime exits 2. Otherwise every surviving advisory copy is concatenated into ONE
+// additionalContext string under ONE envelope (two JSON documents on stdout parse as neither).
+//
+// THE DROP RULE that makes "raw bytes are a protocol violation" mechanically true: on the ADVISORY
+// path, invalid JSON / a non-object / an unknown channel / an unknown effect / a missing copy / a
+// missing required advocacy field is SILENTLY dropped. A rogue producer that prints raw bytes instead
+// of candidate JSON therefore reaches NEITHER user stream. A block is only ever produced by a VALID
+// lesson candidate with `effect:'block'`; raw bytes can never manufacture a refusal.
+//
+// FAIL-SAFE. This never throws out to the caller. Any internal failure resolves toward SILENCE (exit
+// 0, empty stdout) — never toward speaking, and never toward a spurious refusal.
+//
+// NON-NEGOTIABLE INVARIANTS (each proven by a test that breaks it):
+//   1. An opted-in BLOCK lesson still exits 2 with byte-empty stdout.
+//   2. advocacy=off ⇒ an advocacy candidate yields exit 0 and byte-EXACT stdout === "".
+//   3. A rogue producer printing raw bytes ⇒ nothing reaches either user stream on the advisory path.
+//   4. (Registry-test territory, not this file) a bare unprompted line in hooks.json fails the test.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// <codeRoot>/plugin/scripts/unprompted-runtime.mjs → <codeRoot>. Resolved from THIS file's own
+// location so it is correct under the Stable Spine (an immutable versions/<gen> tree) and in a dev
+// checkout alike — hook-shim.mjs has already chosen the tree by the time it dispatches this body.
+const SELF = fileURLToPath(import.meta.url);
+const SCRIPTS_DIR = path.dirname(SELF);                     // <codeRoot>/plugin/scripts
+const CODE_ROOT = path.resolve(SCRIPTS_DIR, '..', '..');    // <codeRoot>
+
+// The CC event name the shim forwarded. No event → nothing to run; stay silent.
+const EVENT = process.argv[2] || '';
+
+// Bound the whole runtime well under the 5s hook budget: producers run sequentially and each has its
+// own internal watchdog, but a backstop timeout here means a wedged producer can never hang the turn.
+const PRODUCER_TIMEOUT_MS = Number(process.env.RUVNET_UNPROMPTED_TIMEOUT_MS) || 4000;
+const MAX_BUFFER = 1 << 20;
+
+const VALID_CHANNELS = new Set(['advocacy', 'promotion', 'lesson', 'alarm']);
+const VALID_EFFECTS = new Set(['advisory', 'block']);
+
+/** Exit 0 with byte-empty stdout — the fail-safe and the "nothing to say" path. */
+function silent() { process.exit(0); }
+
+// ── Producer registry: CC event token → the producers to spawn in candidate mode ──────────────────
+// Each producer is an argv array + whether it is fed the payload on stdin. The channel is NOT declared
+// here — it travels on each emitted candidate, so one producer may legitimately emit more than one
+// channel and the runtime still routes every line by its own `channel`.
+//
+// Producers are the adapters that already own event→trigger mapping and payload parsing (lesson-hooks
+// maps "PreToolUse-bash" → the mutate-machine trigger and pulls session_id/command off stdin;
+// anticipate reads the prompt off stdin). Keeping that mapping in the producer layer is deliberate:
+// this core file decides WHETHER bytes reach the user, not WHAT each producer looks for.
+//
+// TEST SEAM: RUVNET_UNPROMPTED_PRODUCERS, when set to a JSON array of {argv:[...],feedStdin:bool},
+// REPLACES the built-in registry for every event — so a test can inject a fake block-emitter, an
+// advocacy-emitter, or a rogue raw-bytes emitter without touching real producers.
+const ANTICIPATE = { argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'anticipate.sh')], feedStdin: true };
+const lesson = (subEvent) => ({ argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'lesson-hooks.sh'), subEvent], feedStdin: true });
+
+const BUILTIN_REGISTRY = {
+  'UserPromptSubmit': [ANTICIPATE, lesson('UserPromptSubmit')],
+  'PreToolUse-write': [lesson('PreToolUse-write')],
+  'PreToolUse-bash':  [lesson('PreToolUse-bash')],
+  'PreToolUse-push':  [lesson('PreToolUse-push')],
+};
+
+function resolveProducers(event) {
+  const override = process.env.RUVNET_UNPROMPTED_PRODUCERS;
+  if (override) {
+    try {
+      const specs = JSON.parse(override);
+      if (Array.isArray(specs)) {
+        return specs
+          .filter((s) => s && Array.isArray(s.argv) && s.argv.length && s.argv.every((a) => typeof a === 'string'))
+          .map((s) => ({ argv: s.argv, feedStdin: s.feedStdin !== false }));
+      }
+    } catch { /* malformed override → fall through to the built-in registry */ }
+  }
+  return BUILTIN_REGISTRY[event] || [];
+}
+
+// ── Read the payload ONCE, forward the same bytes to every producer ────────────────────────────────
+// Claude Code pipes the hook JSON and closes stdin, so a synchronous read to EOF is safe and simplest.
+// GUARD: an interactive/attached stdin (a TTY) is NOT piped and would block readFileSync(0) forever —
+// so read only when fd 0 is a real pipe/file. A manual run with no redirect yields empty, not a hang.
+let payload = Buffer.alloc(0);
+if (!process.stdin.isTTY) {
+  try { payload = fs.readFileSync(0); } catch { payload = Buffer.alloc(0); }
+}
+
+const producers = resolveProducers(EVENT);
+if (!producers.length) silent();   // unknown event, or nothing wired for it — never speak on a guess
+
+// ── Spawn producers as CAPTURED children, collect candidate lines ──────────────────────────────────
+// stdio is piped (input buffer for stdin; stdout/stderr captured into the result). NOTHING a producer
+// writes touches the real streams — that is what makes the runtime the sole writer, and what drops a
+// rogue producer's raw bytes before they can reach a terminal.
+const rawLines = [];
+for (const p of producers) {
+  let out = '';
+  try {
+    const r = spawnSync(p.argv[0], p.argv.slice(1), {
+      input: p.feedStdin ? payload : Buffer.alloc(0),
+      env: { ...process.env, RUVNET_EMIT_CANDIDATES: '1' },
+      timeout: PRODUCER_TIMEOUT_MS,
+      maxBuffer: MAX_BUFFER,
+    });
+    out = r.stdout ? r.stdout.toString('utf8') : '';
+  } catch { out = ''; }   // a failed spawn contributes no candidates — never a failure of the turn
+  for (const line of out.split('\n')) {
+    const s = line.trim();
+    if (s) rawLines.push(s);
+  }
+}
+
+// ── Parse candidates. Anything that is not a well-formed candidate object is dropped here, which is
+// where the "raw bytes are a protocol violation" guarantee is actually enforced. ───────────────────
+const candidates = [];
+for (const s of rawLines) {
+  let c;
+  try { c = JSON.parse(s); } catch { continue; }              // not JSON → drop (a rogue's raw line)
+  if (!c || typeof c !== 'object' || Array.isArray(c)) continue;
+  if (!VALID_CHANNELS.has(c.channel)) continue;               // unknown/absent channel → drop
+  if (!VALID_EFFECTS.has(c.effect)) continue;                 // unknown/absent effect → drop
+  if (typeof c.copy !== 'string' || !c.copy.trim()) continue; // nothing to say → drop
+  candidates.push(c);
+}
+if (!candidates.length) silent();
+
+// ── Lazy access to the REAL dial read and the REAL DismissalLedger. Reused, not re-implemented. ────
+// The dial comes from user-settings.loadSettings() (the versioned-envelope reader that honours
+// RUVNET_SETTINGS_FILE); suppression comes from advocacy-outcomes.shouldStillOffer()/record(). Both
+// are loaded only if an advocacy/promotion candidate is actually present, so a lesson- or alarm-only
+// event pays nothing for them.
+const SETTINGS_MODULE = process.env.RUVNET_USER_SETTINGS_MODULE || path.join(CODE_ROOT, 'scripts', 'user-settings.mjs');
+const ADVOCACY_MODULE = process.env.RUVNET_ADVOCACY_OUTCOMES_MODULE || path.join(CODE_ROOT, 'scripts', 'advocacy-outcomes.mjs');
+
+let _dial;
+async function advocacyDial() {
+  if (_dial !== undefined) return _dial;
+  // Default matches anticipate.sh: 'important-only' (the owner's "recommend on") when settings are
+  // unreadable/absent — on for important findings, one setting away from silent, never unbounded.
+  _dial = 'important-only';
+  try {
+    const m = await import(pathToFileURL(SETTINGS_MODULE).href);
+    if (typeof m.loadSettings === 'function') {
+      const v = m.loadSettings().values?.advocacy;
+      if (v === 'off' || v === 'important-only' || v === 'all') _dial = v;
+    }
+  } catch { /* keep the safe default */ }
+  return _dial;
+}
+
+let _ledger = null;      // { shouldStillOffer, record, ACTIONS } or null if unavailable
+let _ledgerTried = false;
+async function ledger() {
+  if (_ledgerTried) return _ledger;
+  _ledgerTried = true;
+  try {
+    const m = await import(pathToFileURL(ADVOCACY_MODULE).href);
+    if (typeof m.shouldStillOffer === 'function' && typeof m.record === 'function' && m.ACTIONS) {
+      _ledger = { shouldStillOffer: m.shouldStillOffer, record: m.record, ACTIONS: m.ACTIONS };
+    }
+  } catch { _ledger = null; }
+  return _ledger;
+}
+
+// ── Apply per-channel policy ───────────────────────────────────────────────────────────────────────
+const advisories = [];   // { copy, hookEventName }
+const blocks = [];       // reason strings
+
+for (const c of candidates) {
+  const hookEventName = typeof c.hookEventName === 'string' && c.hookEventName.trim() ? c.hookEventName.trim() : null;
+  const copy = c.copy.trim();
+
+  switch (c.channel) {
+    case 'alarm':
+      // Always delivered, never gated. Alarms inform; they do not refuse — a stray block effect on an
+      // alarm is treated as advisory rather than allowed to refuse the user's work.
+      advisories.push({ copy, hookEventName });
+      break;
+
+    case 'lesson':
+      if (c.effect === 'block') {
+        // The lesson producer only emits effect:'block' for a lesson the user personally opted into
+        // (blocking-optin.json). The runtime propagates that refusal untouched — it never invents one
+        // and never swallows one.
+        blocks.push(copy);
+      } else {
+        advisories.push({ copy, hookEventName });
+      }
+      break;
+
+    case 'promotion': {
+      // Onboarding + advocacy level. DDD-0004's three-channels table: promotion is "silenced by
+      // anything below all". A block effect from promotion is a protocol violation → drop it.
+      if (c.effect !== 'advisory') break;
+      const dial = await advocacyDial();
+      if (dial !== 'all') break;
+      advisories.push({ copy, hookEventName });
+      break;
+    }
+
+    case 'advocacy': {
+      // The dial AND the DismissalLedger, enforced centrally on the candidate — this is the chokepoint's
+      // whole point: even a naive or rogue producer that emits an advocacy candidate is dropped when the
+      // dial is off or the finding is suppressed.
+      if (c.effect !== 'advisory') break;                    // advocacy cannot block
+      const findingId = typeof c.findingId === 'string' && c.findingId.trim() ? c.findingId.trim() : '';
+      if (!findingId) break;                                 // malformed advocacy candidate → drop
+      const dial = await advocacyDial();
+      if (dial === 'off') break;                             // INVARIANT 2: off ⇒ nothing, exit 0, stdout ""
+      const led = await ledger();
+      if (!led) break;                                       // cannot verify the ledger → stay silent (safe)
+      const severity = typeof c.severity === 'string' && c.severity.trim() ? c.severity.trim() : null;
+      const stateHash = typeof c.observationHash === 'string' && c.observationHash.trim() ? c.observationHash.trim() : null;
+      let offer = true;
+      try { offer = led.shouldStillOffer(findingId, { severity, stateHash }); } catch { offer = false; }
+      if (!offer) break;                                     // dismissed / budget spent → drop
+      // Deliver, and record the OFFERED denominator centrally (best-effort; recording never breaks
+      // the hook it measures). Moving OFFERED here is what makes precision computable at the one place
+      // that actually decides to show a card.
+      try { led.record({ id: findingId, action: led.ACTIONS.OFFERED, severity, stateHash }); } catch { /* a lost row costs one denominator, never the turn */ }
+      advisories.push({ copy, hookEventName });
+      break;
+    }
+
+    default:
+      break;   // unreachable — VALID_CHANNELS already filtered
+  }
+}
+
+// ── Deliver. A surviving block dominates everything. ───────────────────────────────────────────────
+if (blocks.length) {
+  // Exit 2: stdout is ignored by the harness and MUST be byte-empty; stderr becomes the model's
+  // refusal reason. Advisories collected this pass are deliberately discarded — a refusal supersedes.
+  process.stderr.write(blocks.join('\n') + '\n');
+  process.exit(2);
+}
+
+if (!advisories.length) silent();
+
+// One envelope, one additionalContext string. hookEventName MUST name the firing CC event or the
+// harness discards the envelope — prefer what the producer stamped on the candidate (it knows the real
+// event, e.g. "PreToolUse" not "PreToolUse-bash"); fall back to the leading segment of the token the
+// shim forwarded.
+const hookEventName =
+  advisories.find((a) => a.hookEventName)?.hookEventName ||
+  (EVENT ? EVENT.split('-')[0] : 'UserPromptSubmit');
+
+const additionalContext = advisories.map((a) => a.copy).join('\n\n');
+process.stdout.write(JSON.stringify({
+  hookSpecificOutput: { hookEventName, additionalContext },
+}));
+process.exit(0);

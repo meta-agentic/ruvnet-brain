@@ -105,27 +105,27 @@ export const SETTINGS_SCHEMA = Object.freeze([
     options: Object.freeze(['off', 'important-only', 'all']),
     default: 'important-only',
     escalates: Object.freeze([]),   // speech only — no value of this setting writes anything anywhere
-    help: 'How often it interrupts with findings and suggestions you did not ask for.',
-    // DEFAULT = 'important-only', deliberately not 'off', and the reasoning is narrow enough to state
-    // exactly: this setting mutates NOTHING (hence `escalates: []`), so the conservative-defaults rule
-    // — which is about machine changes — does not bind here. The real risk is attention, not damage.
+    help: 'How often it promotes capabilities you did not ask about. This dial governs that one channel; lessons and the Markdown stamp are separate channels, each with its own control.',
+    // DEFAULT = 'important-only', deliberately not 'off'. This setting mutates NOTHING itself (hence
+    // `escalates: []`), so the conservative-defaults rule — which is about machine changes — does not
+    // bind here; the risk it manages is attention, not damage.
     //
-    // And 'off' has its own failure mode, one this project has a standing order about: silence is not
-    // health. capability-audit surfaces findings like "your learner has gone quiet — 457 patterns
-    // recorded, nothing in 12 days" — a machine that is quietly not working. Suppressing that by
-    // default would make a broken install look identical to a healthy one, which is dishonesty by
-    // omission dressed up as politeness. The middle setting is the honest one: speak when something
-    // is actually wrong. (The example used to cite "26 learning hooks registered, 0 enabled" — that
-    // finding was itself the false alarm this whole audit was rebuilt to eliminate, so quoting it as
-    // a model of good advocacy was quietly teaching the wrong lesson.)
-    whyItMatters: 'Nothing here is pushed on you — every level is suggestions only, and none of them act. The middle setting exists so a genuinely broken install (a job that stopped running, hooks registered but switched off) can still reach you, because a quiet machine and a working machine look identical from the outside.',
-    // HONEST AS OF 2026-07-23 (was found describing behavior that does not exist — see the wiring
-    // report): plugin/scripts/anticipate.sh, the only emitter this dial governs, branches on exactly
+    // WHAT THIS DIAL ACTUALLY GOVERNS, corrected after the wiring report caught the copy overselling
+    // it: it is the volume knob on ONE channel — unsolicited advocacy/promotion of capabilities,
+    // emitted by plugin/scripts/anticipate.sh. It is NOT the master mute it was once sold as. Two
+    // other unsolicited channels ignore this dial entirely and carry their OWN controls:
+    //   • NAME lessons — gated by ratification + blocking-optin.json + RUVNET_LESSON_MAX_SHOWS, never
+    //     by this value.
+    //   • the Markdown grounding stamp (md-stamp) — a FILE MUTATION gated by RUVNET_MD_STAMP.
+    // And genuine failure alarms bypass the dial by design. So the old "off = nothing speaks at all"
+    // line was simply false, and is fixed below.
+    whyItMatters: 'This dial governs one thing: unsolicited advocacy for capabilities you did not ask about. It is not a master mute for everything the brain can say. Named lessons are a separate channel, surfaced under their own controls (ratification, blocking-optin.json, and RUVNET_LESSON_MAX_SHOWS), and the Markdown grounding stamp is a separate file mutation under RUVNET_MD_STAMP. Turning this dial down quiets capability advocacy and nothing else, and a genuine failure alarm reaches you no matter where it is set.',
+    // HONEST ABOUT THE WIRING: anticipate.sh, the only emitter this dial governs, branches on exactly
     // one condition — `if (ADVOCACY === 'off') quit();` — and nothing else reads the value. So
-    // "important-only" and "all" currently produce IDENTICAL output; the routine/important split the
-    // old copy promised does not exist in the emitter yet. Say that plainly instead of a benefit that
-    // isn't real, without underselling what "off" genuinely does.
-    downside: 'Today "important-only" and "all" behave identically — the only thing this dial currently changes is off vs. on, so every evidence-gated nudge speaks the same way at both levels; the finer routine-vs-important split is designed into the setting but not wired into the code that emits them yet. On "off", nothing volunteers anything at all, including a real failure — it stays invisible until you go looking for it.',
+    // "important-only" and "all" produce IDENTICAL output today; the routine/important split does not
+    // exist in the emitter yet. Say that plainly, and scope "off" to the advocacy channel it actually
+    // silences rather than claiming it silences the lessons and md-stamp channels it does not touch.
+    downside: 'Today "important-only" and "all" behave identically — the only thing this dial currently changes is off vs. on, so every evidence-gated capability nudge speaks the same way at both levels; the finer routine-vs-important split is designed into the setting but not wired into the emitter yet. On "off", the advocacy channel is silent — but that is all it silences: named lessons still surface under their own controls, the md-stamp still writes under RUVNET_MD_STAMP, and a genuine failure alarm still reaches you.',
   }),
 
   Object.freeze({
