@@ -119,7 +119,13 @@ export const SETTINGS_SCHEMA = Object.freeze([
     // finding was itself the false alarm this whole audit was rebuilt to eliminate, so quoting it as
     // a model of good advocacy was quietly teaching the wrong lesson.)
     whyItMatters: 'Nothing here is pushed on you — every level is suggestions only, and none of them act. The middle setting exists so a genuinely broken install (a job that stopped running, hooks registered but switched off) can still reach you, because a quiet machine and a working machine look identical from the outside.',
-    downside: 'On "all" you will see routine observations you did not ask for, and the important ones get harder to spot in the noise. On "off" a real failure stays invisible until you go looking for it.',
+    // HONEST AS OF 2026-07-23 (was found describing behavior that does not exist — see the wiring
+    // report): plugin/scripts/anticipate.sh, the only emitter this dial governs, branches on exactly
+    // one condition — `if (ADVOCACY === 'off') quit();` — and nothing else reads the value. So
+    // "important-only" and "all" currently produce IDENTICAL output; the routine/important split the
+    // old copy promised does not exist in the emitter yet. Say that plainly instead of a benefit that
+    // isn't real, without underselling what "off" genuinely does.
+    downside: 'Today "important-only" and "all" behave identically — the only thing this dial currently changes is off vs. on, so every evidence-gated nudge speaks the same way at both levels; the finer routine-vs-important split is designed into the setting but not wired into the code that emits them yet. On "off", nothing volunteers anything at all, including a real failure — it stays invisible until you go looking for it.',
   }),
 
   Object.freeze({

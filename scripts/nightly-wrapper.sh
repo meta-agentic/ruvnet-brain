@@ -91,6 +91,15 @@ run_once() {
 # automatically (keeps last 14), zero risk to the live DB (reads only).
 ~/.npm-global/bin/ruflo memory backup --db .swarm/memory.db --keep 14 >> "$LOG" 2>&1 || true
 
+# AgentDB drift canary (2026-07-23, P7 wiring sweep) — scripts/memdb-health.sh existed unwired since
+# 2026-07-09/10, the exact nights idx_bridge_key/idx_bridge_ns corruption recurred 3x on this very DB
+# while in WAL mode. Best-effort, same shape as its brain-health/key-health siblings below: never
+# blocks the real publish, just makes a WAL-mode/integrity regression loud instead of silent.
+echo "===== memdb-health canary — $(date -u +%FT%TZ) =====" >> "$LOG"
+sh scripts/memdb-health.sh .swarm/memory.db >> "$LOG" 2>&1 \
+  && echo "===== memdb-health canary: OK =====" >> "$LOG" \
+  || echo "===== memdb-health canary: UNHEALTHY (see line above) =====" >> "$LOG"
+
 # ── GONG LAYER 3: brain-health canary (Stuart, 2026-07-12 — the brain must NEVER be dark silently).
 # One real query against the LIVE cache brain every night. forge-ask-all.mjs exits non-zero on a
 # total retrieval failure (all repos erroring) and rings kb/brain-alarm.mjs itself; this adds the
