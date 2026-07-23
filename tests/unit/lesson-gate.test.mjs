@@ -483,6 +483,24 @@ describe('PER-SESSION FREQUENCY CAP: a reminder stops repeating; a refusal never
     }
   });
 
+  test('a BLOCK-CAPABLE but NOT opted-in lesson is an ADVISORY, and IS capped like one', () => {
+    // The regression an independent regrade caught: enforcement:block WITHOUT an opt-in renders as a
+    // nudge (exit 0) carrying the "you could turn this into a refusal" offer — it is a reminder, not a
+    // refusal. The first build exempted it from the cap (capExempt keyed on block-CAPABILITY), so the
+    // live "gate on blast radius" lesson nagged unbounded. It must now be capped; capping it silences no
+    // refusal (a refusal exits 2, which this lesson never does until opted in). FAILS on the old capExempt.
+    writeStore([blockLesson()]);                              // enforcement:block, ratified — but NO writeOptIn
+    const fire = () => runGate(['--event', 'PreToolUse', '--trigger', 'claim-done', '--session', 'bc'],
+      { RUVNET_LESSON_MAX_SHOWS: '2' });
+    const r1 = fire();
+    expect(r1.code).toBe(0);                                 // advisory, never a refusal (not opted in)
+    expect(ctxOf(r1)).toContain('channel capable of observing');   // show 1 of 2
+    expect(ctxOf(fire())).toContain('channel capable of observing'); // show 2 of 2
+    const r3 = fire();
+    expect(r3.code).toBe(0);
+    expect(ctxOf(r3)).not.toContain('channel capable of observing'); // capped — the nag stops
+  });
+
   test('a pure-advisory lesson stops repeating after MAX_SHOWS in the same session', () => {
     writeStore([advisory('A')]);
     const env = { RUVNET_LESSON_MAX_SHOWS: '2' };

@@ -314,10 +314,14 @@ const optedIn = loadBlockingOptIn();
  * lesson gate. A PURE-ADVISORY lesson is shown at most MAX_SHOWS times per session, then stays silent
  * until a new session.
  *
- * THE LOAD-BEARING INVARIANT: anything BLOCK-related is NEVER capped. A lesson the user opted into as a
- * block — and even a block-CAPABLE lesson the user has not yet opted into — is exempt. The cap governs a
- * reminder, never a refusal, and never the visibility of a refusal the user could choose to turn on.
- * Suppressing a block to "reduce noise" would silently disable the one control this file exists to honour.
+ * THE LOAD-BEARING INVARIANT: an actual REFUSAL is never capped. A lesson the user has opted into as a
+ * block (isBlocking, below) exits 2 and refuses the action — the cap must never touch it. But a merely
+ * block-CAPABLE lesson the user has NOT opted into renders as an ADVISORY (exit 0): it is a reminder, not
+ * a refusal, and it is capped like any other advisory. An earlier version exempted block-capable lessons
+ * too — which left exactly the lesson doing the nagging (the block-capable "gate on blast radius", never
+ * opted in) repeating unbounded on every mutating command; an independent regrade caught it. Capping a
+ * block-capable ADVISORY silences no refusal: a refusal exits 2 regardless of this file's display budget,
+ * and the one-time "you could turn this into a refusal" offer needs to be seen a few times, not forever.
  *
  * FAIL-OPEN: any error reading or writing the state degrades to the pre-cap behaviour (show it), never to
  * suppression — a gate that goes quiet because it could not read a JSON file is worse than a repeat.
@@ -332,8 +336,20 @@ const KEEP_SESSIONS = 20;   // bound the state file to the most-recent sessions,
 const SID = (typeof session === 'string' && session.trim())
   ? session.trim()
   : `fallback:${process.cwd()}:${new Date().toISOString().slice(0, 10)}`;
-/** A lesson that can EVER refuse is exempt from the frequency cap — active block or merely block-capable. */
-const capExempt = (l) => l.enforcement === ENFORCEMENT.BLOCK || l.intendedEnforcement === ENFORCEMENT.BLOCK;
+/**
+ * BLOCKING = four conditions, all required; the user's opt-in is necessary and NOT sufficient. Defined
+ * here (rather than at the emit site) because the frequency cap below must key its exemption on it: the
+ * last two conditions are also guaranteed by makeLesson, and are re-asserted deliberately — this is the
+ * one place the answer is "refuse the human's work", and a security invariant enforced only at a distance
+ * is one refactor from being enforced nowhere.
+ */
+const isBlocking = (l) => optedIn.has(l.id)
+  && l.enforcement === ENFORCEMENT.BLOCK
+  && (l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE)
+  && l.origin === ORIGIN.USER_STATED;
+/** Exempt from the cap: ONLY a lesson that refuses RIGHT NOW (an opted-in block, exit 2). A block-capable
+ *  lesson that is not opted in is an advisory and is capped like any other — see the invariant above. */
+const capExempt = isBlocking;
 function readGateState() {
   try { const s = JSON.parse(fs.readFileSync(GATE_STATE_PATH, 'utf8')); return s && typeof s === 'object' ? s : {}; }
   catch { return {}; }
@@ -450,20 +466,8 @@ for (const l of ranked) {
 }
 const trimmed = capped.length - inForce.length;
 
-/**
- * BLOCKING = four conditions, all required. The user's opt-in is necessary and NOT sufficient.
- *
- * The last two are already guaranteed by makeLesson (which refuses to construct a `block` lesson
- * that is machine-authored or unratified). They are re-asserted here deliberately: this is the one
- * place in the system where the answer is "refuse the human's work", and a security invariant
- * enforced only at a distance is one refactor away from being enforced nowhere. Cheap to state,
- * catastrophic to omit.
- */
-const isBlocking = (l) => optedIn.has(l.id)
-  && l.enforcement === ENFORCEMENT.BLOCK
-  && (l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE)
-  && l.origin === ORIGIN.USER_STATED;
-
+// isBlocking is defined above (the frequency cap keys its exemption on it). BLOCKING = four ANDed
+// conditions; the user's opt-in is necessary and NOT sufficient, and the security invariant lives there.
 const blocking = inForce.filter(isBlocking);
 // Lessons that COULD block if the user asked them to. Shown, because the entire product claim is
 // that the user can see what is available and choose — not discover enforcement by being refused.
