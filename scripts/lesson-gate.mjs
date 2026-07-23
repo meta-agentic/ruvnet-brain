@@ -96,6 +96,158 @@ const triggers = allArgs('--trigger');
 const event = arg('--event');          // the real Claude Code event name → hook mode
 const quiet = argv.includes('--quiet');
 const json = argv.includes('--json');
+// NOT `arg('--command')`: that helper treats a falsy VALUE the same as an ABSENT flag
+// (`argv[i+1] ? ... : d`), so a real event whose command happens to be "" would silently fall back to
+// the unfiltered default — precisely the false-nag path this fix exists to close. Presence of the flag,
+// not truthiness of its value, is what distinguishes "an old caller that never learned about this" from
+// "the dispatcher, telling us the command text (however short)".
+const commandIdx = argv.indexOf('--command');
+const command = commandIdx >= 0 ? (argv[commandIdx + 1] ?? '') : null;
+
+/**
+ * THE MUTATE-MACHINE PREDICATE — narrows "about to change something outside this repo" to commands
+ * that plausibly do that, instead of firing on every Bash call.
+ *
+ * THE BUG, found by an independent grader reading real session transcripts (2026-07-22/23): the
+ * dispatcher maps `PreToolUse-bash` → `--trigger mutate-machine` UNCONDITIONALLY —
+ * plugin/scripts/lesson-hooks.sh:98 — with no inspection of the command at all. Not a weak keyword
+ * match: NO match. Every `ls`, `grep`, `wc`, `git status`, `git rev-parse` fired the identical L07
+ * advisory, ~10x/session verbatim. A true finding repeated on false triggers is exactly the nagging
+ * ADR-030's own P3 (nudge, never force) exists to prevent — a correct lesson trains itself to be
+ * ignored by firing when it has nothing to say.
+ *
+ * THE FIX is an ALLOWLIST OF MUTATING PATTERNS, not a read-only allowlist — chosen because the
+ * trigger's own label is "about to change something", so the honest default for an unrecognized
+ * command is SILENCE, not suspicion. Under-firing on some obscure mutating command is the safe
+ * failure mode for an advisory nudge; over-firing is the bug this whole fix exists to close.
+ *
+ * Every pattern is anchored to COMMAND POSITION (the leading word of a shell segment), never a bare
+ * substring search — the same discipline verify-interface.sh already uses and for the identical
+ * reason: an unanchored match fires on `grep -r "npm install -g" .` or `echo "curl -X POST"`, which
+ * would reintroduce the exact false-positive nagging this fix removes, just spelled differently.
+ *
+ * Known, accepted limitation: command substitution (`$(rm -rf ~/x)`) and path traversal (`../../etc`)
+ * are not resolved — this is a heuristic for an ADVISORY nudge, not a security boundary. It is
+ * layered on top of the existing consent/ratification trust boundary (ORIGIN/STATUS/opt-in above),
+ * which is where the real security property already lives.
+ */
+const REPO_ROOT = (() => {
+  let d = process.cwd();
+  for (let i = 0; i < 12; i++) {
+    if (fs.existsSync(path.join(d, '.git'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return process.cwd();
+})();
+
+/** Split on top-level `;`, `&&`, `||`, `&`, `|`, newline — NOT inside single/double quotes. One
+ *  compound command ("cmd1 && rm -rf ~/x") must be judged by its most dangerous segment, not its first. */
+function splitTopLevelSegments(cmd) {
+  const segments = [];
+  let cur = '';
+  let quote = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (quote) { cur += c; if (c === quote) quote = null; continue; }
+    if (c === '"' || c === "'") { quote = c; cur += c; continue; }
+    if ((c === '&' && cmd[i + 1] === '&') || (c === '|' && cmd[i + 1] === '|')) { segments.push(cur); cur = ''; i++; continue; }
+    if (c === ';' || c === '&' || c === '|' || c === '\n') { segments.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim()) segments.push(cur);
+  return segments.map((s) => s.trim()).filter(Boolean);
+}
+
+/** Whitespace tokenizer that keeps a quoted argument ("a path with spaces") as ONE token. */
+function tokenize(segment) {
+  const tokens = [];
+  let cur = '';
+  let quote = null;
+  for (let i = 0; i < segment.length; i++) {
+    const c = segment[i];
+    if (quote) { if (c === quote) quote = null; else cur += c; continue; }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (/\s/.test(c)) { if (cur) { tokens.push(cur); cur = ''; } continue; }
+    cur += c;
+  }
+  if (cur) tokens.push(cur);
+  return tokens;
+}
+
+const SYSTEM_PATH_PREFIXES = ['/etc', '/usr', '/bin', '/sbin', '/System', '/Library', '/private', '/var', '/opt'];
+/** A path argument that targets a system-wide location — "chmod 777 /etc/x", never "chmod +x ./run.sh". */
+function isSystemAbsolutePath(tok) {
+  if (!tok || tok.startsWith('-')) return false;
+  return SYSTEM_PATH_PREFIXES.some((p) => tok === p || tok.startsWith(p + '/'));
+}
+/** A path argument that resolves OUTSIDE this repo — a bare `~` reference, or an absolute path that
+ *  is not rooted under REPO_ROOT. A relative path ("./tmp", "build") is inside the repo by construction. */
+function isOutsideRepoPath(tok) {
+  if (!tok || tok.startsWith('-')) return false;
+  if (tok.startsWith('~')) return true;
+  if (tok.startsWith('/')) return tok !== REPO_ROOT && !tok.startsWith(REPO_ROOT + path.sep);
+  return false;
+}
+/** curl mutates when it names a non-GET verb or attaches a request body — "-X POST", "--data", etc. */
+function curlMutates(tokens) {
+  for (let i = 1; i < tokens.length; i++) {
+    const t = tokens[i];
+    if ((t === '-X' || t === '--request') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes((tokens[i + 1] || '').toUpperCase())) return true;
+    if (/^--request=/.test(t) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(t.split('=')[1].toUpperCase())) return true;
+    if (t === '-d' || t === '--data' || /^--data(-raw|-binary|-urlencode)?$/.test(t) || t === '--upload-file' || t === '-T') return true;
+  }
+  return false;
+}
+
+const INSTALL_VERBS = new Set(['install', 'i', 'add', 'uninstall', 'remove', 'rm', 'un']);
+const GLOBAL_FLAGS = new Set(['-g', '--global']);
+const SECURITY_MUTATING = new Set([
+  'create-keychain', 'delete-keychain', 'set-keychain-password', 'set-keychain-settings',
+  'unlock-keychain', 'lock-keychain', 'import', 'add-generic-password', 'add-internet-password',
+  'delete-generic-password', 'delete-internet-password', 'default-keychain',
+]);
+const BREW_MUTATING = new Set(['install', 'uninstall', 'remove', 'rm', 'upgrade', 'reinstall', 'tap', 'untap', 'link', 'unlink', 'pin', 'unpin', 'services']);
+const PKG_MUTATING = new Set(['install', 'remove', 'purge', 'upgrade']);
+const FS_MUTATING_VERBS = new Set(['rm', 'mv', 'cp', 'ln', 'shred', 'truncate', 'unlink']);
+
+/** One shell segment → does its LEADING command plausibly mutate something outside this repo? */
+function classifySegment(segment) {
+  let tokens = tokenize(segment);
+  while (tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) tokens = tokens.slice(1); // FOO=bar cmd
+  if (!tokens.length) return false;
+  const lead = tokens[0];
+  if (lead === 'sudo') return true; // elevated privilege is outside-repo blast radius by definition
+  switch (lead) {
+    case 'launchctl': return true; // any subcommand — LaunchAgents/system services, never repo-scoped
+    case 'security': return SECURITY_MUTATING.has(tokens[1]);
+    case 'defaults': return tokens[1] === 'write' || tokens[1] === 'delete';
+    case 'npm': case 'pnpm': case 'yarn':
+      return INSTALL_VERBS.has(tokens[1]) && tokens.some((t) => GLOBAL_FLAGS.has(t));
+    case 'pip': case 'pip3': case 'pipx':
+      return tokens[1] === 'install' || tokens[1] === 'uninstall';
+    case 'brew': return BREW_MUTATING.has(tokens[1]);
+    case 'gem': return tokens[1] === 'install' || tokens[1] === 'uninstall';
+    case 'apt': case 'apt-get': case 'yum': case 'dnf': case 'pacman': case 'port':
+      return PKG_MUTATING.has(tokens[1]);
+    case 'git': return tokens[1] === 'push';
+    case 'curl': return curlMutates(tokens);
+    case 'wget': return tokens.some((t) => t.startsWith('--post-data') || t.startsWith('--post-file'));
+    case 'chmod': case 'chown': case 'chgrp':
+      return tokens.slice(1).some(isSystemAbsolutePath);
+    case 'dd': case 'mkfs': case 'diskutil': return true;
+    case 'crontab': return tokens[1] === '-e' || tokens[1] === '-r';
+    default:
+      return FS_MUTATING_VERBS.has(lead) && tokens.slice(1).some(isOutsideRepoPath);
+  }
+}
+
+/** Exported for the test suite: does this WHOLE command plausibly mutate something outside the repo? */
+export function looksLikeOutsideRepoMutation(cmd) {
+  if (!cmd || typeof cmd !== 'string') return false;
+  return splitTopLevelSegments(cmd).some(classifySegment);
+}
 
 /**
  * THE CONSENT FILE — where "yes, actually refuse me" is recorded, and why it is not in the lesson store.
@@ -191,9 +343,19 @@ const isHome = (l) => {
 };
 const isUniversal = (l) => Array.isArray(l.projects) && l.projects.length >= 2;
 
+// Apply the mutate-machine predicate defined above. `mutate-machine` is requested for EVERY Bash
+// call (plugin/scripts/lesson-hooks.sh:98) — it is the ONLY trigger the dispatcher fires unconditionally
+// on a tool, so it is the only one that needs narrowing here. When no `--command` was supplied (a bare
+// CLI invocation, or a caller that predates this fix), behavior is UNCHANGED — fail open to the old,
+// unfiltered behavior rather than silently swallow a trigger nobody asked to have filtered.
+const MUTATE_KEY = TRIGGERS.MUTATE_MACHINE.key;
+const effectiveTriggers = command === null
+  ? triggers
+  : triggers.filter((t) => t !== MUTATE_KEY || looksLikeOutsideRepoMutation(command));
+
 const seen = new Set();
 const candidates = [];
-for (const t of triggers) {
+for (const t of effectiveTriggers) {
   for (const l of lessonsFor(t, lessons, { limit: 3 })) {
     if (seen.has(l.id)) continue;
     // Away from home, only a lesson with cross-project evidence may speak.

@@ -59,6 +59,15 @@ done
 [ -z "$GATE" ] && exit 0
 command -v node >/dev/null 2>&1 || exit 0
 
+# Read the hook's JSON payload off stdin ONCE, via the same shared Node parser the other PreToolUse
+# gates on Bash already use for this — never a hand-rolled bash regex, which is how a JSON-escaped
+# quote once silently truncated a command in this exact codebase. Safe for every event this script
+# handles: the harness always pipes a payload, and a caller with no stdin (a manual test) gets EOF
+# immediately, not a hang — an empty result just means no command text was found.
+INPUT=""
+while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"$'\n'; done
+HOOK_INPUT_JS="$HERE/hook-input.mjs"
+
 # Map a real Claude Code event onto the store's decision points, and onto the event name the harness
 # will accept back. An event may carry more than one decision point: ending a turn is simultaneously
 # "reporting status" and "claiming done", and both have lessons.
@@ -106,6 +115,17 @@ esac
 # this runs on every matching event, so one node spawn instead of two is latency the user feels.
 ARGS=()
 for t in $TRIGGERS; do ARGS+=(--trigger "$t"); done
+
+# THE FIX for the mutate-machine false-positive nag: `mutate-machine` fired on EVERY Bash call — `ls`,
+# `grep`, `git status` included — because this dispatcher requested the trigger unconditionally, with
+# no inspection of the command at all (there was nothing here to inspect it WITH). The gate now takes
+# `--command <text>` and narrows `mutate-machine` to commands that plausibly mutate something OUTSIDE
+# this repo (scripts/lesson-gate.mjs, looksLikeOutsideRepoMutation) — so extract the real command text
+# for exactly the one event that carries it, and hand it to the gate to decide.
+if [ "$EVENT" = "PreToolUse-bash" ] && [ -f "$HOOK_INPUT_JS" ]; then
+  CMD=$(printf '%s' "$INPUT" | node "$HOOK_INPUT_JS" command 2>/dev/null) || CMD=""
+  ARGS+=(--command "$CMD")
+fi
 
 # A hard timeout, because this runs on every matching event and must never add perceptible latency.
 # BUT `timeout` is GNU coreutils and STOCK macOS DOES NOT SHIP IT — on this dev machine it exists

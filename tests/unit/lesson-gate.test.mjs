@@ -297,6 +297,117 @@ describe('FAILS OPEN on malfunction — but never on a decision', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('mutate-machine: narrowed to commands that PLAUSIBLY mutate outside this repo', () => {
+  /**
+   * WHY THIS DESCRIBE BLOCK EXISTS. An independent grader reading real session transcripts (2026-07-
+   * 22/23) found L07 ("about to change something outside this repo") firing ~10x/session, VERBATIM,
+   * on `ls`, `grep`, `wc`, `git status`, `git rev-parse` — read-only Bash calls with nothing outside
+   * this repo to change. Root cause: plugin/scripts/lesson-hooks.sh:98 mapped `PreToolUse-bash` to
+   * `--trigger mutate-machine` UNCONDITIONALLY. Not a weak keyword match — no inspection of the
+   * command existed AT ALL. A true finding repeated on false triggers trains the user to ignore it,
+   * which is the exact nagging ADR-030's "nudge, never force" principle exists to prevent.
+   *
+   * The fix: scripts/lesson-gate.mjs now takes `--command <text>` and narrows `mutate-machine` via
+   * `looksLikeOutsideRepoMutation()` — an allowlist of mutating patterns anchored to command
+   * position, never a substring search. Every test below asserts through `--json`, on the `inForce`
+   * array of ACTUAL lesson objects — never on rendered prose — so a wording change to L07's statement
+   * can never make a real regression here read as green.
+   */
+  const MUTATE_ID = 'L07-blast-radius-not-social-comfort';
+  const mutateLesson = () => blockLesson({
+    id: MUTATE_ID,
+    trigger: 'mutate-machine',
+    statement: 'Gate on blast radius, not on how awkward an action feels — ask if it is reversible and outward-facing.',
+  });
+
+  beforeEach(() => writeStore([mutateLesson()]));
+
+  /** Runs the gate exactly as the dispatcher does post-fix: one trigger, one command, --json. */
+  function classify(cmd) {
+    const { stdout, code } = runGate(['--trigger', 'mutate-machine', '--command', cmd, '--json']);
+    expect(code).toBe(0); // a nudge on an un-opted-in lesson never blocks — see the CONSENT suite above
+    return JSON.parse(stdout);
+  }
+
+  describe('TEETH: the pre-fix dispatcher fired unconditionally — reproduced literally, not asserted', () => {
+    test('--trigger mutate-machine with NO --command (the exact old invocation) fires regardless of intent', () => {
+      // plugin/scripts/lesson-hooks.sh used to run `node lesson-gate.mjs --event PreToolUse --trigger
+      // mutate-machine` with no way to name the command at all. This IS that call, byte for byte
+      // (module for module) — reproducing the bug's own shape rather than asserting it happened.
+      const { stdout } = runGate(['--trigger', 'mutate-machine', '--json']);
+      const j = JSON.parse(stdout);
+      expect(j.inForce.map((l) => l.id)).toContain(MUTATE_ID);
+    });
+  });
+
+  describe('READ-ONLY commands: silent (would have fired under the old, unfiltered dispatcher above)', () => {
+    for (const cmd of ['ls', 'ls -la', 'wc -l README.md', 'grep -rn "TODO" .', 'git status', 'git rev-parse HEAD', 'node test.mjs', 'npm run test']) {
+      test(`"${cmd}"`, () => expect(classify(cmd).inForce).toEqual([]));
+    }
+
+    test('a read-only command that merely MENTIONS a mutating pattern stays silent — anchored to command position, never a bare substring search', () => {
+      // The naive fix (search the whole string for "npm install -g" or "curl -X POST") would have
+      // reintroduced false positives one substring later: a grep for the pattern, or an echo of it.
+      expect(classify('grep -rn "npm install -g" .').inForce).toEqual([]);
+      expect(classify('echo "curl -X POST is dangerous"').inForce).toEqual([]);
+    });
+
+    test('a compound command of only read-only segments stays silent', () => {
+      expect(classify('git status; git log -1; ls').inForce).toEqual([]);
+    });
+
+    test('rm scoped INSIDE the repo stays silent — the trigger means OUTSIDE this repo, not "any deletion"', () => {
+      expect(classify('rm -rf ./build').inForce).toEqual([]);
+    });
+  });
+
+  describe('MUTATING commands: still fire — the fix narrows, it does not silence', () => {
+    for (const cmd of ['rm -rf ~/x', 'npm install -g some-pkg', 'launchctl bootstrap system /Library/LaunchDaemons/x.plist', 'git push origin main', 'chmod 777 /etc/x', 'curl -X POST https://example.com/api']) {
+      test(`"${cmd}"`, () => expect(classify(cmd).inForce.map((l) => l.id)).toContain(MUTATE_ID));
+    }
+
+    test('a compound command fires if ANY segment mutates outside the repo, even a trailing one', () => {
+      expect(classify('ls -la && rm -rf ~/x').inForce.map((l) => l.id)).toContain(MUTATE_ID);
+    });
+  });
+
+  describe('END-TO-END through the real dispatcher — stdin JSON, real bash process, no shortcuts', () => {
+    function runDispatchBash(cmd, env = {}) {
+      const r = spawnSync('bash', [DISPATCH, 'PreToolUse-bash'], {
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd } }),
+        encoding: 'utf8',
+        env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath, ...env },
+      });
+      return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+    }
+
+    test('a real read-only Bash call produces NOTHING on stdout', () => {
+      const { stdout, code } = runDispatchBash('git rev-parse HEAD');
+      expect(code).toBe(0);
+      expect(stdout.trim()).toBe('');
+    });
+
+    test('a real mutating Bash call still reaches the model via additionalContext', () => {
+      const { stdout, code } = runDispatchBash('git push origin main');
+      expect(code).toBe(0);
+      const ctx = JSON.parse(stdout).hookSpecificOutput.additionalContext;
+      expect(ctx).toContain('Gate on blast radius');
+    });
+
+    test('a malformed/empty stdin payload degrades to silence, never a crash or a false fire', () => {
+      const r = spawnSync('bash', [DISPATCH, 'PreToolUse-bash'], {
+        input: 'not json at all',
+        encoding: 'utf8',
+        env: { ...process.env, RUVNET_LESSON_STORE: storePath, RUVNET_LESSON_OPTIN: optInPath },
+      });
+      expect(r.status).toBe(0);
+      expect((r.stdout ?? '').trim()).toBe('');
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
 describe('CLI mode stays backward compatible', () => {
   test('plain text on stdout, because version-bump-gate.sh embeds it verbatim', () => {
     // plugin/scripts/version-bump-gate.sh:78 captures this stdout and appends it under
