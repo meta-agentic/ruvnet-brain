@@ -10,8 +10,9 @@ supersedes: []
 relates: [ADR-028]
 ---
 
-**Status**: Accepted (2026-07-23) — build pending (→ Implemented once the harness + mutants pass).
-Duel recorded in `docs/reviews/0041-duel-fixture-machine.md`.
+**Status**: Accepted (2026-07-23)
+
+Build pending (→ Implemented once the harness + mutants pass). Duel recorded in `docs/reviews/0041-duel-fixture-machine.md`.
 
 ## Why now
 
