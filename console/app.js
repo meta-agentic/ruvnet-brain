@@ -1666,6 +1666,7 @@ const HOUSE_SOURCE_NOTE = {
 // Friendly labels for the model-house selector — the stored value stays the id (anthropic/openai/…).
 const SEG_LABEL = {
   provider: { auto: 'Auto', anthropic: 'Claude', openai: 'ChatGPT', codex: 'Codex', google: 'Gemini', xai: 'Grok' },
+  advocacy: { off: 'Off', 'important-only': 'Important only', all: 'All' },
 };
 const segLabel = (key, opt) => (SEG_LABEL[key] && SEG_LABEL[key][opt]) || opt;
 const prettyModel = (id) => {
@@ -1999,25 +2000,135 @@ function renderSavings(sv) {
 
 /* --------------------------------------------------------- section 6: settings */
 
-function renderSettings(cfg) {
-  const body = $('#body-settings');
-  if (!cfg || !Array.isArray(cfg.schema) || !cfg.schema.length) {
-    setChips('chips-settings', [chip('no schema', 'grey')]);
-    body.replaceChildren(el('p', { class: 'muted' }, 'No editable settings were received.'));
-    return;
+// Shown wherever a control is sitting on a recommendation rather than on a stored answer.
+const notChosenField = (rec) => el('span', { class: 'field-unset' },
+  'Not chosen yet — this shows the recommended setting (', el('b', {}, String(rec)), '), not your machine’s.');
+
+/**
+ * WP4 — every row answers What / Why / How on click. Fields with hand-written copy in SETTING_INFO
+ * use it verbatim; everything else builds its beats from what the SERVER actually sent — `help`,
+ * and, where the schema carries them (user-settings.mjs entries do), `whyItMatters`/`downside` —
+ * rather than inventing new copy here. That is how the advocacy dial gets its info bubble without
+ * this file duplicating a single sentence user-settings.mjs already owns.
+ */
+function fieldBeats(f) {
+  if (SETTING_INFO[f.key]) return SETTING_INFO[f.key];
+  const beats = [{ k: 'What is this?', t: f.help || 'A RuvNet Brain option, stored in your settings file.' }];
+  if (f.whyItMatters) beats.push({ k: 'Why does it matter?', t: f.whyItMatters });
+  if (f.downside) beats.push({ k: 'What’s the downside?', t: f.downside });
+  return beats;
+}
+
+/**
+ * Build ONE field's control + its label/info/help row. Factored out of renderSettings so the
+ * advocacy dial (backed by user-settings.mjs, a different file, a different endpoint) gets the exact
+ * same widget — same markup, same "not chosen" honesty rule, same info-bubble mechanics — as every
+ * config.json field, rather than a bespoke control invented for one setting.
+ */
+function buildSettingsField(f, values, defaults, refreshDirty) {
+  const labId = `lab-${f.key}`;
+  const helpId = `help-${f.key}`;
+  const ctl = el('div', { class: 'field-ctl' });
+  let collector;
+  let initialValue;
+
+  if (f.type === 'secret' || f.secret) {
+    const isSet = values[f.key] === true;
+    let input = null;
+    const buildInput = () => {
+      input = el('input', {
+        type: 'password', class: 'text-input', autocomplete: 'off',
+        spellcheck: 'false', placeholder: isSet ? 'Enter a new key to replace it' : 'Enter key',
+        'aria-labelledby': labId, 'aria-describedby': helpId,
+        oninput: refreshDirty,
+      });
+      const showBtn = el('button', {
+        class: 'btn btn-ghost btn-sm', type: 'button',
+        onclick: () => {
+          const showing = input.type === 'text';
+          input.type = showing ? 'password' : 'text';
+          showBtn.textContent = showing ? 'Show' : 'Hide';
+        },
+      }, 'Show');
+      const row = el('div', { class: 'secret-input-row' }, input, showBtn);
+      if (isSet) {
+        row.append(el('button', {
+          class: 'btn btn-ghost btn-sm', type: 'button',
+          onclick: () => { row.replaceWith(buildSetRow()); input = null; refreshDirty(); },
+        }, 'Keep existing'));
+      }
+      return row;
+    };
+    const buildSetRow = () => el('div', { class: 'secret-set-row' },
+      el('span', { class: 'chip tone-green secret-set', title: 'A value is stored; it is never sent to this page.' }, '•••• set'),
+      el('button', {
+        class: 'btn btn-ghost btn-sm', type: 'button', 'aria-describedby': helpId,
+        onclick: (e) => { const r = buildInput(); e.currentTarget.parentElement.replaceWith(r); input.focus(); refreshDirty(); },
+      }, 'Replace…'));
+    ctl.append(isSet ? buildSetRow() : buildInput());
+    collector = () => ({ secret: true, include: !!(input && input.value.trim()), value: input ? input.value.trim() : undefined });
+  } else if (f.type === 'bool') {
+    // NOT CHOSEN IS NOT OFF. The server sends null when the user has never answered this question,
+    // and a bare unchecked switch states "off" — a claim about their machine that nobody made. The
+    // control still has to sit somewhere, so it sits on the RECOMMENDED value and says, in words,
+    // that this is a recommendation and not their current setting.
+    const chosen = values[f.key] === true || values[f.key] === false;
+    const rec = defaults[f.key] === true;
+    const input = el('input', { type: 'checkbox', 'aria-labelledby': labId, 'aria-describedby': helpId, onchange: refreshDirty });
+    input.checked = chosen ? values[f.key] === true : rec;
+    initialValue = input.checked;
+    ctl.append(el('label', { class: 'switch' }, input, el('span', { class: 'track', 'aria-hidden': 'true' })));
+    if (!chosen) ctl.append(notChosenField(rec ? 'on' : 'off'));
+    collector = () => ({ include: true, value: input.checked });
+  } else if (f.type === 'enum' && Array.isArray(f.options)) {
+    const name = `seg-${f.key}`;
+    const seg = el('div', { class: 'seg', role: 'radiogroup', 'aria-labelledby': labId, 'aria-describedby': helpId });
+    const inputs = [];
+    const chosen = typeof values[f.key] === 'string' && f.options.includes(values[f.key]);
+    const rec = f.options.includes(defaults[f.key]) ? defaults[f.key] : f.options[0];
+    for (const opt of f.options) {
+      const input = el('input', { type: 'radio', name, value: opt, onchange: refreshDirty });
+      input.checked = chosen ? values[f.key] === opt : opt === rec;
+      inputs.push(input);
+      seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, segLabel(f.key, opt))));
+    }
+    // Falling back to options[0] and saying nothing is how "routing: auto" appeared to be the
+    // user's setting on a machine whose config file did not exist.
+    if (!inputs.some((i) => i.checked) && inputs[0]) inputs[0].checked = true;
+    initialValue = inputs.find((i) => i.checked)?.value;
+    ctl.append(seg);
+    if (!chosen) ctl.append(notChosenField(segLabel(f.key, rec)));
+    collector = () => ({ include: true, value: inputs.find((i) => i.checked)?.value });
+  } else {
+    const input = el('input', {
+      type: 'text', class: 'text-input', 'aria-labelledby': labId, 'aria-describedby': helpId, oninput: refreshDirty,
+    });
+    input.value = values[f.key] != null && values[f.key] !== true ? String(values[f.key]) : '';
+    initialValue = input.value;
+    ctl.append(input);
+    collector = () => ({ include: true, value: input.value });
   }
+
+  const row = el('div', { class: 'field', id: `field-${f.key}` },
+    el('div', {},
+      el('span', { class: 'field-label', id: labId }, f.label || f.key, infoBtn(f.label || f.key, fieldBeats(f))),
+      f.help ? el('p', { class: 'field-help', id: helpId }, f.help) : el('span', { id: helpId })),
+    ctl);
+
+  return { row, collector, initialValue };
+}
+
+/**
+ * Build one COMPLETE settings form — every field in `cfg.schema`, a Save button, and a submit
+ * handler that POSTs to `endpoint`. Used twice: once for config.json's five fields, once for the
+ * single advocacy field backed by user-settings.mjs — same widget, same save/undo/error handling,
+ * only the endpoint and the file it names in its own copy differ.
+ */
+function buildSettingsForm(cfg, { endpoint }) {
   const values = cfg.values || {};
   // What the project would pick FOR you, kept strictly apart from what you actually picked. The
-  // server sends these separately for exactly that reason — see gatherConfig.
+  // server sends these separately for exactly that reason — see gatherConfig / gatherAdvocacy.
   const defaults = cfg.defaults || {};
-  // Shown wherever a control is sitting on a recommendation rather than on a stored answer.
-  const notChosen = (rec) => el('span', { class: 'field-unset' },
-    'Not chosen yet — this shows the recommended setting (', el('b', {}, String(rec)), '), not your machine’s.');
-  const unsetCount = cfg.schema.filter((f) => !f.secret && f.type !== 'secret'
-    && (values[f.key] === null || values[f.key] === undefined)).length;
-  setChips('chips-settings', [chip(`${cfg.schema.length} options`, 'grey'),
-    unsetCount ? chip(`${unsetCount} not chosen yet`, 'wait') : null,
-    cfg.exists === false ? chip('not created yet', 'wait') : null].filter(Boolean));
 
   const form = el('form', { class: 'settings-form', novalidate: true });
   const collectors = {}; // key → () => ({ include, value })
@@ -2036,95 +2147,10 @@ function renderSettings(cfg) {
   function refreshDirty() { if (saveBtn) saveBtn.disabled = !isDirty(); }
 
   for (const f of cfg.schema) {
-    const labId = `lab-${f.key}`;
-    const helpId = `help-${f.key}`;
-    const ctl = el('div', { class: 'field-ctl' });
-
-    if (f.type === 'secret' || f.secret) {
-      const isSet = values[f.key] === true;
-      let input = null;
-      const buildInput = () => {
-        input = el('input', {
-          type: 'password', class: 'text-input', autocomplete: 'off',
-          spellcheck: 'false', placeholder: isSet ? 'Enter a new key to replace it' : 'Enter key',
-          'aria-labelledby': labId, 'aria-describedby': helpId,
-          oninput: refreshDirty,
-        });
-        const showBtn = el('button', {
-          class: 'btn btn-ghost btn-sm', type: 'button',
-          onclick: () => {
-            const showing = input.type === 'text';
-            input.type = showing ? 'password' : 'text';
-            showBtn.textContent = showing ? 'Show' : 'Hide';
-          },
-        }, 'Show');
-        const row = el('div', { class: 'secret-input-row' }, input, showBtn);
-        if (isSet) {
-          row.append(el('button', {
-            class: 'btn btn-ghost btn-sm', type: 'button',
-            onclick: () => { row.replaceWith(buildSetRow()); input = null; refreshDirty(); },
-          }, 'Keep existing'));
-        }
-        return row;
-      };
-      const buildSetRow = () => el('div', { class: 'secret-set-row' },
-        el('span', { class: 'chip tone-green secret-set', title: 'A value is stored; it is never sent to this page.' }, '•••• set'),
-        el('button', {
-          class: 'btn btn-ghost btn-sm', type: 'button', 'aria-describedby': helpId,
-          onclick: (e) => { const r = buildInput(); e.currentTarget.parentElement.replaceWith(r); input.focus(); refreshDirty(); },
-        }, 'Replace…'));
-      ctl.append(isSet ? buildSetRow() : buildInput());
-      collectors[f.key] = () => ({ secret: true, include: !!(input && input.value.trim()), value: input ? input.value.trim() : undefined });
-    } else if (f.type === 'bool') {
-      // NOT CHOSEN IS NOT OFF. The server sends null when the user has never answered this question,
-      // and a bare unchecked switch states "off" — a claim about their machine that nobody made. The
-      // control still has to sit somewhere, so it sits on the RECOMMENDED value and says, in words,
-      // that this is a recommendation and not their current setting.
-      const chosen = values[f.key] === true || values[f.key] === false;
-      const rec = defaults[f.key] === true;
-      const input = el('input', { type: 'checkbox', 'aria-labelledby': labId, 'aria-describedby': helpId, onchange: refreshDirty });
-      input.checked = chosen ? values[f.key] === true : rec;
-      initial[f.key] = input.checked;
-      ctl.append(el('label', { class: 'switch' }, input, el('span', { class: 'track', 'aria-hidden': 'true' })));
-      if (!chosen) ctl.append(notChosen(rec ? 'on' : 'off'));
-      collectors[f.key] = () => ({ include: true, value: input.checked });
-    } else if (f.type === 'enum' && Array.isArray(f.options)) {
-      const name = `seg-${f.key}`;
-      const seg = el('div', { class: 'seg', role: 'radiogroup', 'aria-labelledby': labId, 'aria-describedby': helpId });
-      const inputs = [];
-      const chosen = typeof values[f.key] === 'string' && f.options.includes(values[f.key]);
-      const rec = f.options.includes(defaults[f.key]) ? defaults[f.key] : f.options[0];
-      for (const opt of f.options) {
-        const input = el('input', { type: 'radio', name, value: opt, onchange: refreshDirty });
-        input.checked = chosen ? values[f.key] === opt : opt === rec;
-        inputs.push(input);
-        seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, segLabel(f.key, opt))));
-      }
-      // Falling back to options[0] and saying nothing is how "routing: auto" appeared to be the
-      // user's setting on a machine whose config file did not exist.
-      if (!inputs.some((i) => i.checked) && inputs[0]) inputs[0].checked = true;
-      initial[f.key] = inputs.find((i) => i.checked)?.value;
-      ctl.append(seg);
-      if (!chosen) ctl.append(notChosen(segLabel(f.key, rec)));
-      collectors[f.key] = () => ({ include: true, value: inputs.find((i) => i.checked)?.value });
-    } else {
-      const input = el('input', {
-        type: 'text', class: 'text-input', 'aria-labelledby': labId, 'aria-describedby': helpId, oninput: refreshDirty,
-      });
-      input.value = values[f.key] != null && values[f.key] !== true ? String(values[f.key]) : '';
-      initial[f.key] = input.value;
-      ctl.append(input);
-      collectors[f.key] = () => ({ include: true, value: input.value });
-    }
-
-    // WP4 — every row answers What / Why / How on click; unknown keys fall back to their help text.
-    const beats = SETTING_INFO[f.key]
-      || (f.help ? [{ k: 'What is this?', t: f.help }] : [{ k: 'What is this?', t: 'A RuvNet Brain option, stored in your settings file.' }]);
-    form.append(el('div', { class: 'field', id: `field-${f.key}` },
-      el('div', {},
-        el('span', { class: 'field-label', id: labId }, f.label || f.key, infoBtn(f.label || f.key, beats)),
-        f.help ? el('p', { class: 'field-help', id: helpId }, f.help) : el('span', { id: helpId })),
-      ctl));
+    const { row, collector, initialValue } = buildSettingsField(f, values, defaults, refreshDirty);
+    collectors[f.key] = collector;
+    if (f.type !== 'secret' && !f.secret) initial[f.key] = initialValue;
+    form.append(row);
   }
 
   saveBtn = el('button', { class: 'btn btn-apply', type: 'submit', disabled: true }, 'Save settings');
@@ -2147,10 +2173,13 @@ function renderSettings(cfg) {
     saveBtn.textContent = 'Saving…';
     resultSlot.replaceChildren();
     try {
-      const { status: code, data } = await postJSON('/api/save-config', { values: out });
+      const { status: code, data } = await postJSON(endpoint, { values: out });
       if (code === 403) {
         resultSlot.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' }, TOKEN_MSG));
       } else if (data && data.ok) {
+        // Not every store behind this form has an undo token — saveAdvocacy() (user-settings.mjs)
+        // returns a real backup path but no journalled undoToken the way saveConfig() does, so this
+        // button simply does not appear for that form rather than pretending a capability exists.
         const undoBtn = data.undoToken ? el('button', {
           class: 'btn btn-undo btn-sm', type: 'button',
           // try/catch, because this is an async onclick with a network call in it. Without one, a
@@ -2206,7 +2235,38 @@ function renderSettings(cfg) {
     saveBtn.textContent = prev;
   });
 
-  body.replaceChildren(withIllo('settings', form));
+  return form;
+}
+
+/**
+ * `cfg` is config.json's fields (issue's original section); `us` is user-settings.mjs's fields — for
+ * now just the advocacy dial (ADR-032 §DDD-0004 "the three channels": this control is the volume knob
+ * on the speech channel). Two stores, two forms, one shared widget — see buildSettingsField/Form.
+ */
+function renderSettings(cfg, us) {
+  const body = $('#body-settings');
+  const groups = [cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
+  if (!groups.length) {
+    setChips('chips-settings', [chip('no schema', 'grey')]);
+    body.replaceChildren(el('p', { class: 'muted' }, 'No editable settings were received.'));
+    return;
+  }
+
+  const totalOptions = groups.reduce((n, c) => n + c.schema.length, 0);
+  const unsetCount = groups.reduce((n, c) => {
+    const values = c.values || {};
+    return n + c.schema.filter((f) => !f.secret && f.type !== 'secret'
+      && (values[f.key] === null || values[f.key] === undefined)).length;
+  }, 0);
+  setChips('chips-settings', [chip(`${totalOptions} option${totalOptions === 1 ? '' : 's'}`, 'grey'),
+    unsetCount ? chip(`${unsetCount} not chosen yet`, 'wait') : null,
+    groups.some((c) => c.exists === false) ? chip('not created yet', 'wait') : null].filter(Boolean));
+
+  const main = [];
+  if (cfg && Array.isArray(cfg.schema) && cfg.schema.length) main.push(buildSettingsForm(cfg, { endpoint: '/api/save-config' }));
+  if (us && Array.isArray(us.schema) && us.schema.length) main.push(buildSettingsForm(us, { endpoint: '/api/save-advocacy' }));
+
+  body.replaceChildren(withIllo('settings', ...main));
 }
 
 /* -------------------------------------------------- section 7: trust & provenance
@@ -2392,7 +2452,7 @@ async function loadState() {
         lastMemory = c.memory;
         renderMemory(c.memory);
         renderSavings(c.savings);
-        renderSettings(c.config);
+        renderSettings(c.config, c.userSettings);
         renderGates(c.gates);
         dismissStandby();
       }
@@ -2406,7 +2466,7 @@ async function loadState() {
     lastMemory = s.memory;
     renderMemory(s.memory);
     renderSavings(s.savings);
-    renderSettings(s.config);
+    renderSettings(s.config, s.userSettings);
     renderGates(s.gates);
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);

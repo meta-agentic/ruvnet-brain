@@ -42,7 +42,7 @@ import { loadCatalog, detectProvider, frontierFor } from './model-catalog.mjs';
 import { learnings } from './learnings.mjs';
 import { gatesSurvey } from './gates.mjs';
 // The write-safety primitives, borrowed rather than re-implemented. See saveConfig for why.
-import { withLock, writeAtomic, LOCK_WAIT_MS } from './user-settings.mjs';
+import { withLock, writeAtomic, LOCK_WAIT_MS, loadSettings, saveSettings, SETTINGS_SCHEMA as USER_SETTINGS_SCHEMA } from './user-settings.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -382,6 +382,67 @@ function gatherConfig() {
     // then say "recommended: on" without ever claiming that is the current state.
     defaults: { provider: 'auto', nightly: true, routing: 'auto', qeFleet: false },
     schema: CONFIG_SCHEMA,
+  };
+}
+
+/**
+ * ── The advocacy dial (user-settings.mjs) — a SEPARATE store from config.json, on purpose ─────────
+ *
+ * `advocacy` lives in ~/.config/ruvnet-brain/settings.json (user-settings.mjs STORE_PATH), not this
+ * console's own CONFIG_PATH — because anticipate.sh, the one emitter that gates on it, reads that
+ * exact file. Folding it into CONFIG_SCHEMA/saveConfig would give the console its own copy of the
+ * value, free to drift from the one the emitter actually reads. So this reads and writes through
+ * user-settings.mjs's own `loadSettings`/`saveSettings` — the same functions its CLI (`node
+ * user-settings.mjs`) and its test suite already exercise — rather than growing a second writer.
+ *
+ * Only `advocacy` is served. The other three entries in SETTINGS_SCHEMA (learningScope, autoApply,
+ * newProjectDefaults) stay off this page until each has its own real caller — wiring them in ahead of
+ * that is the exact "light switch to nothing" user-settings.mjs's own header warns against.
+ */
+const ADVOCACY_FIELD = USER_SETTINGS_SCHEMA.find((s) => s.key === 'advocacy');
+
+function gatherAdvocacy() {
+  const state = loadSettings(); // validated: respects RUVNET_SETTINGS_FILE, degrades on corrupt/future files
+  // NOT-CHOSEN IS ITS OWN ANSWER — same rule gatherConfig() applies above. loadSettings() always hands
+  // back a COMPLETE values object (defaults filled in for any key the file never mentions), so the only
+  // way to tell "the user picked the default on purpose" apart from "the user never touched this key"
+  // is to peek at what was actually written, the same way gatherConfig() reads CONFIG_PATH raw.
+  const raw = readJSON(state.path);
+  const chosen = !!(raw && typeof raw === 'object' && raw.settings && typeof raw.settings === 'object'
+    && Object.hasOwn(raw.settings, 'advocacy'));
+  return {
+    path: state.path.replace(HOME, '~'),
+    exists: state.exists,
+    values: { advocacy: chosen ? state.values.advocacy : null },
+    defaults: { advocacy: ADVOCACY_FIELD.default },
+    schema: [ADVOCACY_FIELD],
+  };
+}
+
+/**
+ * SAVE — through user-settings.mjs's own `saveSettings`, never a hand-rolled second writer. That
+ * function already owns the lock, the atomic rename and the backup-before-write for this exact file;
+ * re-implementing any of it here would be the precise duplication saveConfig's own header warns about.
+ *
+ * Takes a `values` object, the SAME shape saveConfig() takes, so the console's settings form can post
+ * to either endpoint with identical client code — only the URL and the target file differ.
+ */
+function saveAdvocacy(values) {
+  const value = values && typeof values === 'object' ? values.advocacy : undefined;
+  if (value === undefined) {
+    return { ok: false, log: 'nothing was saved — no recognised settings were supplied' };
+  }
+  if (typeof value !== 'string' || !ADVOCACY_FIELD.options.includes(value)) {
+    const reason = `expected one of ${ADVOCACY_FIELD.options.join(', ')}, got ${JSON.stringify(value)}`;
+    return { ok: false, rejected: [{ key: 'advocacy', reason }], log: `nothing was saved — advocacy: ${reason}` };
+  }
+  const result = saveSettings({ advocacy: value });
+  if (!result.ok) return { ok: false, log: result.log };
+  return {
+    ok: true,
+    backup: result.backup ? result.backup.replace(HOME, '~') : null,
+    values: { advocacy: result.values.advocacy },
+    log: result.log,
   };
 }
 
@@ -817,6 +878,7 @@ function gatherState(cwd, { fleet = true } = {}) {
     savings.utilization = utilization({ frontier: frontierFor(cat, det.provider) });
   } catch { try { savings.utilization = utilization({}); } catch { savings.utilization = null; } }
   const config = gatherConfig();
+  const userSettings = gatherAdvocacy();
   let gates = null;
   try { gates = gatesSurvey({ repo: REPO }); } catch { gates = null; }
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
@@ -842,7 +904,7 @@ function gatherState(cwd, { fleet = true } = {}) {
     generatedAt: new Date().toISOString(),
     preStateHash,
     host: { user: os.userInfo().username, platform: process.platform, node: process.version, npmPrefix: NPM_PREFIX.replace(HOME, '~') },
-    sections: { wiring, memory, savings, config, gates, recommendations },
+    sections: { wiring, memory, savings, config, userSettings, gates, recommendations },
   };
   // Cache the last good state so repeat page-loads paint instantly, same as the stack audit does.
   // TOKEN is per-server-run and must never touch disk — ?fast=1 splices the live one back in.
@@ -1397,6 +1459,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         if (body.token !== TOKEN) return sendJSON(res, 403, { error: 'bad or missing token' });
         if (url === '/api/apply') return sendJSON(res, 200, apply(Array.isArray(body.ids) ? body.ids : []));
         if (url === '/api/save-config') return sendJSON(res, 200, saveConfig(body.values || {}));
+        if (url === '/api/save-advocacy') return sendJSON(res, 200, saveAdvocacy(body.values || {}));
         if (url === '/api/undo') return sendJSON(res, 200, undo(body.undoToken));
         return sendJSON(res, 404, { error: 'unknown endpoint' });
       }
@@ -1486,4 +1549,4 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   else { console.log(`\n  onboarding-console — the RuvNet Brain configure page\n\n    --serve [--open]   start the local server (and open your browser)\n    --print-state      print the read-only state JSON and exit (for tests)\n    --print-stack      print the stack audit JSON and exit\n`); }
 }
 
-export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo };
+export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy };

@@ -269,7 +269,12 @@ function advocacyLevel() {
   try {
     const f = process.env.RUVNET_SETTINGS_FILE
       || path.join(os.homedir(), '.config', 'ruvnet-brain', 'settings.json');
-    const v = JSON.parse(fs.readFileSync(f, 'utf8')).advocacy;
+    const parsed = JSON.parse(fs.readFileSync(f, 'utf8'));
+    // user-settings.mjs saveSettings() writes a VERSIONED ENVELOPE: { version, updated, settings:{…} }.
+    // Read the nested `.settings.advocacy` FIRST — reading top-level `.advocacy` (which an earlier
+    // version did) meant every real save through the console/CLI was invisible here and the dial
+    // silently fell back to the default. Keep a top-level fallback for a hand-written/legacy file.
+    const v = (parsed && parsed.settings && parsed.settings.advocacy) ?? (parsed && parsed.advocacy);
     return (v === 'off' || v === 'important-only' || v === 'all') ? v : 'important-only';
   } catch { return 'important-only'; }
 }

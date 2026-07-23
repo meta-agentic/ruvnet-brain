@@ -127,6 +127,28 @@ describe('the advocacy dial — the default is ON, not off (the owner\'s "recomm
   });
 });
 
+describe('the advocacy dial — reads the REAL settings envelope (nested .settings.advocacy)', () => {
+  // The shape user-settings.mjs saveSettings() actually writes: a versioned envelope, value nested
+  // under .settings. An earlier read of top-level `.advocacy` made every real save invisible here —
+  // off never took effect. These prove the emitter reads the shape the console/CLI actually persist.
+  const envelope = (advocacy) => ({
+    version: 1, updated: '2026-07-23T00:00:00Z',
+    settings: { learningScope: 'project', advocacy, autoApply: false, newProjectDefaults: false },
+  });
+
+  it('advocacy=off in the versioned envelope → silent (before the fix this defaulted to on and spoke)', () => {
+    const { status, stdout } = run({ prompt: MATCHING_PROMPT, settingsFile: writeSettings(envelope('off')), sessionId: 'env-off' });
+    expect(status).toBe(0);
+    expect(stdout).toBe('');
+  });
+
+  it('advocacy=all in the versioned envelope → speaks (off-silence is the setting, not a parse miss)', () => {
+    const { status, stdout } = run({ prompt: MATCHING_PROMPT, settingsFile: writeSettings(envelope('all')), sessionId: 'env-all' });
+    expect(status).toBe(0);
+    expect(stdout).toContain('Fixture Vector Cache');
+  });
+});
+
 describe('the advocacy dial — on-levels do not mean "match anything"', () => {
   it('an unrelated prompt stays silent at important-only AND all — the dial is not a bypass of the matcher', () => {
     for (const advocacy of ['important-only', 'all']) {
