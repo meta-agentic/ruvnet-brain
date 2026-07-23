@@ -174,9 +174,13 @@ const STANDALONE = [
  * small lie that hides a real gap. Held work is VISIBLE work.
  */
 const HELD = {
-  'correction-detect': 'N3 lesson extraction. Measured at ~27% precision against a >=90% shipping '
-    + 'floor (ADR-033). Wiring it would feed the lesson store garbage at 3 rejects per 4 hits, and '
-    + 'a store full of garbage is worse than an empty one. Ships when precision clears the floor.',
+  'correction-detect': 'N3 lesson extraction. Re-measured 2026-07-23 on a reproducible held-out split '
+    + 'of 1,328 real transcripts (scripts/correction-detect-measure.mjs): 5 real detector bugs fixed, '
+    + 'corpus detections 2->8, but still 4 firings on the holdout at ~50-100% precision (n far below the '
+    + '>=100-detection / >=90% floor, ADR-033). The residual gap looks STRUCTURAL, not a tuning miss: '
+    + 'genuine "learn a new rule" phrasing is lexically identical to the bug-report / spec-language '
+    + 'false-positive classes the adversarial review killed. Clearing the floor needs a different '
+    + 'primitive (an embedding classifier) or far more labeled data — not more regexes. Stays HELD.',
   'lesson-lifecycle': 'retirement + generalization for extracted lessons. Depends on '
     + 'correction-detect; wiring it alone would retire hand-written lessons on evidence that does '
     + 'not exist yet.',
