@@ -24,11 +24,12 @@ beforeEach(() => { tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), '
 afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
 /** Fire the hook exactly as hook-shim.mjs / Claude Code do: subprocess, JSON payload on stdin. */
-function fireHook(payload) {
+function fireHook(payload, env) {
   const r = spawnSync('node', [HOOK], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     timeout: 15000,
+    ...(env ? { env: { ...process.env, ...env } } : {}),
   });
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -175,5 +176,50 @@ describe('md-stamp — PostToolUse .md date-stamp refresher', () => {
     expect(r.code).toBe(0);
     expect(fs.readFileSync(file, 'utf8')).toBe(original);
     expect(fs.statSync(file).mtimeMs).toBe(before.mtimeMs);
+  });
+});
+
+describe('md-stamp — the off switch (a file-mutating hook must be silenceable)', () => {
+  const staleDoc = ['# Doc', '', 'Updated: 2020-01-01 09:00:00 EST | Version 1.0.0', '', 'body', ''].join('\n');
+
+  it('RUVNET_MD_STAMP=0 makes it a no-op — a STALE stamp is left untouched', () => {
+    const file = writeFile('offswitch.md', staleDoc);
+    const before = fs.statSync(file);
+    const r = fireHook({ tool_name: 'Write', tool_input: { file_path: file } }, { RUVNET_MD_STAMP: '0' });
+    expect(r.code).toBe(0);
+    expect(fs.readFileSync(file, 'utf8')).toBe(staleDoc);                 // still 2020-01-01
+    expect(fs.statSync(file).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it('CONTROL: the SAME stale doc, no off switch → the date IS refreshed (proves the test has teeth)', () => {
+    const file = writeFile('offswitch-control.md', staleDoc);
+    const r = fireHook({ tool_name: 'Write', tool_input: { file_path: file } });
+    expect(r.code).toBe(0);
+    const after = fs.readFileSync(file, 'utf8');
+    expect(after).toContain(`Updated: ${TODAY}`);
+    expect(after).not.toContain('2020-01-01');
+  });
+
+  it('off is also honoured spelled out (off/false/no)', () => {
+    for (const val of ['off', 'false', 'no']) {
+      const file = writeFile(`offswitch-${val}.md`, staleDoc);
+      fireHook({ tool_name: 'Write', tool_input: { file_path: file } }, { RUVNET_MD_STAMP: val });
+      expect(fs.readFileSync(file, 'utf8'), `RUVNET_MD_STAMP=${val}`).toBe(staleDoc);
+    }
+  });
+});
+
+describe('md-stamp — the date is honest across timezones (ships to other machines)', () => {
+  it('RUVNET_MD_STAMP_TZ is honoured: an instant that is a different calendar day in two zones', () => {
+    // 2026-07-22T11:00Z is already the 23rd in Kiritimati (UTC+14) but still the 22nd in Honolulu (UTC-10).
+    const instant = new Date('2026-07-22T11:00:00Z');
+    expect(todayNY(instant, 'Pacific/Kiritimati')).toBe('2026-07-23');
+    expect(todayNY(instant, 'Pacific/Honolulu')).toBe('2026-07-22');
+    expect(todayNY(instant, 'Pacific/Kiritimati')).not.toBe(todayNY(instant, 'Pacific/Honolulu'));
+  });
+
+  it('an invalid timezone falls back to system-local instead of throwing', () => {
+    expect(() => todayNY(new Date(), 'Not/AZone')).not.toThrow();
+    expect(todayNY(new Date(), 'Not/AZone')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

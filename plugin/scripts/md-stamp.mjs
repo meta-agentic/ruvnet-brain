@@ -36,10 +36,17 @@ import { parseHookEvent, toolName, field } from './hook-input.mjs';
 // ── date, from the system clock, formatted in the repo's standard timezone ─────────────────────────
 // Same idiom as scripts/self-update.mjs's README badge stamp: Intl.DateTimeFormat is a Node builtin
 // (ICU is bundled), never a guessed/hardcoded string.
-export function todayNY(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now);
+// The date is computed in the MACHINE'S OWN timezone by default — this plugin ships to other
+// machines, and a user in Tokyo editing their own doc should get Tokyo's date, not New York's.
+// Overridable with RUVNET_MD_STAMP_TZ for anyone who wants their docs pinned to a fixed zone (e.g.
+// a team standardising on ET). Name kept `todayNY` for import stability; the "NY" is now only the
+// legacy default's ghost, not a hardcode. An invalid TZ value falls back to system-local, never throws.
+export function todayNY(now = new Date(), tz = process.env.RUVNET_MD_STAMP_TZ) {
+  const opts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  if (tz) opts.timeZone = tz;
+  let parts;
+  try { parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(now); }
+  catch { parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now); }
   const g = (t) => parts.find((p) => p.type === t)?.value || '';
   return `${g('year')}-${g('month')}-${g('day')}`;
 }
@@ -105,6 +112,13 @@ function readHookInput() {
 }
 
 function main() {
+  // THE OFF SWITCH. This hook writes to the user's own files, so it must be silenceable in one move
+  // — the same "nothing without you" bar anticipate.sh's RUVNET_ANTICIPATE=0 meets. Set
+  // RUVNET_MD_STAMP=0 (or =off) and it becomes a no-op. Absence = on (it only ever refreshes a stamp
+  // the user already put there, never invents one), but the escape hatch exists and is honoured first.
+  const sw = String(process.env.RUVNET_MD_STAMP ?? '').trim().toLowerCase();
+  if (sw === '0' || sw === 'off' || sw === 'false' || sw === 'no') return;
+
   const ev = readHookInput();
   if (!['Write', 'Edit', 'MultiEdit'].includes(toolName(ev))) return; // wrong tool: do nothing
 
