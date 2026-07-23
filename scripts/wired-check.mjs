@@ -117,6 +117,12 @@ const STANDALONE = [
   // diagnostic CLIs run by hand — same shape as memory-doctor/token-report/agentdb-fleet-doctor above:
   ['calibrate-router', 'measurement harness run by hand to calibrate router tiers on real runs; '
     + 'billing-safety wrapped (strips API keys so it can only bill the subscription)'],
+  ['correction-detect-embed', 'ADR-033 NEGATIVE-RESULT reference, run by hand. Built 2026-07-23 to '
+    + 'test whether an embedding k-NN (the same local Xenova/all-MiniLM-L6-v2 path the KB uses) clears '
+    + 'the lesson-extraction floor where the regex cannot. It does NOT: measured WORSE precision than '
+    + 'the regex (25% vs 50-100%) at comparable recall on the same held-out split, because MiniLM '
+    + 'separates by topic, not by the pragmatic "is this correcting the agent" property. Kept, wired to '
+    + 'nothing on purpose, so the negative is reproducible and not re-litigated — NOT a path to wire in.'],
   ['check-indexation', 'diagnostic CLI run by hand; explicitly "always exit 0, not a gate" per its '
     + 'own header — live Bing/Google scraping to eyeball real-world SEO status, not CI-appropriate'],
   ['check-legibility', 'manual pre-ship check run by hand against a LOCAL dev server the developer '
@@ -176,11 +182,16 @@ const STANDALONE = [
 const HELD = {
   'correction-detect': 'N3 lesson extraction. Re-measured 2026-07-23 on a reproducible held-out split '
     + 'of 1,328 real transcripts (scripts/correction-detect-measure.mjs): 5 real detector bugs fixed, '
-    + 'corpus detections 2->8, but still 4 firings on the holdout at ~50-100% precision (n far below the '
-    + '>=100-detection / >=90% floor, ADR-033). The residual gap looks STRUCTURAL, not a tuning miss: '
-    + 'genuine "learn a new rule" phrasing is lexically identical to the bug-report / spec-language '
-    + 'false-positive classes the adversarial review killed. Clearing the floor needs a different '
-    + 'primitive (an embedding classifier) or far more labeled data — not more regexes. Stays HELD.',
+    + 'corpus detections 2->8, ~50-100% precision at n=4 on the holdout. TWO measured findings now bound '
+    + 'this, and both point the same way. (1) The >=100-DETECTION floor is UNREACHABLE ON THIS CORPUS: '
+    + 'hand-labeling all 271 loose-net candidates across the full 1,328 transcripts against ADR-033\'s '
+    + 'four-signal definition found only ~37-43 genuine corrections TOTAL — a third of the floor. The '
+    + 'floor is a fact about the data, not the regex. (2) The embedding classifier that this note used '
+    + 'to name as the way out was BUILT and MEASURED (scripts/correction-detect-embed.mjs, STANDALONE): '
+    + 'it is WORSE than the regex (25% vs 50-100% precision, comparable recall) and less legible, because '
+    + 'MiniLM separates by topic not by pragmatics. No primitive clears >=100 here. The honest floor '
+    + '(owner decision, ADR-033) is ">=90% precision at whatever N the corpus supports, accumulating as '
+    + 'it grows" — under which this STILL stays HELD, precision at the available N being unproven.',
   'lesson-lifecycle': 'retirement + generalization for extracted lessons. Depends on '
     + 'correction-detect; wiring it alone would retire hand-written lessons on evidence that does '
     + 'not exist yet.',
