@@ -7,7 +7,8 @@ authors: [Stuart Kerr, Claude Code]
 tags: [learning, agentdb, sona, reasoningbank, cross-project, configurator, explainer]
 supersedes: []
 relates: [ADR-013, ADR-016]
-updated: 2026-07-15
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 
 **Status**: Accepted (foundation shipped in v3.0.5; retrieval + skill-promotion are the named next layers)

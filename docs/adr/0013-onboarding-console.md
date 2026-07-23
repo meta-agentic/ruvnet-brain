@@ -3,7 +3,8 @@ id: ADR-013
 title: The Onboarding Console — RuvNet Brain becomes a mirror, an advisor, and only then a configurator
 status: Implemented
 date: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-18
+updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [onboarding, ux, config, stack, memory-health, savings, safety]
 supersedes: []

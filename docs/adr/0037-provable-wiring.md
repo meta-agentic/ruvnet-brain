@@ -3,7 +3,8 @@ id: ADR-037
 title: The wiring gate cannot fail — fixing the predicate, not the allowlist
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
+updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [gates, wiring, release, verification, ci, predicate]
 supersedes: []

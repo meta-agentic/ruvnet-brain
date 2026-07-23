@@ -2,7 +2,8 @@
 id: ADR-007
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-09
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0007: Tiered scope (T0–T3) by ingest depth; union selection rule
 

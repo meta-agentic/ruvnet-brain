@@ -2,7 +2,8 @@
 id: ADR-011
 status: Accepted
 date: 2026-07-09
-updated: 2026-07-16
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0011: The Verified Quality Program — gates that can fail, before scores that can be believed
 

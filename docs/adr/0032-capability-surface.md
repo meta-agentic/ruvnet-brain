@@ -3,7 +3,8 @@ id: ADR-032
 title: The capability surface — on, off, and the third answer we keep refusing to give: unknown
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
+updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [console, capability, honesty, derived-status, advocacy, settings, anti-nag]
 supersedes: []
