@@ -274,8 +274,14 @@ function advocacyLevel() {
   } catch { return 'important-only'; }
 }
 const ADVOCACY = advocacyLevel();
-if (ADVOCACY === 'off') quit();   // the dial's whole point: off is genuinely, verifiably silent
-const isHigh = (sev) => /^(important|high|critical)$/i.test(String(sev || '').trim());
+// THE DIAL for this emitter. anticipate produces exactly ONE class of output: a dormant-capability
+// nudge that has already cleared a high evidence bar (two independent cues + the matcher's confidence
+// floor + once-per-session). Its meaningful dial is therefore off-vs-on: `off` is verifiably silent;
+// both `important-only` (the default — the owner's "recommend on") and `all` let the gated nudge
+// through. There is NO severity axis to split on here — auditAll()/matchGoal() emit none — so a
+// severity gate at this point silences the whole feature at the default (a real regression, caught by
+// the dial integration test 2026-07-23 and removed). The `off` gate is the real, honoured control.
+if (ADVOCACY === 'off') quit();
 
 // Session identity decides what "once per session" means. Claude Code supplies session_id; when it
 // is missing we do NOT fall back to something unbounded (that would make every prompt a fresh
@@ -335,12 +341,6 @@ for (const m of matches) {
 if (!scored.length) quit();
 scored.sort((a, b) => b.conf - a.conf);
 const best = scored[0];
-
-// SILENCE RULE 0 — THE DIAL AT THE EMIT POINT. 'important-only' (the default) speaks only for
-// high-severity findings; a dormant-capability suggestion is 'normal', so at the default this hook is
-// quiet unless the user chose 'all'. Checked here, at the one place a line is emitted, so the level
-// cannot be forgotten by a future branch — the chokepoint discipline, in the one emitter that exists.
-if (ADVOCACY === 'important-only' && !isHigh(best.row.severity)) quit();
 
 // SILENCE RULE 3, and the ordering here is the whole rule: PERSIST FIRST, SPEAK SECOND. Killed
 // between the two, we lose one suggestion (silent, harmless). The other order risks speaking

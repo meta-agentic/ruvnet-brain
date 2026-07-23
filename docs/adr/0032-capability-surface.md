@@ -300,12 +300,22 @@ per-detector `compare()` decides "materially worse". Full spec in DDD-0004 aggre
 **owner decided** (2026-07-22): *"default recommendation to on, but do not force it on users."* That
 is `important-only` as the shipped default — on out of the box for the highest-evidence findings, and
 one setting away from silent. GPT-5.6's consent objection ("unprompted-by-default treats missing
-consent as permission") is answered two ways: the default speaks ONLY for high-severity findings (a
-dormant-capability *suggestion* is `normal`, so at the default this channel is quiet unless the user
-chooses `all`), and decision 1 keeps alarms out from under the dial so nothing that matters is ever
-silenced. `off` is always available and always fully honoured — that is the "do not force." Wired
-2026-07-23: `anticipate.sh` reads the level directly from `settings.json` (default `important-only`
-on a missing/unreadable file) and gates at the emit point; `advocacy: off` is verifiably silent.
+consent as permission") is answered by decision 1 — alarms stay out from under the dial, so nothing
+that *matters* is ever silenced at any level — and by `off` always being available and fully honoured
+(the "do not force").
+
+**Correction, 2026-07-23 — a real regression, caught by the dial's own integration test BEFORE it
+shipped (local commit only, never pushed).** The first wiring gated `important-only` on a finding's
+*severity*, on the theory a dormant-capability nudge is a low `SUGGESTED` that only `all` should
+surface. Verified live: `auditAll()` and `matchGoal()` emit **no severity field**, so that gate
+silenced the whole feature at the default and broke seven existing assertions. The honest model:
+**`anticipate` produces ONE class of output** — a nudge that has already cleared a high evidence bar
+(two independent cues + a confidence floor + once-per-session). Its dial is therefore **off vs on**,
+not a severity split it has no data for: `off` is verifiably silent; `important-only` (the default)
+and `all` both let the gated nudge through. The `important-only`/`all` distinction is reserved for
+emitters that genuinely have a verbosity axis (session-start promotions, health tiers); `anticipate`
+does not fake one. Reads the level from `settings.json`, defaulting to `important-only` on any
+missing/unreadable/malformed file — a broken settings file must never silently mute the brain.
 
 **6. Tone is a current fail.** Emitters say "this is now yours to fix", "MANDATE (non-negotiable)",
 "HARD RULE" (`session-start.sh:38-43,67-73`) — command-and-scold. The rewrite is fact + impact +
