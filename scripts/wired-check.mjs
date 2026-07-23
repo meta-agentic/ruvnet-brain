@@ -113,10 +113,23 @@ const STANDALONE = [
     + '../ruvnet-repos/<name> clone + paid multi-vendor LLM grading, run by hand per repo'],
   ['build-l2', 'human-run KB synthesis harness (CONTRIBUTING.md §5); synthesizes + grades L2 prose '
     + 'via a paid multi-vendor LLM panel, run by hand per repo/variant'],
+  ['build-primer', 'human-run KB synthesis harness, the same proven shape as build-l2 (its own header): '
+    + 'per-repo top-down primer over the 6 comprehension archetypes, paid-LLM synthesis, run by hand per '
+    + 'repo. Surfaced here 2026-07-23 when the comment-strip stopped counting its usage-example mentions '
+    + 'as callers — it never had a code caller, it is invoked by a person.'],
+  ['gen-images', 'human-run explainer-image generator (OpenAI gpt-image-1, dall-e-3 fallback), run by '
+    + 'hand when the explainer art needs regenerating — a paid one-shot build tool with no code caller, '
+    + 'same class as the KB synthesis harnesses above. Surfaced by the 2026-07-23 comment-strip.'],
 
   // diagnostic CLIs run by hand — same shape as memory-doctor/token-report/agentdb-fleet-doctor above:
   ['calibrate-router', 'measurement harness run by hand to calibrate router tiers on real runs; '
     + 'billing-safety wrapped (strips API keys so it can only bill the subscription)'],
+  ['correction-detect-measure', 'the measurement harness ADR-033 §2 requires, run by hand (its own '
+    + '`invokedDirectly` CLI). It walks the real transcript corpus to score correction-detect on a '
+    + 'held-out split. It was previously reported "wired" by three mentions that are ALL prose — two '
+    + 'header comments in correction-detect{,-embed}.mjs and this file\'s own HELD string — the exact '
+    + '"a gate must not wire its own dead" hole an independent regrade found; the comment-strip closes '
+    + 'the comment half, and this entry is the honest classification for a hand-run harness.'],
   ['correction-detect-embed', 'ADR-033 NEGATIVE-RESULT reference, run by hand. Built 2026-07-23 to '
     + 'test whether an embedding k-NN (the same local Xenova/all-MiniLM-L6-v2 path the KB uses) clears '
     + 'the lesson-extraction floor where the regex cannot. It does NOT: measured WORSE precision than '
@@ -160,6 +173,12 @@ const STANDALONE = [
   ['ground-before-write', 'PreToolUse (Write|Edit|MultiEdit) gate — confirmed LIVE 2026-07-23 wired '
     + 'into Stuart\'s own global ~/.claude/settings.json (ADR-0012), not this repo\'s files. '
     + 'SECURITY.md documents it as shipping inert in hooks.json by design'],
+  ['grounding-stamp', 'PostToolUse hook on search_ruvnet — the OTHER half of ground-before-write: it '
+    + 'stamps which rUv products a query grounded, read later by the write-path gate. SECURITY.md §"four '
+    + 'more scripts" names it explicitly as shipping INERT with every install, run only when a user\'s '
+    + 'settings.json wires it (this repo\'s .claude/settings.json does). Same ships-inert class as '
+    + 'ground-before-write above; surfaced here 2026-07-23 when the comment-strip stopped a prose mention '
+    + 'from standing in for a caller.'],
   ['kling-preflight', 'PreToolUse (Bash) gate — ships inert by design, same SECURITY.md class as '
     + 'ground-before-write. Per ADR-0014 ownership moved to the Kling skill (confirmed live: a copy '
     + 'ships at ~/.claude/skills/klingai/scripts/kling-preflight.sh); NOT currently wired into any '
@@ -195,6 +214,18 @@ const HELD = {
   'lesson-lifecycle': 'retirement + generalization for extracted lessons. Depends on '
     + 'correction-detect; wiring it alone would retire hand-written lessons on evidence that does '
     + 'not exist yet.',
+  'capability-audit': 'THE L3 GAP, and now visible instead of falsely green. The offensive half of '
+    + 'retrieval — it answers "what capability is installed and dormant?" — but nothing calls it: verified '
+    + '2026-07-23 that its only non-comment mention is its own invokedDirectly guard (self). It was '
+    + 'reported "wired" purely by JSDoc mentions in capability-registry.mjs until the comment-strip; '
+    + 'ADR-028 and 4.0-READINESS §4 both name this the single largest 4.0 gap. HELD because the fix is a '
+    + 'real decision — one in-session consumer that speaks unprompted, with a one-action permanent silence '
+    + '— not a line of wiring.',
+  'issue-fix': 'the GitHub-issue AUTO-FIXER, built but intentionally NOT wired. Verified 2026-07-23: '
+    + 'issue-watch.yml runs only issue-watch.mjs (which LISTS issues), and issue-watch.mjs spawns only '
+    + 'gh/sleep — never this. Its own yml comment says why it is gated: it "spawns a headless Claude and '
+    + 'costs money + needs credentials". Wiring it is a cost-and-consent decision the owner makes, not a '
+    + 'gap to silently close.',
 };
 
 /** Where first-party executables live. v1 knew only the first line of this table. */
@@ -272,6 +303,37 @@ export function callerPattern(fileName) {
   return new RegExp(`["'\`][^"'\`\\n]*${q}|(?:node|bash|sh|exec|spawn\\w*)\\s+[^\\n]*${q}`);
 }
 
+/**
+ * Strip comments BEFORE matching. The invocation branch of callerPattern (`node <file>`) matches a
+ * usage example in a header comment exactly as it matches a real command line — which is how, after
+ * this gate already fixed "a bare prose mention wired a module in v1", a `node scripts/…measure.mjs`
+ * line inside a comment quietly re-opened it (an independent regrade, 2026-07-23, found correction-
+ * detect-measure.mjs reported "wired" by three comment/string mentions, one of them this file's own
+ * HELD reason). Removing comments closes the comment form of that hole.
+ *
+ * Conservative by construction: over-stripping a `//` that lives inside a string (a URL) can only ever
+ * DROP a candidate line, never invent one — and a genuine caller is an import / require / node-exec,
+ * never a URL — so this can hide a prose mention but cannot hide a real caller. The `[^:]` guard keeps
+ * `https://…` from eating its own line. String LITERALS that name a module (e.g. a documentation
+ * string) are deliberately NOT stripped — that is a separate, rarer shape, and the module it would
+ * mis-wire here is instead classified honestly in STANDALONE.
+ */
+export function stripComments(src, ext) {
+  const jsLike = ['.mjs', '.js', '.cjs', '.ts', '.mts'].includes(ext);
+  const shLike = ['.sh', '.yml', '.yaml'].includes(ext);
+  if (!jsLike && !shLike) return src;                // .json has no line-comment syntax
+  // ONLY blank a line that is ENTIRELY a comment (trimmed, it starts with the comment marker). This is
+  // the deliberately narrow, provably-safe version. An earlier attempt span-matched `/*…*/` globally and
+  // a `/*` sitting inside a line-comment made it swallow real code across many lines — it hid
+  // sign-bundle.mjs's genuine caller in self-update.mjs:353 (execFileSync([... 'scripts/sign-bundle.mjs'])).
+  // A REAL invocation never lives on a whole-line-comment line, so this cannot hide a caller; block and
+  // inline comments are left untouched (a caller-shaped mention there is rare and not worth the span risk),
+  // and JSDoc `*` bodies are NOT matched (a `*gen()` line is real code). Every false caller the regrade
+  // found — `// … scripts/…measure.mjs` usage examples — is a whole-line `//`, so this closes exactly it.
+  const marker = jsLike ? '//' : '#';
+  return src.split('\n').map((l) => (l.trim().startsWith(marker) ? '' : l)).join('\n');
+}
+
 /** Count REAL callers. Tests excluded deliberately: all seven failures had passing tests. */
 export function callersOf(mod, files, repo = REPO) {
   const re = callerPattern(mod.file);
@@ -282,7 +344,7 @@ export function callersOf(mod, files, repo = REPO) {
     if (isTestFile(rel)) continue;              // a test is not a caller
     let src = '';
     try { src = fs.readFileSync(f, 'utf8'); } catch { continue; }
-    if (re.test(src)) hits.push(rel);
+    if (re.test(stripComments(src, path.extname(f)))) hits.push(rel);
   }
   return hits;
 }

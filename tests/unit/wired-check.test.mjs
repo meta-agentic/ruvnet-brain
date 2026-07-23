@@ -61,6 +61,33 @@ describe('the predicate — a mention is not a caller', () => {
     w('scripts/other.mjs', '// this is proven behaviour, approved and improved\n');
     expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/prove.mjs')).toBe('unwired');
   });
+
+  // The regrade (2026-07-23) found correction-detect-measure.mjs "wired" by a `node scripts/…measure.mjs`
+  // usage example living in a header comment — the invocation branch of callerPattern matched prose.
+  it('an INVOCATION-shaped usage example in a whole-line // comment is NOT a caller', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/other.mjs', '// run it by hand: node scripts/widget.mjs --flag\nexport const y = 2;\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('unwired');
+  });
+
+  it('a backticked path inside a whole-line // comment is NOT a caller', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/other.mjs', '// see `scripts/widget.mjs` for the details\nexport const y = 2;\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('unwired');
+  });
+
+  it('a REAL caller between a // that contains /* and a later */ STILL counts — the over-strip regression', () => {
+    // The exact bug an early comment-strip introduced and this guards against forever: a global
+    // /*…*/ regex span-matched from the `/*` sitting inside a line-comment across real code to the next
+    // `*/`, eating a genuine caller (it hid sign-bundle.mjs's execFileSync in self-update.mjs). The
+    // line-scoped strip blanks only the whole-line // comment and leaves the invocation intact.
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/caller.mjs',
+      '// turn this off /* flaky, see the notes below\n'
+      + "execFileSync(NODE, ['scripts/widget.mjs']);\n"
+      + 'const z = 1; /* a real block comment */\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
+  });
 });
 
 describe('a test is not a caller — the exclusion that is the entire point', () => {
