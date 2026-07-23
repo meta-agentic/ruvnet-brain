@@ -295,13 +295,17 @@ runtime's structured output, which would be a test with no teeth. DDD-0004 §"Th
 `{v, detectorId, findingId, state, severity, material-bands}`, excluding timestamps/prose/paths; a
 per-detector `compare()` decides "materially worse". Full spec in DDD-0004 aggregate 4.
 
-**5. The default posture is `ask-at-install`.** The reviewers split — Fable: default `important-only`
-(speaks out of the box); GPT-5.6: ask once at install, recommend Important, **preselect nothing**,
-and stay silent until answered, because unprompted-by-default speech "treats missing consent as
-permission to interrupt." **Decision: GPT-5.6's posture.** It is the faithful reading of the owner's
-"recommend on but do not force it on users," and Fable's one objection ("silence is not health") is
-already answered by decision 1 — alarms bypass the dial, so a broken brain still gongs even at unset.
-`important-only` remains the *recommended* value; it is not applied until the user is asked.
+**5. The default posture is `important-only`.** The reviewers split — Fable: default `important-only`
+(speaks out of the box); GPT-5.6: ask at install, preselect nothing, silent until answered. The
+**owner decided** (2026-07-22): *"default recommendation to on, but do not force it on users."* That
+is `important-only` as the shipped default — on out of the box for the highest-evidence findings, and
+one setting away from silent. GPT-5.6's consent objection ("unprompted-by-default treats missing
+consent as permission") is answered two ways: the default speaks ONLY for high-severity findings (a
+dormant-capability *suggestion* is `normal`, so at the default this channel is quiet unless the user
+chooses `all`), and decision 1 keeps alarms out from under the dial so nothing that matters is ever
+silenced. `off` is always available and always fully honoured — that is the "do not force." Wired
+2026-07-23: `anticipate.sh` reads the level directly from `settings.json` (default `important-only`
+on a missing/unreadable file) and gates at the emit point; `advocacy: off` is verifiably silent.
 
 **6. Tone is a current fail.** Emitters say "this is now yours to fix", "MANDATE (non-negotiable)",
 "HARD RULE" (`session-start.sh:38-43,67-73`) — command-and-scold. The rewrite is fact + impact +

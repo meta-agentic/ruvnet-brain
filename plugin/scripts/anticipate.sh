@@ -258,6 +258,25 @@ if (!ev || typeof ev !== 'object') quit();
 const prompt = [ev.prompt, ev.user_prompt, ev.input].find((v) => typeof v === 'string' && v.trim()) || '';
 if (prompt.trim().length < 12) quit();
 
+// THE DIAL, ENFORCED (ADR-032 / DDD-0004 "The three channels"). This hook is the ADVOCACY channel —
+// unsolicited suggestions — so the user's `advocacy` level governs whether it may speak. Alarms live
+// in session-start.sh and bypass this by design; nothing here can silence a broken-brain warning.
+// Read the settings file DIRECTLY (no ESM import) so a missing module path can never turn the dial
+// into a no-op — the exact failure that left it declared-but-dead. Default is 'important-only' (the
+// owner's "recommend on, do not force"): on out of the box for important findings, one setting away
+// from silent. Unreadable/absent settings resolve to that same default rather than to unbounded speech.
+function advocacyLevel() {
+  try {
+    const f = process.env.RUVNET_SETTINGS_FILE
+      || path.join(os.homedir(), '.config', 'ruvnet-brain', 'settings.json');
+    const v = JSON.parse(fs.readFileSync(f, 'utf8')).advocacy;
+    return (v === 'off' || v === 'important-only' || v === 'all') ? v : 'important-only';
+  } catch { return 'important-only'; }
+}
+const ADVOCACY = advocacyLevel();
+if (ADVOCACY === 'off') quit();   // the dial's whole point: off is genuinely, verifiably silent
+const isHigh = (sev) => /^(important|high|critical)$/i.test(String(sev || '').trim());
+
 // Session identity decides what "once per session" means. Claude Code supplies session_id; when it
 // is missing we do NOT fall back to something unbounded (that would make every prompt a fresh
 // session and turn this hook into the nag it exists to avoid). A cwd+day key keeps the promise
@@ -316,6 +335,12 @@ for (const m of matches) {
 if (!scored.length) quit();
 scored.sort((a, b) => b.conf - a.conf);
 const best = scored[0];
+
+// SILENCE RULE 0 — THE DIAL AT THE EMIT POINT. 'important-only' (the default) speaks only for
+// high-severity findings; a dormant-capability suggestion is 'normal', so at the default this hook is
+// quiet unless the user chose 'all'. Checked here, at the one place a line is emitted, so the level
+// cannot be forgotten by a future branch — the chokepoint discipline, in the one emitter that exists.
+if (ADVOCACY === 'important-only' && !isHigh(best.row.severity)) quit();
 
 // SILENCE RULE 3, and the ordering here is the whole rule: PERSIST FIRST, SPEAK SECOND. Killed
 // between the two, we lose one suggestion (silent, harmless). The other order risks speaking

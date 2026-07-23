@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.12-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.9.12--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.13-dev — updated 2026-07-21 06:00 EDT](https://img.shields.io/badge/version_3.9.13--dev-updated_2026--07--21_06:00_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -58,15 +58,24 @@
 
 ## What's new in 3.9 — it anticipates, and it learns whether it was right
 
-**Shipped 2026-07-22.** Two levels of the proactivity ladder landed together.
+**Building toward L4/L5 (3.9.x, dev).** The mechanisms for the top two rungs of the proactivity
+ladder are built and wired — but they are **not yet verified to 4.0's bar**, which requires all five
+of ADR-028's test classes green under independent grading. Until then, [ADR-028](docs/adr/0028-what-proactive-means.md)
+grades the shipped, *verified* state at **L2–L3**, and `-dev` is the honest version. 4.0 is claimed
+only when L3+L4+L5 are each measured, not when the code merely exists.
 
-- **L4 Anticipatory.** It infers what you're *trying to do* and names the capability that serves
-  that goal — before you hit the wall. The design is built to stay quiet: a match needs **two
+- **L4 Anticipatory (mechanism built).** It infers what you're *trying to do* and names the capability
+  that serves that goal — before you hit the wall. Built to stay quiet: a match needs **two
   independent cues** (the problem AND that the topic is your AI workflow), so near-misses get
-  silence. Measured: **0 false positives** across the negative table, fires on a genuine match.
-- **L5 Compounding.** Advocacy now learns whether it was right. A dismissal is evidence about
-  **fit, not importance**, so the budget is asymmetric: a suggestion dies on one dismissal; an
-  important finding needs three and gets a state-change reprieve. One action mutes anything forever.
+  silence. Measured on the negative table: **0 false positives**; fires on a genuine match. What's
+  still owed for L4: the full five-class verification, independently graded.
+- **L5 Compounding (mechanism built, metric now live).** Advocacy records whether it was right —
+  precision = acted-on ÷ offered, ADR-028's line between advocating and nagging. The numerator is
+  now **derived from an observed state transition** (offered → later switched on = applied) and
+  surfaced in the console; it reads an honest `null` until enough offers resolve, never a fabricated
+  score. A dismissal is evidence about **fit, not importance** — asymmetric budget: a suggestion dies
+  on one dismissal, an important finding needs three. What's still owed for L5: real precision data
+  from use, and the cross-project promotion test.
 - **The admin page is rebuilt around deltas**, not lifetime totals — and the humans who wrote in
   are promoted to the top, ranked by recency rather than lifetime count.
 
