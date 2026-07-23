@@ -181,7 +181,7 @@ const lines = [
   ...open.slice(0, 8).map((i) => `  ☐ ${i.text}`),
   ...(open.length > 8 ? [`  … and ${open.length - 8} more`] : []),
   '',
-  'Mark items done as you complete them:  node scripts/continuation-gate.mjs --done "<item text>"',
+  'Mark items done as you complete them:  node plugin/scripts/continuation-gate.mjs --done "<item text>"',
 ];
 
 process.stdout.write(JSON.stringify({
