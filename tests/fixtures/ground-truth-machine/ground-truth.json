@@ -1,0 +1,15 @@
+{
+  "_doc": "ADR-041 ground-truth manifest. THE DENOMINATOR AUTHORITY, and it speaks only STATE-VOCABULARY — never a probe command, never an artifact shape. scripts/capability-registry.mjs NEVER reads this file; the builder (tests/helpers/ground-truth-machine.mjs) reads it and writes REAL artifacts, and the detector maps artifact->state independently. That separation of authorities is what kills the echo trap: the detector cannot echo a manifest it never sees.",
+  "_cohort_note": "First increment: the two HOME-scoped, pure-JSON capabilities, fully grounded against capability-registry.mjs (session-capture -> ~/.claude/settings.json capture hooks at BOTH boundaries; mcp-servers -> ~/.claude.json mcpServers). ADR-041's full cohort adds memory-distillation (a real sqlite3 .swarm/memory.db) and workflow-pattern-learning (~/.claude-flow/neural/stats.json) — same pattern, tracked as the follow-up. With 2 caps, breaking one detector gives recall 1/2 = 0.50 < 0.80, so the mutation test's falsifiability already holds at this size.",
+  "cohort": ["session-capture", "mcp-servers"],
+  "states": {
+    "healthy": {
+      "session-capture": "on",
+      "mcp-servers": "on"
+    },
+    "dormant": {
+      "session-capture": "off",
+      "mcp-servers": "off"
+    }
+  }
+}

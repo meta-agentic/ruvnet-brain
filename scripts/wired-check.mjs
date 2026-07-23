@@ -124,6 +124,11 @@ const STANDALONE = [
   // diagnostic CLIs run by hand — same shape as memory-doctor/token-report/agentdb-fleet-doctor above:
   ['calibrate-router', 'measurement harness run by hand to calibrate router tiers on real runs; '
     + 'billing-safety wrapped (strips API keys so it can only bill the subscription)'],
+  ['proactivity-metrics', 'ADR-041 recall + false-alarm harness. Its own CLI prints the two metrics, and '
+    + 'tests/integration/proactivity-ground-truth + tests/mutation/proactivity-detector-mutation exercise '
+    + 'it — a test is not a caller, so it registers here like calibrate-router. It spawns the REAL '
+    + 'capability-registry.mjs against a ground-truth scratch machine to measure detector-recall and '
+    + 'false-alarm IN-FENCE (the two ADR-028 metrics that do not need the deploy gate).'],
   ['correction-detect-measure', 'the measurement harness ADR-033 §2 requires, run by hand (its own '
     + '`invokedDirectly` CLI). It walks the real transcript corpus to score correction-detect on a '
     + 'held-out split. It was previously reported "wired" by three mentions that are ALL prose — two '

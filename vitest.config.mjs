@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
-    include: ['tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs'],
+    include: ['tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs', 'tests/mutation/*.test.mjs'],
     // Windows runners spawn processes MUCH slower than macOS/Linux (Git Bash startup dominates), and
     // a large slice of this suite deliberately exercises real shell hooks as subprocesses rather than
     // mocking them. vitest's 5s default is marginal there — hook-battery and token-meter timed out on
