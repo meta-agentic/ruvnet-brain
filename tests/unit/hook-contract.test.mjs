@@ -102,14 +102,57 @@ describe('Stop-hook loop protection (the 2026-07-22 regression)', () => {
     expect(r.stderr).not.toContain('visible item');
   });
 
-  it('nudges at most ONCE per session — a per-turn nudge is a forced turn every turn', () => {
+  it('re-engages on every fresh natural stop — the "don\'t stop" fix (ADR-043)', () => {
+    // ADR-043: the once-per-session `nudgedSession` guard silenced the gate after ONE nudge, so
+    // re-engagement died and the model could stop mid-goal for the rest of a session with no push-back.
+    // A fresh natural stop (stop_hook_active:false) with open work must nudge EVERY time. This is
+    // bounded not by a per-session cap but by the stop_hook_active guard (tested above): the NEXT stop
+    // in a forced-continuation chain carries stop_hook_active:true and goes silent, so each episode
+    // forces exactly one continuation. The 2026-07-22 runaway was caused by IGNORING stop_hook_active,
+    // not by re-engaging — so re-engagement is safe while that guard is live.
+    // Cooldown disabled here so the two rapid fires test PURE re-engagement; the cooldown is proven
+    // separately below. In production the two stops are minutes apart and the cooldown never bites.
     const ledger = tempLedger([{ text: 'repeat me', done: false }]);
-    const env = { RUVNET_WORK_LEDGER: ledger };
-    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-once' }, env);
-    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-once' }, env);
+    const env = { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' };
+    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-reengage' }, env);
+    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-reengage' }, env);
 
     expect(first.stdout).toContain('additionalContext');
-    expect(second.stdout).toBe('');
+    expect(second.stdout).toContain('additionalContext');   // was `toBe('')` — the once-per-session bug ADR-043 fixes
+  });
+
+  it('does NOT force when the stdin payload is unreadable — an EAGAIN must not launder into a loop (ADR-043)', () => {
+    // Fable red-team #1: the old readHookInput returned {} on a parse failure, which under a forcing
+    // gate reads as "fresh stop" → a machine-wide loop. Garbage on stdin must yield silence, not force.
+    const ledger = tempLedger([{ text: 'real open work', done: false }]);
+    const r = spawnSync('node', [CONTINUATION_GATE], {
+      input: '}{ not json at all',
+      encoding: 'utf8',
+      env: { ...process.env, RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' },
+      timeout: 15000,
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout ?? '').toBe('');   // open work present, but the payload could not be confirmed → no force
+  });
+
+  it('suppresses a second force within the cooldown window — the self-owned loop cap (ADR-043)', () => {
+    // Belt-and-braces beyond stop_hook_active: two forces cannot land inside COOLDOWN_MS (default 20s).
+    const ledger = tempLedger([{ text: 'cooldown me', done: false }]);
+    const env = { RUVNET_WORK_LEDGER: ledger };   // default cooldown, no override
+    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-cd' }, env);
+    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-cd' }, env);
+    expect(first.stdout).toContain('additionalContext');   // first forces, records lastForcedAt
+    expect(second.stdout).toBe('');                        // second within the window → suppressed
+  });
+
+  it('does NOT force on a STALE item — week-old debris must not compel a continuation (ADR-043)', () => {
+    // Fable red-team #3: a stale item pressuring every turn breeds mark-done-without-doing. TTL = 24h.
+    const old = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const ledger = tempLedger([{ text: 'ancient abandoned item', done: false, at: old }]);
+    const r = fireHook('node', [CONTINUATION_GATE],
+      { stop_hook_active: false, session_id: 'sess-stale' },
+      { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
+    expect(r.stdout).toBe('');   // only stale items remain → silence, not a forced continuation
   });
 
   it('stays silent when nothing is outstanding — a guard that always fires carries no information', () => {

@@ -145,7 +145,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/continuation-gate.mjs\" || true"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/continuation-gate.mjs\" || true",
+            "timeout": 10
           }
         ]
       }
