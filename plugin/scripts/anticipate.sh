@@ -246,7 +246,7 @@ if (!advocacy || typeof advocacy.shouldStillOffer !== 'function' || typeof advoc
   quit();
 }
 const {
-  record, shouldStillOffer, outcomesFor, summarize, pendingOffers,
+  record, shouldStillOffer, outcomesFor, summarize, pendingOffers, reconcileApplied,
   ACTIONS, DISMISSAL_BUDGET, weightClass, stateHashOf,
 } = advocacy;
 const OUTCOMES_FILE = process.env.RUVNET_ADVOCACY_OUTCOMES
@@ -379,6 +379,16 @@ const MIN_CONFIDENCE = typeof floor === 'number' && Number.isFinite(floor) ? flo
 
 let rows = [];
 try { rows = auditAll({ project: process.cwd() }) || []; } catch { quit(); }
+
+// CONTINUOUS RECONCILIATION — the L5 loop must not depend on someone opening the console. This is the
+// PUSH surface (it already runs every prompt); reconcileApplied() credits an APPLIED for any capability
+// we OFFERED that is now switched on. It is idempotent (a resolved offer stops being pending, so a
+// re-run is a no-op), writes only when there is a real observed on-state WITH a pending offer to close,
+// and never throws. Wiring it here is what makes precision computable from ordinary use instead of only
+// when /api/capabilities is polled — ADR-028's own named failure is a PULL surface guarding an anti-pull
+// metric. Guarded on typeof so an older advocacy module that predates this export degrades to prior
+// behaviour rather than throwing; a lost credit costs one ledger row, never the hook.
+try { if (typeof reconcileApplied === 'function') reconcileApplied(rows, { file: OUTCOMES_FILE }); } catch { /* never break the hook we measure */ }
 
 // SILENCE RULE 1. 'off' is the only state that has earned a sentence: installed, and switched off.
 // 'unknown' is a detector saying it could not tell — advocating on it would be fabricating a fault,

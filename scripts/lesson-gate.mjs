@@ -414,11 +414,22 @@ const blocking = inForce.filter(isBlocking);
 const blockCapable = inForce.filter((l) => !isBlocking(l)
   && (l.enforcement === ENFORCEMENT.BLOCK || l.intendedEnforcement === ENFORCEMENT.BLOCK));
 
+/** Cut at the last word boundary inside the cap, with an ellipsis, rather than mid-word — the live
+ *  output truncated "…the ris" (from "the risk"), which reads as a bug in the lesson, not a length
+ *  cap. Falls back to a hard slice when there is no space to break on (a single very long token).
+ *  Same rule anticipate.sh already applies to its `why`. */
+function clip(text, max) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const brk = cut.lastIndexOf(' ');
+  return `${(brk > max * 0.6 ? cut.slice(0, brk) : cut).trimEnd()}…`;
+}
+
 /** One lesson, rendered. Evidence is what makes this a lesson rather than a nag — it says why, from
  *  real history, in the user's own words. Counts come from the store; nothing here is invented. */
 function renderLesson(l, mark) {
   const out = [`  ${mark} ${l.statement}`];
-  if (l.evidence?.[0]?.observed) out.push(`      ${String(l.evidence[0].observed).slice(0, 150)}`);
+  if (l.evidence?.[0]?.observed) out.push(`      ${clip(String(l.evidence[0].observed), 150)}`);
   if (l.repeatCount >= 3) out.push(`      you have had to say this ${l.repeatCount} times across ${l.projects.length} project(s)`);
   return out.join('\n');
 }

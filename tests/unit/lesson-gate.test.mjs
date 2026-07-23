@@ -104,6 +104,21 @@ describe('a NUDGE informs and never refuses', () => {
     expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).toMatch(/advisory/i);
   });
 
+  test('truncates long evidence at a WORD boundary, never mid-word', () => {
+    // The live defect: the evidence line ended "…the ris" (from "the risk"), which reads as a bug in
+    // the lesson, not a length cap. A recognizable marker word is placed so that char 150 falls INSIDE
+    // it: the old slice(0,150) leaked the fragment "ZZUNMISTA"; the fixed clip() drops the whole word
+    // and ends on an ellipsis. This test FAILS on the pre-fix code — which is the only kind worth having.
+    const head = 'x'.repeat(140) + ' ';                 // one space, at index 140
+    const observed = `${head}ZZUNMISTAKABLEWORDZZ and a tail that follows well past the cap`;
+    writeStore([blockLesson({ evidence: [{ observed }] })]);
+    const ctx = JSON.parse(runGate(['--event', 'Stop', '--trigger', 'claim-done']).stdout)
+      .hookSpecificOutput.additionalContext;
+    expect(ctx).not.toContain('ZZUNMISTA');             // no mid-word fragment (the pre-fix bug)
+    expect(ctx).not.toContain('ZZUNMISTAKABLEWORDZZ');  // and not the whole straddling word either
+    expect(ctx).toContain('…');                          // it announced the cut instead of hiding it
+  });
+
   test('hookEventName names the REAL harness event, or the envelope is discarded', () => {
     // "PreToolUse-write" is our internal key. Emitting it here would produce a well-formed JSON
     // document the harness throws away — a nudge that tests green and delivers nothing.
