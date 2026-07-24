@@ -80,9 +80,9 @@ const STANDALONE = [
   // Run by the launchd nightly, which lives OUTSIDE this repo — so no in-repo caller can exist.
   // This is the one category the scanner genuinely cannot reach, and saying so is the honest form.
   ['self-update', 'launchd nightly (out-of-repo scheduler)'],
-  ['count-chunks', 'launchd nightly (out-of-repo scheduler)'],
-  ['brain-stamp', 'launchd nightly (out-of-repo scheduler)'],
-  ['lesson-promote', 'launchd nightly (out-of-repo scheduler), plus a human'],
+  ['count-chunks', 'human-run CLI — recount + restamp chunk surfaces (--check for drift); no scheduler'],
+  ['brain-stamp', 'invoked by self-update.mjs:249, the nightly launchd driver (com.ruvnet.brain-nightly)'],
+  ['lesson-promote', 'human-run CLI — promotion is manual (--apply); no scheduler yet (automation is ADR-029 #4, open)'],
   ['behavioral-l1-l4', 'behavioural harness invoked by its own test file — not a product path'],
 
   // ADDED 2026-07-23 (P7 sweep, ADR-037 honesty bar — each reason verified against reality below,
