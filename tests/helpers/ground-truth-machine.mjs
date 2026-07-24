@@ -27,12 +27,29 @@ export function readManifest() {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
 }
 
-// The SAME regex capability-registry.mjs:210 applies — imported here ONLY to self-verify the artifact we
-// wrote actually satisfies the probe's own condition, never to classify state (that is the detector's job).
-const CAPTURE_COMMAND = /(agentdb|autocapture|auto-capture|session-end|session_end|sessionend|precompact|pre-compact|memory[\s_-]*(store|save|persist)|\bruflo\b[^"]*\b(memory|session|hooks)\b|claude-flow[^"]*\b(memory|session|hooks)\b|(capture|persist|snapshot|checkpoint)[\w-]*\.(mjs|js|sh|py))/i;
-
-// A command string that satisfies CAPTURE_COMMAND — a real state-persisting hook, not a placeholder.
-const CAPTURE_CMD = 'node agentdb-autocapture.mjs';
+// ── THE INDEPENDENT ORACLE (ADR-041's separation of authorities — actually closed, 2026-07-24) ────────
+// This file USED TO copy capability-registry.mjs:210's capture-command regex and use it to "verify" the
+// artifact it had just written. That is the echo trap ADR-041 claimed to close, not a closure of it: the
+// oracle and the detector shared ONE predicate, so the harness could only ever prove "the detector matches
+// a string I built to match it" — never that the detector is CORRECT. A copied pattern is worse than an
+// import: identical circularity, and it can silently drift. GPT-5.6-Sol caught this on 2026-07-24, and it
+// is why the recall / false-alarm numbers were retracted until this fix.
+//
+// The oracle is now STRUCTURAL + REFERENTIAL and names no detector rule:
+//   session-capture ON  = a command is wired at BOTH PreCompact and SessionEnd, AND that command invokes a
+//                         capture script that REALLY EXISTS on disk (the one this fixture writes).
+//   session-capture OFF = neither boundary carries such a command.
+// That shape is grounded in how rUv actually persists session state — a hook command at the
+// compaction/session boundary invoking a real persistence script (searched live 2026-07-24:
+// agentic-flow/.claude/helpers/context-persistence-hook.mjs, ADR-051, which intercepts PreCompact/
+// SessionStart; and ruv-fann's session-end --save-memory Stop hook) — not reverse-engineered from the
+// detector's pattern.
+//
+// Consequence, and the whole point of a ground truth: if the DETECTOR's predicate is wrong (it fails to
+// recognise a real capture hook), the fixture still describes the machine correctly and the detector's
+// error SHOWS UP as a miss in recall / a false alarm. Under the old shared-predicate design that entire
+// class of bug was structurally invisible.
+const CAPTURE_SCRIPT_NAME = 'agentdb-autocapture.mjs';
 
 function writeJSON(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -55,8 +72,13 @@ export function buildState(stateName, rootDir) {
 
   // ── session-capture -> ~/.claude/settings.json ────────────────────────────────────────────────────
   const settingsPath = path.join(home, '.claude', 'settings.json');
+  // The oracle's REFERENT: a capture script that really exists on disk. Its presence — not a pattern match
+  // — is what makes "a capture hook is wired here" true independently of the detector.
+  const capturePath = path.join(home, '.claude', 'hooks', CAPTURE_SCRIPT_NAME);
   if (want['session-capture'] === 'on') {
-    const captureGroup = [{ matcher: '.*', hooks: [{ type: 'command', command: CAPTURE_CMD }] }];
+    fs.mkdirSync(path.dirname(capturePath), { recursive: true });
+    fs.writeFileSync(capturePath, '#!/usr/bin/env node\n// persists session state at the compaction/session boundary\n');
+    const captureGroup = [{ matcher: '.*', hooks: [{ type: 'command', command: `node ${capturePath}` }] }];
     writeJSON(settingsPath, { hooks: { PreCompact: captureGroup, SessionEnd: captureGroup } });
   } else {
     // EXISTS but empty hooks -> OFF, not ABSENT.
@@ -71,7 +93,7 @@ export function buildState(stateName, rootDir) {
     writeJSON(claudeJsonPath, { mcpServers: {} });
   }
 
-  verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want });
+  verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath });
 
   return { home, project, cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }) };
 }
@@ -81,13 +103,16 @@ export function buildState(stateName, rootDir) {
  * silently-wrong artifact (the "real-state echo one layer up" ADR-041's duel flagged) is caught before
  * the detector ever runs. This checks ARTIFACT correctness, not detector output.
  */
-export function verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want }) {
+export function verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath }) {
   const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   const commandsAt = (boundary) => (settings.hooks?.[boundary] || [])
     .flatMap((g) => (Array.isArray(g?.hooks) ? g.hooks : []))
-    .map((h) => (typeof h?.command === 'string' ? h.command : ''))
-    .filter((c) => CAPTURE_COMMAND.test(c));
-  const captureBoth = commandsAt('PreCompact').length > 0 && commandsAt('SessionEnd').length > 0;
+    .map((h) => (typeof h?.command === 'string' ? h.command : ''));
+  // STRUCTURAL + REFERENTIAL — no detector predicate anywhere: a command wired at BOTH boundaries that
+  // invokes a capture script which really exists on disk. If the detector's own pattern is wrong, this
+  // still reads the machine correctly, so the detector's error becomes a visible miss instead of hiding.
+  const wiredAt = (b) => !!capturePath && commandsAt(b).some((c) => c.includes(capturePath));
+  const captureBoth = wiredAt('PreCompact') && wiredAt('SessionEnd') && fs.existsSync(capturePath);
   const wantCaptureOn = want['session-capture'] === 'on';
   if (captureBoth !== wantCaptureOn) {
     throw new Error(`ground-truth-machine[${stateName}]: settings.json does not satisfy session-capture=${want['session-capture']} (captureBoth=${captureBoth})`);
