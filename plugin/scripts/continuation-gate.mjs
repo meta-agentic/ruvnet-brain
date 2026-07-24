@@ -168,12 +168,38 @@ if (!open.length) process.exit(EXIT_ALLOW);   // nothing outstanding: silence is
  * an `at` (set by --commit-to), so only a malformed/legacy row lacks one, and forcing forever on an item of
  * UNKNOWN age is exactly the fabrication-pressure this guard exists to stop.
  */
-const STALE_MS = 24 * 60 * 60 * 1000;
-const forceable = open.filter((i) => {
-  const t = Date.parse(i.at);
-  return Number.isFinite(t) && (nowMs - t) < STALE_MS;
-});
+// CORRECTED 2026-07-24, SAME DAY IT WAS INTRODUCED — and it had already broken the gate for ~30 hours.
+//
+// The guard above was written to stop "forcing forever on an item of UNKNOWN age." That intent is
+// right and is preserved: a row with a missing or unparseable `at` is still refused, because an item
+// of unknown age can nag forever with no evidence it is real.
+//
+// What shipped was different and wrong: `(nowMs - t) < 24h` ALSO discarded items with a perfectly
+// VALID timestamp that were merely old. Measured on this machine: four genuinely-open commitments
+// aged 53-56h, `forceable` came back empty, and the gate exited EXIT_ALLOW in silence. The owner's
+// single most emphatic standing rule — "do not stop until it is done" — was enforced by a mechanism
+// that had quietly switched itself off, and the only symptom was nothing happening.
+//
+// The inversion is the lesson: OLD OPEN WORK IS THE CASE THAT MOST NEEDS THE NUDGE. Work finished in
+// an hour never reaches this gate. Work still open after two days is exactly what gets forgotten, and
+// treating age as a reason for silence hands the failure mode a timer. It is the same shape as every
+// other defect found today — silence standing in for a measurement — committed inside the guard whose
+// whole job is to prevent stopping early.
+//
+// So: age no longer gates DELIVERY, it decorates it. An old item is still forced, and the nudge SAYS
+// how old it is, which is information the reader needs rather than a reason to withhold. If a ledger
+// is genuinely abandoned, the honest fix is to mark its items done — not to let a clock silently
+// decide the commitment expired.
+const forceable = open.filter((i) => Number.isFinite(Date.parse(i.at)));
 if (!forceable.length) process.exit(EXIT_ALLOW);
+
+/** Age, only ever used to LABEL an item — never to suppress one. See the note above. */
+const ageLabel = (i) => {
+  const h = (nowMs - Date.parse(i.at)) / 3_600_000;
+  if (h < 1) return '';
+  if (h < 24) return ` (committed ${Math.round(h)}h ago)`;
+  return ` (committed ${Math.round(h / 24)}d ago — still open)`;
+};
 
 /**
  * LOOP-SAFETY 3 (belt-and-braces this file OWNS — Fable #1, made fail-closed + race-safe by the GPT-5.6-Sol
@@ -206,10 +232,27 @@ const lines = [
   'EVERY item is genuinely done or blocked; if one is blocked, say why in a single line and move to',
   'the next — never stop on the first obstacle, and never manufacture a reason to go quiet.',
   '',
-  ...forceable.slice(0, 8).map((i) => `  ☐ ${i.text}`),
+  // Age is LABELLED, never used to suppress — an item open for days is the one most worth naming.
+  ...forceable.slice(0, 8).map((i) => `  ☐ ${i.text}${ageLabel(i)}`),
   ...(forceable.length > 8 ? [`  … and ${forceable.length - 8} more`] : []),
   '',
   'Mark each item done as you complete it:  node plugin/scripts/continuation-gate.mjs --done "<exact item text>"',
+  // THE HONEST EXIT, and it is what makes forcing old items safe.
+  //
+  // Fable's red-team #3 was right that a stale item pressuring every turn "breeds
+  // mark-done-without-doing". The first answer to that was a 24h TTL — which silently disabled the
+  // gate on genuine multi-day work (measured 2026-07-24: four real commitments, 53-56h old, gate mute
+  // for ~30 hours). Both failure modes are real, and they are not opposites: the pressure to fake a
+  // completion comes from being nagged with NO LEGITIMATE WAY OUT.
+  //
+  // So the resolution is neither silence nor endless nagging: keep forcing, and name the honest
+  // disposal out loud. An item that is genuinely dead gets cleared — a deliberate, recorded act —
+  // instead of expiring on a timer nobody sees, or being falsely marked done to stop the noise.
+  ...(forceable.some((i) => (nowMs - Date.parse(i.at)) > 24 * 3_600_000)
+    ? ['', 'Some of these are days old. If one is genuinely no longer real, say so and CLEAR it —',
+       'that is a legitimate answer and the right one. What is never acceptable is marking it done',
+       'without doing it, or letting it age quietly out of view.']
+    : []),
 ];
 
 process.stdout.write(JSON.stringify({

@@ -149,14 +149,29 @@ describe('Stop-hook loop protection (the 2026-07-22 regression)', () => {
     expect(second.stdout).toBe('');                        // second within the window → suppressed
   });
 
-  it('does NOT force on a STALE item — week-old debris must not compel a continuation (ADR-043)', () => {
-    // Fable red-team #3: a stale item pressuring every turn breeds mark-done-without-doing. TTL = 24h.
+  it('DOES force on an old item, and offers the honest exit instead of expiring it (ADR-043 resolved)', () => {
+    // REVERSED 2026-07-24, with the reason recorded — this test was RIGHT about the risk and WRONG
+    // about the remedy.
+    //
+    // Fable red-team #3: "a stale item pressuring every turn breeds mark-done-without-doing." True.
+    // The first answer was a 24h TTL. Measured consequence on this machine: four GENUINELY OPEN
+    // commitments aged 53-56h, `forceable` came back empty, and the gate went silent for ~30 hours —
+    // enforcing the owner's most emphatic standing rule by not enforcing it, with no symptom at all.
+    // ADR-043 logged this as an OPEN QUESTION (§Open questions #2), never a settled decision.
+    //
+    // Both risks are real and they are NOT opposites. The pressure to fake a completion comes from
+    // being nagged with no legitimate way out. So: an item with a VALID timestamp forces regardless
+    // of age, its age is LABELLED rather than hidden, and the nudge names clearing as an honest
+    // answer. Unknown age (missing/unparseable `at`) is still refused — that was always the real
+    // guard, and it is covered by tests/unit/continuation-gate.test.mjs.
     const old = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
     const ledger = tempLedger([{ text: 'ancient abandoned item', done: false, at: old }]);
     const r = fireHook('node', [CONTINUATION_GATE],
       { stop_hook_active: false, session_id: 'sess-stale' },
       { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
-    expect(r.stdout).toBe('');   // only stale items remain → silence, not a forced continuation
+    expect(r.stdout, 'a real open commitment must never expire on a timer').toContain('additionalContext');
+    expect(r.stdout, 'its age must be stated, not hidden').toMatch(/committed 2d ago/);
+    expect(r.stdout, 'clearing must be offered as the honest alternative to faking it').toMatch(/CLEAR it/);
   });
 
   it('does NOT force on an empty {} payload — not a real Stop payload (GPT-5.6-Sol review)', () => {
