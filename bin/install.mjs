@@ -1932,6 +1932,91 @@ export async function offerTelemetry(cacheDir) {
  * So: persistent background jobs and global-config edits require their OWN explicit flag. There is
  * no combination of `-y` alone that installs a daemon.
  */
+/**
+ * THE PLAN — everything this run may do, stated BEFORE the first thing is done.
+ *
+ * WHY THIS EXISTS (real user feedback, 2026-07-24, relayed by the owner): people were not running
+ * `npx ruvnet-brain` *because they could not tell what it would do.* One of them, a sophisticated
+ * user, put the general objection precisely: he dislikes "the virus/plugin approach… it all works in
+ * memory, with invisible hooks and all."
+ *
+ * The installer already asked consent for every high-impact step — watchdog, nightly updates,
+ * telemetry, stack tools, statusline. That was necessary and NOT sufficient: consent granted one
+ * question at a time, after the run has already started, never tells you the SHAPE of what you
+ * agreed to. You cannot decline a thing you have not yet been told is coming, and a person deciding
+ * whether to paste a command into their terminal is deciding about the whole run, not about step 4.
+ *
+ * So: the whole list, up front, with what each one costs you and how to undo it. Steps marked [?] are
+ * asked individually as before — this screen does not replace those prompts, it makes them
+ * predictable. Nothing here mutates anything; it prints and waits.
+ *
+ * TRUTHFULNESS RULE: every line below names a real step this file performs and a real reversal
+ * command. If a step is added to the installer and not to this list, the list becomes a lie about
+ * the installer — which is worse than having no list. Keep them together.
+ */
+async function printPlanAndConfirm() {
+  const H = os.homedir();
+  const short = (p) => p.replace(H, '~');
+
+  const steps = [
+    { auto: true,  name: 'Download the knowledge base',
+      // short() already renders $HOME as "~"; prefixing another one produced "~~/.cache/…".
+      cost: short(resolveCacheDir().cacheDir),
+      what: 'Real rUv source, on your disk, so answers cite files instead of guessing.',
+      undo: 'npx ruvnet-brain --uninstall' },
+    { auto: true,  name: 'Register the Claude Code plugin + MCP server',
+      cost: `an entry in ${short(path.join(H, '.claude'))}`,
+      what: 'Gives Claude a search_ruvnet tool. Adds no hooks you have not agreed to.',
+      undo: 'npx ruvnet-brain --uninstall' },
+    { ask: true,   name: 'Add rUv tools you are missing',
+      cost: 'npm installs, only the ones you pick',
+      what: 'So the brain can build with them, not just answer questions about them.',
+      undo: 'npm uninstall -g <tool>' },
+    { ask: true,   name: 'Nightly auto-updates',
+      cost: 'one LaunchAgent',
+      what: 'Keeps the KB and plugin current. Recommended — rUv ships fast, and a stale brain is the main way this stops being useful.',
+      undo: 'npx ruvnet-brain --disable-nightly' },
+    { ask: true,   name: 'Spend watchdog',
+      cost: 'one LaunchAgent',
+      what: 'Warns you if an agent fleet starts burning API credit unexpectedly.',
+      undo: 'npx ruvnet-brain --disable-spend-guard' },
+    { ask: true,   name: 'Status-bar version segment',
+      cost: 'one line in settings.json',
+      what: 'Shows which brain version is live while you work.',
+      undo: 'npx ruvnet-brain --no-statusline, or delete the statusLine entry' },
+    { ask: true,   name: 'Anonymous usage counts',
+      cost: 'a counter ping',
+      what: 'Installs and searches only — never your queries, your code, or your paths.',
+      undo: 'npx ruvnet-brain --no-telemetry' },
+  ];
+
+  console.log(`  ${c.bold('Here is everything this will do.')} Nothing has happened yet.\n`);
+  for (const s of steps) {
+    const mark = s.auto ? c.green('✓') : c.cyan('?');
+    console.log(`  ${mark} ${c.bold(s.name)}  ${c.dim('· ' + s.cost)}`);
+    console.log(`      ${s.what}`);
+    console.log(`      ${c.dim('undo: ' + s.undo)}\n`);
+  }
+  console.log(`  ${c.green('✓')} happens automatically.  ${c.cyan('?')} is asked first — and "no" is a complete answer.`);
+  console.log(`  ${c.dim('Every step is reversible, and `npx ruvnet-brain --what-changed` lists everything it touched.')}\n`);
+
+  // FLAG_YES means the caller already decided; a plan screen that blocks automation would break
+  // agentic-kit and every scripted install. Print it, then proceed — the information is the point,
+  // the pause is a courtesy to humans.
+  if (FLAG_YES || FLAG_AUTO || !process.stdin.isTTY) {
+    console.log(c.dim('  (non-interactive — continuing)\n'));
+    return;
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const a = await new Promise((r) => rl.question(`  ${c.cyan('?')} Continue? ${c.dim('[Y/n]')} `, r));
+  rl.close();
+  if (/^n/i.test(String(a).trim())) {
+    console.log(`\n  Stopped. Nothing was changed.\n`);
+    process.exit(0);
+  }
+  console.log('');
+}
+
 function ask(question, def = false, { blanketYes = true } = {}) {
   if (FLAG_YES && blanketYes) return Promise.resolve(true);
   if (!process.stdin.isTTY) return Promise.resolve(def);
@@ -2490,6 +2575,8 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       die(`RuvNet Brain needs Node 18 or newer — you're on ${process.version}.`, `${fix}\nThen re-run this same command — everything else is ready.`);
     }
   }
+
+  await printPlanAndConfirm();
 
   const { cacheDir, isCustom } = resolveCacheDir();
 
