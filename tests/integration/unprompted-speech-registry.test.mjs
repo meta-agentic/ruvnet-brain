@@ -49,6 +49,22 @@ function fireRuntime(event, { producers, env = {}, payload } = {}) {
     timeout: 20000,
     env: {
       ...process.env,
+      // The runtime gives ALL producers ONE 4s global deadline and then FAILS CLOSED — a producer
+      // that misses it is killed and its output discarded (unprompted-runtime.mjs:91,163-180). That
+      // is correct product behavior and is deliberately not weakened here; what is wrong is running
+      // the assertions under it, because spawning bash inside a saturated 108-file suite regularly
+      // costs more than 4s of wall clock.
+      //
+      // The visible symptom was one flaky failure: the single test asserting DELIVERY went red in 2
+      // of 3 full-suite runs while passing 5 of 5 alone. The real damage was silent and larger — a
+      // timeout yields exactly `code 0, stdout ''`, which is byte-identical to a correct drop, so
+      // the EIGHT tests asserting `stdout === ''` passed under load no matter what the drop logic
+      // did. Eight assertions that cannot fail on broken code are not tests, and they were the ones
+      // guarding the "raw bytes never reach the user" protocol rule.
+      //
+      // A generous deadline restores the meaning of both halves. The 4s default still ships; only
+      // the measurement environment changes, which is the one thing that was actually broken.
+      RUVNET_UNPROMPTED_TIMEOUT_MS: '30000',
       ...(producers ? { RUVNET_UNPROMPTED_PRODUCERS: JSON.stringify(producers) } : {}),
       ...env,
     },
@@ -421,6 +437,13 @@ describe('the drop rule: raw bytes are a protocol violation; alarms bypass every
       env: {
         CANDIDATE_LINE: JSON.stringify({ channel: 'alarm', effect: 'advisory', copy: 'BRAIN STORE UNREADABLE', hookEventName: 'UserPromptSubmit' }),
         RUVNET_SETTINGS_FILE: writeSettings('off'),   // dial off changes nothing for an alarm
+        // Every other spawn in this file passes a temp ledger; this one did not, so the alarm path
+        // recorded its OFFERED row into the user's real ~/.config ledger on every run. That is how
+        // fixture-shaped data reached the live outcome record (found by an outside grader
+        // 2026-07-24, then caught at its source by the new under-test guard in
+        // advocacy-outcomes.record()). Omitting it is now a hard failure rather than silent
+        // pollution — which is exactly why this line has to be here.
+        RUVNET_ADVOCACY_OUTCOMES: path.join(dir, 'o.jsonl'),
       },
     });
     expect(r.code).toBe(0);
