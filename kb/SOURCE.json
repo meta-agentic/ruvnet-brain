@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-24T19:56:15.087Z",
+  "builtUtc": "2026-07-24T19:59:39.474Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "cognitum-claude-plugin": {
-      "kbName": "cognitum-claude-plugin",
-      "sourceRepo": "https://github.com/cognitum-one/cognitum-claude-plugin",
-      "sourceCommit": "83f7adb33194bed33ee552b24423e5117f527687",
-      "sourceDescribe": "83f7adb",
-      "builtUtc": "2026-07-24T19:56:15.087Z",
+    "cognitum-cogs": {
+      "kbName": "cognitum-cogs",
+      "sourceRepo": "git@github.com:cognitum-one/cogs.git",
+      "sourceCommit": "fec275df069288b2cc76ebd74618e20a31003972",
+      "sourceDescribe": "fec275d",
+      "builtUtc": "2026-07-24T19:59:39.474Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-claude-plugin-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs cognitum-claude-plugin"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-cogs-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs cognitum-cogs"
     }
   }
 }

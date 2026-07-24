@@ -322,6 +322,28 @@ if (has('--publish')) {
     );
     fs.writeFileSync(README, readme);
 
+    // FAN THE BUMP OUT ACROSS ROOT'S OTHER SURFACES — the step whose absence deadlocked publishing.
+    //
+    // The two writes above bump ROOT's plugin.json and README because the BUNDLE has to be stamped
+    // with its own release tag (issue #35). The other five surfaces — package.json, kb/package.json,
+    // data/manifest.json, primer/ruvnet-primer.md, explainer/index.html — were left behind, because
+    // sync-version.mjs was only ever run inside the publish worktree.
+    //
+    // That is fine for the COMMIT (the worktree is self-consistent and its version:check passes) and
+    // fatal for the PUSH. Git hooks are shared across worktrees and the pre-push gate resolves the
+    // repo it checks to ROOT — so it read ROOT, found plugin.json at the new version and five
+    // surfaces one behind, and refused: "5 surface(s) drifted from the source of truth".
+    //
+    // MEASURED 2026-07-24, after a ~3h rebuild: the worktree commit 899ed8d was correct and complete,
+    // version:check inside it passed cleanly, and the push was still rejected by a gate reading a
+    // directory the commit had nothing to do with. The whole night's work was thrown away at the last
+    // step by an inconsistency in a tree that was never going to be pushed.
+    //
+    // The gate is RIGHT — those five surfaces really were inconsistent, and a user reading ROOT would
+    // have seen a version that does not exist. The bug is that we made ROOT inconsistent and never
+    // repaired it. One line, in the same place the bump happens, so the two can never drift again.
+    execFileSync(NODE, ['scripts/sync-version.mjs'], { cwd: ROOT, stdio: 'inherit' });
+
     // ── RE-STAMP THE BUNDLE WITH ITS OWN RELEASE TAG (issue #35, Dr. Mark Allen) ────────────────
     //
     // EVERY nightly release shipped a bundle stamped ONE VERSION BEHIND its own tag. build-bundle
