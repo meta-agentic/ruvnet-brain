@@ -670,45 +670,71 @@ function kickRefresh() {
  * makes is then worth nothing.
  *
  * Stale data is still useful (a 49s cold scan is why the cache exists). What is not acceptable is
- * stale data WEARING THE COSTUME OF FRESH DATA. So: under the ceiling, serve it and stamp its age;
- * over the ceiling, refuse to serve it as truth and measure again, in-band, even though that costs
- * the user a slow page. A slow honest page beats a fast lying one. */
+ * stale data WEARING THE COSTUME OF FRESH DATA.
+ *
+ * ── CORRECTED, SAME DAY, BEFORE IT REACHED ANYONE (Fable 5, 2026-07-24) ──────────────────────────
+ *
+ * The first version of this fix said: "over the ceiling, refuse to serve it and measure again,
+ * IN-BAND, even though that costs the user a slow page. A slow honest page beats a fast lying one."
+ *
+ * That reintroduced the outage this very file documents forty lines above (see "the demo-hang fix",
+ * 2026-07-17): every read-model here does multi-second SYNCHRONOUS work — gatherState ~13s,
+ * gatherStack ~22s, scanFleet ~40s+ — and Node is single-threaded, so one inline compute freezes the
+ * WHOLE server. `curl` saw 000 on roughly one request in three. The rule established then was
+ * absolute: THE REQUEST HANDLER NEVER COMPUTES INLINE ONCE A CACHE EXISTS.
+ *
+ * And the console is opened occasionally, not polled — so "older than the ceiling" is the COMMON
+ * case, not the rare one. The first version therefore made the documented hang the DEFAULT path,
+ * while every other endpoint, POST and static file on the server froze behind it.
+ *
+ * The error was treating "honest" and "fast" as the only two options and picking honest. There is a
+ * third, and this repo's own DDD-0011 had already named it: INV-4 makes WITHHOLDING a first-class
+ * outcome, and the domain-event table says MeasurementExpired triggers "re-measure OR withhold."
+ *
+ * So: past the ceiling we serve the value with `stale: true` and its real age — the claim is
+ * WITHDRAWN, not disguised — and kick the detached refresher. The renderer's job is to present a
+ * withdrawn claim as withdrawn ("last measured 2 hours ago, re-measuring now"), never as current.
+ * Honest AND non-blocking. Inline compute survives for exactly one case: no prior measurement
+ * exists at all, where there is nothing to withhold and nothing older to serve. */
 const CACHE_MAX_AGE_MS = 15 * 60 * 1000;
 
 function serveCached(res, file, compute, decorate = (d) => d) {
-  let c = readJSON(file);
+  const c = readJSON(file);
   const ageOf = (rec) => {
     const t = rec && rec.at ? Date.parse(rec.at) : NaN;
     return Number.isFinite(t) ? Date.now() - t : Infinity;   // unparseable stamp ⇒ treat as ancient
   };
 
-  // Over the ceiling (or unstamped) is the same as absent: it may not be served as current state.
-  if (c && c.data && ageOf(c) > CACHE_MAX_AGE_MS) c = null;
-
+  // COLD ONLY. No prior measurement means there is nothing to withhold and nothing to serve, so this
+  // one request eats the compute to seed the cache — the same bargain the 2026-07-17 fix struck.
   if (!c || !c.data) {
-    try { const { at, data } = compute(); writeCache(file, at, data); c = { at, data }; }
-    catch (e) {
-      // The recompute failed AND we refused the stale copy. Say both things — never silently fall
-      // back to serving the old numbers, which is how the two-day-old claim reached the page.
-      const old = readJSON(file);
-      return sendJSON(res, 200, decorate({
-        warming: true,
-        error: String(e && e.message || e),
-        staleAvailableFrom: old && old.at ? old.at : null,
-      }));
+    try {
+      const { at, data } = compute();
+      writeCache(file, at, data);
+      return sendJSON(res, 200, { ...decorate(data), fromCache: false, measuredAt: at, ageMs: 0, stale: false });
+    } catch (e) {
+      return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) }));
     }
-  } else {
-    kickRefresh();
   }
+
+  // WARM — including over-ceiling. Never compute inline here; hand back what we measured, say when,
+  // and let the detached child produce the next one.
   const ageMs = ageOf(c);
+  const stale = !(ageMs <= CACHE_MAX_AGE_MS);   // NaN/Infinity ⇒ stale, without a second predicate
+  kickRefresh();
   return sendJSON(res, 200, {
     ...decorate(c.data),
     fromCache: true,
     cachedAt: c.at,
+    // `measuredAt` is the contract name (DDD-0011); `cachedAt` is kept for existing consumers.
+    measuredAt: c.at,
     // Explicit, so the UI can never render an age it did not compute — and so "how old is this?"
     // is answerable without the client re-deriving it from a timestamp format it might misparse.
     ageMs: Number.isFinite(ageMs) ? ageMs : null,
-    stale: Number.isFinite(ageMs) ? ageMs > CACHE_MAX_AGE_MS : true,
+    // Now genuinely reachable. In the previous version anything over-ceiling had already been
+    // discarded before this line, so `stale` could only ever compute false — an honesty signal that
+    // could not fire, shipped as an honesty guarantee.
+    stale,
   });
 }
 /**
