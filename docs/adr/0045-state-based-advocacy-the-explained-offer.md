@@ -1,7 +1,7 @@
 ---
 id: ADR-045
 title: State-based advocacy — the explained offer, not the goal-matched guess
-status: Proposed
+status: Rejected
 date: 2026-07-24
 updated: 2026-07-24
 authors: [Stuart Kerr, Claude Code]
@@ -10,7 +10,11 @@ supersedes: []
 relates: [ADR-027, ADR-028, ADR-040]
 ---
 
-**Status**: Proposed (2026-07-24)
+**Status**: Rejected (2026-07-24)
+
+REJECTED BY BOTH DUELISTS — Fable 5 and GPT-5.6-Sol independently, the first double-REJECT in this project.
+The product idea survives; this design does not. Full duel + the spec the rewrite must satisfy:
+`docs/reviews/0045-duel-state-based-advocacy.md`. Do not implement this document.
 
 Governed DDD: `docs/ddd/0004-advocacy-context.md` (extends the Advocacy bounded context).
 
