@@ -58,13 +58,34 @@ export function measure({ registryPath = REAL_REGISTRY } = {}) {
     const dormantSeen = runDetector(dormant.home, dormant.project, registryPath);
     const healthySeen = runDetector(healthy.home, healthy.project, registryPath);
 
-    // Recall: of the cohort caps the manifest says are dormant, how many did the detector call 'off'?
-    const dormantKeys = cohort.filter((k) => manifest.states.dormant[k] === 'off');
-    const recalled = dormantKeys.filter((k) => dormantSeen[k] === 'off');
+    // Recall: of the cohort caps the manifest says are dormant, how many did the detector get RIGHT?
+    //
+    // BOTH LINES USED TO TEST `=== 'off'`, AND THAT MADE THIS HARNESS BLIND TO STATE.IDLE — the very
+    // state added on 2026-07-24 because "off" was too coarse. Two failures came from the one literal:
+    //
+    //   1. SILENT EXCLUSION. A capability the manifest declares `idle` was filtered out of the
+    //      denominator entirely, so adding one to the cohort moved no number and the harness reported
+    //      an unchanged, healthy-looking 1.00 while measuring strictly less than before. A metric that
+    //      quietly ignores what it cannot classify is worse than one that fails.
+    //   2. THE MUTANT SURVIVED. MEASURED: deleting learning-enable's staleness check — the exact bug
+    //      fixed hours earlier, where a learner holding 457 trajectories and quiet for 30 days reports
+    //      ON — left recall at 1.00 and the gate PASSING. The harness could not fall on the precise
+    //      defect the pillar exists to catch.
+    //
+    // EXACT MATCH, not merely "some dormant state", is the bar. A detector answering `off` for an idle
+    // capability HAS noticed the dormancy, but it is still wrong in the way that costs the user: OFF
+    // points at `turnOn`, which is how "turn this on" got printed beside 457 already-learned patterns.
+    // Distinguishing them is the entire reason IDLE was introduced, so the metric must require it.
+    const DORMANT_STATES = new Set(['off', 'idle']);
+    const dormantKeys = cohort.filter((k) => DORMANT_STATES.has(manifest.states.dormant[k]));
+    const recalled = dormantKeys.filter((k) => dormantSeen[k] === manifest.states.dormant[k]);
     const recall = dormantKeys.length ? recalled.length / dormantKeys.length : 1;
 
-    // False alarm: of the cohort, how many did the detector call 'off' on the HEALTHY machine?
-    const falseAlarms = cohort.filter((k) => healthySeen[k] === 'off');
+    // False alarm: of the cohort, how many did the detector call DORMANT on the HEALTHY machine?
+    // `idle` counts here too — telling a user that a working capability has gone quiet is the same
+    // broken promise as calling it off, and ADR-028 is explicit that one false alarm costs more trust
+    // than ten true ones earn.
+    const falseAlarms = cohort.filter((k) => DORMANT_STATES.has(healthySeen[k]));
 
     return {
       recall,
@@ -72,7 +93,12 @@ export function measure({ registryPath = REAL_REGISTRY } = {}) {
       cohort,
       dormantSeen: Object.fromEntries(cohort.map((k) => [k, dormantSeen[k]])),
       healthySeen: Object.fromEntries(cohort.map((k) => [k, healthySeen[k]])),
-      missedDormant: dormantKeys.filter((k) => dormantSeen[k] !== 'off'),
+      // DERIVED from `recalled`, never restated. It used to carry its own `!== 'off'` predicate, and
+      // when the recall rule above was corrected for STATE.IDLE this line kept the old one — so the
+      // CLI printed "PASS — recall 1.00" while the test reading missedDormant on the same run saw a
+      // miss. Two independent definitions of one fact will always drift; the reported number and the
+      // list explaining it must come from the same comparison or one of them is lying.
+      missedDormant: dormantKeys.filter((k) => !recalled.includes(k)),
       falseAlarms,
     };
   } finally {

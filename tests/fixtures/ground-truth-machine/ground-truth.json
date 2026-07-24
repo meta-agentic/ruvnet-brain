@@ -1,15 +1,18 @@
 {
   "_doc": "ADR-041 ground-truth manifest. THE DENOMINATOR AUTHORITY, and it speaks only STATE-VOCABULARY — never a probe command, never an artifact shape. scripts/capability-registry.mjs NEVER reads this file; the builder (tests/helpers/ground-truth-machine.mjs) reads it and writes REAL artifacts, and the detector maps artifact->state independently. That separation of authorities is what kills the echo trap: the detector cannot echo a manifest it never sees.",
-  "_cohort_note": "First increment: the two HOME-scoped, pure-JSON capabilities, fully grounded against capability-registry.mjs (session-capture -> ~/.claude/settings.json capture hooks at BOTH boundaries; mcp-servers -> ~/.claude.json mcpServers). ADR-041's full cohort adds memory-distillation (a real sqlite3 .swarm/memory.db) and workflow-pattern-learning (~/.claude-flow/neural/stats.json) — same pattern, tracked as the follow-up. With 2 caps, breaking one detector gives recall 1/2 = 0.50 < 0.80, so the mutation test's falsifiability already holds at this size.",
-  "cohort": ["session-capture", "mcp-servers"],
+  "_cohort_note": "Second increment (2026-07-24), 2 -> 3 capabilities. The first two are the HOME-scoped pure-JSON pair (session-capture -> ~/.claude/settings.json capture hooks at BOTH boundaries; mcp-servers -> ~/.claude.json mcpServers). workflow-pattern-learning (~/.claude-flow/neural/stats.json) was named as the follow-up in the first increment and is added here. memory-distillation (a real sqlite3 .swarm/memory.db) remains the last one outstanding. With 3 caps, breaking one detector gives recall 2/3 = 0.67 < 0.80, so the mutation test's falsifiability still holds.",
+  "_idle_note": "workflow-pattern-learning's dormant state is IDLE, not OFF, and it is the FIRST ground-truth coverage of the idle state at all. That matters because IDLE is the state this product exists for — 'you think it is on; it is set up and nothing is calling it' — and until now no oracle asserted it anywhere. It is also exactly where the detector was wrong: this row returned OFF until 2026-07-24 despite the underlying verdict already being named IDLE, which put 'turn this on' next to a learner holding hundreds of recorded trajectories. A cohort that only ever distinguishes on from off cannot catch that class of error at all, because both readings are 'not on'.",
+  "cohort": ["session-capture", "mcp-servers", "workflow-pattern-learning"],
   "states": {
     "healthy": {
       "session-capture": "on",
-      "mcp-servers": "on"
+      "mcp-servers": "on",
+      "workflow-pattern-learning": "on"
     },
     "dormant": {
       "session-capture": "off",
-      "mcp-servers": "off"
+      "mcp-servers": "off",
+      "workflow-pattern-learning": "idle"
     }
   }
 }

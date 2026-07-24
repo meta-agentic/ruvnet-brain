@@ -93,7 +93,26 @@ export function buildState(stateName, rootDir) {
     writeJSON(claudeJsonPath, { mcpServers: {} });
   }
 
-  verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath });
+  // ── workflow-pattern-learning -> ~/.claude-flow/neural/stats.json ─────────────────────────────────
+  // The dormant case here is IDLE rather than OFF, and the distinction is the point: a learner
+  // holding real trajectories that has gone quiet is NOT off. Both states therefore carry the SAME
+  // non-zero counters, and ONLY the recency of lastAdaptation differs — so a detector that ignores
+  // staleness cannot pass this pair. (learning-enable.mjs: STALE_DAYS = 7.)
+  const statsPath = path.join(home, '.claude-flow', 'neural', 'stats.json');
+  const learnWant = want['workflow-pattern-learning'];
+  if (learnWant) {
+    const DAY = 86_400_000;
+    // Counters are written as JSON NUMBERS deliberately: learning-enable's num() accepts nothing
+    // else, and a string here would make the artifact read UNKNOWN — a fixture bug that would look
+    // like a detector miss.
+    const base = { trajectoriesRecorded: 457, patternsLearned: 118 };
+    const lastAdaptation = learnWant === 'idle'
+      ? Date.now() - (30 * DAY)   // comfortably past STALE_DAYS -> IDLE
+      : Date.now() - (2 * 3600_000); // 2h ago -> ON
+    writeJSON(statsPath, { ...base, lastAdaptation });
+  }
+
+  verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath, statsPath });
 
   return { home, project, cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }) };
 }
@@ -103,7 +122,7 @@ export function buildState(stateName, rootDir) {
  * silently-wrong artifact (the "real-state echo one layer up" ADR-041's duel flagged) is caught before
  * the detector ever runs. This checks ARTIFACT correctness, not detector output.
  */
-export function verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath }) {
+export function verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath, want, capturePath, statsPath }) {
   const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   const commandsAt = (boundary) => (settings.hooks?.[boundary] || [])
     .flatMap((g) => (Array.isArray(g?.hooks) ? g.hooks : []))
@@ -123,6 +142,29 @@ export function verifyArtifacts(stateName, { home, settingsPath, claudeJsonPath,
   const wantMcpOn = want['mcp-servers'] === 'on';
   if ((mcpCount > 0) !== wantMcpOn) {
     throw new Error(`ground-truth-machine[${stateName}]: .claude.json does not satisfy mcp-servers=${want['mcp-servers']} (mcpCount=${mcpCount})`);
+  }
+
+  // workflow-pattern-learning. Checked STRUCTURALLY against the artifact's own meaning — counters are
+  // real JSON numbers, and the age is on the correct side of the 7-day line — never by asking the
+  // detector. Re-deriving staleness here rather than importing STALE_DAYS is deliberate: importing it
+  // would let one edited constant move both the oracle and the thing it grades, which is precisely the
+  // echo trap ADR-041's duel flagged.
+  const learnWant = want['workflow-pattern-learning'];
+  if (learnWant) {
+    const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+    const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+    if (!isNum(stats.trajectoriesRecorded) || !isNum(stats.patternsLearned)) {
+      throw new Error(`ground-truth-machine[${stateName}]: stats.json counters must be JSON numbers, else the artifact reads UNKNOWN`);
+    }
+    if (stats.trajectoriesRecorded === 0 && stats.patternsLearned === 0) {
+      throw new Error(`ground-truth-machine[${stateName}]: an all-zero learner is INITIALISED_EMPTY (off), which is not what any state here wants`);
+    }
+    const ageDays = (Date.now() - stats.lastAdaptation) / 86_400_000;
+    const wantIdle = learnWant === 'idle';
+    const isStale = ageDays >= 7;
+    if (isStale !== wantIdle) {
+      throw new Error(`ground-truth-machine[${stateName}]: stats.json age ${ageDays.toFixed(1)}d does not satisfy workflow-pattern-learning=${learnWant}`);
+    }
   }
   return true;
 }
