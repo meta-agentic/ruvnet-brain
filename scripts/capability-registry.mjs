@@ -88,7 +88,29 @@ const DAY = 86_400_000;
 const selfScript = (rel, args) => `node ${JSON.stringify(path.join(REPO, rel))}${args ? ` ${args}` : ''}`;
 
 /** The four states. 'absent' means "not installed here", which is NOT the same as "installed and off". */
-export const STATE = Object.freeze({ ON: 'on', OFF: 'off', UNKNOWN: 'unknown', ABSENT: 'absent' });
+/**
+ * IDLE — "you think this is on; it is set up and it is not running."
+ *
+ * THE STATE THIS PRODUCT EXISTS FOR, and it was missing. Owner, 2026-07-24: "this is exactly what we
+ * mean by people thinking something is 'On' only to find out it is not really running and working the
+ * way they thought it would — that is exactly what this tool is for."
+ *
+ * It was found on ourselves. `cheap-model-routing` reported ON off a receipt count alone: any n > 0
+ * meant on, forever. The router had 38 receipts, an active policy and a current catalog — and had not
+ * routed anything in 4.8 days, because the PreToolUse gate that would invoke it was written on
+ * 2026-07-13 and never wired into settings.json. Configured, proven, and inert. The age was even
+ * PRINTED in the evidence string and did not touch the verdict, which is the tell: we had the fact and
+ * threw it away at the moment of judgement.
+ *
+ * IDLE is deliberately NOT a flavour of OFF. Off means "we looked and it is not running" and points at
+ * turnOn. Idle means "it ran, it works, nothing is calling it now" and points at a WIRING question —
+ * usually a hook that was built and never installed. Collapsing the two would send someone to
+ * re-enable a thing that is already enabled, which is how a diagnosis becomes a wild goose chase.
+ *
+ * The horizon is a property of the capability, not a constant: a nightly job idle for 2 days is
+ * broken, a router idle for 2 days may just be a quiet weekend. Each detector passes its own.
+ */
+export const STATE = Object.freeze({ ON: 'on', OFF: 'off', IDLE: 'idle', UNKNOWN: 'unknown', ABSENT: 'absent' });
 export const SCOPE = Object.freeze({ PROJECT: 'project', USER: 'user', MACHINE: 'machine' });
 
 /**
@@ -417,6 +439,51 @@ export const CAPABILITIES = [
       if (n === null) return row(STATE.UNKNOWN, 'the routing receipt ledger exists but could not be read — usage not checked');
       if (n === 0) return row(STATE.OFF, 'the routing receipt ledger is present but empty — no task has been routed to a cheaper model');
       const age = daysSince(mtimeOf(receipts));
+
+      // THE AGE NOW DECIDES, INSTEAD OF DECORATING. This line used to return ON for any n > 0 and
+      // merely MENTION the age in the evidence — so a router with 38 receipts and nothing invoking it
+      // for a fortnight read as healthy. We were holding the disproving fact and printing it politely.
+      //
+      // 7 days: this path should fire on ordinary sessions, so a full quiet week means something
+      // upstream stopped calling it — not that the user had a light week. Measured on this machine
+      // 2026-07-24: 38 receipts, last one 4.8 days old, and the PreToolUse gate that invokes it
+      // (plugin/scripts/route-dispatch.sh, written 2026-07-13) had never been added to settings.json.
+      // Built, correct, and unwired — which no state in this registry could previously express.
+      // MEASURE THE CAUSE, NOT A SYMPTOM. An age threshold alone is a proxy and it FAILED on the real
+      // case: measured 2026-07-24, the last receipt was 5 days old — under any sane horizon — while the
+      // router was in fact never being consulted at all. A quiet week and a severed wire look identical
+      // from the receipt file, so read the wire directly.
+      //
+      // Two things must both be true for anything to route: a PreToolUse gate on subagent dispatch
+      // (plugin/scripts/route-dispatch.sh, which is what turns "declare a model" from advice into a
+      // wall), and the opt-in profile it refuses to act without (route-dispatch.sh:46 exits 0 when
+      // profile.json is absent). Either missing ⇒ the router cannot fire, regardless of how healthy
+      // the receipt ledger looks.
+      const profile = fs.existsSync(path.join(HOME, '.claude/model-router/profile.json'));
+      let gateWired = false;
+      try {
+        const s = JSON.parse(fs.readFileSync(path.join(HOME, '.claude/settings.json'), 'utf8'));
+        gateWired = (s?.hooks?.PreToolUse || []).some((h) =>
+          /Task|Agent/.test(String(h.matcher || ''))
+          && (h.hooks || []).some((x) => /route-dispatch\.sh/.test(String(x.command || ''))));
+      } catch { gateWired = false; }
+
+      if (!gateWired || !profile) {
+        const missing = [!gateWired && 'no PreToolUse gate on Task|Agent is wired to route-dispatch.sh',
+          !profile && 'no ~/.claude/model-router/profile.json (the opt-in the gate requires)'].filter(Boolean).join('; and ');
+        return row(STATE.IDLE,
+          `set up and proven — ${n} routing receipt${n === 1 ? '' : 's'} recorded — but nothing can invoke it: ${missing}. `
+          + 'Every receipt so far came from someone running the router by hand. Until the gate is wired, subagents keep '
+          + 'inheriting this session\'s model, which is the single largest cost leak in the harness.');
+      }
+
+      const IDLE_AFTER_DAYS = 7;
+      if (age !== null && age > IDLE_AFTER_DAYS) {
+        return row(STATE.IDLE,
+          `set up and proven — ${n} routing receipt${n === 1 ? '' : 's'} recorded — but nothing has routed through it in ${age} days. `
+          + 'It is configured; something that should be calling it is not. Check that the subagent-dispatch gate is wired '
+          + '(a PreToolUse hook on Task|Agent) and that ~/.claude/model-router/profile.json exists — without either, the router is never consulted.');
+      }
       return row(STATE.ON, `${n} routing receipt${n === 1 ? '' : 's'} recorded${age === null ? '' : `, most recent ${age} day${age === 1 ? '' : 's'} ago`}`);
     },
   },

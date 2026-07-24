@@ -1918,10 +1918,15 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // cache at all it is genuinely empty until the detached scan lands, and an empty page with no
     // explanation reads as broken. Measured 2026-07-20: URL is printed in ~0.3s either way, so the
     // wait a user perceives is the page filling in, not the server starting.
+    //
+    // COLD-VS-WARM DEFINITION: loadConsoleCache() returns true only when a disk cache was successfully
+    // restored at boot (meaning a prior run exists and has persisted data). First-ever run → no cache
+    // file exists → loadConsoleCache returns false → message prints. Warm re-opens → cache file exists
+    // and loads → message does not print. This is the same definition serveCached() uses.
     const hadCache = loadConsoleCache();
     if (!hadCache) {
-      console.log(`      ${'first run — scanning your setup now; the page fills in as it lands'}`);
-      console.log(`      ${'(one-time, up to a minute — later runs are instant)'}\n`);
+      console.log(`      ${'first run — scanning your setup now; about 15 seconds'}`);
+      console.log(`      ${"(next time you open this, it's instant)"}\n`);
     }
     kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);

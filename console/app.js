@@ -806,6 +806,19 @@ const CAP_STATE = {
     tone: 'amber', klass: 'is-off', label: 'off',
     hint: 'We looked and it is not running. This is a measured "off", not an assumption.',
   },
+  /* IDLE — the state this whole product exists to surface, and the card could not say it until now.
+     Owner, 2026-07-24: "people think something is 'On' only to find out it is not really running the
+     way they thought — that is exactly what this tool is for."
+
+     Its label is deliberately NOT "off". Off sends you to turn a thing on; this thing IS on, and
+     something that should be calling it stopped. Sending someone to re-enable an already-enabled
+     capability is how a true finding becomes a wasted afternoon. The distinct wording — "set up, not
+     running" — is the whole value of separating them. */
+  IDLE: {
+    tone: 'amber', klass: 'is-off', label: 'set up, not running',
+    hint: 'Configured and proven — it has worked here before — but nothing has invoked it recently. '
+        + 'This is usually a wiring gap, not a switch: something that should call it is missing or was never installed.',
+  },
   UNKNOWN: {
     tone: 'nt', klass: 'is-unknown', label: 'not checked',
     hint: 'Nothing established this one either way, so nothing is claimed. Not checked is not off.',
@@ -833,7 +846,11 @@ const CAP_STATE = {
    "we've never heard of it" pile, where it never belonged. */
 function capState(raw) {
   const t = String(raw ?? '').trim().toUpperCase();
-  return (t === 'ON' || t === 'OFF' || t === 'UNKNOWN' || t === 'ABSENT') ? t : null;
+  // 'IDLE' added 2026-07-24. This whitelist is exactly where the ABSENT bug lived (see CAP_STATE):
+  // the registry gains a state, this line does not, and every row carrying it lands in UNKNOWN
+  // wearing a label that says we never looked — when in fact we looked and found something specific.
+  // Any future state must be added HERE, in the tally, in the chips, and in RANK — all four.
+  return (t === 'ON' || t === 'OFF' || t === 'IDLE' || t === 'UNKNOWN' || t === 'ABSENT') ? t : null;
 }
 const capBucket = (row) => capState(row && row.state) || 'UNKNOWN';
 
@@ -951,11 +968,16 @@ function renderCapabilities(data) {
   const on = rows.filter((r) => capBucket(r) === 'ON').length;
   const off = rows.filter((r) => capBucket(r) === 'OFF').length;
   const absent = rows.filter((r) => capBucket(r) === 'ABSENT').length;
-  const unknown = rows.length - on - off - absent;
+  // Counted explicitly, and SUBTRACTED from unknown below. `unknown` is computed as the remainder, so
+  // any state the tally forgets is silently reported as "we never checked" — the same shape of lie in
+  // the summary line that CAP_STATE fixed in the rows.
+  const idle = rows.filter((r) => capBucket(r) === 'IDLE').length;
+  const unknown = rows.length - on - off - absent - idle;
 
   const chips = [];
   if (on) chips.push(chip(`${fmtInt(on)} on`, 'green'));
   if (off) chips.push(chip(`${fmtInt(off)} off`, 'amber', CAP_STATE.OFF.hint));
+  if (idle) chips.push(chip(`${fmtInt(idle)} set up, not running`, 'amber', CAP_STATE.IDLE.hint));
   if (absent) chips.push(chip(`${fmtInt(absent)} not installed`, 'grey', CAP_STATE.ABSENT.hint));
   if (unknown) chips.push(chip(`${fmtInt(unknown)} not checked`, 'nt', CAP_STATE.UNKNOWN.hint));
   setChips('chips-capabilities', chips);
@@ -971,7 +993,7 @@ function renderCapabilities(data) {
   // more actionable than a piece of software the user has simply not installed — and above ON
   // because "not here" is still a gap. Array#sort is stable, so the server's own ordering survives
   // inside each bucket.
-  const RANK = { OFF: 0, UNKNOWN: 1, ABSENT: 2, ON: 3 };
+  const RANK = { OFF: 0, IDLE: 1, UNKNOWN: 2, ABSENT: 3, ON: 4 };
   const sorted = rows.slice().sort((a, b) => RANK[capBucket(a)] - RANK[capBucket(b)]);
 
   // Built as clauses so a fresh machine — where `on` and `off` are both 0 and everything is absent —
