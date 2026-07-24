@@ -1412,6 +1412,12 @@ function disableSpendGuard() {
   else ok('spend watchdog was already off — nothing to remove (safe to run any time)');
 }
 
+// Default STATE_PATH from scripts/upgrade-notice.mjs, duplicated (not imported — see the cmpTag()
+// comment above this file's own rule on why) so machineFootprint()/uninstallAll() can find and
+// remove it without a module this file may not statically depend on.
+const upgradeNoticeStatePath = () =>
+  process.env.RUVNET_UPGRADE_NOTICE_FILE || path.join(os.homedir(), '.config', 'ruvnet-brain', 'upgrade-notice.json');
+
 /**
  * Everything this installer can leave on a machine, DERIVED from disk — never asserted.
  *
@@ -1435,7 +1441,14 @@ export function machineFootprint() {
   if (cmds) items.push({
     label: 'Claude Code plugin',
     path: path.dirname(cmds),
-    undo: 'claude plugin uninstall ruvnet-brain@ruvnet-brain',
+    // `claude plugin uninstall` removes the INSTALLED plugin only — it leaves the marketplace itself
+    // registered (a separate git clone + registry entry: `claude plugin marketplace list` still
+    // shows it, and wirePlugin() above is the thing that added it via `claude plugin marketplace add
+    // stuinfla/ruvnet-brain`). Verified live against `claude plugin marketplace --help` (marketplace
+    // name = "ruvnet-brain", from this repo's own .claude-plugin/marketplace.json) that `remove` takes
+    // that same short name. Without this second command someone who ran every undo we printed would
+    // still have us registered as a marketplace.
+    undo: 'claude plugin uninstall ruvnet-brain@ruvnet-brain && claude plugin marketplace remove ruvnet-brain',
   });
   const cmdPath = path.join(os.homedir(), '.claude', 'CLAUDE.md');
   try {
@@ -1457,12 +1470,21 @@ export function machineFootprint() {
   add('Status-bar preference', path.join(telemetryStateDir(), '.statusline-pref'), 'delete this file');
   add('Model-router files', path.join(os.homedir(), '.claude', 'model-router'),
       'rm -rf ~/.claude/model-router');
-  // Config entries live INSIDE files the user owns, so they are reported as edits to review rather
-  // than as paths to delete — deleting someone's settings.json over one key would be indefensible.
+  // GAP FIX: this used to be a loose `.includes('ruvnet-brain')` substring test against the WHOLE
+  // settings.json file — which (a) could also fire on something unrelated (e.g. a marketplace
+  // autoUpdate setting that merely mentions our name) and get mislabeled as "the statusLine entry",
+  // and (b) meant this was ALWAYS reported as a manual edit, never auto-removed, even though this
+  // installer is the one that wrote the key and knows exactly what it wrote. detectStatusLine() now
+  // checks the actual parsed statusLine.command against the exact string writeSettingsStatusLine()
+  // writes — precise enough that removeSettingsStatusLine() (called from uninstallAll()) can safely
+  // reverse just this key, the same way removeClaudeMdBlock() reverses just its own block. A status
+  // line a user has since edited or folded into their own script no longer matches and is correctly
+  // left off this list entirely (nothing to claim, nothing to undo).
   try {
-    const settings = path.join(os.homedir(), '.claude', 'settings.json');
-    if (fs.existsSync(settings) && fs.readFileSync(settings, 'utf8').includes('ruvnet-brain')) {
-      items.push({ label: 'A statusLine entry in your settings.json', path: settings, undo: 'remove the "statusLine" entry that points at ruvnet-brain' });
+    const settings = settingsJsonPath();
+    const detected = detectStatusLine(settings);
+    if (detected.hasStatusLine && !detected.parseError && detected.command === `node "${statuslineHelperPath()}"`) {
+      items.push({ label: 'The statusLine entry in settings.json', path: settings, undo: 'npx ruvnet-brain --uninstall (removes just this key; settings.json is backed up first)' });
     }
   } catch { /* unreadable — do not claim it */ }
   try {
@@ -1471,6 +1493,14 @@ export function machineFootprint() {
       items.push({ label: 'The search_ruvnet MCP server registration', path: claudeJson, undo: 'claude mcp remove ruvnet-brain --scope user' });
     }
   } catch { /* unreadable — do not claim it */ }
+  // GAP FIX: recordNotified() (scripts/upgrade-notice.mjs, invoked from main() and runDemo() below)
+  // writes this file the first time a "what's new" notice is shown — a real disk artifact this
+  // installer's own code path creates, that was never listed here and never removed on --uninstall.
+  // Path duplicated rather than imported (see the cmpTag() comment above: this file must not import
+  // from scripts/ at module scope, since scripts/upgrade-notice.mjs isn't in the npm `files` list —
+  // it only reaches a user via a repo clone or `npx github:...`, never a plain npm publish; harmless
+  // no-op existence check either way). Env override name matches STATE_PATH there exactly.
+  add('Upgrade-notice state (release-notice tracking)', upgradeNoticeStatePath(), 'delete this file');
 
   return items;
 }
@@ -1551,7 +1581,10 @@ function uninstallAll() {
   // ours to delete, so they are handed over as commands.
   const AUTO = new Set(['Brain bundle (knowledge base)', 'Nightly updater (LaunchAgent)',
     'Spend watchdog (LaunchAgent)', 'Spend watchdog script', 'CLAUDE.md block (6 lines, between markers)',
-    'Model-router files', 'Status-bar version script', 'Status-bar preference', 'Usage-counts preference']);
+    'Model-router files', 'Status-bar version script', 'Status-bar preference', 'Usage-counts preference',
+    // Two gaps closed here: the statusLine KEY is now removable in place (we know exactly what we
+    // wrote — see removeSettingsStatusLine()), and the upgrade-notice tracker is a file we fully own.
+    'The statusLine entry in settings.json', 'Upgrade-notice state (release-notice tracking)']);
   const willRemove = before.filter((it) => AUTO.has(it.label));
   const manual = before.filter((it) => !AUTO.has(it.label));
 
@@ -1569,6 +1602,14 @@ function uninstallAll() {
 
   const claudeMd = removeClaudeMdBlock();
   if (claudeMd === 'removed') ok('removed our block from ~/.claude/CLAUDE.md (your content untouched, backup saved)');
+
+  // GAP FIX: this used to be permanently "manual" — machineFootprint() treated ANY settings.json edit
+  // as something only the user could safely touch. That blanket rule was right for edits we cannot
+  // attribute with confidence, but wrong for this one specific key: we wrote it ourselves and know
+  // the exact string we wrote, so we can reverse exactly that (never a status line the user has since
+  // customized — removeSettingsStatusLine() checks the live command before touching anything).
+  const statusLine = removeSettingsStatusLine();
+  if (statusLine === 'removed') ok('removed the statusLine entry from ~/.claude/settings.json (your other settings untouched, backup saved)');
 
   // NEVER rm -rf A PATH WE HAVE NOT PROVEN IS OURS. resolvedKbDir() honours $RUVNET_BRAIN_KB, which
   // the docs encourage for custom install locations — so `RUVNET_BRAIN_KB=$HOME npx ruvnet-brain
@@ -1600,6 +1641,11 @@ function uninstallAll() {
     ['status-bar script', path.join(os.homedir(), '.cache', 'ruvnet-brain', 'ruvnet-brain-statusline.cjs')],
     ['status-bar preference', path.join(telemetryStateDir(), '.statusline-pref')],
     ['usage-counts preference', telemetryConsentPath()],
+    // GAP FIX: written by recordNotified() (scripts/upgrade-notice.mjs) whenever the "what's new"
+    // notice fires from main()/runDemo() below — a single-purpose file under a directory this
+    // installer alone writes to, safe to remove outright (not the whole ~/.config/ruvnet-brain/ dir,
+    // which can also hold lessons.json/settings.json this installer never creates and must not touch).
+    ['upgrade-notice state', upgradeNoticeStatePath()],
   ]) {
     if (!fs.existsSync(target)) continue;
     try { fs.rmSync(target, { recursive: true, force: true }); ok(`removed the ${label}`); }
@@ -2307,6 +2353,33 @@ function writeSettingsStatusLine(detected, command) {
   fs.mkdirSync(path.dirname(detected.path), { recursive: true });
   fs.writeFileSync(detected.path, JSON.stringify(next, null, 2) + '\n');
   return backup;
+}
+
+// The uninstall-side mirror of writeSettingsStatusLine() above — this installer is the ONLY writer
+// that can safely reverse this specific edit, because it is the only one that knows the EXACT string
+// it wrote. Match on that exact command (never a loose "mentions ruvnet-brain" guess — see the
+// machineFootprint() comment this replaces) so a status line the user has since folded their own
+// script into, or edited by hand, is left completely alone. Same "refuse rather than guess"
+// discipline removeClaudeMdBlock() already applies to CLAUDE.md, and the same backup-first courtesy.
+function removeSettingsStatusLine() {
+  const settingsPath = settingsJsonPath();
+  const detected = detectStatusLine(settingsPath);
+  if (!detected.exists || detected.parseError || !detected.hasStatusLine) return 'absent';
+  const ours = `node "${statuslineHelperPath()}"`;
+  if (detected.command !== ours) return 'not-ours'; // never touch a status line we didn't write
+  try {
+    const backup = backupSettingsJson(settingsPath);
+    const next = { ...(detected.json || {}) };
+    delete next.statusLine;
+    const tmp = `${settingsPath}.ruvnet-tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n');
+    fs.renameSync(tmp, settingsPath);
+    info(c.dim(`  your original is saved at ${backup}`));
+    return 'removed';
+  } catch (e) {
+    warn(`couldn't remove the statusLine entry (${e.message}) — remove it yourself from ${settingsPath}`);
+    return 'error';
+  }
 }
 
 // Only called after explicit consent. NEVER overwrites an existing statusLine — detectStatusLine()

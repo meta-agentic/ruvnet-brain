@@ -479,7 +479,13 @@ const ENFORCEMENT_MEANING = {
 function gatherLessons() {
   let all;
   try { all = loadLessons(); }
-  catch (e) { return { ok: false, error: String(e && e.message || e), lessons: [], counts: null }; }
+  catch (e) {
+    // TASK 3: stamped at the read that just failed, not before it was attempted.
+    return { ok: false, error: String(e && e.message || e), lessons: [], counts: null, ...freshnessOf(new Date().toISOString()) };
+  }
+  // TASK 3: the observation instant is loadLessons() finishing, right above — not whenever the
+  // .map()/.sort() derived-computation below happens to finish building the response.
+  const measuredAt = new Date().toISOString();
 
   const lessons = all.map((l) => {
     const trig = TRIGGER_BY_KEY.get(l.trigger);
@@ -535,6 +541,10 @@ function gatherLessons() {
       off: lessons.filter((l) => l.demoted).length,
       blocking: lessons.filter((l) => l.enforcement === 'block' && l.ratified && !l.demoted).length,
     },
+    // TASK 2: this endpoint bypasses serveCached entirely and had NO timestamp of any kind. It is
+    // never cached — loadLessons() reads the live file on every call — so this is always fresh, but
+    // said so through the SAME envelope every other card uses rather than a bespoke "no age" shape.
+    ...freshnessOf(measuredAt),
   };
 }
 
@@ -724,8 +734,30 @@ export function findStaleOffers(rows, { file, now = Date.now() } = {}) {
 
 const SELF = fileURLToPath(import.meta.url);
 let LAST_REFRESH_KICK = 0;
+/**
+ * TEMP-THEN-RENAME — every cache writer in this file goes through this, never a bare writeFileSync.
+ *
+ * A bare writeFileSync truncates the target before the new bytes land. This file writes each cache
+ * from at least two independent code paths per refresh cycle (the detached `--refresh-cache` child,
+ * PLUS gatherState()/gatherStack() self-caching whenever called directly — see those two functions),
+ * and a crash or kill mid-write leaves a TORN, half-written JSON file behind. readJSON()'s JSON.parse
+ * then throws on that file, which is indistinguishable from "no cache yet" to every `!c || !c.data`
+ * cold-path check in this file — so a torn cache silently demotes the NEXT request into the exact
+ * expensive inline compute (13-49s) this caching exists to avoid.
+ *
+ * NOT hand-rolled: this reuses `writeAtomic` from user-settings.mjs (already imported above, line 46)
+ * rather than growing a second copy of open/write/rename — it already does temp-then-rename PLUS an
+ * fsync before the rename (a rename alone can land while the new bytes are still in the page cache;
+ * without the flush, a power loss can leave an atomically-renamed but EMPTY file). Matches
+ * lesson-store.mjs's saveLessons() in spirit, the store this class of fix was hardened for after a
+ * real data-loss incident (see that file's own header).
+ */
+function atomicWriteJSON(file, obj) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  writeAtomic(file, JSON.stringify(obj));
+}
 function writeCache(file, at, data) {
-  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ at, data })); }
+  try { atomicWriteJSON(file, { at, data }); }
   catch { /* a cache write must never break a response */ }
 }
 function kickRefresh() {
@@ -781,12 +813,33 @@ function kickRefresh() {
  * exists at all, where there is nothing to withhold and nothing older to serve. */
 const CACHE_MAX_AGE_MS = 15 * 60 * 1000;
 
+/**
+ * ONE ceiling, ONE shape, for every JSON response that carries measured machine state.
+ *
+ * GPT-5.6-Sol's review of the fix above, verbatim: "Four freshness policies is zero freshness
+ * policies." serveCached() got a real ceiling while ACTIVITY_MACHINE_CACHE, TRUST_CACHE, and the
+ * always-live /api/lessons read each kept (or lacked) a PRIVATE one — so two cards on the same page,
+ * both "compliant" with their own rule, could disagree about whether a given age counts as current.
+ * A user cannot tell which promise a card is making, which is the same failure as making none.
+ *
+ * Pure function of a timestamp the CALLER already took — never `Date.now()` computed in here — so it
+ * can never paper over a stamp taken at the wrong moment (see gatherStack()/gatherActivity()/
+ * gatherLessons() below, where THAT bug lived). A missing or unparseable `measuredAt` reads as
+ * maximally stale, not silently fresh: a card that cannot prove its own age must never claim to be
+ * current.
+ */
+function freshnessOf(measuredAt) {
+  const t = typeof measuredAt === 'string' ? Date.parse(measuredAt) : NaN;
+  const ageMs = Number.isFinite(t) ? Date.now() - t : Infinity;
+  return {
+    measuredAt: typeof measuredAt === 'string' ? measuredAt : null,
+    ageMs: Number.isFinite(ageMs) ? ageMs : null,
+    stale: !(ageMs <= CACHE_MAX_AGE_MS),
+  };
+}
+
 function serveCached(res, file, compute, decorate = (d) => d) {
   const c = readJSON(file);
-  const ageOf = (rec) => {
-    const t = rec && rec.at ? Date.parse(rec.at) : NaN;
-    return Number.isFinite(t) ? Date.now() - t : Infinity;   // unparseable stamp ⇒ treat as ancient
-  };
 
   // COLD ONLY. No prior measurement means there is nothing to withhold and nothing to serve, so this
   // one request eats the compute to seed the cache — the same bargain the 2026-07-17 fix struck.
@@ -794,7 +847,7 @@ function serveCached(res, file, compute, decorate = (d) => d) {
     try {
       const { at, data } = compute();
       writeCache(file, at, data);
-      return sendJSON(res, 200, { ...decorate(data), fromCache: false, measuredAt: at, ageMs: 0, stale: false });
+      return sendJSON(res, 200, { ...decorate(data), fromCache: false, ...freshnessOf(at) });
     } catch (e) {
       return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) }));
     }
@@ -802,22 +855,13 @@ function serveCached(res, file, compute, decorate = (d) => d) {
 
   // WARM — including over-ceiling. Never compute inline here; hand back what we measured, say when,
   // and let the detached child produce the next one.
-  const ageMs = ageOf(c);
-  const stale = !(ageMs <= CACHE_MAX_AGE_MS);   // NaN/Infinity ⇒ stale, without a second predicate
+  const fresh = freshnessOf(c.at);
   kickRefresh();
   return sendJSON(res, 200, {
     ...decorate(c.data),
     fromCache: true,
-    cachedAt: c.at,
-    // `measuredAt` is the contract name (DDD-0011); `cachedAt` is kept for existing consumers.
-    measuredAt: c.at,
-    // Explicit, so the UI can never render an age it did not compute — and so "how old is this?"
-    // is answerable without the client re-deriving it from a timestamp format it might misparse.
-    ageMs: Number.isFinite(ageMs) ? ageMs : null,
-    // Now genuinely reachable. In the previous version anything over-ceiling had already been
-    // discarded before this line, so `stale` could only ever compute false — an honesty signal that
-    // could not fire, shipped as an honesty guarantee.
-    stale,
+    cachedAt: c.at,   // legacy alias — `fresh.measuredAt` (from `...fresh` below) is the contract name (DDD-0011)
+    ...fresh,
   });
 }
 /**
@@ -835,10 +879,10 @@ function loadConsoleCache() {
   return restored;
 }
 function saveConsoleCache() {
-  try {
-    fs.mkdirSync(path.dirname(CONSOLE_CACHE_PATH), { recursive: true });
-    fs.writeFileSync(CONSOLE_CACHE_PATH, JSON.stringify({ activity: ACTIVITY_MACHINE_CACHE, trust: TRUST_CACHE }));
-  } catch { /* cache persistence must never break a read */ }
+  // Same torn-write risk as every other cache in this file (Task 4) — routed through the same atomic
+  // helper rather than its own bare writeFileSync.
+  try { atomicWriteJSON(CONSOLE_CACHE_PATH, { activity: ACTIVITY_MACHINE_CACHE, trust: TRUST_CACHE }); }
+  catch { /* cache persistence must never break a read */ }
 }
 function refreshFleetCache() {
   const projects = [];
@@ -890,8 +934,13 @@ function findMemoryStores(root) {
 function gatherActivity(cwd) {
   const project = fs.existsSync(path.join(cwd, '.swarm/memory.db')) ? cwd : REPO;
   const db = path.join(project, '.swarm/memory.db');
-  const out = { generatedAt: new Date().toISOString(), project: path.basename(project), hasStore: fs.existsSync(db) };
-  if (!out.hasStore) return out;
+  if (!fs.existsSync(db)) {
+    // No store to read — the existence check above IS the entire measurement, so it IS the
+    // observation instant. Stamped here, not with a value taken before the check ran.
+    const measuredAt = new Date().toISOString();
+    return { generatedAt: measuredAt, project: path.basename(project), hasStore: false, ...freshnessOf(measuredAt) };
+  }
+  const out = { project: path.basename(project), hasStore: true };
   const rows = (sql) => robustReadJSON(db, sql).rows;
   out.totals = {
     memories: Number(robustRead(db, "SELECT COUNT(*) FROM memory_entries WHERE status='active'").value || 0),
@@ -901,21 +950,33 @@ function gatherActivity(cwd) {
   out.recent = rows("SELECT key, namespace, type, datetime(updated_at/1000,'unixepoch','localtime') AS at FROM memory_entries WHERE status='active' ORDER BY updated_at DESC LIMIT 18");
   out.breakdown = rows("SELECT namespace, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY namespace ORDER BY n DESC");
   out.growth = rows("SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n FROM memory_entries WHERE status='active' GROUP BY 1 ORDER BY 1");
+  // TASK 3: stamped HERE, after every sqlite3 shell-out above has actually returned — not at the top
+  // of this function (the previous `out = { generatedAt: new Date().toISOString(), ... }`), which
+  // dated the whole response before a single row of it had been read.
+  const measuredAt = new Date().toISOString();
+
+  // MACHINE-WIDE FLEET SCAN — brought under the ONE ceiling every other cache in this file already
+  // obeys (CACHE_MAX_AGE_MS), replacing the bespoke 600000 this used to hardcode privately. A restored
+  // ACTIVITY_MACHINE_CACHE (loadConsoleCache(), at server boot) carries whatever age it truly has —
+  // this is where that age is finally checked against the same rule as everything else, rather than
+  // served as current no matter how old.
   if (!ACTIVITY_MACHINE_CACHE) {
-    refreshFleetCache(); // first-ever run: nothing older to serve honestly
-  } else if (Date.now() - ACTIVITY_MACHINE_CACHE.at > 600000 && !FLEET_REFRESHING) {
-    // Serve the stale-but-stamped cache NOW; re-scan behind the response. (Single-threaded server:
-    // the background scan can still delay a CONCURRENT request — same as before, but never again
-    // the request that asked.)
+    refreshFleetCache(); // first-ever run: nothing older to serve honestly, nothing to withhold
+  } else if (Date.now() - ACTIVITY_MACHINE_CACHE.at > CACHE_MAX_AGE_MS && !FLEET_REFRESHING) {
+    // WITHHOLD, NEVER BLOCK: this response gets the stale-but-stamped scan below; the re-scan runs
+    // behind it. (Single-threaded server: the background scan can still delay a CONCURRENT request —
+    // same as before this fix, but never again the request that asked.)
     FLEET_REFRESHING = true;
     setImmediate(() => { try { refreshFleetCache(); } finally { FLEET_REFRESHING = false; } });
   }
+  const machineMeasuredAt = new Date(ACTIVITY_MACHINE_CACHE.at).toISOString();
   out.machine = {
     projects: ACTIVITY_MACHINE_CACHE.projects,
     totalMemories: ACTIVITY_MACHINE_CACHE.totalMemories,
-    scannedAt: new Date(ACTIVITY_MACHINE_CACHE.at).toISOString(),
+    scannedAt: machineMeasuredAt,   // legacy field, unchanged shape
+    ...freshnessOf(machineMeasuredAt),
   };
-  return out;
+  return { generatedAt: measuredAt, ...out, ...freshnessOf(measuredAt) };
 }
 
 // ── Router engine read-model ─────────────────────────────────────────────────────────────────────
@@ -1032,7 +1093,34 @@ function readSbom() {
     return { present: false, path: rel, error: String((e && e.message) || e) };
   }
 }
-let TRUST_CACHE = null; // successful release reads cached 10 min; failures are never cached
+let TRUST_CACHE = null; // successful release reads cached; failures are never cached
+let TRUST_REFRESHING = false;
+let LAST_TRUST_KICK = 0;
+/**
+ * Background refresh for TRUST_CACHE, fired only once we are PAST CACHE_MAX_AGE_MS — see gatherTrust()
+ * below. Debounced the same way kickRefresh() debounces the other caches' detached child, so a console
+ * tab left open and polling /api/trust every few seconds cannot turn into a GitHub API hammer.
+ *
+ * Not a detached child process like kickRefresh(): fetchReleaseDigest() is network I/O, not a
+ * synchronous CPU-bound scan, so it does not block the event loop the way gatherStack()/scanFleet() do
+ * — an un-awaited fetch() already satisfies "never block the request that asked".
+ */
+function kickTrustRefresh() {
+  const now = Date.now();
+  if (TRUST_REFRESHING || now - LAST_TRUST_KICK < 15000) return;
+  LAST_TRUST_KICK = now;
+  TRUST_REFRESHING = true;
+  fetchReleaseDigest()
+    .then((release) => {
+      if (release.ok) {
+        const generatedAt = new Date().toISOString();
+        TRUST_CACHE = { at: Date.parse(generatedAt), data: { generatedAt, release } };
+        saveConsoleCache();
+      }
+    })
+    .catch(() => { /* keep serving the last good measurement — a failed refresh must not erase it */ })
+    .finally(() => { TRUST_REFRESHING = false; });
+}
 async function fetchReleaseDigest() {
   const ua = { 'user-agent': 'ruvnet-brain-console' };
   const rel = await fetch(`https://api.github.com/repos/${TRUST_REPO}/releases/latest`,
@@ -1085,18 +1173,41 @@ function readInstallChannel() {
     repo: (src && src.repo) || null,
   };
 }
+/**
+ * TASK 1: TRUST_CACHE now obeys the SAME ceiling (CACHE_MAX_AGE_MS) as every other cache in this
+ * file, and past it we WITHHOLD rather than recompute in-band.
+ *
+ * The previous version's own age check (a bespoke 600000, not CACHE_MAX_AGE_MS) fell straight through
+ * to `await fetchReleaseDigest()` — a GitHub network round-trip with an 8s timeout — INSIDE the
+ * request that asked. That is precisely the in-band-recompute-past-the-ceiling pattern the big
+ * comment above serveCached() documents as the reintroduced 2026-07-17 outage, just for a network
+ * call instead of a synchronous scan. It also meant a cache RESTORED from disk at boot
+ * (loadConsoleCache()), which is virtually always older than 10 minutes by the time anyone opens the
+ * console, hit that path on its very first request — "restored from disk with no age check" in
+ * practice, because the check that did exist only ever triggered a blocking recompute rather than an
+ * honest stale-serve.
+ */
 async function gatherTrust() {
-  if (TRUST_CACHE && Date.now() - TRUST_CACHE.at < 600000) {
-    // Disk facts stay live even on a cached release read — the SBOM file and install channel can
-    // change (a fresh `npm run sbom`, a plugin update) between two calls inside the 10-min window.
-    return { ...TRUST_CACHE.data, channel: readInstallChannel(), sbom: readSbom() };
+  // COLD ONLY: no successful release read has ever landed, so there is nothing to withhold or serve
+  // stale — the one exception serveCached() itself carves out for its own caches.
+  if (!TRUST_CACHE) {
+    let release;
+    try { release = await fetchReleaseDigest(); }
+    catch (e) { release = { ok: false, error: String((e && e.message) || e) }; }
+    // TASK 3: stamped AFTER the network call above resolves, not before it — the observation instant.
+    const generatedAt = new Date().toISOString();
+    const data = { generatedAt, release };
+    if (release.ok) { TRUST_CACHE = { at: Date.parse(generatedAt), data }; saveConsoleCache(); }
+    return { ...data, channel: readInstallChannel(), sbom: readSbom(), ...freshnessOf(generatedAt) };
   }
-  let release;
-  try { release = await fetchReleaseDigest(); }
-  catch (e) { release = { ok: false, error: String((e && e.message) || e) }; }
-  const data = { generatedAt: new Date().toISOString(), release };
-  if (release.ok) { TRUST_CACHE = { at: Date.now(), data }; saveConsoleCache(); }
-  return { ...data, channel: readInstallChannel(), sbom: readSbom() };
+
+  // WARM — including over-ceiling. Never await the network here; hand back what we measured, say
+  // when, and let a debounced background refresh (never THIS request) produce the next one.
+  const fresh = freshnessOf(TRUST_CACHE.data.generatedAt);
+  if (fresh.stale) kickTrustRefresh();
+  // Disk facts stay live even when the release read is served from cache — the SBOM file and install
+  // channel can change (a fresh `npm run sbom`, a plugin update) between two calls inside the ceiling.
+  return { ...TRUST_CACHE.data, channel: readInstallChannel(), sbom: readSbom(), ...fresh };
 }
 
 // ── Assemble the read-models ─────────────────────────────────────────────────────────────────────
@@ -1237,11 +1348,15 @@ function gatherState(cwd, { fleet = true } = {}) {
   };
   // Cache the last good state so repeat page-loads paint instantly, same as the stack audit does.
   // TOKEN is per-server-run and must never touch disk — ?fast=1 splices the live one back in.
-  try {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    const { token, ...safe } = result;
-    fs.writeFileSync(path.join(CONFIG_DIR, 'state-cache.json'), JSON.stringify({ at: result.generatedAt, data: safe }));
-  } catch { /* cache is best-effort; the live gather is the product */ }
+  //
+  // TASK 4: routed through the shared atomic writeCache(), not a private writeFileSync. This used to
+  // be a SECOND, non-atomic writer to the exact same STATE_CACHE path that serveCached()'s own
+  // writeCache() call (and the --refresh-cache CLI branch) also write, right after calling this very
+  // function — a bare writeFileSync racing an atomic rename on one file defeats the atomicity of the
+  // other writer, because a reader can still land mid-truncate from THIS one. writeCache() is already
+  // best-effort internally (never throws), so no extra try/catch is needed here.
+  const { token, ...safe } = result;
+  writeCache(STATE_CACHE, result.generatedAt, safe);
   return result;
 }
 function gatherStack() {
@@ -1255,12 +1370,14 @@ function gatherStack() {
   const recommendations = buildStackRecommendations({ rows: a.rows, stale: a.stale });
   const result = { error: a.error, packages: rows, shadows, summary, recommendations };
   // Cache the last good audit so repeat page-loads render instantly ("as of HH:MM — re-checking").
-  if (!a.error) {
-    try {
-      fs.mkdirSync(CONFIG_DIR, { recursive: true });
-      fs.writeFileSync(path.join(CONFIG_DIR, 'stack-audit-cache.json'), JSON.stringify({ at: new Date().toISOString(), data: result }));
-    } catch { /* cache is best-effort; the live audit is the product */ }
-  }
+  //
+  // TASK 4: routed through the shared atomic writeCache(), same reasoning as gatherState() above —
+  // this used to be a private writeFileSync straight to STACK_CACHE's own path (a SECOND, non-atomic
+  // writer racing the serveCached()/--refresh-cache callers that also write this exact file right
+  // after calling this function). The timestamp is taken HERE, after `result` above is already fully
+  // built from `auditModel()`'s completed scan (Task 3) — never before it, unlike the two callers this
+  // fix also corrects.
+  if (!a.error) writeCache(STACK_CACHE, new Date().toISOString(), result);
   return result;
 }
 
@@ -1758,7 +1875,13 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         });
       }
       if (req.method === 'GET' && url === '/api/stack') {
-        return serveCached(res, STACK_CACHE, () => ({ at: new Date().toISOString(), data: gatherStack() }));
+        // TASK 3: `data: gatherStack()` must not be evaluated as a property inside the SAME object
+        // literal as `at: new Date().toISOString()` — JS evaluates object-literal properties in the
+        // order written, so the previous `{ at: ..., data: gatherStack() }` stamped `at` BEFORE
+        // gatherStack()'s ~22s scan ran, not after it (see the "demo-hang fix" comment above
+        // serveCached for where that figure comes from). Computing gatherStack() as its own statement
+        // first makes the timestamp reflect when the scan actually finished.
+        return serveCached(res, STACK_CACHE, () => { const data = gatherStack(); return { at: new Date().toISOString(), data }; });
       }
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
       if (req.method === 'GET' && url === '/api/lessons') return sendJSON(res, 200, gatherLessons());
@@ -1817,7 +1940,11 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
     // heavy read-models HERE, in a separate process, so the server's event loop is never blocked, and
     // writes each cache the moment it is ready (state first — it is what the page paints first).
     try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe); } catch { /* leave the old cache in place */ }
-    try { writeCache(STACK_CACHE, new Date().toISOString(), gatherStack()); } catch { /* keep prior */ }
+    // TASK 3: function-call arguments are evaluated left-to-right, so the previous
+    // `writeCache(STACK_CACHE, new Date().toISOString(), gatherStack())` evaluated the timestamp
+    // BEFORE gatherStack()'s ~22s scan ran — the same bug as the /api/stack handler above, duplicated
+    // here. gatherStack() as its own statement first fixes it the same way.
+    try { const stackData = gatherStack(); writeCache(STACK_CACHE, new Date().toISOString(), stackData); } catch { /* keep prior */ }
     // Must compute the SAME shape the /api/memory handler does — fleet AND recommendations.
     //
     // This wrote fleet-only, so the background refresh silently ERASED the advocacy the handler had

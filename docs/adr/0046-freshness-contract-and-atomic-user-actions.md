@@ -15,8 +15,10 @@ governs:
   - console/activity.js
 ---
 
-**Status**: **REJECTED** by Fable 5 (50/100), 2026-07-24 — rewrite required before any of this is
-built. Governed DDD: `docs/ddd/0011-freshness-context.md`.
+**Status**: Rejected (2026-07-24)
+
+**REJECTED by Fable 5, 50/100 — rewrite required before any of this is built.**
+Governed DDD: `docs/ddd/0011-freshness-context.md`.
 
 > **Decision 2 was not merely wrong — it was a regression, and it shipped.** "Recompute in-band past
 > the ceiling" reintroduced the outage documented forty lines above the edit in

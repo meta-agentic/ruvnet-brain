@@ -5,10 +5,12 @@
 > **These are announcements and notes, not shipped source.** A gist routinely describes work that is
 > proposed, unreleased, or still moving. Verify against repo source before asserting behavior.
 
-_445 gists · refreshed 2026-07-22_
+_446 gists · refreshed 2026-07-24_
 
 | Updated | Gist | Description |
 |---|---|---|
+| 2026-07-22 | [wifi-densepose-2.0-python-sota-announcement.md](https://gist.github.com/ruvnet/274c55f2849a20b8b31512c41a9766a5) | wifi-densepose 2.0 — Python SOTA extras (AETHER, MERIDIAN, MAT) |
+| 2026-07-22 | [MED.md](https://gist.github.com/ruvnet/e27b77949b0b0d5564ea447edcaf95c3) | Various Medical Discoveries |
 | 2026-07-21 | [tutorial.md](https://gist.github.com/ruvnet/c9a6b4d88e887de392d0b10fe088f1f4) | Train Your Own AI Models for Free Using Google AI Studio |
 | 2026-07-21 | [readme.md](https://gist.github.com/ruvnet/1f278d1994e3bcf8802bf26488258e61) | AgentDB Browser Demo: Agentic Marketing Intelligence System: An intelligent marketing optimization system that uses Agen |
 | 2026-07-19 | [.gist-v0.6.5.md](https://gist.github.com/ruvnet/8c099b17eeb589370b36eff74df08890) | RuView v0.6.5-esp32 — open-source WiFi sensing on a $9 ESP32 board (presence, vitals, motion through walls — no camera) |
@@ -138,7 +140,6 @@ _445 gists · refreshed 2026-07-22_
 | 2026-05-18 | [Prediciton.md](https://gist.github.com/ruvnet/9aae2bf9b0f2dee01511d1118d817eb4) | A prediction framework & prompt uses a "future retrospective" approach where predictions are framed as historical analys |
 | 2026-05-17 | [pi5-cluster-cookbook.md](https://gist.github.com/ruvnet/88e7b053c41cb4f4af7a7ec4af873017) | Pi 5 + Hailo Cluster Cookbook — rvcsi Cognitive RF Observer (detailed reference for the RuView tutorial) |
 | 2026-05-17 | [Anomaly.md](https://gist.github.com/ruvnet/fc979c4e581c254bad17372f0d018702) | Anomaly Detection System for AI Outputs |
-| 2026-05-17 | [MED.md](https://gist.github.com/ruvnet/e27b77949b0b0d5564ea447edcaf95c3) | Various Medical Discoveries |
 | 2026-05-17 | [agentics.md](https://gist.github.com/ruvnet/233ccb75f4dad0b52b9da9aae9cd82ef) | 🌍 AGENTICS : GLOBAL HACKATHON — "Learn. Build. Earn." |
 | 2026-05-16 | [1-quantum-agent-manager.md](https://gist.github.com/ruvnet/b259d2174f901d63d805b34fc6aa9cef) | Quantum Agent Manager is a quantum-inspired task scheduling system |
 | 2026-05-16 | [ruvector-residual-vq.md](https://gist.github.com/ruvnet/cadf124e2e8220682452c268210b09a0) | ruvector 2026: Residual Vector Quantization (RVQ) — 64x memory compression, 14K QPS, pure Rust vector search with multi- |
