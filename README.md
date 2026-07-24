@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.18-dev — updated 2026-07-23 04:06 EDT](https://img.shields.io/badge/version_3.9.18--dev-updated_2026--07--23_04:06_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.50-dev — updated 2026-07-23 04:06 EDT](https://img.shields.io/badge/version_3.9.50--dev-updated_2026--07--23_04:06_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -142,9 +142,12 @@ answers the question the owner has been asking for weeks — **"what is actually
   had zero call sites; the client referenced it only in comments. Built-tested-unwired is this
   project's signature failure, and it happened three times in one night.
 
-Honest limit: this is **3.6, not 4.0**. 4.0 requires levels 3–5 of ADR-028's proactivity ladder
-(contextual, anticipatory, compounding) and all three remain unbuilt — see `docs/4.0-READINESS.md`,
-which grades the current state at **L2** with evidence for every mark.
+Honest limit: this is still a dev release, **not 4.0**. 4.0 requires levels 3–5 of ADR-028's ladder
+(contextual, anticipatory, compounding) **shipped and independently graded ≥95**. The mechanisms now
+exist — L3's delivery seam (the chokepoint), an L4 goal surface, and L5 cross-project promotion (lessons
+promoted to your global brain, survival proven by isolation) — but the ladder still grades **L2–L3**,
+because L3 is built rather than live (deploy-gated) and the five acceptance metrics aren't all measured.
+See `docs/4.0-READINESS.md` and `docs/4.0-EXECUTIVE-BRIEFING.md` (last independent grade: 70/100 overall).
 
 <details>
 <summary><b>Earlier &#8212; what 3.5 shipped</b> &#183; it stopped waiting to be asked. <i>Expand for the receipts.</i></summary>
@@ -406,7 +409,7 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **149,721 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **149,729 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
@@ -516,7 +519,7 @@ node forge-ask-all.mjs --dir . --q "How does RuVector implement HNSW vector sear
 
 This project versions in the open (see the live badge up top for the exact plugin version; the downloadable knowledge bundle is a separate track) — we don't claim “done,” “complete,” or “zero hallucinations.” Where it stands:
 
-- ✅ **The grounding brain is real and proven** — 54 public stores · 149,721 public source chunks (57 built stores incl. private), dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
+- ✅ **The grounding brain is real and proven** — 54 public stores · 149,729 public source chunks (57 built stores incl. private), dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.

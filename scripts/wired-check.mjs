@@ -3,155 +3,430 @@
  * wired-check.mjs — refuses to let a module ship with zero callers.
  *
  * THE FAILURE THIS EXISTS TO END. On 2026-07-22 this project shipped built-tested-unwired code
- * SEVEN times in a single session:
+ * SEVEN times in a single session: capability-registry, capability-audit, lesson-gate, anticipate,
+ * advocacy-outcomes, lesson-promote, continuation-gate. Each was found by a human running grep.
+ * Every one passed its own tests, because a unit test imports the module directly — the one caller
+ * whose existence is guaranteed by its own file.
  *
- *   capability-registry.mjs   zero call sites; the console referenced it only in comments
- *   capability-audit.mjs      zero call sites
- *   lesson-gate.mjs           five triggers "enforcing", nothing invoked them
- *   anticipate.sh             invoked by zero hooks
- *   advocacy-outcomes.mjs     fed by zero callers, so precision had no denominator
- *   lesson-promote.mjs        zero references to `demoted`, so demotion was theatre
- *   continuation-gate.mjs     global hook pointed at a path not yet shipped
- *
- * Each was found by a human or a reviewer running `grep`. Each time the fix took minutes and the
- * discovery took hours. Every one of them passed its own tests, because a test imports the module
- * directly — the one caller that proves nothing about whether the product uses it.
+ * (Those names are deliberately NOT written here as `<name>.mjs`. The first version of this header
+ * listed them in invocation form, and the gate's own memorial then matched as a caller for every
+ * module it eulogised. A gate must not be able to wire its own dead.)
  *
  * The owner's principle, P7: "Built is not shipped; shipped is not wired. A feature exists only
  * when a real caller invokes it on a real user path."
  *
- * Seven repetitions of one mistake is not a discipline problem. Discipline is what failed. So this
- * is a gate, and gates in this repo run 8/8 while prose runs 0/6.
- *
  *   node scripts/wired-check.mjs            report
  *   node scripts/wired-check.mjs --check    exit 1 if any shippable module has no caller
  *
- * WHAT COUNTS AS A CALLER: an import or invocation from non-test, non-self source. A test is
- * explicitly NOT a caller — that exclusion is the entire point, because every one of the seven
- * above had passing tests.
+ * ── WHAT CHANGED, 2026-07-22 (ADR-037 / DDD-0010) ────────────────────────────────────────────
+ * v1 of this gate reported 62/62 wired, exit 0, and had never failed. That was not health, it was
+ * silence. Adversarial review (GPT-5.6-Sol, Fable 5) found three defects, all measured:
+ *
+ *   1. THE PREDICATE. v1 matched any MENTION of the basename anywhere in a file. A comment counted.
+ *      A substring counted — `prove` matched "proven"; `version` matched a `"version"` JSON key.
+ *      DDD-0010's own glossary said a Caller is "explicitly NOT any mention of the module's name",
+ *      and the implementation was exactly that. The model disclaimed the code and nobody diffed it.
+ *      Now: a caller must reference the module in INVOCATION SHAPE — inside a quoted string (import,
+ *      require, npm script, workflow `run:`) or after node/bash/sh. Prose no longer wires anything.
+ *
+ *   2. THE INVENTORY. v1 read `scripts/*.mjs` only — 40 of 129 first-party executables were
+ *      invisible, never audited, never printed, never counted. Among them
+ *      `plugin/scripts/anticipate.sh`: one of the seven failures above, which v1 could never have
+ *      caught. An invisible module is worse than an unwired one, because nothing reports it.
+ *
+ *   3. THE SEARCH SET. `kb/` was scanned for callers — ~3MB of JSON corpora INDEXING 68 OTHER
+ *      REPOSITORIES, so a foreign repo's filenames counted as callers here. Removed. Also added:
+ *      `.github/` + `--include=*.yml` (all 5 workflows are YAML; adding the directory without the
+ *      glob, as ADR-037 draft 1 proposed, would have matched exactly nothing) and root package.json,
+ *      where npm-script callers actually live.
+ *
+ * Also fixed: the test exclusion filtered `/tests/` PATHS, so `scripts/console-engine.test.mjs`
+ * counted as a caller — violating this file's own rule in-tree. Now excluded by NAME, anywhere.
+ *
+ * WHAT COUNTS AS A CALLER: an invocation-shaped reference from non-test, non-self source. A test is
+ * explicitly NOT a caller — that exclusion is the entire point, because every one of the seven had
+ * passing tests.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 const REPO = path.resolve(import.meta.dirname, '..');
 const argv = process.argv.slice(2);
 
 /**
- * Modules that are legitimately standalone: a human runs them, so a call site would be wrong to
- * demand. Each entry needs a REASON, so the allowlist cannot quietly become the place unwired code
- * goes to hide — which is the obvious way a gate like this dies.
+ * Modules that are legitimately standalone: a human or an out-of-repo scheduler runs them, so a call
+ * site would be wrong to demand.
+ *
+ * An array, not an object literal, so a duplicate name is DETECTABLE. v1 used an object and had
+ * `memory-doctor` twice (lines 50 and 64) — last-wins discarded one silently.
+ *
+ * HONEST LIMIT (ADR-037 §3): a reason here is PROSE, and prose is not verification. v1's four
+ * "invoked from the workflow" reasons were all written in the same commit as the gate, by an author
+ * who never ran the check — three of them were simply false. No schema detects that. The two real
+ * mitigations are (a) needing far fewer entries now the predicate is correct, and (b) PRINTING
+ * every entry on every run, below, so they cannot rot unseen.
  */
-const STANDALONE = {
-  'wired-check': 'this gate; run by CI and by hand',
-  'lesson-seed': 'one-shot seeding, run deliberately by a human',
-  'lesson-ratify': 'the human control surface — a CLI is its entire purpose',
-  'lesson-promote': 'run by a human or the nightly; surfaced to the user by the capability registry',
-  'memory-doctor': 'diagnostic CLI',
-  'token-report': 'diagnostic CLI',
-  'health-repair': 'invoked by the console via runNode, which this scanner cannot see as an import',
-  'capability-audit': 'invoked by the console via the capability surface',
-  'release': 'the ship path, run by a human',
-  'self-update': 'run by the nightly cron',
-  'sync-version': 'run by gates and by hand',
-  'claims-verify': 'run by CI',
-  'build-bundle': 'run by the release path',
-  'count-chunks': 'run by the nightly',
-  'brain-stamp': 'run by the nightly',
-  // Diagnostics and one-shots a human invokes deliberately. Each reason is real; an allowlist
-  // without reasons is just where unwired code goes to hide, which would kill this gate quietly.
-  'agentdb-fleet-doctor': 'diagnostic CLI run by hand when a fleet looks wrong',
-  'memory-doctor': 'diagnostic CLI',
-  'ingest-meeting': 'one-shot ingestion, run by hand',
-  'fix-metaharness-memretrieve': 'one-shot historical repair; kept for the record',
-  'gen-console-images': 'build-time asset generation, run by hand',
-  'behavioral-l1-l4': 'behavioural test harness, invoked by its own test file',
-  'check-indexation': 'CI check invoked from the workflow, not from source',
-  'check-legibility': 'CI check invoked from the workflow, not from source',
-  'status-honesty': 'CI check invoked from the workflow, not from source',
-  'doc-currency': 'gate CLI: npm run doc:currency, and the release path',
-  'adr-backfill': 'one-shot backfill run by a human; its result is enforced by adr-format.test.mjs',
-};
+const STANDALONE = [
+  ['lesson-seed', 'one-shot seeding, run deliberately by a human'],
+  ['lesson-ratify', 'the human control surface — a CLI is its entire purpose'],
+  ['memory-doctor', 'diagnostic CLI'],
+  ['token-report', 'diagnostic CLI'],
+  ['agentdb-fleet-doctor', 'diagnostic CLI run by hand when a fleet looks wrong'],
+  ['ingest-meeting', 'one-shot ingestion, run by hand'],
+  ['fix-metaharness-memretrieve', 'one-shot historical repair; kept for the record'],
+  ['gen-console-images', 'build-time asset generation, run by hand'],
+  ['adr-backfill', 'one-shot backfill by a human; its result is enforced by adr-format.test.mjs'],
+  ['release', 'the ship path, run by a human'],
+  // Run by the launchd nightly, which lives OUTSIDE this repo — so no in-repo caller can exist.
+  // This is the one category the scanner genuinely cannot reach, and saying so is the honest form.
+  ['self-update', 'launchd nightly (out-of-repo scheduler)'],
+  ['count-chunks', 'human-run CLI — recount + restamp chunk surfaces (--check for drift); no scheduler'],
+  ['brain-stamp', 'invoked by self-update.mjs:249, the nightly launchd driver (com.ruvnet.brain-nightly)'],
+  ['lesson-promote', 'human-run CLI — promotion is manual (--apply); no scheduler yet (automation is ADR-029 #4, open)'],
+  ['behavioral-l1-l4', 'behavioural harness invoked by its own test file — not a product path'],
+
+  // ADDED 2026-07-23 (P7 sweep, ADR-037 honesty bar — each reason verified against reality below,
+  // not written blind. See PROGRESS.md / the wiring report for the per-item evidence.)
+  //
+  // launchd nightly (out-of-repo scheduler) — confirmed LIVE via `launchctl list` + the installed
+  // plist's own ProgramArguments on 2026-07-23, not assumed from the header comment alone:
+  ['clear-claude-tmp', 'launchd, every 3h (out-of-repo scheduler) — confirmed live: '
+    + 'com.stuartkerr.clear-claude-tmp.plist is loaded and its ProgramArguments invoke this exact file'],
+  ['nightly-gists', 'launchd nightly 21:47 (out-of-repo scheduler) — confirmed live: '
+    + 'com.ruvnet.brain-gists.plist is loaded and its ProgramArguments invoke this exact file'],
+  ['nightly-wrapper', 'launchd nightly 03:15 (out-of-repo scheduler) — confirmed live: '
+    + 'com.ruvnet.brain-nightly.plist is loaded and its ProgramArguments invoke this exact file'],
+  ['routing-flywheel', 'launchd nightly 04:45 --dry-run (out-of-repo scheduler) — confirmed live: '
+    + 'com.ruvnet.routing-flywheel.plist is loaded and its ProgramArguments invoke this exact file'],
+  ['install-npx-witness', 'one-shot idempotent installer for the com.ruvnet.npx-witness launchd job, '
+    + 'run by hand once — confirmed live: the installed plist\'s ProgramArguments match exactly what '
+    + 'this script writes. The recurring job body is scripts/npx-witness.sh, wired separately'],
+
+  // human-run KB-build/grading harnesses — documented as a unit in CONTRIBUTING.md §5 ("the test/
+  // grading scripts") and exercised by hand per PROGRESS.md session logs (`--name X --variant Y`).
+  // Each needs an external `../ruvnet-repos/<name>` clone and/or a paid multi-vendor LLM call
+  // (OPENROUTER_API_KEY) to grade a KB variant — deliberately outside gate.sh's fast/free/local
+  // pipeline (gate.sh only runs prove.mjs, which needs neither):
+  ['brain-capability-check', 'human-run KB grading harness (CONTRIBUTING.md §5); '
+    + 'grades a built variant against kb/capability.*.json by hand before shipping'],
+  ['brain-grade-groundtruth', 'human-run KB grading harness (CONTRIBUTING.md §5); needs an external '
+    + '../ruvnet-repos/<name> clone + paid multi-vendor LLM grading, run by hand per repo'],
+  ['build-l2', 'human-run KB synthesis harness (CONTRIBUTING.md §5); synthesizes + grades L2 prose '
+    + 'via a paid multi-vendor LLM panel, run by hand per repo/variant'],
+  ['build-primer', 'human-run KB synthesis harness, the same proven shape as build-l2 (its own header): '
+    + 'per-repo top-down primer over the 6 comprehension archetypes, paid-LLM synthesis, run by hand per '
+    + 'repo. Surfaced here 2026-07-23 when the comment-strip stopped counting its usage-example mentions '
+    + 'as callers — it never had a code caller, it is invoked by a person.'],
+  ['gen-images', 'human-run explainer-image generator (OpenAI gpt-image-1, dall-e-3 fallback), run by '
+    + 'hand when the explainer art needs regenerating — a paid one-shot build tool with no code caller, '
+    + 'same class as the KB synthesis harnesses above. Surfaced by the 2026-07-23 comment-strip.'],
+
+  // diagnostic CLIs run by hand — same shape as memory-doctor/token-report/agentdb-fleet-doctor above:
+  ['calibrate-router', 'measurement harness run by hand to calibrate router tiers on real runs; '
+    + 'billing-safety wrapped (strips API keys so it can only bill the subscription)'],
+  ['proactivity-metrics', 'ADR-041 recall + false-alarm harness. Its own CLI prints the two metrics, and '
+    + 'tests/integration/proactivity-ground-truth + tests/mutation/proactivity-detector-mutation exercise '
+    + 'it — a test is not a caller, so it registers here like calibrate-router. It spawns the REAL '
+    + 'capability-registry.mjs against a ground-truth scratch machine to measure detector-recall and '
+    + 'false-alarm IN-FENCE (the two ADR-028 metrics that do not need the deploy gate).'],
+  ['correction-detect-measure', 'the measurement harness ADR-033 §2 requires, run by hand (its own '
+    + '`invokedDirectly` CLI). It walks the real transcript corpus to score correction-detect on a '
+    + 'held-out split. It was previously reported "wired" by three mentions that are ALL prose — two '
+    + 'header comments in correction-detect{,-embed}.mjs and this file\'s own HELD string — the exact '
+    + '"a gate must not wire its own dead" hole an independent regrade found; the comment-strip closes '
+    + 'the comment half, and this entry is the honest classification for a hand-run harness.'],
+  ['correction-detect-embed', 'ADR-033 NEGATIVE-RESULT reference, run by hand. Built 2026-07-23 to '
+    + 'test whether an embedding k-NN (the same local Xenova/all-MiniLM-L6-v2 path the KB uses) clears '
+    + 'the lesson-extraction floor where the regex cannot. It does NOT: measured WORSE precision than '
+    + 'the regex (25% vs 50-100%) at comparable recall on the same held-out split, because MiniLM '
+    + 'separates by topic, not by the pragmatic "is this correcting the agent" property. Kept, wired to '
+    + 'nothing on purpose, so the negative is reproducible and not re-litigated — NOT a path to wire in.'],
+  ['check-indexation', 'diagnostic CLI run by hand; explicitly "always exit 0, not a gate" per its '
+    + 'own header — live Bing/Google scraping to eyeball real-world SEO status, not CI-appropriate'],
+  ['check-legibility', 'manual pre-ship check run by hand against a LOCAL dev server the developer '
+    + 'starts themselves (--url http://127.0.0.1:.../page.html, via Playwright) — needs a live '
+    + 'rendered page, not a static diff, so it is a dev-loop tool like gen-console-images.mjs, not a '
+    + 'CI step'],
+  ['dev-plugin-link', 'developer convenience CLI — its own header: "Users never run it." Hot-links '
+    + 'the cached plugin install to the working tree so hook edits apply without a CC restart'],
+
+  // ADR-0026 Meta LLM Proxy passthrough trial — both are human-run by design (one launches a proxied
+  // session interactively via `exec claude "$@"`, the other is the trial's safety-net uninstaller):
+  ['claude-proxied', 'ADR-0026 proxy trial: human-run launcher for one proxied Claude Code session '
+    + '(exec claude "$@") — interactive by design, never invoked programmatically'],
+  ['proxy-revert', 'ADR-0026 proxy trial: human-run safety-net uninstaller, run by hand to fully '
+    + 'revert the trial'],
+
+  // lesson-capture CLI — same shape as lesson-seed/lesson-ratify above: a human runs this with
+  // --task/--tried/--worked/--critique flags. docs/ARCHITECTURE-MAP.md documents the pipeline as
+  // "record-lesson.mjs -> lesson-store.mjs -> lesson-ratify.mjs (a human, never the model)":
+  ['record-lesson', 'human-run structured lesson-capture CLI (--task/--tried/--worked/--critique); '
+    + 'never invoked by the model itself, by design'],
+
+  // one-shot, and its job is done: issue #4 closed 2026-07-10 (confirmed live via `gh issue view 4`).
+  // Per the file's own header its 07:17 launchd trigger removed itself after firing, so no plist
+  // remains to find. Kept for the historical record, same precedent as fix-metaharness-memretrieve
+  // above — NOT re-wired, because there is nothing left for it to verify:
+  ['verify-nightly-close-issue4', 'one-shot, job complete: issue #4 closed 2026-07-10 (confirmed '
+    + 'live); its own launchd trigger self-removed after firing. Kept for the record — deletion is '
+    + 'also reasonable and is flagged as a candidate in the wiring report, Stuart\'s call'],
+
+  // Gates that ship deliberately INERT in hooks.json (SECURITY.md documents this exact class:
+  // "ship as inert files with every install; they only ever run if something else explicitly wires
+  // them into a settings.json") — an in-repo caller is structurally the wrong thing to demand for a
+  // gate the INSTALLING USER activates in their own, out-of-repo settings.json:
+  ['ground-before-write', 'PreToolUse (Write|Edit|MultiEdit) gate — confirmed LIVE 2026-07-23 wired '
+    + 'into Stuart\'s own global ~/.claude/settings.json (ADR-0012), not this repo\'s files. '
+    + 'SECURITY.md documents it as shipping inert in hooks.json by design'],
+  ['grounding-stamp', 'PostToolUse hook on search_ruvnet — the OTHER half of ground-before-write: it '
+    + 'stamps which rUv products a query grounded, read later by the write-path gate. SECURITY.md §"four '
+    + 'more scripts" names it explicitly as shipping INERT with every install, run only when a user\'s '
+    + 'settings.json wires it (this repo\'s .claude/settings.json does). Same ships-inert class as '
+    + 'ground-before-write above; surfaced here 2026-07-23 when the comment-strip stopped a prose mention '
+    + 'from standing in for a caller.'],
+  ['kling-preflight', 'PreToolUse (Bash) gate — ships inert by design, same SECURITY.md class as '
+    + 'ground-before-write. Per ADR-0014 ownership moved to the Kling skill (confirmed live: a copy '
+    + 'ships at ~/.claude/skills/klingai/scripts/kling-preflight.sh); NOT currently wired into any '
+    + 'settings.json there either — honestly dormant until a user opts in, not a silent gap'],
+];
+// REMOVED 2026-07-22, each verified before removal:
+//   check-legibility / check-indexation / status-honesty — claimed "invoked from the workflow";
+//     nothing in .github/ invokes them. The claim was false, so they are now audited for real.
+//   claims-verify — the claim was TRUE (.github/workflows/ci.yml:56 runs `npm run claims:verify`).
+//     It needs no entry now that package.json and *.yml are searched. Draft 1 of ADR-037 called this
+//     one false too; it had grepped `claims-verify` while the npm script is `claims:verify`.
+//   doc-currency, sync-version, build-bundle, health-repair, capability-audit, wired-check —
+//     all have real invokers the corrected scanner now finds on its own.
 
 /**
- * DELIBERATELY HELD — built, correct to keep, and knowingly NOT wired yet, each with the bar it
- * must clear before it may ship.
- *
- * This is a separate category from STANDALONE on purpose. Filing held work under "standalone"
- * would be a small lie that hides a real gap, and this gate exists because small lies about
- * wiring cost this project seven incidents in one day. Held work is VISIBLE work.
+ * DELIBERATELY HELD — built, correct to keep, knowingly NOT wired, each with the bar it must clear.
+ * A separate category from STANDALONE on purpose: filing held work under "standalone" would be a
+ * small lie that hides a real gap. Held work is VISIBLE work.
  */
 const HELD = {
-  'correction-detect': 'N3 lesson extraction. Measured at ~27% precision against a >=90% shipping '
-    + 'floor (ADR-033). Wiring it would feed the lesson store garbage at 3 rejects per 4 hits, and '
-    + 'a store full of garbage is worse than an empty one. Ships when precision clears the floor.',
+  'correction-detect': 'N3 lesson extraction. Re-measured 2026-07-23 on a reproducible held-out split '
+    + 'of 1,328 real transcripts (scripts/correction-detect-measure.mjs): 5 real detector bugs fixed, '
+    + 'corpus detections 2->8, ~50-100% precision at n=4 on the holdout. TWO measured findings now bound '
+    + 'this, and both point the same way. (1) The >=100-DETECTION floor is UNREACHABLE ON THIS CORPUS: '
+    + 'hand-labeling all 271 loose-net candidates across the full 1,328 transcripts against ADR-033\'s '
+    + 'four-signal definition found only ~37-43 genuine corrections TOTAL — a third of the floor. The '
+    + 'floor is a fact about the data, not the regex. (2) The embedding classifier that this note used '
+    + 'to name as the way out was BUILT and MEASURED (scripts/correction-detect-embed.mjs, STANDALONE): '
+    + 'it is WORSE than the regex (25% vs 50-100% precision, comparable recall) and less legible, because '
+    + 'MiniLM separates by topic not by pragmatics. No primitive clears >=100 here. The honest floor '
+    + '(owner decision, ADR-033) is ">=90% precision at whatever N the corpus supports, accumulating as '
+    + 'it grows" — under which this STILL stays HELD, precision at the available N being unproven. '
+    + 'CORPUS WIDENED 2026-07-24 (the lever nobody had pulled): the note above said the floor is a fact '
+    + 'about THE DATA — true, and it was measured on ONE project. Re-run across 8 further transcript '
+    + 'corpora (--corpus-dir): 2,728 files / 2,641 candidates / 11 detections, for a combined 4,083 '
+    + 'files / 4,023 candidates / 19 detections. Detections went 8 -> 19 with ZERO detector changes, so '
+    + 'the binding constraint was corpus size, not the regex. TWO findings. (1) IT GENERALISES: it fires '
+    + 'in a salon website, an insurance-appeal tool and a health platform — non-software domains it was '
+    + 'never tuned on — at a comparable low rate. Not 0 (which would mean overfit to this repo\'s '
+    + 'dialect) and not a flood (false positives). That was the open question about the second-person '
+    + 'rule and it now has an answer. (2) THE FLOOR IS REACHABLE, JUST FAR: at ~19 per 4,083 transcripts, '
+    + '>=100 needs on the order of 21,000 transcripts. That is a schedule, not a wall — the earlier '
+    + '"unreachable" was true of one project and false of the machine. '
+    + 'PRECISION MEASURED AT n=19 (2026-07-24), by THREE independent raters labelling BLIND — they were '
+    + 'given the utterances with the detector verdict stripped, and the author did not label, being '
+    + 'unblinded by construction. Majority vote. HOLDOUT (the only unbiased half): n=9, 7 TRUE / 2 FALSE, '
+    + 'ZERO borderline, so strict and lenient agree exactly: PRECISION 77.8%. Combined n=19: 68.4% strict '
+    + '/ 84.2% lenient. Rater agreement 73.7-84.2% pairwise, 13/19 unanimous. THIS REPLACES the old '
+    + '"~50-100% at n=4" — a range so wide it asserted nothing. The wider corpus did not just grow N, it '
+    + 'REVEALED THE DETECTOR IS WEAKER than the small sample implied, which is precisely why n=4 was never '
+    + 'shippable. 77.8% is BELOW the >=90% floor, so this stays HELD — now for a measured reason instead '
+    + 'of an unproven one. THE RESIDUAL FALSE-POSITIVE CLASS IS NAMED AND SINGULAR: both holdout misses '
+    + '(and every tune borderline) are REPROACH PHRASED AS A QUESTION — "you keep doing X, why?" — real '
+    + 'dissatisfaction about a real pattern, carrying no explicit forward rule. Signal 3 binds a quantifier '
+    + 'to the second person and these satisfy it ("you keep"), yet a human reads them as complaint, not '
+    + 'instruction. That is the next thing to fix, and it is one class, not a long tail.',
   'lesson-lifecycle': 'retirement + generalization for extracted lessons. Depends on '
     + 'correction-detect; wiring it alone would retire hand-written lessons on evidence that does '
     + 'not exist yet.',
+  'capability-audit': 'THE L3 GAP, and now visible instead of falsely green. The offensive half of '
+    + 'retrieval — it answers "what capability is installed and dormant?" — but nothing calls it: verified '
+    + '2026-07-23 that its only non-comment mention is its own invokedDirectly guard (self). It was '
+    + 'reported "wired" purely by JSDoc mentions in capability-registry.mjs until the comment-strip; '
+    + 'ADR-028 and 4.0-READINESS §4 both name this the single largest 4.0 gap. HELD because the fix is a '
+    + 'real decision — one in-session consumer that speaks unprompted, with a one-action permanent silence '
+    + '— not a line of wiring.',
+  'issue-fix': 'the GitHub-issue AUTO-FIXER, built but intentionally NOT wired. Verified 2026-07-23: '
+    + 'issue-watch.yml runs only issue-watch.mjs (which LISTS issues), and issue-watch.mjs spawns only '
+    + 'gh/sleep — never this. Its own yml comment says why it is gated: it "spawns a headless Claude and '
+    + 'costs money + needs credentials". Wiring it is a cost-and-consent decision the owner makes, not a '
+    + 'gap to silently close.',
 };
 
-/** Every first-party module that is expected to be USED by something. */
-function shippableModules() {
+/** Where first-party executables live. v1 knew only the first line of this table. */
+const INVENTORY_ROOTS = [
+  { dir: 'scripts', exts: ['.mjs', '.sh'], recurse: true },
+  { dir: 'plugin/scripts', exts: ['.mjs', '.sh'], recurse: true },
+  { dir: 'bin', exts: ['.mjs'], recurse: false },
+  { dir: 'console', exts: ['.js'], recurse: false },
+];
+
+/**
+ * Where callers live. NOT kb/ — it indexes 68 other repos and their filenames are not our callers.
+ *
+ * `.claude/` earns its place the hard way: the first run of the corrected gate reported
+ * `version-bump-gate.sh` unwired, and it is invoked from `.claude/settings.json`. Per ADR-037 §3, an
+ * invoker outside the roots proves the ROOTS are incomplete — the fix is to add the root, never to
+ * write an exemption. That rule caught its own author within a minute of the gate first running.
+ */
+const CALLER_ROOTS = ['scripts', 'plugin', 'console', 'bin', '.github', '.claude', 'package.json'];
+const CALLER_EXTS = new Set(['.mjs', '.js', '.sh', '.json', '.html', '.yml', '.yaml']);
+
+const isTestFile = (f) => /\.(test|spec)\.(mjs|js)$/.test(path.basename(f))
+  || f.includes(`${path.sep}tests${path.sep}`) || f.startsWith(`tests${path.sep}`);
+
+function walk(abs, recurse, out = []) {
+  let entries = [];
+  try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const full = path.join(abs, e.name);
+    if (e.isDirectory()) {
+      if (recurse && e.name !== 'node_modules' && !e.name.startsWith('.')) walk(full, recurse, out);
+    } else out.push(full);
+  }
+  return out;
+}
+
+/** Every first-party module expected to be USED by something. */
+export function shippableModules(repo = REPO) {
   const out = [];
-  for (const dir of ['scripts']) {
-    const abs = path.join(REPO, dir);
-    let names = [];
-    try { names = fs.readdirSync(abs); } catch { continue; }
-    for (const n of names) {
-      if (!n.endsWith('.mjs')) continue;
-      const base = n.replace(/\.mjs$/, '');
-      if (STANDALONE[base]) continue;
-      if (HELD[base]) continue;   // reported separately, never silently skipped
-      out.push({ base, rel: path.join(dir, n) });
+  for (const root of INVENTORY_ROOTS) {
+    const abs = path.join(repo, root.dir);
+    for (const full of walk(abs, root.recurse)) {
+      const ext = path.extname(full);
+      if (!root.exts.includes(ext)) continue;
+      if (isTestFile(full)) continue;
+      const rel = path.relative(repo, full);
+      out.push({ base: path.basename(full, ext), file: path.basename(full), rel });
     }
   }
   return out;
 }
 
+/** Files that could contain a caller. */
+function callerFiles(repo = REPO) {
+  const out = [];
+  for (const r of CALLER_ROOTS) {
+    const abs = path.join(repo, r);
+    let st; try { st = fs.statSync(abs); } catch { continue; }
+    if (st.isFile()) { out.push(abs); continue; }
+    for (const f of walk(abs, true)) if (CALLER_EXTS.has(path.extname(f))) out.push(f);
+  }
+  return out;
+}
+
 /**
- * Count REAL callers. Tests are excluded deliberately: all seven failures had passing tests, so
- * counting them would make this gate agree with every one of them.
+ * INVOCATION-SHAPED match. The whole correction lives here.
+ *
+ * A caller references the file either inside a quoted string — covering `import ... from '...'`,
+ * `require('...')`, npm scripts, and a workflow's `run:` — or directly after node/bash/sh. A bare
+ * mention in prose does not match, which is what let a comment wire a module in v1.
  */
-function callersOf(base) {
-  let hits = '';
-  try {
-    hits = execFileSync('grep', [
-      '-rl', '--include=*.mjs', '--include=*.js', '--include=*.sh', '--include=*.json', '--include=*.html',
-      base, 'scripts', 'plugin', 'console', 'bin', 'kb',
-    ], { cwd: REPO, encoding: 'utf8' });
-  } catch { return []; }
-  return hits.split('\n').filter(Boolean).filter((f) =>
-    !f.includes('/tests/') && !f.startsWith('tests/') && !f.endsWith(`${base}.mjs`));
+export function callerPattern(fileName) {
+  const q = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line no-useless-escape
+  return new RegExp(`["'\`][^"'\`\\n]*${q}|(?:node|bash|sh|exec|spawn\\w*)\\s+[^\\n]*${q}`);
 }
 
-export function audit() {
-  return shippableModules().map((m) => {
-    const callers = callersOf(m.base);
-    return { ...m, callers, wired: callers.length > 0 };
-  });
+/**
+ * Strip comments BEFORE matching. The invocation branch of callerPattern (`node <file>`) matches a
+ * usage example in a header comment exactly as it matches a real command line — which is how, after
+ * this gate already fixed "a bare prose mention wired a module in v1", a `node scripts/…measure.mjs`
+ * line inside a comment quietly re-opened it (an independent regrade, 2026-07-23, found correction-
+ * detect-measure.mjs reported "wired" by three comment/string mentions, one of them this file's own
+ * HELD reason). Removing comments closes the comment form of that hole.
+ *
+ * Conservative by construction: over-stripping a `//` that lives inside a string (a URL) can only ever
+ * DROP a candidate line, never invent one — and a genuine caller is an import / require / node-exec,
+ * never a URL — so this can hide a prose mention but cannot hide a real caller. The `[^:]` guard keeps
+ * `https://…` from eating its own line. String LITERALS that name a module (e.g. a documentation
+ * string) are deliberately NOT stripped — that is a separate, rarer shape, and the module it would
+ * mis-wire here is instead classified honestly in STANDALONE.
+ */
+export function stripComments(src, ext) {
+  const jsLike = ['.mjs', '.js', '.cjs', '.ts', '.mts'].includes(ext);
+  const shLike = ['.sh', '.yml', '.yaml'].includes(ext);
+  if (!jsLike && !shLike) return src;                // .json has no line-comment syntax
+  // ONLY blank a line that is ENTIRELY a comment (trimmed, it starts with the comment marker). This is
+  // the deliberately narrow, provably-safe version. An earlier attempt span-matched `/*…*/` globally and
+  // a `/*` sitting inside a line-comment made it swallow real code across many lines — it hid
+  // sign-bundle.mjs's genuine caller in self-update.mjs:353 (execFileSync([... 'scripts/sign-bundle.mjs'])).
+  // A REAL invocation never lives on a whole-line-comment line, so this cannot hide a caller; block and
+  // inline comments are left untouched (a caller-shaped mention there is rare and not worth the span risk),
+  // and JSDoc `*` bodies are NOT matched (a `*gen()` line is real code). Every false caller the regrade
+  // found — `// … scripts/…measure.mjs` usage examples — is a whole-line `//`, so this closes exactly it.
+  const marker = jsLike ? '//' : '#';
+  return src.split('\n').map((l) => (l.trim().startsWith(marker) ? '' : l)).join('\n');
 }
 
-const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]).endsWith('wired-check.mjs');
+/** Count REAL callers. Tests excluded deliberately: all seven failures had passing tests. */
+export function callersOf(mod, files, repo = REPO) {
+  const re = callerPattern(mod.file);
+  const hits = [];
+  for (const f of files) {
+    const rel = path.relative(repo, f);
+    if (rel === mod.rel) continue;              // self
+    if (isTestFile(rel)) continue;              // a test is not a caller
+    let src = '';
+    try { src = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    if (re.test(stripComments(src, path.extname(f)))) hits.push(rel);
+  }
+  return hits;
+}
+
+export function audit({ repo = REPO, standalone = STANDALONE, held = HELD } = {}) {
+  const dupes = [];
+  const seen = new Map();
+  for (const [name, why] of standalone) {
+    if (seen.has(name)) dupes.push(name); else seen.set(name, why);
+  }
+
+  const files = callerFiles(repo);
+  const all = shippableModules(repo);
+  const rows = [];
+  for (const m of all) {
+    if (seen.has(m.base)) { rows.push({ ...m, state: 'exempt', why: seen.get(m.base) }); continue; }
+    if (held[m.base]) { rows.push({ ...m, state: 'held', why: held[m.base] }); continue; }
+    const callers = callersOf(m, files, repo);
+    rows.push({ ...m, state: callers.length ? 'wired' : 'unwired', callers });
+  }
+  return { rows, dupes, inventory: all.length };
+}
+
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]).endsWith(`wired-check${path.extname(process.argv[1])}`);
+
 if (invokedDirectly) {
-  const rows = audit();
-  const unwired = rows.filter((r) => !r.wired);
+  const { rows, dupes, inventory } = audit();
+  const by = (s) => rows.filter((r) => r.state === s);
+  const unwired = by('unwired');
 
   if (!argv.includes('--quiet')) {
-    console.log(`\n  ${rows.length} shippable module(s) checked · ${rows.length - unwired.length} wired · ${unwired.length} with NO caller\n`);
-    for (const u of unwired) console.log(`    ✗ ${u.rel}  — built, tested, and invoked by nothing`);
+    console.log(`\n  ${inventory} first-party module(s) in the inventory`);
+    console.log(`    ${by('wired').length} wired · ${by('exempt').length} exempt · `
+      + `${by('held').length} held · ${unwired.length} UNWIRED\n`);
+
+    for (const u of unwired) console.log(`    ✗ ${u.rel}  — built, and invoked by nothing`);
     if (unwired.length) {
       console.log(`\n  A module with no caller is not a feature. Either wire it to a real user path,`);
-      console.log(`  or add it to STANDALONE in this file WITH A REASON.\n`);
-    } else {
-      console.log('  Every shippable module has at least one real caller.\n');
+      console.log(`  or add it to STANDALONE in this file WITH A TRUE REASON.\n`);
     }
-    // Held work is always printed, pass or fail. An unwired feature nobody can see is how a gap
-    // becomes permanent.
-    const held = Object.entries(HELD);
-    if (held.length) {
-      console.log(`  ${held.length} module(s) deliberately HELD — built, not wired, and why:\n`);
-      for (const [k, why] of held) console.log(`    ⏸ scripts/${k}.mjs\n       ${why}\n`);
-    }
+
+    // Every exemption, every run. v1 never printed these, so 3 false reasons rotted unseen for a
+    // day inside the gate built to stop exactly that.
+    console.log(`  ${by('exempt').length} exempt — no caller required, and why:\n`);
+    for (const e of by('exempt')) console.log(`    ○ ${e.rel}\n       ${e.why}`);
+
+    console.log(`\n  ${by('held').length} HELD — built, not wired, and the bar each must clear:\n`);
+    for (const h of by('held')) console.log(`    ⏸ ${h.rel}\n       ${h.why}\n`);
+
+    if (dupes.length) console.log(`  ✗ DUPLICATE exemption(s): ${dupes.join(', ')}\n`);
   }
-  process.exit(argv.includes('--check') && unwired.length ? 1 : 0);
+
+  const bad = unwired.length || dupes.length;
+  process.exit(argv.includes('--check') && bad ? 1 : 0);
 }

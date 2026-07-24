@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOOK = path.join(ROOT, 'plugin', 'scripts', 'anticipate.sh');
@@ -44,6 +44,14 @@ afterEach(() => {
 });
 
 const STATE = () => path.join(home, '.config', 'ruvnet-brain', 'anticipate-state.json');
+const OUTCOMES = () => path.join(home, '.config', 'ruvnet-brain', 'advocacy-outcomes.jsonl');
+
+/** Parse the ledger's JSONL rows for one id — the single source of truth suppression now reads. */
+function ledgerRows(id) {
+  let raw;
+  try { raw = fs.readFileSync(OUTCOMES(), 'utf8'); } catch { return []; }
+  return raw.split('\n').map((s) => s.trim()).filter(Boolean).map((s) => JSON.parse(s)).filter((r) => r.id === id);
+}
 
 /**
  * A capability registry fixture. Rows carry the exact shape auditAll() returns, including the
@@ -194,17 +202,98 @@ export function matchGoal() { return [{ capability: 'learning-hooks', why: 'too 
     // this repo has shipped a dead button before, and the fix is to make the test press it.
     const dismissed = run({ args: ['--dismiss', 'learning-hooks'], registry, matcher });
     expect(dismissed.status).toBe(0);
-    expect(JSON.parse(fs.readFileSync(STATE(), 'utf8')).dismissed).toContain('learning-hooks');
+    // THE SINGLE SUPPRESSION POLICY (2026-07-23): the local anticipate-state.json `dismissed` array
+    // is gone — advocacy-outcomes.mjs's ledger is the only place a dismissal is recorded now, and
+    // DORMANT_ROW carries no `severity`, so it is 'normal' (budget 1): one dismissal fully spends it.
+    expect(ledgerRows('learning-hooks').map((r) => r.action)).toContain('dismissed');
+    expect(dismissed.stdout).toMatch(/will not be raised again/);
 
     // Dismissed means dismissed — even in a brand-new session that has said nothing yet.
     const after = run({ event: { session_id: 'brand-new', prompt: PROMPT }, registry, matcher });
     expect(after.stdout.trim()).toBe('');
 
-    // ...and the undo genuinely restores it. A dismissal with no inverse is a one-way door.
+    // ...and the undo genuinely restores it. A dismissal with no inverse is a one-way door. The undo
+    // is a RESET record, not a deletion — append-only, same as every other write to this ledger.
     const undo = run({ args: ['--undismiss', 'learning-hooks'], registry, matcher });
     expect(undo.status).toBe(0);
+    expect(ledgerRows('learning-hooks').map((r) => r.action)).toEqual(['offered', 'dismissed', 'reset']);
     const again = run({ event: { session_id: 'later', prompt: PROMPT }, registry, matcher });
     expect(again.stdout).toContain(DORMANT_ROW.label);
+  });
+});
+
+describe('anticipate.sh — the dismissal budget is severity-weighted (the single suppression policy)', () => {
+  // THE DEFECT THIS PROVES FIXED. Before this build, anticipate.sh kept its OWN dismissed-Set: ONE
+  // --dismiss call muted a capability forever, at every severity, and advocacy-outcomes.mjs's
+  // DISMISSAL_BUDGET (1 for normal, 3 for high) sat completely uncalled — two disconnected
+  // suppression policies for one decision. These tests drive the REAL hook end-to-end (spawnSync,
+  // real advocacy-outcomes.mjs, real ledger file) and would fail against the old policy: a
+  // high-severity finding would have gone silent after the FIRST dismissal instead of surviving two.
+
+  it('a NORMAL finding (no severity field) is muted by its first dismissal', () => {
+    const registry = writeRegistry([DORMANT_ROW]);   // no `severity` → weightClass() resolves 'normal'
+    const matcher = writeMatcher('remember', [GOOD_MATCH]);
+
+    expect(run({ event: { session_id: 'n1', prompt: PROMPT }, registry, matcher }).stdout)
+      .toContain(DORMANT_ROW.label);
+
+    const d1 = run({ args: ['--dismiss', DORMANT_ROW.key], registry, matcher });
+    expect(d1.status).toBe(0);
+    expect(d1.stdout, 'a normal finding spends its whole budget (1) on the first click').toMatch(/will not be raised again/);
+    expect(ledgerRows(DORMANT_ROW.key).find((r) => r.action === 'dismissed').severity).toBe('normal');
+
+    // A brand-new session — dismissed means dismissed, immediately.
+    expect(run({ event: { session_id: 'n2', prompt: PROMPT }, registry, matcher }).stdout.trim()).toBe('');
+  });
+
+  it('a HIGH-severity finding survives one and two dismissals, and only the third silences it', () => {
+    const HIGH_ROW = {
+      ...DORMANT_ROW, key: 'repair-memory-index', label: 'Repair memory index', severity: 'high',
+      turnOn: { cmd: 'ruflo memory repair' }, evidence: 'integrity_check: 1 corrupt index',
+    };
+    const HIGH_MATCH = { capability: HIGH_ROW.key, why: 'your memory index looks corrupt', confidence: 0.9 };
+    const registry = writeRegistry([HIGH_ROW]);
+    const matcher = writeMatcher('remember', [HIGH_MATCH]);
+
+    expect(run({ event: { session_id: 'h1', prompt: PROMPT }, registry, matcher }).stdout)
+      .toContain(HIGH_ROW.label);
+
+    const d1 = run({ args: ['--dismiss', HIGH_ROW.key], registry, matcher });
+    expect(d1.stdout, 'the first dismissal must know it is high-severity, not fall back to normal')
+      .toMatch(/1\/3 for a high-severity finding/);
+    expect(run({ event: { session_id: 'h2', prompt: PROMPT }, registry, matcher }).stdout,
+      'dismissal 1 of 3 must not yet suppress a high-severity finding').toContain(HIGH_ROW.label);
+
+    const d2 = run({ args: ['--dismiss', HIGH_ROW.key], registry, matcher });
+    expect(d2.stdout).toMatch(/2\/3 for a high-severity finding/);
+    expect(run({ event: { session_id: 'h3', prompt: PROMPT }, registry, matcher }).stdout,
+      'dismissal 2 of 3 must not yet suppress a high-severity finding').toContain(HIGH_ROW.label);
+
+    const d3 = run({ args: ['--dismiss', HIGH_ROW.key], registry, matcher });
+    expect(d3.stdout, 'the third dismissal spends the high-severity budget').toMatch(/will not be raised again/);
+    expect(run({ event: { session_id: 'h4', prompt: PROMPT }, registry, matcher }).stdout).toBe('');
+
+    expect(ledgerRows(HIGH_ROW.key).filter((r) => r.action === 'dismissed')).toHaveLength(3);
+  });
+
+  it('a missing advocacy-outcomes module is silence for `suggest`, and an honest failure for the CLI modes', () => {
+    const registry = writeRegistry([DORMANT_ROW]);
+    const matcher = writeMatcher('remember', [GOOD_MATCH]);
+    const missingModule = path.join(fx, 'no-advocacy-outcomes.mjs');
+
+    const suggest = run({
+      event: { session_id: 's1', prompt: PROMPT }, registry, matcher,
+      env: { RUVNET_ADVOCACY_OUTCOMES_MODULE: missingModule },
+    });
+    expect(suggest.status).toBe(0);
+    expect(suggest.stdout).toBe('');
+
+    const dismiss = run({
+      args: ['--dismiss', 'learning-hooks'], registry, matcher,
+      env: { RUVNET_ADVOCACY_OUTCOMES_MODULE: missingModule },
+    });
+    expect(dismiss.status).toBe(0);
+    expect(dismiss.stderr + dismiss.stdout).toMatch(/advocacy-outcomes module (not found|unavailable)/);
   });
 });
 
@@ -485,4 +574,73 @@ describe('anticipate.sh — footprint', () => {
     }
     expect((Date.now() - t0) / 5).toBeLessThan(300);
   }, 30_000);
+});
+
+describe('anticipate.sh — continuous reconciliation (the L5 loop runs on the PUSH surface)', () => {
+  /**
+   * THE DEDUCTION THIS CLOSES. The precision metric ADR-028 uses to separate advocating from nagging
+   * was only ever reconciled when someone opened the console and it polled /api/capabilities — a PULL
+   * surface guarding an anti-pull metric, ADR-028's own named failure. These tests prove the credit
+   * now happens on the hook that already fires every prompt, with no console visit anywhere in sight.
+   *
+   * They FAIL if the reconcileApplied() call is removed from anticipate.sh: nothing else writes an
+   * APPLIED in this harness, so the assertion drops to zero. That is the point — a test that could not
+   * fail on the un-wired code would be defending nothing.
+   */
+  const advocacyModule = () =>
+    import(pathToFileURL(path.join(ROOT, 'scripts', 'advocacy-outcomes.mjs')).href);
+
+  /** Seed an OFFER through the REAL recorder, so the row is exactly the shape reconcileApplied reads —
+   *  a hand-written JSONL line would be testing a schema the module might never accept. */
+  async function seedOffer(id) {
+    fs.mkdirSync(path.dirname(OUTCOMES()), { recursive: true });
+    const mod = await advocacyModule();
+    const res = mod.record({ id, action: mod.ACTIONS.OFFERED, severity: 'normal' }, { file: OUTCOMES() });
+    expect(res.ok).toBe(true);
+    return mod;
+  }
+
+  it('credits an APPLIED for an offered capability that is now switched on — no console poll involved', async () => {
+    const mod = await seedOffer('learning-hooks');
+    expect(ledgerRows('learning-hooks').filter((r) => r.action === mod.ACTIONS.APPLIED)).toHaveLength(0);
+
+    // The capability is ON now, so it is NOT dormant and the offer path cannot fire again — any APPLIED
+    // that appears came from reconciliation, not from a fresh offer. A real matcher fixture is required
+    // only because the hook refuses to run without one; it is never consulted (dormant is empty).
+    const { status } = run({
+      event: { session_id: 'reconcile', prompt: 'a prompt matching no dormant goal at all' },
+      registry: writeRegistry([{ ...DORMANT_ROW, state: 'on' }]),
+      matcher: writeMatcher('unrelated-needle', []),
+    });
+    expect(status).toBe(0);
+
+    const applied = ledgerRows('learning-hooks').filter((r) => r.action === mod.ACTIONS.APPLIED);
+    expect(applied).toHaveLength(1);
+  });
+
+  it('is idempotent — a second substantive prompt in the same on-state never double-credits', async () => {
+    // Prompts must clear the hook's own >=12-char substantive-prompt guard (anticipate.sh:325) — the
+    // same bar a nudge clears. Reconciliation piggybacks on the hook's real work rather than paying to
+    // audit on every "ok"/"yes", so a trivial prompt is deliberately not a reconciliation point. Two
+    // real prompts here: the first credits the APPLIED, the second must find nothing pending.
+    const mod = await seedOffer('learning-hooks');
+    const registry = writeRegistry([{ ...DORMANT_ROW, state: 'on' }]);
+    const matcher = writeMatcher('unrelated-needle', []);
+    run({ event: { session_id: 'r1', prompt: 'first substantive prompt for reconciliation' }, registry, matcher });
+    run({ event: { session_id: 'r2', prompt: 'second substantive prompt for reconciliation' }, registry, matcher });
+    const applied = ledgerRows('learning-hooks').filter((r) => r.action === mod.ACTIONS.APPLIED);
+    expect(applied).toHaveLength(1);
+  });
+
+  it('credits nothing when the capability is still off — reconciliation is not a fabricated apply', async () => {
+    const mod = await seedOffer('learning-hooks');
+    // Still OFF: the user has not acted, so there is no APPLIED to record. (The offer path is separately
+    // suppressed by the matcher returning nothing, so this run neither offers nor applies.)
+    run({
+      event: { session_id: 'stilloff', prompt: 'a prompt matching no dormant goal at all' },
+      registry: writeRegistry([{ ...DORMANT_ROW, state: 'off' }]),
+      matcher: writeMatcher('unrelated-needle', []),
+    });
+    expect(ledgerRows('learning-hooks').filter((r) => r.action === mod.ACTIONS.APPLIED)).toHaveLength(0);
+  });
 });

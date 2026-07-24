@@ -2,7 +2,8 @@
 id: ADR-003
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-09
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0003: Point deeper — the KB resolves to exact code; the agent never chooses to dig
 

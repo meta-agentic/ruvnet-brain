@@ -26,6 +26,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   SETTINGS_SCHEMA, SETTINGS_VERSION, STORE_PATH,
   defaults, validate, loadSettings, saveSettings, listBackups, revertSettings, escalatesBeyondProject,
@@ -406,6 +407,33 @@ describe('qualitative — every setting explains its own downside', () => {
       expect(s.downside.length, `${s.key}.downside`).toBeGreaterThan(60);
       expect(s.downside, `${s.key}.downside must differ from whyItMatters`).not.toBe(s.whyItMatters);
     }
+  });
+
+  // "The product can never lie" (F: fabricated/undelivered behavior on a user-facing surface). The
+  // advocacy field's copy once claimed 'all' shows routine observations 'important-only' filters out
+  // — but plugin/scripts/anticipate.sh, the only dial-governed emitter, never reads 'important-only'
+  // or 'all' as distinct values; it only branches on off vs. on. This test fails the moment either
+  // side of that drifts out of sync again: if the emitter starts differentiating the two levels for
+  // real, this test breaks and says so, which is the signal to restore the richer copy honestly.
+  it('advocacy copy does not claim a routine/important split the emitter does not implement', () => {
+    const anticipatePath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'plugin', 'scripts', 'anticipate.sh',
+    );
+    const src = fs.readFileSync(anticipatePath, 'utf8');
+
+    // Ground truth: the emitter's only advocacy-level branch is the off-quit. If a future change adds
+    // a real 'all'-specific or 'important-only'-specific branch, this assertion — not just the copy —
+    // is what should be revisited.
+    expect(src).toMatch(/ADVOCACY\s*===\s*'off'/);
+    expect(src).not.toMatch(/ADVOCACY\s*===\s*'all'/);
+    expect(src).not.toMatch(/ADVOCACY\s*===\s*'important-only'/);
+
+    const advocacy = SETTINGS_SCHEMA.find((s) => s.key === 'advocacy');
+    // The copy must say the two "on" levels behave the same today, not imply 'all' is noisier than
+    // 'important-only' in practice — that filtering does not exist yet.
+    expect(advocacy.downside.toLowerCase()).toMatch(/identical|behave the same|not (yet )?wired/);
+    // And it must not undersell 'off', which genuinely does silence everything.
+    expect(advocacy.downside.toLowerCase()).toMatch(/off.{0,40}(nothing|invisible|silent)/s);
   });
 
   it('no setting is sold — none of the copy tells the user what to pick', () => {

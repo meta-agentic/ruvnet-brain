@@ -22,6 +22,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolveModelCache, modelPresent, classifyBattery } from './model-cache.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // plugin/
 let pass = 0;
@@ -179,6 +180,7 @@ function withServer(KB, fn) {
 // 3 & 4. launcher + capability battery
 const KB = process.env.RUVNET_BRAIN_KB || path.join(os.homedir(), '.cache', 'ruvnet-brain', 'kb');
 let brainSkipped = false; // QE-0011 tests#1: track so "skipped" can never masquerade as "passed"
+let coldSkipped = false;  // cold model cache (embedder not downloaded) — distinct from a retrieval outage
 section('3. MCP launcher + 4. capability battery');
 if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
   brainSkipped = true;
@@ -195,11 +197,39 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
   await finish();
 } else {
   const questions = readJson(process.env.CAP_QUESTIONS || 'test/capability-questions.json') || [];
+  // COLD-CACHE EVIDENCE (docs/4.0-READINESS.md §6 item 1). The MCP child embeds every question with
+  // Xenova/all-MiniLM-L6-v2. If that model has never been downloaded, EVERY query fails and — parsed
+  // by this battery — prints the same "(no hit)" a real outage prints, mislabeling a healthy brain as
+  // broken. Resolve the SAME cache path the child will use (mirrors plugin/mcp/server.mjs) and read
+  // the one honest signal: is the embedder on disk? A cold cache is reported distinctly and is NOT a
+  // failure; an outage (model present, retrieval still dead) stays red. See plugin/test/model-cache.mjs.
+  const modelCache = resolveModelCache();
+  const haveModel = modelPresent(modelCache);
   await withServer(KB, async (rpc) => {
     const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
     check('launcher: initialize returns serverInfo ruvnet-brain', init?.result?.serverInfo?.name === 'ruvnet-brain');
     const tl = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     check('launcher: tools/list exposes search_ruvnet', !!tl?.result?.tools?.find((t) => t.name === 'search_ruvnet'));
+
+    // Cold cache → do NOT run the battery. Running it would either hang on a ~90MB first-run download
+    // or print a misleading "(no hit)" per question. Say plainly it is cold and how to warm it.
+    if (!haveModel) {
+      coldSkipped = true;
+      console.log(`\n  ⚠️  CAPABILITY BATTERY SKIPPED — COLD MODEL CACHE (embedder not downloaded).`);
+      console.log(`      Xenova/all-MiniLM-L6-v2 is ABSENT at ${path.join(modelCache, 'Xenova', 'all-MiniLM-L6-v2')}.`);
+      console.log(`      This is NOT a retrieval outage: the corpus is present and the launcher answered above.`);
+      console.log(`      A cold cache makes EVERY query fail identically to a real outage, so the battery is not`);
+      console.log(`      run rather than printing a misleading "(no hit)" on every question (empty-first house rule).`);
+      console.log(`      Warm it once (downloads ~90MB from HuggingFace) or point at a warmed cache:`);
+      console.log(`        KB_MODEL_CACHE=/path/to/models-cache npm test`);
+      // In a dedicated warm/nightly/release job the cache MUST be warm — REQUIRE_BRAIN promotes the
+      // cold skip to a failure there, same contract as the brain-absent skip above.
+      if (process.env.REQUIRE_BRAIN === '1') {
+        console.log(`      REQUIRE_BRAIN=1 set → treating a cold model cache as FAILURE.`);
+        failures.push('capability battery skipped: cold model cache but REQUIRE_BRAIN=1');
+      }
+      return;
+    }
 
     console.log('\n  -- capability-confidence battery (never wrongly doubt) --');
     for (let i = 0; i < questions.length; i++) {
@@ -212,7 +242,10 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
       const exp = q.expectRepo;
       const repoOk = !exp || (Array.isArray(exp) ? exp.includes(repo) : repo === exp);
       const relOk = rel == null ? true : rel >= (q.minRelevance ?? -3);
-      check(`"${q.query.slice(0, 48)}…" → ${repo || '(no hit)'} @ ${rel ?? 'n/a'}`, !!repo && repoOk && relOk, exp ? `expected one of [${[].concat(exp).join(', ')}]` : '');
+      // Model is present here, so classifyBattery can only return 'pass' or 'fail' — a "(no hit)" now
+      // is a GENUINE outage and stays red, never softened to cold.
+      const status = classifyBattery({ repo, repoOk, relOk, haveModel });
+      check(`"${q.query.slice(0, 48)}…" → ${repo || '(no hit)'} @ ${rel ?? 'n/a'}`, status === 'pass', exp ? `expected one of [${[].concat(exp).join(', ')}]` : '');
     }
   });
   await finish();
@@ -221,7 +254,9 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
 async function finish() {
   section('summary');
   const total = pass + failures.length;
-  const skipNote = brainSkipped ? '  ⚠️  (core capability battery SKIPPED — brain absent; structure/hook/guard only)' : '';
+  const skipNote = brainSkipped ? '  ⚠️  (core capability battery SKIPPED — brain absent; structure/hook/guard only)'
+    : coldSkipped ? '  ⚠️  (core capability battery SKIPPED — COLD model cache; warm it or set KB_MODEL_CACHE. NOT an outage.)'
+    : '';
   console.log(`\n${pass}/${total} checks passed.${skipNote ? '\n' + skipNote : ''}`);
   if (failures.length) { console.log('\nFAILURES:'); failures.forEach((f) => console.log('  - ' + f)); }
   process.exit(failures.length ? 1 : 0);

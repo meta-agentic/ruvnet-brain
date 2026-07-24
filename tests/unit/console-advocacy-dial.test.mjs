@@ -90,6 +90,27 @@ describe('the console serves the advocacy dial — real schema, not invented cop
     expect(f.downside.length).toBeGreaterThan(60);
   });
 
+  it('the served copy scopes the dial to capability advocacy and names the channels it does NOT govern', () => {
+    // HONESTY REGRESSION — fails on the old copy. The dial was sold as THE volume knob on all
+    // unsolicited behavior and claimed "off" meant "nothing volunteers anything at all, including a
+    // real failure". Both are false and verified so: lesson-gate (its own controls — ratification +
+    // blocking-optin.json + RUVNET_LESSON_MAX_SHOWS) and md-stamp (RUVNET_MD_STAMP, a file mutation)
+    // are SEPARATE channels that do not obey this dial, and genuine failure alarms bypass it by
+    // design. The copy the console serves must say what the dial does and does NOT govern — and it
+    // must come FROM the schema, so this reads it back through gatherAdvocacy() rather than trusting a
+    // hand-typed second copy in the client.
+    const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
+    const f = out.schema[0];
+    const copy = `${f.help}\n${f.whyItMatters}\n${f.downside}`;
+
+    // Names the separate channel it does NOT govern (fails on the old copy — it had no "lesson" at all).
+    expect(copy).toMatch(/lesson/i);
+
+    // The false "off = nothing speaks at all" claim is gone (present verbatim in the old copy).
+    expect(copy).not.toMatch(/nothing volunteers anything at all/i);
+    expect(copy).not.toMatch(/including a real failure/i);
+  });
+
   it('reports "not chosen" (null) on a fresh machine — never the default painted on as a real answer', () => {
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
     expect(out.exists).toBe(false);

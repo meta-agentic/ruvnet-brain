@@ -125,70 +125,56 @@
         </blockquote>
       </div>
 
-      <!-- The one metaphor, stated once and reused everywhere: three depth rings
-           around your prompt. Under the new thesis these rings answer the obvious
-           follow-up — "fine, so how do I switch the rest on?" — and the same three
-           colours key the ten items below, so the reader learns the code once. -->
+      <!-- The one metaphor, stated once and reused everywhere: three depth STRATA under your
+           prompt. Under the new thesis these strata answer the obvious follow-up — "fine, so how
+           do I switch the rest on?" — and the same three colours key the ten items below, so the
+           reader learns the code once. -->
       <figure class="hero-art">
-        <!-- REBUILT 2026-07-17 (twice — both lessons kept). Lesson 1: the old
-             640-unit viewBox rendered into a ~453px column, downscaling every
-             label to ~8px; the viewBox is now ~1:1 with the render (460 units).
-             Lesson 2: labeling each ring on its own top arc crowded all seven
-             text nodes into the rings' converging crowns and halo-punched the
-             strokes — so this is the ORIGINAL composition (rings left, label
-             column right, leader lines), which has no collisions by
-             construction: ring 3's right edge peaks at x=226, the label column
-             starts at x=235. Color/type/motion all live in tips.css under
-             `.hero-scene` so both themes and reduced-motion are honored.
-             2026-07-22: ONLY the punchline text changed, and deliberately to a
-             SHORTER string (29 chars -> 24) so the measured no-collision
-             geometry above still holds without re-deriving it. The old punch
-             ("most work never leaves ring 1") argued you can ignore the outer
-             rings — true of effort, but it is the opposite of this page's point,
-             which is that you already own them. -->
+        <!-- REBUILT 2026-07-24 (owner: "not sure I'm loving the three circles — something more
+             elegant"). The rings are now a CROSS-SECTION: depth is a vertical idea, so the three
+             depths read as horizontal strata under the prompt at the surface. This dissolves the
+             ring composition's structural flaw by construction — the old build needed leader lines
+             and a side column because seven labels crowded the rings' converging crowns; a stratum
+             is its own full-width lane, so every label sits inside the band it names. The stroke
+             encoding is UNCHANGED (solid cyan = always on · dashed amber = asked · dotted green =
+             named) and so are the label strings, so the legend and the ten cards below still key
+             perfectly. Depth 1 is now literally the surface — "asks nothing of you" made visual.
+             Color/type/motion live in tips.css under `.hero-scene`; both themes and
+             reduced-motion honored. Motion: the caret pulse drops down the plumb line and depth 1
+             catches it — bands 2 and 3 never stir. That IS the lesson. -->
         <svg class="hero-scene" viewBox="0 0 460 300" role="img"
-             aria-label="Three concentric depth rings around a chat prompt reading 'just type'. Ring one, always on — grounding, memory and gates wrap every prompt; you do nothing. Ring two, say it — plain-English asks. Ring three, name it — commands, skills and tools you call directly. You already own all three.">
+             aria-label="A cross-section: a chat prompt reading 'just type' sits at the surface, and a plumb line drops through three depth strata beneath it. Depth one, always on — grounding, memory and gates; you do nothing. Depth two, say it — plain-English asks. Depth three, name it — commands, skills and tools you call directly. You already own all three.">
 
-          <!-- rings + prompt: the visual. On narrow phones this group is the WHOLE hero (the label
-               column is hidden and the legend below the figure becomes the key), so it re-centers. -->
-          <g class="hs-rings">
-            <!-- rings, inside out: 1 always-on (solid cyan) · 2 asked (dashed amber) · 3 named (dotted green).
-                 hs-pulse + hs-r1-halo are the animation: a prompt leaves the center, ring 1 catches it. -->
-            <circle class="hs-ring3"   cx="105" cy="146" r="120"/>
-            <circle class="hs-ring2"   cx="105" cy="146" r="90"/>
-            <circle class="hs-r1-halo" cx="105" cy="146" r="60"/>
-            <circle class="hs-pulse"   cx="105" cy="146" r="60"/>
-            <circle class="hs-ring1"   cx="105" cy="146" r="60"/>
-
-            <!-- the center: you, typing normally -->
-            <rect class="hs-box" x="49" y="133" width="112" height="26" rx="8"/>
-            <text class="hs-prompt" x="105" y="150"><tspan class="hs-pmark">&gt;</tspan> just type<tspan class="hs-caret">▍</tspan></text>
+          <!-- the surface: you, typing normally, and the plumb line your prompt rides down -->
+          <g class="hs-surface">
+            <rect class="hs-box" x="24" y="18" width="130" height="26" rx="8"/>
+            <text class="hs-prompt" x="89" y="35"><tspan class="hs-pmark">&gt;</tspan> just type<tspan class="hs-caret">▍</tspan></text>
+            <line class="hs-plumb" x1="89" y1="46" x2="89" y2="256"/>
+            <circle class="hs-pulse" cx="89" cy="50" r="4"/>
           </g>
 
-          <!-- label column + its leaders. Hidden ≤29em (they render ~9px at phone width — the
-               legend directly below the figure repeats every word at full size, so nothing is lost;
-               the aria-label above still carries the full description to screen readers). -->
-          <g class="hs-labels">
-            <!-- leader lines: a dot on each ring, a line out to its label -->
-            <circle class="hs-dot l3" cx="180" cy="52"  r="2.6"/>
-            <line   class="hs-lead l3" x1="180" y1="52"  x2="226" y2="52"/>
-            <circle class="hs-dot l2" cx="190" cy="118" r="2.6"/>
-            <line   class="hs-lead l2" x1="190" y1="118" x2="226" y2="118"/>
-            <circle class="hs-dot l1" cx="151" cy="184" r="2.6"/>
-            <line   class="hs-lead l1" x1="151" y1="184" x2="226" y2="184"/>
+          <!-- the strata, surface first. Each band's TOP EDGE carries the depth's stroke style;
+               each label lives INSIDE its own band — no leader lines, no side column. -->
+          <g class="hs-strata">
+            <rect class="hs-band b1" x="24" y="64"  width="412" height="60" rx="9"/>
+            <line class="hs-edge e1 hs-b1-halo" x1="30" y1="64"  x2="430" y2="64"/>
+            <text class="hs-main hs-l1" x="112" y="92">01 · ALWAYS ON</text>
+            <text class="hs-sub hs-note" x="430" y="92">you do nothing</text>
+            <text class="hs-sub"        x="112" y="112">grounding · memory · gates</text>
 
-            <!-- label column, outermost ring first, punchline last.
-                 Baseline rhythm is bbox-derived (mechanically asserted): main→sub 21, sub→sub 20. -->
-            <text class="hs-main hs-l3" x="235" y="56">03 · NAME IT</text>
-            <text class="hs-sub"        x="235" y="77">commands · skills · tools</text>
-            <text class="hs-main hs-l2" x="235" y="122">02 · SAY IT</text>
-            <text class="hs-sub"        x="235" y="143">plain-English asks</text>
-            <text class="hs-main hs-l1" x="235" y="188">01 · ALWAYS ON</text>
-            <text class="hs-sub"        x="235" y="209">grounding · memory · gates</text>
-            <text class="hs-sub"        x="235" y="229">you do nothing</text>
+            <rect class="hs-band b2" x="24" y="132" width="412" height="60" rx="9"/>
+            <line class="hs-edge e2" x1="30" y1="132" x2="430" y2="132"/>
+            <text class="hs-main hs-l2" x="112" y="160">02 · SAY IT</text>
+            <text class="hs-sub"        x="112" y="180">plain-English asks</text>
 
-            <!-- the punchline — the last thing the column says -->
-            <text class="hs-punch" x="235" y="253">you already own all three</text>
+            <rect class="hs-band b3" x="24" y="200" width="412" height="60" rx="9"/>
+            <line class="hs-edge e3" x1="30" y1="200" x2="430" y2="200"/>
+            <text class="hs-main hs-l3" x="112" y="228">03 · NAME IT</text>
+            <text class="hs-sub"        x="112" y="248">commands · skills · tools</text>
+
+            <!-- the punchline — right-aligned on band 3's TITLE baseline, whose right half is
+                 empty by construction ("03 · NAME IT" ends ~x=216; the punch starts ~x=270) -->
+            <text class="hs-punch" x="430" y="228">you already own all three</text>
           </g>
         </svg>
         <figcaption class="hero-cap mono">three ways in · depth 1 asks nothing of you</figcaption>
@@ -403,7 +389,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-mirror">Depth 1 · always on</span>
-        <h2 id="d1-h">The cyan ones need nothing from you</h2>
+        <h2 id="d1-h">Already on — you do not have to do anything</h2>
         <p class="q">Grounding, memory capture and the gates run on every prompt once the plugin is
         wired — whether or not you think about them. Type normally, like it's plain Claude.</p>
       </div>
@@ -435,7 +421,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-rec">Depth 2 · when you ask</span>
-        <h2 id="d2-h">The amber ones are one sentence away</h2>
+        <h2 id="d2-h">One sentence away — just ask, in plain English</h2>
         <p class="q">No syntax to learn. These phrases are live triggers, verbatim from the shipped
         plugin — say one and the right machinery wakes up.</p>
       </div>
@@ -494,7 +480,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-prove">Depth 3 · when you name it</span>
-        <h2 id="d3-h">The green ones are one command away</h2>
+        <h2 id="d3-h">One command away — paste a single line in your terminal</h2>
         <p class="q">When you know exactly what you want, reach for it by name. This is the complete
         board — nothing hidden, nothing extra.</p>
       </div>
@@ -734,6 +720,81 @@
       <b>Small ask, world-class return.</b> How many are actually on is a question this page cannot
       answer — the console reads your machine and tells you, live.</p>
     </div>
+  </section>
+
+  <!-- ================================================= THE PARTS DRAWER
+       Owner, 2026-07-24: "you'd like to know that there are a lot of tools at your disposal that you
+       can reach for and bring in intelligence when you need it… a one-liner per could be useful."
+       And: this page gets re-read, the installer page is seen once — so the reference belongs here.
+
+       EVERY LINE IS GROUNDED. Each entry below was read out of rUv's own source this session via
+       search_ruvnet and carries the file it came from. Nothing here is recalled, and nothing is
+       inferred from a name that merely sounds right — inventing a rUv capability is the single
+       worst failure this project has on record.
+
+       THE FRAME IS LOAD-BEARING. These are parts that exist IN RUV'S SOURCE. Most are NOT wired
+       into the reader's machine, and saying so plainly is the difference between a catalogue and a
+       lie: the console next door reports what you actually have, and it must never be contradicted
+       by this page. "You don't need most of these" is also true, and says so. -->
+  <section class="depth card rail-mirror" id="parts" aria-labelledby="parts-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-mirror">the parts drawer · reach for one when the problem calls for it</span>
+        <h2 id="parts-h">The pieces inside. <em>You will not need them all.</em></h2>
+        <p class="q">These live in rUv's source, and most are <strong>not</strong> switched on for you —
+        that is normal and fine. Using every advanced part in every project is overkill. The point of a
+        list like this is that when you hit the problem, you know the part already exists and you can
+        reach for it instead of building it. Your console shows what you actually have running today.</p>
+      </div>
+    </header>
+
+    <div class="parts-grid">
+      <div class="parts-col">
+        <h3>Finding things</h3>
+        <dl>
+          <dt>HNSW index</dt><dd>Approximate nearest-neighbour search — the default when the corpus is big. <code>ruvector-core/src/index/hnsw.rs</code></dd>
+          <dt>Flat index</dt><dd>Exact search, no approximation, for when the corpus is small enough. <code>ruvector-core/src/index/flat.rs</code></dd>
+          <dt>Hyperbolic HNSW</dt><dd>Poincaré-ball geometry for tree-shaped data — parent/child distances survive the embedding. For taxonomies and code trees. <code>ruvector-hyperbolic-hnsw/src/hnsw.rs</code></dd>
+          <dt>RaBitQ quantisation</dt><dd>32× memory reduction with a Hamming prefilter — reach for it when a large corpus stops fitting comfortably. <code>ruflo · embeddings_rabitq_build</code></dd>
+          <dt>Product quantisation</dt><dd>Compressed vectors, smaller index. <code>ruvector-core/src/advanced_features/product_quantization.rs</code></dd>
+          <dt>Matryoshka embeddings</dt><dd>Progressive retrieval: a cheap coarse pass first, full precision only for finalists. <code>advanced_features/matryoshka.rs</code></dd>
+          <dt>Hybrid search</dt><dd>Combines several vector representations in one query. <code>advanced_features/hybrid_search.rs</code></dd>
+          <dt>Multi-vector search</dt><dd>Joint embeddings — one item represented by several vectors. <code>advanced_features/multi_vector.rs</code></dd>
+          <dt>Filtered search</dt><dd>Vector search with metadata predicates applied. <code>advanced_features/filtered_search.rs</code></dd>
+          <dt>Sparse vectors</dt><dd>Efficiency gains where the representation is mostly zeros. <code>advanced_features/sparse_vector.rs</code></dd>
+          <dt>Graph RAG</dt><dd>Retrieval-augmented generation over a graph rather than a flat list. <code>advanced_features/graph_rag.rs</code></dd>
+        </dl>
+      </div>
+
+      <div class="parts-col">
+        <h3>Getting better over time</h3>
+        <dl>
+          <dt>SONA</dt><dd>Self-Optimising Neural Architecture — trajectory tracking, pattern recognition, and memory protection so new learning does not erase old. <code>ruvllm/src/sona.ts</code></dd>
+          <dt>Micro-LoRA</dt><dd>A deliberately tiny adapter (rank 1–2) driving SONA's instant loop — adaptation without retraining anything large. <code>ruvllm/src/sona.ts</code></dd>
+          <dt>MicroLoRA SDK</dt><dd>Browser-based LoRA fine-tuning of small models, built for edge deployment and a minimal memory footprint. <code>edge-net/pkg/models/microlora.js</code></dd>
+          <dt>EWC++</dt><dd>Continual learning that avoids catastrophic forgetting — the reason adaptation does not cost you yesterday's behaviour. <code>@ruvector/sona</code></dd>
+        </dl>
+
+        <h3>Remembering things</h3>
+        <dl>
+          <dt>Agent memory</dt><dd>Thousands of memory clusters with coherence-weighted compaction — old memory is condensed, not truncated. <code>ruvector-agent-memory</code></dd>
+          <dt>Hopfield associative memory</dt><dd>Recall a whole pattern from a partial cue. <code>ruvector-nervous-system · hopfield::ModernHopfield</code></dd>
+          <dt>Dentate-gyrus separation</dt><dd>Keeps similar memories from blurring into each other. <code>ruvector-nervous-system · separate::DentateGyrus</code></dd>
+          <dt>BTSP</dt><dd>One-shot learning — a single exposure is enough to lay something down. <code>ruvector-nervous-system · plasticity::btsp</code></dd>
+        </dl>
+
+        <h3>Everything else in the drawer</h3>
+        <dl>
+          <dt>Sparse inference embeddings</dt><dd>PowerInfer-style sparse feed-forward nets with a configurable sparsity ratio. <code>ruvector-sparse-inference</code></dd>
+          <dt>CNN backbone</dt><dd>MobileNetV3 (small and large) for image features. <code>ruvector-cnn/src/backbone/mod.rs</code></dd>
+          <dt>Attention CLI</dt><dd>compute · benchmark · convert · serve · repl, driven by a YAML config. <code>ruvector-attention-cli</code></dd>
+        </dl>
+      </div>
+    </div>
+
+    <p class="parts-foot">Every line above was read out of rUv's source, and names the file it came from,
+    so you can go look. If something here is not in your console, it is not running on your
+    machine — this drawer is what is <em>available</em>, not what is <em>on</em>.</p>
   </section>
 
   <!-- ================================================= SETUP · INSTALL PATHS -->

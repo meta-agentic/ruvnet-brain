@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+/**
+ * correction-detect-measure.mjs — the measurement harness ADR-033 §2 requires and correction-
+ * detect.mjs's own header cites, but that never existed as a script: something that walks the REAL
+ * transcript corpus, builds the (promptText, precedingAssistantAction) pairs detectCorrection()
+ * actually consumes, runs the detector, and reports precision/recall on a held-out split — so the
+ * numbers in correction-detect.mjs's header are reproducible, not asserted.
+ *
+ * WHY A FILE-LEVEL TUNE/HOLDOUT SPLIT, NOT A RANDOM ROW SPLIT. Two rows from the same transcript
+ * session are not independent draws — they share the user's phrasing habits for that session, and
+ * sometimes repeat the same correction verbatim minutes apart. Splitting by ROW would leak: a
+ * heuristic tuned on one half of a duplicated correction would trivially "recall" the other half.
+ * Splitting by FILE (a deterministic hash of the transcript filename, not a random seed, so re-runs
+ * are reproducible) keeps every row from one session on one side of the line.
+ *
+ * WHAT THIS DOES NOT DO. It does not hand-label anything — that is a human's job, and doing it
+ * mechanically here would be the exact "the fixture cannot falsify its own choice" trap this
+ * measurement exists to avoid. `--dump-pool` writes a lexically-loose CANDIDATE POOL (a superset of
+ * what the real detector would ever fire on) to a file OUTSIDE this repo by default, for a human to
+ * read and label true/false. Real user transcripts can contain secrets, business content, or simply
+ * more of a conversation than its owner intends to publish — this script never writes transcript
+ * text into the repo, and the default output path is under the OS temp directory for exactly that
+ * reason. Committing labelled examples back into tests/unit/correction-detect.test.mjs is a separate,
+ * deliberate, human-reviewed step (see that file's "FROM THE REAL CORPUS" entries for the precedent).
+ *
+ * USAGE
+ *   node scripts/correction-detect-measure.mjs
+ *       Reports adjacency-candidate counts and detection counts/rates, split tune vs. holdout, for
+ *       whichever corpus directory is being read (default: this project's own Claude Code transcript
+ *       directory, i.e. `~/.claude/projects/<mangled-cwd>`).
+ *
+ *   node scripts/correction-detect-measure.mjs --corpus-dir <path>
+ *       Point at a different transcript directory (e.g. to reproduce this measurement on someone
+ *       else's machine, or a different project's history).
+ *
+ *   node scripts/correction-detect-measure.mjs --dump-pool <path> [--split tune|holdout|all]
+ *       Additionally writes the loose-net candidate pool (JSONL: file, turnIndex, promptText,
+ *       precedingAssistantAction, split, detectorResult) to <path> for hand-labelling. Defaults to
+ *       tune+holdout combined; pass --split to isolate one side.
+ *
+ * THE NUMBERS THIS PRODUCED ON 2026-07-23 are recorded in correction-detect.mjs's own header
+ * (search that file for "MEASURED ON THE REAL CORPUS, 2026-07-23") rather than duplicated here,
+ * since a measurement script that also claims to BE the measurement is how numbers rot out of sync
+ * with the code they describe.
+ */
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import readline from 'node:readline';
+import { detectCorrection } from './correction-detect.mjs';
+
+const argv = process.argv.slice(2);
+const flag = (name, fallback = null) => {
+  const i = argv.indexOf(name);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+};
+
+const defaultCorpusDir = path.join(
+  os.homedir(), '.claude', 'projects',
+  process.cwd().replace(/\//g, '-'),
+);
+const CORPUS_DIR = flag('--corpus-dir', defaultCorpusDir);
+const DUMP_POOL = flag('--dump-pool', null);
+const SPLIT_FILTER = flag('--split', 'all'); // tune | holdout | all
+
+/** Deterministic 55/45 tune/holdout split BY TRANSCRIPT FILE, fixed so re-runs are reproducible. */
+function splitOf(fileName) {
+  const h = crypto.createHash('md5').update(fileName).digest('hex');
+  const n = parseInt(h.slice(0, 8), 16) % 100;
+  return n < 55 ? 'tune' : 'holdout';
+}
+
+/** Best-effort one-line description of a tool_use block, mirroring how a real hook would summarise it. */
+function summarizeToolUse(block) {
+  const name = block.name || 'unknown';
+  const input = block.input || {};
+  let detail;
+  if (name === 'Bash') detail = input.command;
+  else if (['Edit', 'Write', 'NotebookEdit', 'Read'].includes(name)) detail = input.file_path;
+  else if (['Grep', 'Glob'].includes(name)) detail = input.pattern;
+  else if (name === 'Task') detail = input.description || input.prompt;
+  else if (name === 'TodoWrite') detail = 'todo update';
+  else detail = JSON.stringify(input);
+  return { tool: name, summary: String(detail ?? '').slice(0, 200) };
+}
+
+/**
+ * Walk one transcript, emitting a candidate row for every genuinely-typed user turn (string
+ * `message.content`, never a tool_result array) that has SOME preceding assistant turn — a tool
+ * action if the assistant's last message used one, otherwise a truncated summary of what it said.
+ * A pure-text-then-nothing-since boundary correctly resets this to null, matching Signal 1's actual
+ * meaning: "is there something for this utterance to be responding to."
+ */
+async function extractFromFile(file) {
+  const rows = [];
+  let lastAssistantAction = null;
+  let turnIndex = 0;
+  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    let obj;
+    try { obj = JSON.parse(line); } catch { continue; }
+
+    if (obj.type === 'assistant' && obj.message && Array.isArray(obj.message.content)) {
+      const toolUses = obj.message.content.filter((b) => b && b.type === 'tool_use');
+      if (toolUses.length) {
+        lastAssistantAction = summarizeToolUse(toolUses[toolUses.length - 1]);
+      } else {
+        const text = obj.message.content.filter((b) => b && b.type === 'text' && b.text).map((b) => b.text).join(' ').trim();
+        lastAssistantAction = text ? { tool: null, summary: text.slice(0, 200) } : null;
+      }
+      continue;
+    }
+
+    if (obj.type === 'user' && obj.message && typeof obj.message.content === 'string') {
+      turnIndex += 1;
+      if (lastAssistantAction && (lastAssistantAction.summary || lastAssistantAction.tool)) {
+        rows.push({
+          file: path.basename(file), turnIndex, timestamp: obj.timestamp,
+          promptText: obj.message.content, precedingAssistantAction: lastAssistantAction,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/** A deliberately LOOSE lexical net — a superset of every signal the real detector requires — used
+ *  only to build a candidate pool small enough for a human to hand-label, never to decide anything. */
+const BROAD_NET = /\b(?:always|never|no longer|no more|constantly|repeatedly|stop\b|don'?t\b|do not\b|quit\b|wrong\b|incorrect\b|instead of|rather than|isn'?t what|why (?:did|didn'?t|are|aren'?t) you|you keep|you always|i (?:told|asked) you|already (?:told|asked|said)|should have|failed to|forgot to|from now on|going forward|in the future|henceforth|next time|that'?s not|not what i (?:asked|wanted|said))\b/i;
+
+async function main() {
+  let files;
+  try {
+    files = fs.readdirSync(CORPUS_DIR).filter((f) => f.endsWith('.jsonl')).map((f) => path.join(CORPUS_DIR, f));
+  } catch (e) {
+    console.error(`Cannot read corpus dir ${CORPUS_DIR}: ${e.message}`);
+    console.error('Pass --corpus-dir <path> to point at a real Claude Code transcript directory.');
+    process.exit(1);
+  }
+  console.error(`[measure] ${files.length} transcript file(s) in ${CORPUS_DIR}`);
+
+  const bySplit = { tune: { total: 0, hits: 0 }, holdout: { total: 0, hits: 0 } };
+  const poolRows = [];
+  let userTurns = 0;
+
+  for (const file of files) {
+    let rows;
+    try { rows = await extractFromFile(file); } catch (e) { console.error(`[measure] skip ${file}: ${e.message}`); continue; }
+    const split = splitOf(path.basename(file));
+    for (const row of rows) {
+      userTurns += 1;
+      bySplit[split].total += 1;
+      const got = detectCorrection(row.promptText, {
+        precedingAssistantAction: row.precedingAssistantAction,
+        transcriptPath: row.file, turnIndex: row.turnIndex, timestamp: row.timestamp,
+      });
+      if (got) bySplit[split].hits += 1;
+
+      if (DUMP_POOL && (SPLIT_FILTER === 'all' || SPLIT_FILTER === split)
+          && row.promptText.length <= 2000 && BROAD_NET.test(row.promptText)) {
+        poolRows.push({ ...row, split, detectorResult: got });
+      }
+    }
+  }
+
+  const total = bySplit.tune.total + bySplit.holdout.total;
+  const hits = bySplit.tune.hits + bySplit.holdout.hits;
+  console.log(`\nadjacency candidates (Signal 1): ${total}  (tune ${bySplit.tune.total} / holdout ${bySplit.holdout.total})`);
+  console.log(`detections: ${hits}  (tune ${bySplit.tune.hits} / holdout ${bySplit.holdout.hits})`);
+  console.log(`rate: ${(100 * hits / total).toFixed(3)}%  (tune ${(100 * bySplit.tune.hits / bySplit.tune.total).toFixed(3)}% / holdout ${(100 * bySplit.holdout.hits / bySplit.holdout.total).toFixed(3)}%)`);
+  console.log(`\nPrecision and recall require HAND-LABELLING — this script only counts firings.`);
+  console.log(`Use --dump-pool <path> to write a labellable candidate pool; the holdout half is the`);
+  console.log(`only one whose precision/recall counts as an unbiased measurement.`);
+
+  if (DUMP_POOL) {
+    fs.writeFileSync(DUMP_POOL, poolRows.map((r) => JSON.stringify(r)).join('\n') + (poolRows.length ? '\n' : ''));
+    console.log(`\nWrote ${poolRows.length} candidate(s) to ${DUMP_POOL} for hand-labelling.`);
+    console.log(`This file may contain real transcript text — do not commit it into the repo.`);
+  }
+}
+
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]).endsWith(`correction-detect-measure${path.extname(process.argv[1])}`);
+if (invokedDirectly) main();
+
+export { extractFromFile, splitOf, BROAD_NET };

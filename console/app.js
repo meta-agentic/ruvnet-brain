@@ -233,15 +233,38 @@ function updateFoundStrip() {
       found.pkgCurrent != null ? el('span', {}, ' (', countUpNum('pkgCurrent', found.pkgCurrent), ' current)') : ''));
   }
   if (found.npx != null) {
-    bits.push(el('span', {}, countUpNum('npx', found.npx), ' npx call sites across ',
-      countUpNum('projects', found.projects ?? 0), ' projects',
-      found.projectNames?.length
-        ? el('span', {}, ' — ', el('span', { class: 'fs-path' }, found.projectNames.slice(0, 2).join(', ')),
-            found.projectNames.length > 2 ? ` +${found.projectNames.length - 2} more` : '')
-        : ''));
+    // THE SENTENCE USED TO CONTRADICT ITSELF IN THE SPACE OF SIX WORDS:
+    //   "0 npx call sites across 0 projects — AI Retirement Analyzer, AMBULANCE_INVENTORY +63 more"
+    // `projectNames` is the list of projects we SCANNED, not the projects with npx call sites, and it
+    // was appended unconditionally to a count of npx sites. So the first data sentence on the page —
+    // the one immediately above "every number below traces to something we actually observed" —
+    // named 65 projects while asserting there were none. Nothing was miscounted; the two halves were
+    // about different things and were joined anyway. Found by Fable 5, 2026-07-24.
+    //
+    // Zero is the good outcome here (no npx drift), so it gets a sentence that reads as good news
+    // and credits the scan, instead of a contradiction that makes the reader distrust the number.
+    const scanned = found.projectNames?.length ?? 0;
+    if (found.npx === 0) {
+      bits.push(el('span', {}, 'no npx call sites',
+        scanned ? el('span', {}, ' in the ', countUpNum('projects', scanned), ' projects we scanned') : ''));
+    } else {
+      bits.push(el('span', {}, countUpNum('npx', found.npx), ' npx call sites across ',
+        countUpNum('projects', found.projects ?? 0), ' projects',
+        found.projectNames?.length
+          ? el('span', {}, ' — ', el('span', { class: 'fs-path' }, found.projectNames.slice(0, 2).join(', ')),
+              found.projectNames.length > 2 ? ` +${found.projectNames.length - 2} more` : '')
+          : ''));
+    }
   }
   if (found.memScore != null) {
-    bits.push(el('span', {}, 'memory quality ', countUpNum('memScore', found.memScore, (v) => `${v}/100`)));
+    // The qualifier travels WITH the number. A score whose asterisk lives in another card is an
+    // unqualified score to everyone who reads only this line — which is everyone, it is the ribbon.
+    bits.push(el('span', {}, 'memory quality ',
+      countUpNum('memScore', found.memScore, (v) => `${v}/100`),
+      found.memNotTested
+        ? el('span', { class: 'muted' },
+            ` (${found.memProbed} of ${found.memDims} dimensions checked)`)
+        : ''));
   }
   strip.replaceChildren(
     el('span', {}, 'We looked around ', el('b', {}, found.host), '’s machine: '),
@@ -249,6 +272,69 @@ function updateFoundStrip() {
     el('span', {}, '. Every number below traces to something we actually observed.'),
   );
   strip.hidden = false;
+  updateVerdict();
+}
+
+/**
+ * THE VERDICT LINE — the one sentence the page never said.
+ *
+ * Fable 5, 2026-07-24: "8,100px and the page never once says the one sentence the owner's success
+ * criterion demands: 'You're in good shape. One package needs a look; three suggestions below.'
+ * Every card makes you derive the verdict from chips." That is the whole gap between a dashboard and
+ * an answer, and it is why a careful reader can finish this page without ever learning how they are
+ * doing.
+ *
+ * THREE RULES IT OBEYS, all of them the product's existing rules applied to one sentence:
+ *
+ *  1. DERIVED, NEVER ASSERTED. Every number here is handed over by the card that measured it. This
+ *     function computes nothing about the machine; it only decides which sentence the measurements
+ *     support. That is also why it renders nothing until the counts arrive — an empty verdict is
+ *     honest, an early one is a guess.
+ *  2. UNKNOWN IS NOT GOOD NEWS. Capabilities we could not check are stated separately and never
+ *     folded into the good column, because "we could not tell" reported as "fine" is the exact lie
+ *     the four-state model exists to prevent.
+ *  3. GOOD NEWS IS ALLOWED TO SOUND LIKE GOOD NEWS. The owner's criterion is that someone smiles and
+ *     thinks "I have more tools than I realised." A page that can only ever hedge cannot deliver
+ *     that. When the evidence says things are in good shape, this says so plainly — and names the
+ *     exceptions in the same breath, which is what makes it believable rather than cheerful.
+ */
+function updateVerdict() {
+  const v = $('#verdict');
+  if (!v || found.capsTotal == null) return;      // nothing measured yet — say nothing
+
+  const behind = (found.pkgTotal != null && found.pkgCurrent != null)
+    ? found.pkgTotal - found.pkgCurrent : null;
+
+  // What actually wants the reader's attention, in blast-radius order.
+  const needsLook = [];
+  if (found.capsOff) needsLook.push(`${found.capsOff} capabilit${found.capsOff === 1 ? 'y is' : 'ies are'} off`);
+  if (behind) needsLook.push(`${behind} package${behind === 1 ? '' : 's'} behind`);
+
+  const caveats = [];
+  if (found.capsUnknown) caveats.push(`${found.capsUnknown} capabilit${found.capsUnknown === 1 ? "y" : "ies"} we could not check`);
+  if (found.memNotTested) caveats.push(`${found.memNotTested} memory dimension${found.memNotTested === 1 ? '' : 's'} not probed this session`);
+
+  const good = !needsLook.length;
+  const headline = good
+    ? 'You’re in good shape.'
+    : `Mostly good — ${needsLook.join(' and ')}.`;
+
+  const detail = `${found.capsOn} of ${found.capsTotal} capabilities are on`
+    + (found.capsAbsent ? `, ${found.capsAbsent} not installed` : '')
+    + (behind === 0 ? ', and every package on your stack is current' : '')
+    + '.';
+
+  v.replaceChildren(
+    el('span', { class: `verdict-mark ${good ? 'vm-good' : 'vm-look'}` }, good ? '✓' : '!'),
+    el('span', {},
+      el('b', {}, headline), ' ', detail,
+      // Caveats read as their own clause, not as a subordinate one. "We're not counting X, or Y as
+      // either" parsed badly out loud, and a sentence about honesty that the reader has to re-read
+      // is not doing its job.
+      caveats.length ? el('span', { class: 'muted' }, ` Not counted either way: ${caveats.join(' · ')}.`) : '',
+      !good ? el('span', { class: 'muted' }, ' Each one is named below, with its evidence and its undo.') : ''),
+  );
+  v.hidden = false;
 }
 
 /* ------------------------------------------------------------- section 0: host */
@@ -263,6 +349,12 @@ function renderHost(host, generatedAt) {
     found.host = `${host.user}@${osName(host.platform)}`;
     const hc = $('#host-chip');
     if (hc) { hc.textContent = found.host; hc.hidden = false; }
+    // Header version chip (owner, 2026-07-24): the version is worn openly, next to the wordmark.
+    if (host.brainVersion) {
+      BRAIN_INSTALLED_VERSION = String(host.brainVersion);
+      const vc = $('#brain-ver');
+      if (vc) { vc.textContent = `v${BRAIN_INSTALLED_VERSION}`; vc.hidden = false; }
+    }
     const meta = $('#host-meta');
     if (meta) {
       meta.replaceChildren(
@@ -714,6 +806,19 @@ const CAP_STATE = {
     tone: 'amber', klass: 'is-off', label: 'off',
     hint: 'We looked and it is not running. This is a measured "off", not an assumption.',
   },
+  /* IDLE — the state this whole product exists to surface, and the card could not say it until now.
+     Owner, 2026-07-24: "people think something is 'On' only to find out it is not really running the
+     way they thought — that is exactly what this tool is for."
+
+     Its label is deliberately NOT "off". Off sends you to turn a thing on; this thing IS on, and
+     something that should be calling it stopped. Sending someone to re-enable an already-enabled
+     capability is how a true finding becomes a wasted afternoon. The distinct wording — "set up, not
+     running" — is the whole value of separating them. */
+  IDLE: {
+    tone: 'amber', klass: 'is-off', label: 'set up, not running',
+    hint: 'Configured and proven — it has worked here before — but nothing has invoked it recently. '
+        + 'This is usually a wiring gap, not a switch: something that should call it is missing or was never installed.',
+  },
   UNKNOWN: {
     tone: 'nt', klass: 'is-unknown', label: 'not checked',
     hint: 'Nothing established this one either way, so nothing is claimed. Not checked is not off.',
@@ -741,7 +846,11 @@ const CAP_STATE = {
    "we've never heard of it" pile, where it never belonged. */
 function capState(raw) {
   const t = String(raw ?? '').trim().toUpperCase();
-  return (t === 'ON' || t === 'OFF' || t === 'UNKNOWN' || t === 'ABSENT') ? t : null;
+  // 'IDLE' added 2026-07-24. This whitelist is exactly where the ABSENT bug lived (see CAP_STATE):
+  // the registry gains a state, this line does not, and every row carrying it lands in UNKNOWN
+  // wearing a label that says we never looked — when in fact we looked and found something specific.
+  // Any future state must be added HERE, in the tally, in the chips, and in RANK — all four.
+  return (t === 'ON' || t === 'OFF' || t === 'IDLE' || t === 'UNKNOWN' || t === 'ABSENT') ? t : null;
 }
 const capBucket = (row) => capState(row && row.state) || 'UNKNOWN';
 
@@ -859,14 +968,24 @@ function renderCapabilities(data) {
   const on = rows.filter((r) => capBucket(r) === 'ON').length;
   const off = rows.filter((r) => capBucket(r) === 'OFF').length;
   const absent = rows.filter((r) => capBucket(r) === 'ABSENT').length;
-  const unknown = rows.length - on - off - absent;
+  // Counted explicitly, and SUBTRACTED from unknown below. `unknown` is computed as the remainder, so
+  // any state the tally forgets is silently reported as "we never checked" — the same shape of lie in
+  // the summary line that CAP_STATE fixed in the rows.
+  const idle = rows.filter((r) => capBucket(r) === 'IDLE').length;
+  const unknown = rows.length - on - off - absent - idle;
 
   const chips = [];
   if (on) chips.push(chip(`${fmtInt(on)} on`, 'green'));
   if (off) chips.push(chip(`${fmtInt(off)} off`, 'amber', CAP_STATE.OFF.hint));
+  if (idle) chips.push(chip(`${fmtInt(idle)} set up, not running`, 'amber', CAP_STATE.IDLE.hint));
   if (absent) chips.push(chip(`${fmtInt(absent)} not installed`, 'grey', CAP_STATE.ABSENT.hint));
   if (unknown) chips.push(chip(`${fmtInt(unknown)} not checked`, 'nt', CAP_STATE.UNKNOWN.hint));
   setChips('chips-capabilities', chips);
+  // Feed the verdict line. It needs the same counts this card just derived, and deriving them a
+  // second time somewhere else is how two surfaces start disagreeing about one machine.
+  found.capsOn = on; found.capsOff = off; found.capsAbsent = absent; found.capsUnknown = unknown;
+  found.capsTotal = rows.length;
+  updateFoundStrip();
 
   // Attention first, same law as every other list on this page (never alphabetical, never arrival
   // order): what you own but aren't getting, then what we couldn't answer, then what isn't here at
@@ -874,7 +993,7 @@ function renderCapabilities(data) {
   // more actionable than a piece of software the user has simply not installed — and above ON
   // because "not here" is still a gap. Array#sort is stable, so the server's own ordering survives
   // inside each bucket.
-  const RANK = { OFF: 0, UNKNOWN: 1, ABSENT: 2, ON: 3 };
+  const RANK = { OFF: 0, IDLE: 1, UNKNOWN: 2, ABSENT: 3, ON: 4 };
   const sorted = rows.slice().sort((a, b) => RANK[capBucket(a)] - RANK[capBucket(b)]);
 
   // Built as clauses so a fresh machine — where `on` and `off` are both 0 and everything is absent —
@@ -902,7 +1021,43 @@ function renderCapabilities(data) {
       : ' Every row below was established by something we observed, not assumed.'));
 
   main.push(capLegend());
-  main.push(el('div', { class: 'cap-list' }, ...sorted.map(capRow)));
+
+  /* GROUPED BY SCOPE, not flat. `scope` has been in the registry since it was written
+     (capability-registry.mjs — SCOPE.MACHINE / PROJECT / USER) and was rendered as a small grey
+     badge nobody reads. As a badge it is trivia; as the GROUPING it answers the question the owner
+     actually asks on opening this page: "what is switched on FOR THIS PROJECT, versus everywhere?"
+     Order is most-specific-first — the project you are standing in is the one you can act on now,
+     and the machine-wide rows are the ones you touch least often.
+
+     A scope with no rows renders nothing at all. An empty "In this project" heading would imply we
+     looked and found none, when the truth is there was nothing of that scope to look at. */
+  const SCOPE_GROUPS = [
+    { key: 'project', title: 'In this project', blurb: 'Applies only where you are right now. Changing these affects this project and nothing else.' },
+    { key: 'user',    title: 'For you, in every project', blurb: 'Follows your user account across every project on this machine.' },
+    { key: 'machine', title: 'On this machine', blurb: 'Machine-wide. These affect anyone using this computer, so they are the ones to read twice.' },
+  ];
+  const seen = new Set();
+  const groups = [];
+  for (const g of SCOPE_GROUPS) {
+    const inGroup = sorted.filter((r) => String(r.scope || '').toLowerCase() === g.key);
+    inGroup.forEach((r) => seen.add(r));
+    if (!inGroup.length) continue;
+    groups.push(el('section', { class: 'cap-group' },
+      el('h3', { class: 'cap-group-h' }, g.title,
+        el('span', { class: 'cap-group-n mono' }, `${inGroup.length}`)),
+      el('p', { class: 'cap-group-blurb muted' }, g.blurb),
+      el('div', { class: 'cap-list' }, ...inGroup.map(capRow))));
+  }
+  // Anything whose scope we do not recognise still gets shown — silently dropping a capability
+  // because its scope string was unexpected would be the console lying by omission.
+  const ungrouped = sorted.filter((r) => !seen.has(r));
+  if (ungrouped.length) {
+    groups.push(el('section', { class: 'cap-group' },
+      el('h3', { class: 'cap-group-h' }, 'Everything else',
+        el('span', { class: 'cap-group-n mono' }, `${ungrouped.length}`)),
+      el('div', { class: 'cap-list' }, ...ungrouped.map(capRow))));
+  }
+  main.push(...groups);
 
   // No control that can't act: this card reads state, it does not flip switches. Say where the
   // acting happens instead of growing a button with no executor and no undo behind it.
@@ -1005,7 +1160,11 @@ function renderWiring(w) {
   setChips('chips-wiring', total
     ? (driftN
         ? [chip(`${fmtInt(driftN)} can drift stale`, 'warn'), chip(`${fmtInt(total - driftN)} pinned down`, 'green')]
-        : [chip('nothing can drift', 'green'), chip(`${fmtInt(total)} launch sites`, 'grey')])
+        // "can" claimed the FUTURE from present-tense evidence: we observed that 0 of N launch sites
+        // currently resolve via npx, which establishes that nothing IS drifting, not that nothing
+        // COULD. One npx line added tomorrow falsifies the stronger claim, and this project's whole
+        // trust position rests on never making a claim its evidence cannot carry. Fable 5, 2026-07-24.
+        : [chip('nothing is drifting', 'green'), chip(`${fmtInt(total)} launch sites`, 'grey')])
     : [chip('nothing wired yet', 'grey')]);
 
   found.npx = s.npx ?? 0;
@@ -1439,12 +1598,31 @@ function renderMemory(mem) {
   const h = mem.health;
   const score = Math.max(0, Math.min(100, Math.round(Number(h.score) || 0)));
   const tone = score >= 85 ? 'green' : score >= 60 ? 'warn' : 'red';
-  setChips('chips-memory', [chip(`${score}/100`, tone)]);
-  found.memScore = score;
-  updateFoundStrip();
 
+  // COUNT THE UNTESTED DIMENSIONS BEFORE ANYTHING PRINTS THE SCORE.
+  //
+  // These two lines used to sit BELOW the chip and the found-strip assignment, so both surfaces
+  // published a bare "100/100" while a dimension of the five had never been probed — an untested
+  // dimension silently contributing zero deduction inside a perfect-looking score. The server's own
+  // summary string carries the qualifier ("across N probed dimensions; 1 not checked"); both
+  // rendered surfaces dropped it. A perfect score is exactly the number that most needs its
+  // asterisk, and this project's standing rule bans an unqualified score with an untested input.
+  // Found by Fable 5, 2026-07-24.
   const dims = Array.isArray(h.dimensions) ? h.dimensions : [];
   const notTested = dims.filter((d) => d.status === 'notTested').length;
+  const probed = dims.length - notTested;
+  const qualifier = notTested
+    ? `${probed} of ${dims.length} dimensions checked; ${notTested} not checked this session`
+    : null;
+
+  setChips('chips-memory', [
+    chip(notTested ? `${score}/100*` : `${score}/100`, tone, qualifier || undefined),
+  ]);
+  found.memScore = score;
+  found.memNotTested = notTested;
+  found.memProbed = probed;
+  found.memDims = dims.length;
+  updateFoundStrip();
 
   const main = [];
   main.push(el('div', { class: 'memory-top' },
@@ -2425,10 +2603,41 @@ function trustSkeleton() {
   setChips('chips-trust', [chip('checking…', 'wait')]);
 }
 
+/* ---------------------------------------------- header update gong (owner, 2026-07-24) */
+
+let BRAIN_INSTALLED_VERSION = null; // set by renderHost from /api/state's host.brainVersion
+
+// Numeric x.y.z only; -dev/-rc suffixes are deliberately ignored so a tie is NEVER "newer" —
+// a false gong is the nag this page promises not to be. Latest unreachable (null) is UNKNOWN,
+// never "update available" (same rule the trust section already lives by).
+function cmpVer(a, b) {
+  const num = (v) => String(v).replace(/^v/, '').split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = num(a); const pb = num(b);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }
+  return 0;
+}
+
+// An update has no verified undo, so per the intro contract the gong is INSTRUCTIONS, not a
+// switch: one click copies the exact command and says so — nothing runs behind your back.
+function renderUpdateGong(t) {
+  const btn = $('#brain-update');
+  if (!btn) return;
+  const latest = t && t.release && t.release.tag ? String(t.release.tag).replace(/^v/, '') : null;
+  if (!BRAIN_INSTALLED_VERSION || !latest || cmpVer(latest, BRAIN_INSTALLED_VERSION) <= 0) { btn.hidden = true; return; }
+  const cmd = 'npx ruvnet-brain --update';
+  btn.textContent = `⟳ update available · v${latest} — click to update`;
+  btn.onclick = async () => {
+    try { await navigator.clipboard.writeText(cmd); btn.textContent = `copied — paste in any terminal: ${cmd}`; }
+    catch { btn.textContent = `run in any terminal: ${cmd}`; }
+  };
+  btn.hidden = false;
+}
+
 async function loadTrust() {
   try {
     const t = await getJSON('/api/trust');
     renderTrust(t);
+    renderUpdateGong(t);
   } catch (err) {
     setChips('chips-trust', [chip('unavailable', 'grey')]);
     inlineError('body-trust', String(err.message || err), () => { trustSkeleton(); loadTrust(); });
@@ -2510,22 +2719,52 @@ function renderGates(g) {
   ]);
 
   const main = [];
+  // The three numbers are now in one unit (wired entries), so this sentence adds up. It previously
+  // mixed a deduplicated count with a raw one and lost a gate per duplicate wiring — see the note in
+  // scripts/gates.mjs. Duplicates are now STATED rather than absorbed: a gate wired twice really does
+  // run twice, which is a thing the reader would want to know and fix, not a rounding detail.
+  const dupes = Array.isArray(s.duplicated) ? s.duplicated : [];
   main.push(el('p', { class: 'lead-stat' },
     'Every move your AI makes here is read first. ', el('b', {}, String(s.armed)),
     ' gates are armed — ', el('b', {}, String(s.blocking)),
     ' of them can stop a tool call before it touches your machine. The other ',
-    el('b', {}, String(s.advisory)), ' add context without ever blocking.'));
+    el('b', {}, String(s.advisory)), ' add context without ever blocking.',
+    Number.isFinite(s.blockingDistinct) && s.blockingDistinct !== s.blocking
+      ? ` Those ${s.blocking} blocking entries are ${s.blockingDistinct} distinct gates — some are wired more than once.`
+      : '',
+    dupes.length
+      ? el('span', { class: 'muted' }, ` Wired twice, so it runs twice: ${dupes.join(', ')}.`)
+      : ''));
 
   if (caught) {
     // Deliberately NOT the .wire-lane grid: its fixed columns are sized for (count, label, meaning)
     // and fling a gate name and its subject to opposite sides of a dead gap. A catch is a sentence —
     // who stopped what, and why — so it reads as one.
+    // COLLAPSE IDENTICAL CATCHES — collapse, never hide.
+    //
+    // Measured 2026-07-24: of twelve rows, SIX were the same sentence ("design-wall — deliberate
+    // override, wall skipped"). The card meant to show that the guardrails work instead read as a
+    // log of one guardrail being walked past, six times, because repetition is what the eye counts.
+    // Twelve near-identical amber rows is also simply unreadable.
+    //
+    // Grouping by (gate, reason) keeps every catch represented and every count exact — "× 6" states
+    // the repetition plainly rather than letting six rows imply six different events. The most recent
+    // timestamp is kept because "when did this last happen" is the actionable half. Fable 5, 2026-07-24.
+    const groups = new Map();
+    for (const c of g.catches) {
+      const key = `${c.gate || 'gate'} ${c.subject || ''} ${c.reason || ''}`;
+      const prev = groups.get(key);
+      if (prev) { prev.n += 1; if (c.at && (!prev.at || Date.parse(c.at) > Date.parse(prev.at))) prev.at = c.at; }
+      else groups.set(key, { ...c, n: 1 });
+    }
     main.push(el('ul', { class: 'gate-catches' },
-      ...g.catches.map((c) => el('li', {},
+      ...[...groups.values()].map((c) => el('li', {},
         el('b', {}, c.gate || 'gate'),
         ' stopped ', el('b', {}, c.subject || 'a call'),
+        c.n > 1 ? el('b', { class: 'catch-n' }, ` × ${c.n}`) : '',
         ' — ', el('span', { class: 'cell-dim' }, c.reason || ''),
-        c.at ? el('span', { class: 'cell-dim' }, ' · ' + new Date(c.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : ''))));
+        c.at ? el('span', { class: 'cell-dim' },
+          (c.n > 1 ? ' · most recent ' : ' · ') + new Date(c.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : ''))));
   } else {
     // Honest empty state. The gates only started writing receipts on 2026-07-17; saying "0 blocks"
     // as though it were a measured safety record would be a lie of omission.
@@ -2779,3 +3018,259 @@ $('#recheck-btn')?.addEventListener('click', () => recheckMachine());
     if (!localStorage.getItem('rvbc-seen')) sc.open = true;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   LESSONS — "what it's learned from you"
+
+   THE GAP: sixteen lessons, thirteen of them the owner's own words, one enforcing at BLOCK level,
+   all of them invisible on this page until now. Owner, 2026-07-24: "murky things in a .claude file
+   nobody sees." A rule you cannot see is a rule you never consented to.
+
+   ONE CONTROL, NOT TWO. The obvious design is a checkbox AND an ✕ ("turn off" vs "remove"). The
+   store has exactly one off-switch — demote() — which is reversible and KEEPS the record of where
+   the lesson was taught. Shipping two controls that call one function is the precise flavour of
+   fake granularity that makes people close a settings page. So: one checkbox, and the row says
+   plainly what off means.
+
+   NOTHING IS ASSERTED. Every row's state is read from the store on load, and every write re-reads
+   from disk and renders what actually changed. A toggle that reports success without re-reading is
+   the failure user-settings.mjs exists to end.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+const LESSON_ENF_TONE = { block: 'amber', checklist: 'cyan', review: 'grey' };
+
+function lessonsSkeleton() {
+  $('#body-lessons')?.replaceChildren(
+    frag('<div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w85"></div></div>'));
+  setChips('chips-lessons', [chip('checking…', 'wait')]);
+}
+
+/* Turn a lesson ON. Two store verbs can stand between a lesson and "in force": it may be demoted
+   (user switched it off) and/or unratified (never agreed to). Clear whichever apply, in that order,
+   and let each call verify itself — rather than inventing a compound verb the store does not have. */
+/* postJSON returns {status, ok, data} where `ok` is the HTTP status — NOT the handler's verdict.
+   Reading it directly meant a server-side refusal ({ok:false} sent with HTTP 200) rendered as
+   success while the store never moved: the checkbox stays flipped, the note says it saved, and the
+   rule is not actually off. That is the precise "every writer returned ok:true" failure this
+   codebase already paid for once. This unwraps to the BODY and judges on the body's own verdict. */
+async function setLessonCall(id, action) {
+  const r = await postJSON('/api/set-lesson', { id, action });
+  const body = (r && r.data) || {};
+  if (!r || !r.ok) return { ok: false, log: r && r.status === 403 ? TOKEN_MSG : `the console returned ${r ? r.status : '?'}` };
+  return body;
+}
+
+async function lessonOn(row) {
+  let last = null;
+  if (row.demoted) {
+    last = await setLessonCall(row.id, 'restore');
+    if (!last || !last.ok) return last;
+  }
+  if (!row.ratified) return setLessonCall(row.id, 'ratify');
+  // Return the RESTORE's payload rather than a synthetic one. The first version discarded it and
+  // fabricated `{ok, log}` with no `now`, so the row fell back to printing the raw lesson id —
+  // internal jargon on the one line the user reads to find out what just happened.
+  return last || { ok: true, now: { status: 'ratified', demoted: false } };
+}
+
+function renderLessons(data) {
+  const body = $('#body-lessons');
+  if (!body) return;
+
+  if (!data || !data.ok) {
+    setChips('chips-lessons', [chip('not checked', 'nt')]);
+    body.replaceChildren(el('p', { class: 'loading-note' },
+      data && data.error ? `Couldn't read the lesson store: ${data.error}` : 'Couldn’t read the lesson store.'));
+    return;
+  }
+
+  const rows = data.lessons || [];
+  const c = data.counts || {};
+
+  if (!rows.length) {
+    setChips('chips-lessons', [chip('nothing yet', 'grey')]);
+    body.replaceChildren(el('p', { class: 'loading-note' },
+      'No lessons recorded yet. When you correct me and that correction proves durable, it shows up here — ' +
+      'with a switch, so you decide whether it stays.'));
+    return;
+  }
+
+  const chips = [];
+  if (c.awaitingYou) chips.push(chip(`${c.awaitingYou} awaiting you`, 'amber', 'Recorded, but not yet agreed to by you. Until you decide, it does not enforce at full strength.'));
+  if (c.active) chips.push(chip(`${c.active} on`, 'green'));
+  if (c.off) chips.push(chip(`${c.off} off`, 'grey', 'Switched off by you. The record of where you taught it is kept.'));
+  if (c.blocking) chips.push(chip(`${c.blocking} can stop me`, 'cyan', 'These interrupt me at their moment and I cannot continue until the check passes.'));
+  setChips('chips-lessons', chips);
+
+  const list = el('div', { class: 'cap-list' });
+
+  for (const r of rows) {
+    const isOn = r.ratified && !r.demoted;
+
+    const box = el('input', {
+      type: 'checkbox', class: 'lesson-switch', id: `lsw-${r.id}`,
+      'aria-label': `${isOn ? 'Turn off' : 'Turn on'}: ${r.statement.slice(0, 60)}`,
+    });
+    box.checked = isOn;
+
+    const note = el('span', { class: 'form-note', role: 'status' });
+
+    box.addEventListener('change', async () => {
+      const want = box.checked;
+      box.disabled = true;
+      note.textContent = want ? 'turning on…' : 'turning off…';
+      try {
+        const res = want ? await lessonOn(r) : await setLessonCall(r.id, 'demote');
+        if (!res || !res.ok) {
+          box.checked = !want;                       // the store did not move; neither does the UI
+          note.textContent = (res && res.log) || 'that didn’t save — nothing changed';
+          note.className = 'form-note n-err';
+          return;
+        }
+        note.className = 'form-note';
+        // Report the state read back from DISK, not the state we asked for.
+        // Plain words only. `res.now.status` is "ratified" — a word about our data model, not about
+        // the user's day. It never reaches the page.
+        note.textContent = res.now
+          ? (res.now.demoted ? 'off — the record of where you taught it is kept' : 'on — in force from now on')
+          : 'saved';
+        announce(`${r.id} ${want ? 'turned on' : 'turned off'}.`);
+        // RE-READ THE WHOLE CARD FROM THE SERVER.
+        //
+        // Before this, a successful toggle updated exactly two things — the checkbox and this note —
+        // while the header counts ("13 on", "3 awaiting you"), the row's on/off styling, and above
+        // all the PARTITION kept describing the previous world. Concretely: switch a rule off and it
+        // stayed filed under "The N rules already in force". That is not a stale number; it is a
+        // false sentence about the user's machine, printed by the card whose whole purpose is to
+        // tell them the truth about it. Turning a candidate ON left it under "needs your decision" —
+        // the decision they had just made.
+        //
+        // Re-fetching is deliberately unconditional and unclever: the server already computes every
+        // derived field, so anything patched up here would be a second implementation of the same
+        // logic, free to drift from it. Found by GPT-5.6-Sol, 2026-07-24.
+        loadLessons();
+      } catch (e) {
+        box.checked = !want;
+        note.textContent = `that didn’t save — ${String(e.message || e)}`;
+        note.className = 'form-note n-err';
+      } finally { box.disabled = false; }
+    });
+
+    const meta = [
+      chip(r.enforcementLabel, LESSON_ENF_TONE[r.enforcement] || 'grey', r.enforcementDetail),
+      chip(r.origin, r.userStated ? 'green' : 'nt',
+        r.userStated
+          ? 'You said this. Only lessons you stated yourself are allowed to reach the strongest level.'
+          : 'I inferred this from what happened. A lesson I inferred can never be raised to "Stops me", however often it fires — the model does not get to ratify its own rules.'),
+      r.taughtCount ? chip(`taught ${r.taughtCount}×`, 'grey') : null,
+      r.awaitingYou ? chip('awaiting your decision', 'amber', 'Recorded, but you have not agreed to it yet.') : null,
+    ].filter(Boolean);
+
+    const why = el('details', { class: 'cap-why' },
+      el('summary', null, 'What is this, and why is it here?'),
+      el('div', { class: 'cap-why-body' },
+        el('p', null, r.statement),
+        el('p', null, el('strong', null, 'When it fires: '), r.when, '.'),
+        el('p', null, el('strong', null, `${r.enforcementLabel}: `), r.enforcementDetail),
+        // `evidence` is an ARRAY of {observed} records, not a string. Rendering it directly printed
+        // "[object Object]" — the exact defect that got ADR-045 rejected, caught here only because
+        // the endpoint was hit with real data instead of being reasoned about.
+        Array.isArray(r.evidence) && r.evidence.length
+          ? el('div', null,
+              el('p', null, el('strong', null, r.evidence.length > 1 ? 'What I observed: ' : 'What I observed: ')),
+              el('ul', { class: 'cap-ev' }, ...r.evidence
+                .map((e) => (e && typeof e === 'object' ? e.observed : e))
+                .filter((t) => typeof t === 'string' && t.trim())
+                .map((t) => el('li', null, t))))
+          : null,
+        r.projects && r.projects.length
+          ? el('p', null, el('strong', null, 'Learned in: '), r.projects.join(', ')) : null,
+        el('p', { class: 'muted' },
+          'Turning this off hides the rule without deleting the record of where you taught it — ',
+          'you can switch it back on here at any time.')));
+
+    list.append(el('div', { class: `cap-row lesson-row${r.demoted ? ' is-off' : ''}` },
+      // NO `for=` here. The label WRAPS its checkbox, which is already an implicit association; a
+      // `for` pointing at the contained input makes the browser activate it twice on one click, so
+      // `change` fired an even number of times and the confirmation text was overwritten back to
+      // empty. Caught by clicking it in a real browser — the DOM structure and the API were both
+      // correct, and the endpoint returned a perfect payload the whole time.
+      el('label', { class: 'cap-row-head' },
+        box,
+        el('span', { class: 'cap-row-title' }, r.statement),
+      ),
+      el('div', { class: 'chips' }, ...meta),
+      el('p', { class: 'cap-row-when muted' }, r.when),
+      why, note));
+  }
+
+  body.replaceChildren(
+    el('p', { class: 'loading-note' },
+      'These are the rules I now work by on this machine. You can switch any of them off — ',
+      'nothing here is permanent, and off is reversible.'),
+    ...partitionLessons(list, rows));
+}
+
+/* Split the rows into "needs you" and "already settled", and fold the settled ones away.
+ *
+ * WHY: graded 78 on 2026-07-24 with the single largest deduction (-8) being that this card ran to
+ * roughly 40% of the whole page — sixteen uncapped rows that a first-time visitor had to scroll past
+ * before reaching anything else. The content was right and the SHAPE was wrong, which is a distinct
+ * failure: a card that answers its question honestly can still bury the six cards beneath it.
+ *
+ * The split is not arbitrary trimming. Exactly one group is a question being put to the user
+ * (candidates awaiting ratification); the rest is a reference list they may audit whenever they like.
+ * Showing a question and a reference list at the same visual weight is what made it a wall. */
+function partitionLessons(list, rows) {
+  const kids = [...list.children];
+  // THREE groups, not two. The first version split on `awaitingYou` alone and swept everything else
+  // into "already in force" — so the moment a user switched a rule OFF, the page filed it under a
+  // heading asserting it was ON. Not a stale count: a false sentence about their machine, printed by
+  // the card whose job is to be the truth about it, and printed BECAUSE they used the control we
+  // gave them. Found by GPT-5.6-Sol, 2026-07-24. A group's heading must be derivable from the state
+  // of the rows inside it, which is why the counts below are computed from the split, never passed in.
+  const asks = [], inForce = [], off = [];
+  rows.forEach((r, i) => {
+    if (r.demoted) off.push(kids[i]);
+    else if (r.awaitingYou) asks.push(kids[i]);
+    else inForce.push(kids[i]);
+  });
+  const out = [];
+  if (asks.length) {
+    out.push(el('p', { class: 'lessons-ask-h' },
+      `${asks.length} ${asks.length === 1 ? 'rule needs' : 'rules need'} your decision`),
+      el('p', { class: 'muted lessons-ask-b' },
+        'I noticed these myself, so they are not in force and cannot stop me until you agree. ',
+        'Leaving them off is a perfectly good answer.'),
+      el('div', { class: 'cap-list' }, ...asks));
+  }
+  if (inForce.length) {
+    out.push(el('details', { class: 'lessons-more' },
+      el('summary', null,
+        `The ${inForce.length} ${inForce.length === 1 ? 'rule' : 'rules'} already in force — open to review or switch any off`),
+      el('div', { class: 'cap-list' }, ...inForce)));
+  }
+  if (off.length) {
+    // Switched-off rules get their OWN fold rather than being hidden. Hiding them would make the
+    // control feel like deletion, and the whole promise of the switch is that it is not.
+    out.push(el('details', { class: 'lessons-more' },
+      el('summary', null,
+        `${off.length} ${off.length === 1 ? 'rule you switched off' : 'rules you switched off'} — not in force; switch back on any time`),
+      el('div', { class: 'cap-list' }, ...off)));
+  }
+  return out;
+}
+
+async function loadLessons() {
+  lessonsSkeleton();
+  try {
+    const res = await fetch('/api/lessons', { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`the console returned ${res.status}`);
+    renderLessons(await res.json());
+  } catch (err) {
+    setChips('chips-lessons', [chip('not checked', 'nt')]);
+    inlineError('body-lessons', String(err.message || err), () => loadLessons());
+  }
+}
+
+loadLessons();

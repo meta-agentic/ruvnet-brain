@@ -47,7 +47,15 @@ function fireHook(cmd, args, payload, env = {}) {
   const r = spawnSync(cmd, args, {
     input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    // A FRESH lesson gate-state per call: lesson-hooks runs the frequency cap (3.9.28-29), and without
+    // isolation these invocations wrote the user's REAL ~/.config gate-state and accumulated a fixture
+    // lesson past MAX_SHOWS across suite runs. A unique temp path per call keeps every fire at count 0 —
+    // deterministic, and it never touches the developer's real config.
+    env: {
+      ...process.env,
+      RUVNET_LESSON_GATE_STATE: path.join(os.tmpdir(), `hc-gs-${process.pid}-${Math.random().toString(36).slice(2)}.json`),
+      ...env,
+    },
     timeout: 15000,
   });
   return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
@@ -55,7 +63,11 @@ function fireHook(cmd, args, payload, env = {}) {
 
 function tempLedger(items) {
   const p = path.join(os.tmpdir(), `hook-contract-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(p, JSON.stringify({ items }));
+  // Default a FRESH `at` on every item unless the test sets one — mirrors reality (--commit-to always
+  // stamps `at`), so the freshness TTL (which now treats a missing/invalid `at` as stale) doesn't
+  // silently make an unstamped fixture non-forceable.
+  const stamped = items.map((i) => ({ at: new Date().toISOString(), ...i }));
+  fs.writeFileSync(p, JSON.stringify({ items: stamped }));
   return p;
 }
 
@@ -94,14 +106,80 @@ describe('Stop-hook loop protection (the 2026-07-22 regression)', () => {
     expect(r.stderr).not.toContain('visible item');
   });
 
-  it('nudges at most ONCE per session — a per-turn nudge is a forced turn every turn', () => {
+  it('re-engages on every fresh natural stop — the "don\'t stop" fix (ADR-043)', () => {
+    // ADR-043: the once-per-session `nudgedSession` guard silenced the gate after ONE nudge, so
+    // re-engagement died and the model could stop mid-goal for the rest of a session with no push-back.
+    // A fresh natural stop (stop_hook_active:false) with open work must nudge EVERY time. This is
+    // bounded not by a per-session cap but by the stop_hook_active guard (tested above): the NEXT stop
+    // in a forced-continuation chain carries stop_hook_active:true and goes silent, so each episode
+    // forces exactly one continuation. The 2026-07-22 runaway was caused by IGNORING stop_hook_active,
+    // not by re-engaging — so re-engagement is safe while that guard is live.
+    // Cooldown disabled here so the two rapid fires test PURE re-engagement; the cooldown is proven
+    // separately below. In production the two stops are minutes apart and the cooldown never bites.
     const ledger = tempLedger([{ text: 'repeat me', done: false }]);
-    const env = { RUVNET_WORK_LEDGER: ledger };
-    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-once' }, env);
-    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-once' }, env);
+    const env = { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' };
+    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-reengage' }, env);
+    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-reengage' }, env);
 
     expect(first.stdout).toContain('additionalContext');
-    expect(second.stdout).toBe('');
+    expect(second.stdout).toContain('additionalContext');   // was `toBe('')` — the once-per-session bug ADR-043 fixes
+  });
+
+  it('does NOT force when the stdin payload is unreadable — an EAGAIN must not launder into a loop (ADR-043)', () => {
+    // Fable red-team #1: the old readHookInput returned {} on a parse failure, which under a forcing
+    // gate reads as "fresh stop" → a machine-wide loop. Garbage on stdin must yield silence, not force.
+    const ledger = tempLedger([{ text: 'real open work', done: false }]);
+    const r = spawnSync('node', [CONTINUATION_GATE], {
+      input: '}{ not json at all',
+      encoding: 'utf8',
+      env: { ...process.env, RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' },
+      timeout: 15000,
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout ?? '').toBe('');   // open work present, but the payload could not be confirmed → no force
+  });
+
+  it('suppresses a second force within the cooldown window — the self-owned loop cap (ADR-043)', () => {
+    // Belt-and-braces beyond stop_hook_active: two forces cannot land inside COOLDOWN_MS (default 20s).
+    const ledger = tempLedger([{ text: 'cooldown me', done: false }]);
+    const env = { RUVNET_WORK_LEDGER: ledger };   // default cooldown, no override
+    const first = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-cd' }, env);
+    const second = fireHook('node', [CONTINUATION_GATE], { stop_hook_active: false, session_id: 'sess-cd' }, env);
+    expect(first.stdout).toContain('additionalContext');   // first forces, records lastForcedAt
+    expect(second.stdout).toBe('');                        // second within the window → suppressed
+  });
+
+  it('does NOT force on a STALE item — week-old debris must not compel a continuation (ADR-043)', () => {
+    // Fable red-team #3: a stale item pressuring every turn breeds mark-done-without-doing. TTL = 24h.
+    const old = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const ledger = tempLedger([{ text: 'ancient abandoned item', done: false, at: old }]);
+    const r = fireHook('node', [CONTINUATION_GATE],
+      { stop_hook_active: false, session_id: 'sess-stale' },
+      { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
+    expect(r.stdout).toBe('');   // only stale items remain → silence, not a forced continuation
+  });
+
+  it('does NOT force on an empty {} payload — not a real Stop payload (GPT-5.6-Sol review)', () => {
+    // An empty-but-parseable {} passes the __source check; a real Stop payload carries session_id.
+    const ledger = tempLedger([{ text: 'real open work', done: false }]);
+    const r = spawnSync('node', [CONTINUATION_GATE], {
+      input: '{}',
+      encoding: 'utf8',
+      env: { ...process.env, RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' },
+      timeout: 15000,
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout ?? '').toBe('');   // no session_id → not a confirmed real stop → no force
+  });
+
+  it('does NOT force on an item with a MISSING timestamp — unknown age must not force forever (GPT-5.6-Sol)', () => {
+    // A row without a valid `at` is now treated as STALE, not fresh — closes the TTL-bypass GPT-5.6-Sol found.
+    const p = path.join(os.tmpdir(), `hc-noat-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
+    fs.writeFileSync(p, JSON.stringify({ items: [{ text: 'no timestamp', done: false }] }));  // NO `at`
+    const r = fireHook('node', [CONTINUATION_GATE],
+      { stop_hook_active: false, session_id: 'sess-noat' },
+      { RUVNET_WORK_LEDGER: p, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
+    expect(r.stdout).toBe('');   // missing/invalid `at` → stale → no force
   });
 
   it('stays silent when nothing is outstanding — a guard that always fires carries no information', () => {
@@ -238,28 +316,32 @@ describe('registry hygiene', () => {
    * running in every already-open session until each user restarts — it cannot be hotfixed. That
    * un-recallability is exactly why this belongs in a gate and not in a review checklist.
    *
-   * The three BLOCKING hooks are the deliberate exception and are named explicitly, never inferred:
+   * The four BLOCKING hooks are the deliberate exception and are named explicitly, never inferred:
    * their exit codes ARE their contract (see hooks.json `_note` — mode:'blocking' in the shim's
    * dispatch table). `|| true` on those would silently disarm every wall in the product, so the
    * assertion is two-sided: advisory hooks MUST have it, blocking hooks MUST NOT. A one-sided test
    * would pass on a registry that had disarmed all three.
    *
-   * WHY THE LIST HAS FOUR ENTRIES, NOT THE THREE THE `_note` NAMES. The registry `_note` calls out
-   * three blocking hooks — the shim-dispatched walls. `lesson-hooks.sh` is a fourth, and it is
-   * blocking-capable by DESIGN rather than by dispatch table: `lesson-hooks.sh:134` is
-   * `[ "$CODE" -eq 2 ] && exit 2`, propagating a block only when a ratified lesson genuinely refuses
-   * (ADR-035's "the block is the exception"). This test was written with the three-name list and
-   * immediately flagged all three lesson-hooks registrations as unguarded. The code was right and
-   * the test was wrong: wrapping them in `|| true` is precisely the disarm the next assertion
-   * exists to prevent, and it is the same `|| true` ADR-035 documents as having turned "the gate is
-   * broken" into "the gate is silent" once already.
+   * THE LIST IS FOUR SHIM-DISPATCHED WALLS, and the fourth is `unprompted-speech` (ADR-040 /
+   * DDD-0004). Until the 4.0 reroute the fourth entry was `lesson-hooks.sh` — a bare producer wired
+   * straight into hooks.json that was blocking-capable by DESIGN (`lesson-hooks.sh:134` is
+   * `[ "$CODE" -eq 2 ] && exit 2`). That bare wiring is now GONE: the unprompted producers
+   * (anticipate + lesson-hooks) are spawned in candidate mode by `unprompted-runtime.mjs`, and the
+   * ONLY thing hooks.json points at for them is `hook-shim.mjs unprompted-speech <CCEvent>`, a
+   * mode:'blocking' entry in the shim's table. So the opted-in lesson refusal (exit 2) still
+   * propagates — but through the runtime, exactly like route-dispatch's wall, which is why
+   * unprompted-speech joins the other three here and `lesson-hooks.sh` leaves (leaving it on the list
+   * would be a STALE exemption — it is no longer registered — and the assertion below now proves that).
    *
-   * It needs no failsafe because it already fails OPEN internally on every non-deliberate path —
-   * verified at the real door 2026-07-22: no event → 0, no gate file → 0, no node → 0, malformed
-   * stdin → 0. Exit 2 is reachable only from a real refusal. That is the correct shape for a
-   * blocking hook: unguarded at the registry, defensive on the inside.
+   * unprompted-speech needs no `|| true` for the same reason the other three don't and MUST NOT have
+   * one: the runtime fails toward SILENCE internally on every non-deliberate path (unknown event → 0,
+   * no producers → 0, rogue raw bytes → 0, invalid candidate → 0), and exit 2 is reachable only from a
+   * real, user-opted-in lesson block — proven at the real door by
+   * tests/integration/unprompted-speech-registry.test.mjs. Unguarded at the registry, defensive on
+   * the inside — the correct shape for a blocking hook. A `|| true` here would silently disarm every
+   * opted-in refusal, the exact disarm the next assertion exists to prevent.
    */
-  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'lesson-hooks.sh']);
+  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'unprompted-speech']);
   const isBlocking = (cmd) => BLOCKING.some((b) => cmd.includes(b));
 
   it('gives every ADVISORY hook a `|| true` failsafe — a hook error must never reach the user', () => {
@@ -278,7 +360,7 @@ describe('registry hygiene', () => {
     ).toEqual([]);
   });
 
-  it('leaves the three BLOCKING hooks unguarded — `|| true` there would disarm every wall', () => {
+  it('leaves the BLOCKING hooks unguarded — `|| true` there would disarm every wall', () => {
     const disarmed = [];
     for (const [event, entries] of Object.entries(reg.hooks)) {
       for (const m of entries) {

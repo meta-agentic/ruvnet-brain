@@ -296,21 +296,39 @@ export function loadLessons(file = STORE_PATH) {
  *   2. write to a temp file, then rename() — atomic on POSIX, so a crash mid-write cannot truncate
  *   3. a rotating backup before every write, so even a logic error is recoverable
  */
-export function saveLessons(lessons, file = STORE_PATH) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-
-  // 1. LOCK. Stale locks are broken after 30s — a crashed writer must not wedge the store forever,
-  //    which would turn a data-loss bug into a total outage.
-  const lock = `${file}.lock`;
-  let fd = null;
+/**
+ * Acquire the store lock, or return null if it could not be taken.
+ *
+ * Extracted so `updateLessons` can hold the lock ACROSS its read — see the correction recorded there.
+ * Stale locks are broken after 30s: a crashed writer must not wedge the store forever, which would
+ * turn a data-loss bug into a total outage.
+ */
+function acquireLock(lock) {
   for (let i = 0; i < 50; i++) {
-    try { fd = fs.openSync(lock, 'wx'); break; } catch {
+    try { return fs.openSync(lock, 'wx'); } catch {
       try {
         if (Date.now() - fs.statSync(lock).mtimeMs > 30_000) { fs.rmSync(lock, { force: true }); continue; }
       } catch { /* vanished between check and stat — retry */ }
       // Busy-wait briefly; this write is rare and short, so a spin is cheaper than async plumbing.
       const until = Date.now() + 20; while (Date.now() < until) { /* spin */ }
     }
+  }
+  return null;
+}
+
+export function saveLessons(lessons, file = STORE_PATH, { lockHeld = false } = {}) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+
+  const lock = `${file}.lock`;
+  let fd = null;
+  if (!lockHeld) {
+    fd = acquireLock(lock);
+    // FAIL CLOSED. This loop used to fall through with fd === null and write ANYWAY — so the one
+    // situation the lock exists for (another writer is active right now) was also the one situation
+    // in which it was silently skipped. Refusing is correct: a caller that sees an error can retry
+    // or tell the user, while a silent unlocked write destroys the other writer's change and reports
+    // success. Found by GPT-5.6-Sol, 2026-07-24.
+    if (fd === null) throw new Error('lesson store is locked by another writer — nothing was saved, try again');
   }
 
   try {
@@ -332,33 +350,69 @@ export function saveLessons(lessons, file = STORE_PATH) {
     fs.renameSync(tmp, file);
     return { ok: true, file, count: lessons.length };
   } finally {
-    if (fd !== null) { try { fs.closeSync(fd); } catch { /* already closed */ } }
-    try { fs.rmSync(lock, { force: true }); } catch { /* best effort */ }
+    // Only the acquirer releases. When the caller holds the lock (updateLessons), releasing here
+    // would open the window mid-transaction — the opposite of the fix.
+    if (!lockHeld) {
+      if (fd !== null) { try { fs.closeSync(fd); } catch { /* already closed */ } }
+      try { fs.rmSync(lock, { force: true }); } catch { /* best effort */ }
+    }
   }
 }
 
 /**
  * MERGE-SAFE UPDATE — use this instead of load→modify→save.
  *
- * Re-reads UNDER the lock, applies the caller's transform to the CURRENT state, and writes. The
- * clobber happened because a caller reasoned about a snapshot taken seconds earlier; this closes
- * that window by construction rather than by asking callers to be careful.
+ * CORRECTED 2026-07-24. This doc comment previously claimed "Re-reads UNDER the lock" while the code
+ * did nothing of the kind: `loadLessons()` ran BEFORE `saveLessons()` took the lock, so the lock
+ * protected only the atomic replace, never the read-modify-write. Two writers could both read v1,
+ * serialize their writes, and the second would silently erase the first's change. The comment was
+ * the load-bearing lie — it was read, believed, and repeated to the owner as a guarantee the code
+ * had never implemented. Found by GPT-5.6-Sol, 2026-07-24, by reading the two functions together.
+ *
+ * Now the lock really is held across read → transform → write. The invariant is worth stating
+ * plainly because it is the whole point: NOTHING may read the store for the purpose of writing it
+ * back except inside this function.
  */
 export function updateLessons(transform, file = STORE_PATH) {
-  const fresh = loadLessons(file);
-  const next = transform(fresh);
-  if (!Array.isArray(next)) throw new Error('updateLessons: transform must return an array of lessons');
-  if (next.length < fresh.length) {
-    // A shrinking store is almost always a stale-snapshot clobber, not an intentional deletion.
-    // Deletion has its own path (demote), so refuse rather than lose a rule silently.
-    throw new Error(`updateLessons refused: would drop ${fresh.length - next.length} lesson(s). Use demote() to retire one.`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const lock = `${file}.lock`;
+  const fd = acquireLock(lock);
+  if (fd === null) throw new Error('lesson store is locked by another writer — nothing was saved, try again');
+
+  try {
+    const fresh = loadLessons(file);          // INSIDE the lock, which is what the old comment promised
+    const next = transform(fresh);
+    if (!Array.isArray(next)) throw new Error('updateLessons: transform must return an array of lessons');
+    if (next.length < fresh.length) {
+      // A shrinking store is almost always a stale-snapshot clobber, not an intentional deletion.
+      // Deletion has its own path (demote), so refuse rather than lose a rule silently.
+      throw new Error(`updateLessons refused: would drop ${fresh.length - next.length} lesson(s). Use demote() to retire one.`);
+    }
+    return saveLessons(next, file, { lockHeld: true });
+  } finally {
+    try { fs.closeSync(fd); } catch { /* already closed */ }
+    try { fs.rmSync(lock, { force: true }); } catch { /* best effort */ }
   }
-  return saveLessons(next, file);
 }
 
 /** Demotion is STICKY: the user's "this was wrong" must survive the next mining run, or the control is theatre. */
 export function demote(id, lessons) {
   return lessons.map((l) => (l.id === id ? makeLesson({ ...l, demoted: true }) : l));
+}
+
+/**
+ * RESTORE — the inverse of demote, and the reason an X in the console is safe to click.
+ *
+ * Demotion is sticky against the MINER (a new mining run must not resurrect a rule the user
+ * rejected). It was never meant to be sticky against the USER, who is the authority the stickiness
+ * exists to protect. Without this, "turn it off" is a one-way door, and a one-way door makes people
+ * hesitate before every click — the opposite of the finely-grained control the surface is for.
+ *
+ * It does NOT restore `status`: a lesson that was never ratified comes back as a candidate awaiting
+ * a decision, exactly as it was. Un-hiding something is not the same act as agreeing to it.
+ */
+export function restore(id, lessons) {
+  return lessons.map((l) => (l.id === id ? makeLesson({ ...l, demoted: false }) : l));
 }
 
 /**

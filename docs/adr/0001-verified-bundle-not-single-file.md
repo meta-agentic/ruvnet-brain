@@ -2,7 +2,8 @@
 id: ADR-001
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-09
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0001: Ship a verified zip bundle, not a single embedded `.rvf`
 

@@ -3,7 +3,7 @@ id: ADR-029
 title: Cross-project lesson promotion — a lesson learned twice is a lesson that should be global
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
 authors: [Stuart Kerr, Claude Code]
 tags: [learning, agentdb, memory, compounding, L5, 4.0]
 supersedes: []
@@ -139,8 +139,15 @@ the open item** — see Verification #3. Until it is proven across a real refres
    promotable processes, each naming the projects that taught it.
 2. ✅ Tested at all five classes ADR-028 requires (low/medium/high/numeric/qualitative), 14 tests,
    with the central guard proven to FAIL when the predicate is weakened to a raw lesson count.
-3. ❌ **A promoted lesson survives a nightly refresh and a `--update`.** Not yet demonstrated. Until
-   it is, "survives updates" is a design intent, not a property.
+3. ⚠️ **A promoted lesson survives a nightly refresh and a `--update`.** Demonstrated by ISOLATION on
+   2026-07-23 (7 lessons promoted live; `~/.claude/CLAUDE.md` 37510→39903 bytes, backup
+   `CLAUDE.md.bak-promote-2026-07-23`), not yet by live execution. The promotion lives between unique
+   markers `<!-- BEGIN ruvnet-brain: promoted-lessons -->`; the ONLY writer of `CLAUDE.md`
+   (`bin/install.mjs`, on `--update`/`--uninstall`/`--enhance`) surgically edits a DIFFERENTLY-marked
+   block (`ruvnet-brain:start`) and physically cannot touch the promotion block; `scripts/update-apply.mjs`
+   has ZERO `CLAUDE.md` references; re-applying is idempotent (delta 0). A live end-to-end `--update` was
+   NOT run — it installs the published version, not the branch — so this is proof-by-isolation (falsifiable:
+   matching markers, or an update-path write to `CLAUDE.md`, would break it), not proof-by-execution.
 4. ❌ **The proactive loop closes**: the console offers the promotion unprompted ("7 processes you
    taught in multiple projects are trapped at project level — promote them?"), rather than the user
    having to know this script exists. Currently it is a CLI nobody would think to run, which is the

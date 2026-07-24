@@ -59,6 +59,15 @@ done
 [ -z "$GATE" ] && exit 0
 command -v node >/dev/null 2>&1 || exit 0
 
+# Read the hook's JSON payload off stdin ONCE, via the same shared Node parser the other PreToolUse
+# gates on Bash already use for this — never a hand-rolled bash regex, which is how a JSON-escaped
+# quote once silently truncated a command in this exact codebase. Safe for every event this script
+# handles: the harness always pipes a payload, and a caller with no stdin (a manual test) gets EOF
+# immediately, not a hang — an empty result just means no command text was found.
+INPUT=""
+while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"$'\n'; done
+HOOK_INPUT_JS="$HERE/hook-input.mjs"
+
 # Map a real Claude Code event onto the store's decision points, and onto the event name the harness
 # will accept back. An event may carry more than one decision point: ending a turn is simultaneously
 # "reporting status" and "claiming done", and both have lessons.
@@ -97,7 +106,28 @@ case "$EVENT" in
   PreToolUse-write) TRIGGERS="write-code";                      CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-bash)  TRIGGERS="mutate-machine";                  CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-push)  TRIGGERS="ship";                            CLAUDE_EVENT="PreToolUse" ;;
-  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done"; CLAUDE_EVENT="UserPromptSubmit" ;;
+  # `choose-work` ADDED 2026-07-24 — the omission that made the Learning pillar look broken.
+  #
+  # THE FAILURE, in the owner's words: "why aren't you spinning up parallel swarms... isn't that a
+  # definition of a huge failure of the learning?" He was right, and the cause was one missing word on
+  # this line. L16-parallel-by-default ("when given multiple independent pieces of work, FAN OUT
+  # IMMEDIATELY... serial execution of independent work is a defect, not a style") is RATIFIED, taught
+  # FOUR times — and had never been delivered once, in any session, because nothing ever requested its
+  # trigger. The lesson was not ignored; it was never spoken.
+  #
+  # WHY IT WAS MISSED, and the trap worth naming: `choose-work`'s surface is `plan`, and lesson-store
+  # correctly refuses to let a `plan` lesson claim `block` enforcement — no hook can observe the
+  # instant a model forms an intention. That true statement was silently over-read as "plan lessons
+  # cannot be delivered at all," so the trigger was left off every event. But UserPromptSubmit IS the
+  # work-choice moment: a request arrives and the very next act is deciding how to attack it. The
+  # lesson cannot BLOCK there — it stays advisory, exactly as its enforcement says — but advisory
+  # delivered beats enforcing never. "Cannot be a gate" and "cannot be heard" are different claims,
+  # and conflating them cost four repetitions of the same correction.
+  #
+  # This is the same defect the header table already recorded for `report-status` ("enforcing? yes /
+  # wired to a hook that runs? no ← this is why the model still stopped"). Fixed there, missed here.
+  # One bug, found once, fixed once, left everywhere else.
+  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done choose-work"; CLAUDE_EVENT="UserPromptSubmit" ;;
   *) exit 0 ;;
 esac
 
@@ -106,6 +136,25 @@ esac
 # this runs on every matching event, so one node spawn instead of two is latency the user feels.
 ARGS=()
 for t in $TRIGGERS; do ARGS+=(--trigger "$t"); done
+
+# Session identity for the gate's per-session frequency cap (scripts/lesson-gate.mjs) — extracted from
+# the same payload via the shared parser, never a hand-rolled regex. A missing/empty id just means the
+# gate falls back to a cwd+day key, so the cap stays bounded either way; it is never a hard requirement.
+if [ -f "$HOOK_INPUT_JS" ]; then
+  SID=$(printf '%s' "$INPUT" | node "$HOOK_INPUT_JS" field session_id 2>/dev/null) || SID=""
+  [ -n "$SID" ] && ARGS+=(--session "$SID")
+fi
+
+# THE FIX for the mutate-machine false-positive nag: `mutate-machine` fired on EVERY Bash call — `ls`,
+# `grep`, `git status` included — because this dispatcher requested the trigger unconditionally, with
+# no inspection of the command at all (there was nothing here to inspect it WITH). The gate now takes
+# `--command <text>` and narrows `mutate-machine` to commands that plausibly mutate something OUTSIDE
+# this repo (scripts/lesson-gate.mjs, looksLikeOutsideRepoMutation) — so extract the real command text
+# for exactly the one event that carries it, and hand it to the gate to decide.
+if [ "$EVENT" = "PreToolUse-bash" ] && [ -f "$HOOK_INPUT_JS" ]; then
+  CMD=$(printf '%s' "$INPUT" | node "$HOOK_INPUT_JS" command 2>/dev/null) || CMD=""
+  ARGS+=(--command "$CMD")
+fi
 
 # A hard timeout, because this runs on every matching event and must never add perceptible latency.
 # BUT `timeout` is GNU coreutils and STOCK macOS DOES NOT SHIP IT — on this dev machine it exists

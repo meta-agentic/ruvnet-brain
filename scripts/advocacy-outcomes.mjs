@@ -36,6 +36,15 @@
 // the next release never compounds, and compounding (ADR-028 L5) is the only point of any of this.
 //
 // PURITY: node builtins only, no spawn, no network. It is read by surfaces; it does not render.
+//
+// WIRED (2026-07-23). Until this build `shouldStillOffer()` had ZERO production callers —
+// `anticipate.sh` kept its OWN binary dismissed-Set (one dismissal muted forever, no severity, no
+// budget) as a second, disconnected suppression policy, and this file's asymmetric budget sat
+// uncalled. `anticipate.sh` is now the single caller for every mode (suggest AND
+// dismiss/undismiss/status): it asks `shouldStillOffer()` and nothing else decides. `reconcileIgnored()`
+// likewise had zero callers; `onboarding-console.mjs`'s `/api/capabilities` handler now supplies its
+// pending-and-stale ids via this file's `pendingOffers()` (see `findStaleOffers()` there for the
+// staleness rule, which is deliberately this file's caller's decision, not this file's).
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -433,6 +442,27 @@ function pendingOffer(id, all) {
 }
 
 /**
+ * Every id with a currently-pending offer — the bulk, read-only form of the per-id check
+ * pendingOffer() already makes inside reconcileApplied()/reconcileIgnored(). Exists so a CALLER can
+ * decide its OWN staleness rule (wall-clock age, a newer offer superseding it, a session count) over
+ * a real `at` timestamp, without re-implementing the reset-aware, position-ordered definition of
+ * "pending" that lives here. Read-only: it records nothing and never throws.
+ *
+ * @returns {Array<{id:string, at:string|null, severity:string|null, project:string|null, stateHash:string|null}>}
+ */
+export function pendingOffers({ file = OUTCOMES_PATH, all = null } = {}) {
+  let recs;
+  try { recs = all ?? loadOutcomes(file); } catch { return []; }
+  const ids = [...new Set(recs.map((r) => r.id))];
+  const out = [];
+  for (const id of ids) {
+    const offer = pendingOffer(id, recs);
+    if (offer) out.push({ id, at: offer.at, severity: offer.severity, project: offer.project, stateHash: offer.stateHash });
+  }
+  return out;
+}
+
+/**
  * THE NUMERATOR, DERIVED — not asserted. precision = applied ÷ (applied+dismissed+ignored), and until
  * now `applied` was recorded by nothing, so the number could only ever be 0 (once a dismissal landed)
  * or null. That is the inverse of the fabrication this file warns about in its header: not a beautiful
@@ -469,6 +499,69 @@ export function reconcileApplied(auditRows, { file = OUTCOMES_PATH } = {}) {
       done.push(id);
       // keep the in-call view consistent so a duplicate id in auditRows can't be applied twice
       all.push({ id, action: ACTIONS.APPLIED, at: res.row.at, project: res.row.project, severity: res.row.severity, stateHash: null, scope: null });
+    }
+  }
+  return done;
+}
+
+/**
+ * THE DENOMINATOR'S MISSING THIRD — `ignored`, DERIVED, not guessed.
+ *
+ * ADR-028: precision = applied ÷ (applied + dismissed + ignored). `applied` was wired above by
+ * reconcileApplied(); `dismissed` was always recorded, because a dismissal is a click and a click has
+ * an event to hang a record on. `ignored` has no click — it is the ABSENCE of one — and this module
+ * already refuses to record an absence on a guess (see stateHashOf returning null for no evidence,
+ * outcomesFor's precision:null for no offers). An offer shown and never acted on nor dismissed is
+ * invisible today, and invisible is optimistic: it silently shrinks the denominator, the mirror image
+ * of the fabrication this file's header already names ("record only the applies").
+ *
+ * THE TRIGGER THIS BUILD CHOSE, AND WHY IT IS NOT A GUESS. "Ignored" is fundamentally a claim about
+ * TIME — the offer sat there, unresolved, long enough that the silence means something rather than
+ * "the user hasn't looked yet". This module has no clock of its own worth trusting for that: record()
+ * lets a caller pass an arbitrary `at`, and liveRecords()/pendingOffer() deliberately order by file
+ * position rather than timestamp for exactly the clock-skew reason documented on both of them. Picking
+ * a threshold HERE (say, "offered more than N days ago") would be inventing evidence this file does
+ * not have. So the staleness decision is left where the evidence actually lives — with the caller, who
+ * can say "this offer is N sessions old" or "a newer offer for the same capability just superseded
+ * it" — and reconcileIgnored() takes that decision as a plain list of ids rather than a clock. It stays
+ * pure: no Date.now(), no session counter, nothing but the ledger already on disk.
+ *
+ * WHAT MAKES IT SAFE TO CALL WITH A WRONG OR STALE LIST. Passing an id is a PROPOSAL, not a command —
+ * the ledger is the sole arbiter. For each id, the only question this function answers on its own
+ * evidence is: is there a `pendingOffer` for this id right now (an `offered` since the last reset with
+ * NO resolution after it)? That single check is what buys the three guarantees this build requires:
+ *   - CANNOT double-count: the moment an id is recorded ignored, it IS a resolution — so any later
+ *     call with the same id (a cron re-run, a duplicate in the same list) finds nothing pending.
+ *   - CANNOT convert a real resolution: a caller that (wrongly) still lists an id the user applied or
+ *     dismissed five minutes ago is a no-op, never an overwrite — pendingOffer() already sees the
+ *     resolution and returns null, same as it does for reconcileApplied().
+ *   - CANNOT invent an offer: an id that was never offered has no pendingOffer either, so a stray or
+ *     misspelled id records nothing.
+ *
+ * NEVER THROWS — same contract as reconcileApplied(): a caller here is a surface or a scheduled job,
+ * and a lost `ignored` costs one row, never the caller.
+ *
+ * @param {Array<string>} pendingIds  ids the CALLER has already judged pending AND stale — staleness
+ *   (session age, wall-clock age, supersession by a newer offer) is entirely the caller's evidence;
+ *   this function neither computes nor infers it, only verifies each id still has a real pendingOffer.
+ * @returns {string[]} the ids actually reconciled to `ignored` this call — a subset of pendingIds,
+ *   only those that still had an unresolved offer to resolve.
+ */
+export function reconcileIgnored(pendingIds, { file = OUTCOMES_PATH } = {}) {
+  if (!Array.isArray(pendingIds)) return [];
+  let all;
+  try { all = loadOutcomes(file); } catch { return []; }
+  const done = [];
+  for (const raw of pendingIds) {
+    const id = typeof raw === 'string' ? raw : '';
+    if (!id) continue;
+    const offer = pendingOffer(id, all);
+    if (!offer) continue;   // already resolved, reset since, or never offered — nothing pending to mark
+    const res = record({ id, action: ACTIONS.IGNORED, severity: offer.severity ?? null, project: offer.project ?? null }, { file });
+    if (res.ok) {
+      done.push(id);
+      // keep the in-call view consistent so a duplicate id in pendingIds can't be recorded twice
+      all.push({ id, action: ACTIONS.IGNORED, at: res.row.at, project: res.row.project, severity: res.row.severity, stateHash: null, scope: null });
     }
   }
   return done;

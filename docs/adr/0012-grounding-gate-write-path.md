@@ -2,7 +2,8 @@
 id: ADR-012
 status: Accepted
 date: 2026-07-13
-updated: 2026-07-13
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0012: Grounding gate on the write path — brain consultation is enforced, not advisory
 

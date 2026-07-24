@@ -3,7 +3,7 @@ id: ADR-033
 title: Where a lesson comes from — extracting corrections from what the user actually said, at high precision or not at all
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
 authors: [Stuart Kerr, Claude Code]
 tags: [learning, extraction, corrections, precision, retirement, trust-boundary, 4.0]
 supersedes: []
@@ -347,8 +347,27 @@ Nothing in this ADR is built. Every mark below is honest as of 2026-07-22.
 2. ✅ **The precision problem is measured on the real corpus**, not hypothesised: 1,298 transcripts,
     2,214 user turns, 42.1% naive hit rate, 4.7% tightened, with the three canonical false-positive
     classes quoted verbatim from the data.
-3. ❌ **Precision ≥ 90% on a human-labelled set of ≥ 100 detections.** The only measurement so far is
-    ≈27%, self-graded. **Until this passes, nothing ships.** This is the gate, not a goal.
+3. ❌ **Precision ≥ 90% on a human-labelled set of ≥ 100 detections.** The gate, not a goal.
+    **Measured update 2026-07-23** (reproducible via `scripts/correction-detect-measure.mjs`, a held-out
+    split of all 1,328 transcripts). Two findings now bound this criterion, both measured not asserted,
+    and both point the same way — the ≥ 100 half of it is the wrong number for this data:
+    - **≥ 100 detections is UNREACHABLE ON THIS CORPUS.** All 271 loose-net candidates across the whole
+      corpus were hand-labelled against this ADR's four-signal definition: **~37–43 genuine corrections
+      exist in total** — about a third of 100. The floor is a fact about the *data*, not the regex; no
+      primitive can find 100 corrections that are not there.
+    - **The "different primitive" escape was tried and FAILED.** An embedding k-NN over the repo's own
+      local `Xenova/all-MiniLM-L6-v2` (`scripts/correction-detect-embed.mjs`, kept as a STANDALONE
+      negative-result reference) scored **worse** than the regex (25% vs 50–100% precision, comparable
+      recall) and is less legible — MiniLM separates by topic, not by the pragmatic "is this correcting
+      the agent" property. The regex stays the best available primitive.
+    - **Recommended re-spec — OWNER DECISION, not taken unilaterally:** keep the 90% precision bar,
+      re-scale N to *"whatever the corpus supports, accumulating as it grows"* (currently ~37–43).
+      Consistent with this ADR's own precision-over-recall stance, just honestly reachable. **Under that
+      re-spec the detector STILL does not pass** (≈50% strict precision at n=4 on the holdout), so it
+      stays HELD either way — this replaces an impossible number with a measured one, it does not move a
+      goalpost to turn red green. The self-graded ≈27% below is superseded; the 2026-07-23 labels are
+      likewise self-graded (see #6) and carry that same caveat until an independent grader runs.
+    **Until precision is proven ≥ 90% at the available N, nothing ships from auto-capture.**
 4. ❌ A detector exists at all. There is no code — this ADR specifies one and states the bar it must
     clear.
 5. ❌ An extracted candidate has ever been ratified by the owner, or rejected by him, and the

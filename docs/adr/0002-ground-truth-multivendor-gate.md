@@ -2,7 +2,8 @@
 id: ADR-002
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-09
+updated: 2026-07-22
+updated_source: derived-from-git
 ---
 # ADR-0002: Quality gate of record = ground-truth-against-source + multi-vendor panel
 

@@ -46,6 +46,14 @@ const TABLE = {
   'learn-capture':    { file: 'learn-capture.sh',    interpreter: 'bash', mode: 'advisory' },
   'learn-flush':      { file: 'learn-flush.mjs',     interpreter: 'node', mode: 'advisory' },
   'md-stamp':         { file: 'md-stamp.mjs',        interpreter: 'node', mode: 'advisory' },
+  // The unprompted-speech chokepoint (ADR-040 / DDD-0004). ONE runtime is the sole writer of
+  // user-facing bytes for every unprompted hook: it spawns the real producers (anticipate, lesson)
+  // in candidate mode, applies the per-channel policy, and writes the final envelope itself. `channel`
+  // marks it as the unprompted seam. It is mode:'blocking' on purpose — the runtime decides its own
+  // exit code, and an opted-in lesson BLOCK must propagate as exit 2 (an advisory delivery is exit 0
+  // and passes straight through; a spawn error is exit 1, which CC treats as a non-blocking notice).
+  // The CC event name is forwarded to the runtime as an extra argv (see runHook's arg plumbing).
+  'unprompted-speech': { file: 'unprompted-runtime.mjs', interpreter: 'node', mode: 'blocking', channel: 'unprompted' },
 };
 
 const hookId = process.argv[2];
@@ -80,7 +88,12 @@ function resolveCodeRoot() {
 function runHook(file) {
   if (!fs.existsSync(file)) return 0; // nothing to run — never invent a failure
   const cmd = entry.interpreter === 'node' ? process.execPath : '/bin/bash';
-  const r = spawnSync(cmd, [file], { stdio: 'inherit', env: process.env });
+  // Forward any argv AFTER the hook id to the hook body. Every current hooks.json line calls
+  // `hook-shim.mjs <id>` with no trailing args, so slice(3) is empty and their behavior is unchanged.
+  // The unprompted-speech chokepoint uses this to receive the CC event name:
+  // `hook-shim.mjs unprompted-speech UserPromptSubmit` → `unprompted-runtime.mjs UserPromptSubmit`.
+  const extraArgs = process.argv.slice(3);
+  const r = spawnSync(cmd, [file, ...extraArgs], { stdio: 'inherit', env: process.env });
   if (r.error) {
     process.stderr.write(`[hook-shim] ${entry.file}: ${r.error.message}\n`);
     return entry.mode === 'blocking' ? 1 : 0;

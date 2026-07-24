@@ -25,9 +25,11 @@
  * committed-to items with a done state — and if authorized work remains unfinished, it says so, in
  * the last place the model looks before going quiet.
  *
- * WHAT IT CANNOT DO, stated plainly rather than overclaimed: a Stop hook cannot force another turn.
- * It can make the unfinished work the last thing in context, which is the strongest available
- * intervention at that boundary. Claiming more would be the fabrication this project exists to kill.
+ * WHAT IT DOES, verified against code.claude.com/docs/en/hooks.md (2026-07-23, not recalled, ADR-043):
+ * a Stop hook's `additionalContext` at exit 0 DOES force a continuation — under the same loop
+ * protections as decision:block (the `stop_hook_active` input + the 8-consecutive-continuation cap). An
+ * earlier version of this header claimed "a Stop hook cannot force another turn"; that was wrong. The
+ * gate still exits 0 always — continuation is driven by the envelope, never by a non-zero exit code.
  *
  * FAILS OPEN ALWAYS. Exit 0 unconditionally. A gate that breaks a turn's completion because it
  * could not read a JSON file would be disabled within a day, and a disabled gate protects nothing.
@@ -101,12 +103,13 @@ if (has('--commit-to')) {
 if (has('--done')) {
   const led = load();
   const needle = arg('--done');
-  let hit = 0;
-  for (const i of led.items) {
-    if (!i.done && (i.text === needle || i.text.includes(needle))) { i.done = true; i.doneAt = new Date().toISOString(); hit++; }
-  }
+  // EXACT text match only (GPT-5.6-Sol review). The earlier "unambiguous substring" fallback could still
+  // clear a SINGLETON open item via a fragment — a fake-completion valve under a gate that now applies real
+  // continuation pressure. Marking done requires the item's exact text (copy it from the ledger line).
+  const targets = led.items.filter((i) => !i.done && i.text === needle);
+  for (const i of targets) { i.done = true; i.doneAt = new Date().toISOString(); }
   save(led);
-  console.log(`marked done: ${hit}`);
+  console.log(`marked done: ${targets.length}`);
   process.exit(0);
 }
 
@@ -121,67 +124,92 @@ if (has('--clear')) { save({ items: [] }); console.log('ledger cleared'); proces
  * with no piped input, and a gate that hangs is worse than a gate that is silent.
  */
 function readHookInput() {
-  if (process.stdin.isTTY) return {};
-  try { return JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { return {}; }
+  // Three cases, treated DIFFERENTLY (ADR-043, Fable red-team #1):
+  //  - 'tty'        : run bare in a terminal, not as a hook → never force.
+  //  - 'unreadable' : stdin present but read/parse FAILED. `fs.readFileSync(0)` throws EAGAIN
+  //                   intermittently on macOS — a real footgun. The old code returned {} here, which
+  //                   under a forcing gate LAUNDERS a read error into a fresh-stop verdict → a forced
+  //                   loop. We must not force when we could not confirm the payload.
+  //  - 'stdin'      : a payload we actually parsed → the only case allowed to force.
+  if (process.stdin.isTTY) return { __source: 'tty' };
+  try {
+    const raw = fs.readFileSync(0, 'utf8');
+    return { ...JSON.parse(raw || '{}'), __source: 'stdin' };
+  } catch { return { __source: 'unreadable' }; }
 }
 const hookInput = readHookInput();
 
+// LOOP-SAFETY 1 (ADR-043 / Fable #1) — only an affirmatively-parsed hook payload may force. A 'tty' or
+// 'unreadable' source cannot be confirmed a fresh stop, so it never forces.
+if (hookInput.__source !== 'stdin') process.exit(EXIT_ALLOW);
+
 /**
- * THE LOOP GUARD. This is the single most important line in the file.
- *
- * `additionalContext` at Stop is NOT a passive message — it CONTINUES THE TURN, and it counts
- * against the same 8-consecutive-continuation cap as `decision: "block"`. From the live hooks doc:
- *
- *   "It keeps the conversation going through the same loop protections as decision: 'block',
- *    namely the stop_hook_active input and the 8-consecutive-continuation cap"
- *   "Claude Code overrides the hook and ends the turn after 8 consecutive blocks."
- *
- * So a Stop hook that speaks unconditionally will continue the turn eight times and be overridden
- * on the ninth. That is not a hypothetical: it happened on 2026-07-22 across three projects, and
- * the harness's own error text named this exact fix — "check stop_hook_active in the input and
- * return success while it's true."
- *
- * `stop_hook_active` is true once Claude Code is already continuing because of a stop hook. Honouring
- * it means the nudge is delivered EXACTLY ONCE and the turn then ends normally.
+ * LOOP-SAFETY 2 — the documented guard. `stop_hook_active` is true once Claude Code is already
+ * continuing because of a stop hook (verified against code.claude.com/docs/en/hooks.md, ADR-043).
+ * Honouring it caps each natural-stop episode at EXACTLY ONE forced continuation. Truthy, not
+ * `=== true`, so a future string/number drift ("true", 1) cannot slip past into a loop.
  */
-if (hookInput.stop_hook_active === true) process.exit(EXIT_ALLOW);
+if (hookInput.stop_hook_active) process.exit(EXIT_ALLOW);
 
 const led = load();
-const open = led.items.filter((i) => !i.done);
+const nowMs = Date.now();
 
+// LOOP-SAFETY 1b (GPT-5.6-Sol review) — an empty-but-parseable `{}` is NOT a real Stop payload; a genuine
+// one carries `session_id` (a documented Stop input). Without it we cannot confirm a real stop, so we never
+// force. This closes the empty-stdin hole that LOOP-SAFETY 1's `__source` check does not cover.
+if (!hookInput.session_id) process.exit(EXIT_ALLOW);
+
+const open = led.items.filter((i) => !i.done);
 if (!open.length) process.exit(EXIT_ALLOW);   // nothing outstanding: silence is correct
 
 /**
- * ONE NUDGE PER SESSION, not one per turn.
- *
- * The state gate above is necessary but not sufficient for a well-behaved hook. A ledger carries
- * items across sessions, so "work remains" stays true for days — and a nudge that fires on every
- * turn-end for days is a forced extra model turn every single time the user talks. That is the
- * ham-fisted behaviour that gets a tool switched off, and being technically correct about the
- * unfinished work does not redeem it.
- *
- * Keyed on session_id from the payload, so a genuinely new session hears it again.
+ * FRESHNESS (ADR-043 / Fable #3, tightened by GPT-5.6-Sol) — only FORCE for work with a VALID, recent
+ * timestamp. A missing or unparseable `at` is treated as STALE and NOT forced: a real item always carries
+ * an `at` (set by --commit-to), so only a malformed/legacy row lacks one, and forcing forever on an item of
+ * UNKNOWN age is exactly the fabrication-pressure this guard exists to stop.
  */
-if (hookInput.session_id && led.nudgedSession === hookInput.session_id) process.exit(EXIT_ALLOW);
-if (hookInput.session_id) save({ ...led, nudgedSession: hookInput.session_id });
+const STALE_MS = 24 * 60 * 60 * 1000;
+const forceable = open.filter((i) => {
+  const t = Date.parse(i.at);
+  return Number.isFinite(t) && (nowMs - t) < STALE_MS;
+});
+if (!forceable.length) process.exit(EXIT_ALLOW);
 
 /**
- * DELIVERY. `additionalContext` on STDOUT is the only channel the model reads at exit 0.
- *
- * This file previously wrote all ten of these lines to console.error. On exit 0, stderr is not a
- * delivery channel — the doc lists it nowhere among the exit-0 paths that reach the model. So the
- * one Stop hook that actually knew whether work was outstanding had been shouting into a void since
- * the day it was written, while the one that knew nothing was heard on every turn. Built, tested,
- * unwired: the exact defect class this project exists to catch, in the file written to catch it.
+ * LOOP-SAFETY 3 (belt-and-braces this file OWNS — Fable #1, made fail-closed + race-safe by the GPT-5.6-Sol
+ * review). Claim the force ATOMICALLY via an exclusive-create lock that doubles as the cooldown marker:
+ *   - a fresh lock (another force within COOLDOWN_MS, incl. a concurrent second Stop hook) → do NOT force;
+ *   - the claim cannot be persisted → do NOT force (fail CLOSED — never a force we could not record);
+ *   - exclusive create (`wx`) serialises two racing hooks so they can never both win.
+ * This replaces a read-lastForcedAt-then-write that failed OPEN on a write error and let two hooks race.
+ */
+const COOLDOWN_MS = Number(process.env.RUVNET_CONTINUATION_COOLDOWN_MS ?? 20000);
+const LOCK = LEDGER + '.cooldown';
+function claimCooldown(now, windowMs) {
+  try {
+    const prev = Date.parse(fs.readFileSync(LOCK, 'utf8'));
+    if (Number.isFinite(prev) && (now - prev) < windowMs) return false; // fresh lock: someone forced recently
+    fs.unlinkSync(LOCK);                                                 // stale: clear it so we can re-claim
+  } catch { /* no lock yet */ }
+  try { fs.writeFileSync(LOCK, new Date(now).toISOString(), { flag: 'wx' }); return true; }
+  catch { return false; }                                               // lost the race / cannot persist → fail closed
+}
+if (!claimCooldown(nowMs, COOLDOWN_MS)) process.exit(EXIT_ALLOW);
+
+/**
+ * DELIVERY. `additionalContext` in a Stop envelope forces the continuation (same protection as
+ * decision:block). Directive copy — continue, do not look for an exit.
  */
 const lines = [
-  'You committed to work that is not finished. This is advisory — if the remaining items are genuinely',
-  'blocked or already done, say so and finish the turn; do not manufacture an action to satisfy it.',
+  'You have unfinished work you committed to. Do NOT end the turn — continue now.',
+  'Pick the highest-leverage open item below and make real progress on it this turn. Stop only when',
+  'EVERY item is genuinely done or blocked; if one is blocked, say why in a single line and move to',
+  'the next — never stop on the first obstacle, and never manufacture a reason to go quiet.',
   '',
-  ...open.slice(0, 8).map((i) => `  ☐ ${i.text}`),
-  ...(open.length > 8 ? [`  … and ${open.length - 8} more`] : []),
+  ...forceable.slice(0, 8).map((i) => `  ☐ ${i.text}`),
+  ...(forceable.length > 8 ? [`  … and ${forceable.length - 8} more`] : []),
   '',
-  'Mark items done as you complete them:  node scripts/continuation-gate.mjs --done "<item text>"',
+  'Mark each item done as you complete it:  node plugin/scripts/continuation-gate.mjs --done "<exact item text>"',
 ];
 
 process.stdout.write(JSON.stringify({

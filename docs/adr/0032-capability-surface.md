@@ -3,7 +3,8 @@ id: ADR-032
 title: The capability surface — on, off, and the third answer we keep refusing to give: unknown
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
+updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [console, capability, honesty, derived-status, advocacy, settings, anti-nag]
 supersedes: []
@@ -15,6 +16,14 @@ relates: [ADR-024, ADR-027, ADR-028, ADR-0013, ADR-020]
 **Updated 2026-07-22** — reconciled to the advocacy-dial adversarial duel (Fable 5 + GPT-5.6); the
 converged design and the decisions it forced are in §"Adversarial review and the reconciled design".
 Governing DDD-0004 moved to v1.1.0 in the same pass.
+
+**Updated 2026-07-23** — item 2(a) below cited `anticipate.sh:243` as evidence the dial setting was
+dead; that line is now gone. `anticipate.sh`'s own separate defect (a local dismissed-Set deciding
+suppression instead of `shouldStillOffer()`/`DISMISSAL_BUDGET`) is fixed in the same build, and
+`reconcileIgnored()` is wired at `onboarding-console.mjs`'s `/api/capabilities` audit. Full detail —
+including the honest gap between what shipped (a severity-CLASS budget + a plain evidence-string
+hash) and item 4's still-proposed `observationHash`/per-detector `compare()` — is in DDD-0004 v1.2.0,
+DismissalLedger aggregate. Nothing else in this ADR's own design changed.
 
 Governed DDD: `docs/ddd/0006-capability-context.md` (capability surface) · `docs/ddd/0004-advocacy-context.md` (the advocacy dial)
 

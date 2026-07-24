@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-22T12:02:59.331Z",
+  "builtUtc": "2026-07-23T08:04:57.956Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "open-claude-code": {
-      "kbName": "open-claude-code",
-      "sourceRepo": "https://github.com/ruvnet/open-claude-code",
-      "sourceCommit": "6176d121850bd3c1950ed17ce6276be5d315ee7a",
-      "sourceDescribe": "v2.0.0-nightly.20260722",
-      "builtUtc": "2026-07-22T12:02:59.331Z",
+    "musica": {
+      "kbName": "musica",
+      "sourceRepo": "https://github.com/ruvnet/musica",
+      "sourceCommit": "e6fa3d4190cba6a11a4bea7ad9dbf8280165d9fc",
+      "sourceDescribe": "musica-vj-v0.8.3",
+      "builtUtc": "2026-07-23T08:04:57.956Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/open-claude-code-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs open-claude-code"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/musica-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs musica"
     }
   }
 }

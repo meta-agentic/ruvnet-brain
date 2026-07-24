@@ -88,7 +88,29 @@ const DAY = 86_400_000;
 const selfScript = (rel, args) => `node ${JSON.stringify(path.join(REPO, rel))}${args ? ` ${args}` : ''}`;
 
 /** The four states. 'absent' means "not installed here", which is NOT the same as "installed and off". */
-export const STATE = Object.freeze({ ON: 'on', OFF: 'off', UNKNOWN: 'unknown', ABSENT: 'absent' });
+/**
+ * IDLE — "you think this is on; it is set up and it is not running."
+ *
+ * THE STATE THIS PRODUCT EXISTS FOR, and it was missing. Owner, 2026-07-24: "this is exactly what we
+ * mean by people thinking something is 'On' only to find out it is not really running and working the
+ * way they thought it would — that is exactly what this tool is for."
+ *
+ * It was found on ourselves. `cheap-model-routing` reported ON off a receipt count alone: any n > 0
+ * meant on, forever. The router had 38 receipts, an active policy and a current catalog — and had not
+ * routed anything in 4.8 days, because the PreToolUse gate that would invoke it was written on
+ * 2026-07-13 and never wired into settings.json. Configured, proven, and inert. The age was even
+ * PRINTED in the evidence string and did not touch the verdict, which is the tell: we had the fact and
+ * threw it away at the moment of judgement.
+ *
+ * IDLE is deliberately NOT a flavour of OFF. Off means "we looked and it is not running" and points at
+ * turnOn. Idle means "it ran, it works, nothing is calling it now" and points at a WIRING question —
+ * usually a hook that was built and never installed. Collapsing the two would send someone to
+ * re-enable a thing that is already enabled, which is how a diagnosis becomes a wild goose chase.
+ *
+ * The horizon is a property of the capability, not a constant: a nightly job idle for 2 days is
+ * broken, a router idle for 2 days may just be a quiet weekend. Each detector passes its own.
+ */
+export const STATE = Object.freeze({ ON: 'on', OFF: 'off', IDLE: 'idle', UNKNOWN: 'unknown', ABSENT: 'absent' });
 export const SCOPE = Object.freeze({ PROJECT: 'project', USER: 'user', MACHINE: 'machine' });
 
 /**
@@ -417,6 +439,51 @@ export const CAPABILITIES = [
       if (n === null) return row(STATE.UNKNOWN, 'the routing receipt ledger exists but could not be read — usage not checked');
       if (n === 0) return row(STATE.OFF, 'the routing receipt ledger is present but empty — no task has been routed to a cheaper model');
       const age = daysSince(mtimeOf(receipts));
+
+      // THE AGE NOW DECIDES, INSTEAD OF DECORATING. This line used to return ON for any n > 0 and
+      // merely MENTION the age in the evidence — so a router with 38 receipts and nothing invoking it
+      // for a fortnight read as healthy. We were holding the disproving fact and printing it politely.
+      //
+      // 7 days: this path should fire on ordinary sessions, so a full quiet week means something
+      // upstream stopped calling it — not that the user had a light week. Measured on this machine
+      // 2026-07-24: 38 receipts, last one 4.8 days old, and the PreToolUse gate that invokes it
+      // (plugin/scripts/route-dispatch.sh, written 2026-07-13) had never been added to settings.json.
+      // Built, correct, and unwired — which no state in this registry could previously express.
+      // MEASURE THE CAUSE, NOT A SYMPTOM. An age threshold alone is a proxy and it FAILED on the real
+      // case: measured 2026-07-24, the last receipt was 5 days old — under any sane horizon — while the
+      // router was in fact never being consulted at all. A quiet week and a severed wire look identical
+      // from the receipt file, so read the wire directly.
+      //
+      // Two things must both be true for anything to route: a PreToolUse gate on subagent dispatch
+      // (plugin/scripts/route-dispatch.sh, which is what turns "declare a model" from advice into a
+      // wall), and the opt-in profile it refuses to act without (route-dispatch.sh:46 exits 0 when
+      // profile.json is absent). Either missing ⇒ the router cannot fire, regardless of how healthy
+      // the receipt ledger looks.
+      const profile = fs.existsSync(path.join(HOME, '.claude/model-router/profile.json'));
+      let gateWired = false;
+      try {
+        const s = JSON.parse(fs.readFileSync(path.join(HOME, '.claude/settings.json'), 'utf8'));
+        gateWired = (s?.hooks?.PreToolUse || []).some((h) =>
+          /Task|Agent/.test(String(h.matcher || ''))
+          && (h.hooks || []).some((x) => /route-dispatch\.sh/.test(String(x.command || ''))));
+      } catch { gateWired = false; }
+
+      if (!gateWired || !profile) {
+        const missing = [!gateWired && 'no PreToolUse gate on Task|Agent is wired to route-dispatch.sh',
+          !profile && 'no ~/.claude/model-router/profile.json (the opt-in the gate requires)'].filter(Boolean).join('; and ');
+        return row(STATE.IDLE,
+          `set up and proven — ${n} routing receipt${n === 1 ? '' : 's'} recorded — but nothing can invoke it: ${missing}. `
+          + 'Every receipt so far came from someone running the router by hand. Until the gate is wired, subagents keep '
+          + 'inheriting this session\'s model, which is the single largest cost leak in the harness.');
+      }
+
+      const IDLE_AFTER_DAYS = 7;
+      if (age !== null && age > IDLE_AFTER_DAYS) {
+        return row(STATE.IDLE,
+          `set up and proven — ${n} routing receipt${n === 1 ? '' : 's'} recorded — but nothing has routed through it in ${age} days. `
+          + 'It is configured; something that should be calling it is not. Check that the subagent-dispatch gate is wired '
+          + '(a PreToolUse hook on Task|Agent) and that ~/.claude/model-router/profile.json exists — without either, the router is never consulted.');
+      }
       return row(STATE.ON, `${n} routing receipt${n === 1 ? '' : 's'} recorded${age === null ? '' : `, most recent ${age} day${age === 1 ? '' : 's'} ago`}`);
     },
   },
@@ -437,8 +504,28 @@ export const CAPABILITIES = [
       const scanned = result?.scanned || {};
       const promotable = result?.promotable || [];
       if (!scanned.lessons) return row(STATE.ABSENT, 'no per-project lessons were found to compare, so there is nothing to promote yet');
+
+      // EFFECT IN FORCE, not backlog remaining. REJECTED by both duelists 2026-07-24: the old rule was
+      // ON iff promotable.length === 0, so teaching two new lessons anywhere flipped a WORKING capability
+      // to OFF — permanently, since the backlog always re-arms. Measured on this machine: it read OFF
+      // while the promoted block was sitting in the user's global CLAUDE.md, put there the same day.
+      // Worse, the evidence string carries a live counter and stateHashOf() hashes that prose, so every
+      // tick minted a fresh "the world changed, you may speak again" token — a perpetual-nag engine.
+      // Dormant must mean INSTALLED, USABLE, NEVER USED. Promotion writes a marked block into the user's
+      // global instructions; the presence of that block is the only honest evidence it is in use.
+      let promotedInForce = false;
+      try {
+        promotedInForce = fs.readFileSync(path.join(HOME, '.claude', 'CLAUDE.md'), 'utf8')
+          .includes('BEGIN ruvnet-brain: promoted-lessons');
+      } catch { promotedInForce = false; }
+
+      if (promotedInForce) {
+        return row(STATE.ON, promotable.length
+          ? `cross-project promotion is in force in your global instructions; ${promotable.length} further process${promotable.length === 1 ? '' : 'es'} ${promotable.length === 1 ? 'has' : 'have'} since become eligible (from ${scanned.lessons} lessons across ${scanned.projects} projects)`
+          : `cross-project promotion is in force in your global instructions, and nothing further is waiting (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
+      }
       if (promotable.length === 0) return row(STATE.ON, `${scanned.lessons} lessons across ${scanned.projects} projects scanned, and none are stuck at project level`);
-      return row(STATE.OFF, `${promotable.length} process${promotable.length === 1 ? '' : 'es'} you have taught in multiple separate projects ${promotable.length === 1 ? 'is' : 'are'} still trapped at project level (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
+      return row(STATE.OFF, `promotion has never been applied on this machine, and ${promotable.length} process${promotable.length === 1 ? '' : 'es'} you have taught in multiple separate projects ${promotable.length === 1 ? 'is' : 'are'} still trapped at project level (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
     },
   },
 
@@ -629,8 +716,14 @@ export const CAPABILITIES = [
       }
 
       const name = (j) => j.label.replace('com.ruvnet.', '');
+      // FAILING IS NOT DORMANT. REJECTED by both duelists 2026-07-24: a job that is loaded, scheduled and
+      // has RUN is installed and IN USE — a non-zero exit is a HEALTH problem belonging to the alarm
+      // channel, never a "you should switch this on" offer. Reporting it OFF is a category error, and it
+      // fired here for the worst possible reason: brain-nightly exited non-zero because the publish guard
+      // CORRECTLY refused to release from a non-main branch. A working safety guard was being reported as
+      // a dormant capability the user should go turn on.
       const failing = jobs.filter((j) => j.exit !== '0' && j.exit !== '-');
-      if (failing.length) return row(STATE.OFF, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded, and ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${name(j)}=${j.exit}`).join(', ')})`);
+      if (failing.length) return row(STATE.ON, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded and running, but ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${name(j)}=${j.exit}`).join(', ')}) — installed and in use, so this is a health problem to look into, not a capability to switch on`);
 
       // "-" IS NOT "0". launchd prints "-" for a job that has never run in this boot, and the old
       // check lumped it in with success — so "every one last exited cleanly" could describe a job
