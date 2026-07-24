@@ -575,6 +575,68 @@ function infoBtn(title, beats) {
   }, 'i');
 }
 
+/* ── SECTION-LEVEL EXPLAINERS (2026-07-24) ───────────────────────────────────────────────────────
+ * The owner could not place several cards — "brain activity vs memory", "how it's wired", "trust &
+ * provenance", "what caught Claude". Every card now carries a one-click "i" that says, in the page's
+ * own quiet voice, what it shows and why it matters. One author wrote all of these so they read as
+ * one voice; each is attached via infoBtn() to a title node the render function already rebuilds. */
+const STACK_INFO = ['Every rUv package installed globally on this computer, checked against the npm '
+  + 'registry and grouped by family (ruflo, AgentDB, RuVector, and so on). This is what’s on disk and '
+  + 'at what version — not whether it’s actually running; that’s the wiring card, further down.'];
+const CAPABILITIES_INFO = ['Every capability this stack can offer — routing, learning, guardrails, and '
+  + 'the rest — with the state we actually observed on this machine: on, off, set up but idle, not '
+  + 'installed, or not checked. This card only reads; nothing here is a switch. Anything worth turning '
+  + 'on shows up in “What we’d suggest” below, with evidence and an undo.'];
+const LEARNINGS_INFO = ['A separate, smaller stream from the memory below it: not what your projects '
+  + 'contain, but patterns in how you work — noticed across every project and reused everywhere. Your '
+  + 'project facts stay isolated; this strip is the one thing that deliberately crosses that boundary.'];
+const MEMORY_INFO = [
+  { k: 'What is this?', t: 'A quality score for the memory system itself, not a feed of events. '
+      + '“What is happening in this project” shows individual things your AI did; this card asks whether '
+      + 'the memory behind every project is actually reliable — does it survive a compaction, does '
+      + 'recall really work, is it current.' },
+  { k: 'Why does it matter?', t: 'A memory store can be running and full of entries and still be '
+      + 'useless — the score is graded on real checks, never on whether the lights are on.' },
+  { k: 'How does it help me?', t: 'A dimension we couldn’t verify this session is shown grey and '
+      + 'excluded from the score, never guessed at — so a perfect number is never quietly covering for '
+      + 'something nobody tested.' },
+];
+const ROUTER_ENGINE_INFO = ['The routing engine itself, opened up: which package is actually deciding '
+  + '(rUv’s @metaharness/router, not a lookalike), whether it’s still learning your patterns or routing '
+  + 'on real history, and its most recent real decisions straight from its own log — never a simulation.'];
+const DISTRIBUTION_INFO = ['How your routed tasks split across mechanical/cheap/mid/frontier bands, '
+  + 'with the money saved for each stripe of the bar — from real receipts, matched one-for-one against '
+  + 'what running everything on the frontier model would have cost.'];
+const PROVIDERS_INFO = ['Two separate choices, not one: “Your plan” is which subscription the router '
+  + 'treats as free (the biggest cost lever you have); “OpenRouter” is an optional second lane for '
+  + 'offloading plain-text tasks to even cheaper models. Turning one on never changes the other.'];
+const SAVINGS_INFO = ['MetaHarness is explained just above; this card is its report card — real receipts '
+  + 'from tasks it has actually routed, never a projected or modelled number. Nothing here counts until '
+  + 'it’s actually happened.'];
+const TRUST_CARD_INFO = [
+  { k: 'What is this?', t: '“Provenance” means: can you check that what’s running on your machine is '
+      + 'really what rUv published, instead of taking it on faith? Each row below is one such check — the '
+      + 'release fingerprint, the parts list, how you get updates, and how cautious the console is allowed to be.' },
+  { k: 'Why does it matter?', t: 'Software you can’t verify is software you can only trust — verified '
+      + 'beats trusted, and this card is where that gets proven, row by row.' },
+  { k: 'How does it help me?', t: 'Every row says plainly whether it’s live today or still coming — '
+      + 'nothing here is dressed up as measured when it wasn’t.' },
+];
+const GATES_INFO = [
+  { k: 'What is this?', t: 'Gates are checks that run before your AI touches your machine — most just '
+      + 'add context, but some can refuse the action outright. This card is the ledger: what got refused, '
+      + 'by which gate, and why.' },
+  { k: 'Why does it matter?', t: '“Nothing caught yet” and “nothing is being checked” look identical '
+      + 'unless the count of armed gates is shown alongside it — this card gives you both, so silence '
+      + 'reads as silence, never as an all-clear.' },
+  { k: 'How does it help me?', t: 'Every catch names the gate, what it stopped, and when — recorded '
+      + 'since it was first armed, never guessed at for anything before that.' },
+];
+const LESSONS_INFO = ['Rules your AI now follows on this machine — not memory (facts it recalls) and '
+  + 'not activity (things it did): specific behavioral corrections, most of them in your own words, that '
+  + 'it applies from now on. Every one has a switch, and turning one off never deletes the record of '
+  + 'where you taught it.'];
+
 /* What/Why/How copy — three beats, every Settings row (WP4). */
 const SETTING_INFO = {
   qeFleet: [
@@ -706,7 +768,7 @@ function renderStack(data) {
     ahead ? el('span', {}, ', ', el('b', {}, fmtInt(ahead)), ' ahead of the registry (which is legal)') : '',
     broken ? el('span', {}, ', ', el('b', {}, fmtInt(broken)), ' broken') : '',
     behind ? el('span', {}, ', ', el('b', {}, fmtInt(behind)), ' behind') : '',
-    '.'));
+    '.', infoBtn('Your stack', STACK_INFO)));
 
   if (pkgs.length) {
     main.push(el('p', { class: 'impact-note' },
@@ -1091,7 +1153,8 @@ function renderCapabilities(data) {
   // acting happens instead of growing a button with no executor and no undo behind it.
   main.push(el('p', { class: 'fineprint' },
     'This card only reads — nothing here changes your machine. Anything worth switching on shows up ',
-    'in ', el('b', {}, 'What we’d suggest'), ' below, with its evidence, its cost, and its undo recorded first.'));
+    'in ', el('b', {}, 'What we’d suggest'), ' below, with its evidence, its cost, and its undo recorded first.',
+    infoBtn('What’s on, what’s off', CAPABILITIES_INFO)));
 
   body.replaceChildren(withIllo('capabilities', ...main));
 }
@@ -1161,6 +1224,12 @@ const WV_ICON_DRIFT = `
 
 function renderWiring(w) {
   const body = $('#body-wiring');
+  // Attach the "how it's wired" explainer to the card's static <h2> UNCONDITIONALLY. It used to live
+  // only inside the verdict banner, which mounts only when `total > 0` — so on a machine with zero
+  // wiring sites the whole explainer vanished, which is almost certainly why this card was the one the
+  // owner could never place. Idempotent because <h2> is a static node, not one rebuilt each render.
+  const wh2 = document.querySelector('#card-wiring h2');
+  if (wh2 && !wh2.querySelector('.info-btn')) wh2.append(infoBtn('How it’s wired', WIRING_INFO));
   if (!w) {
     setChips('chips-wiring', [chip('no data', 'grey')]);
     body.replaceChildren(el('p', { class: 'muted' }, 'No wiring data received.'));
@@ -1227,7 +1296,7 @@ function renderWiring(w) {
     main.push(el('div', { class: 'wire-verdict' + (driftN ? ' is-drift' : ' is-clean') },
       el('span', { class: 'wv-icon', 'aria-hidden': 'true' }, frag(driftN ? WV_ICON_DRIFT : WV_ICON_CLEAN)),
       el('div', { class: 'wv-text' },
-        el('p', { class: 'wv-title' }, title, infoBtn('How it’s wired', WIRING_INFO)),
+        el('p', { class: 'wv-title' }, title),
         el('p', { class: 'wv-sub' }, ...sub),
         driftN && driftSites.length ? el('ul', { class: 'wv-sites' },
           ...driftSites.slice(0, 8).map((x) => el('li', {},
@@ -1605,7 +1674,7 @@ function renderLearnings(l) {
     el('div', { class: 'learn-head' },
       el('span', { class: 'learn-spark', 'aria-hidden': 'true' }, '✦'),
       el('div', { class: 'learn-headtext' },
-        el('div', { class: 'learn-title' }, 'Learning how you work'),
+        el('div', { class: 'learn-title' }, 'Learning how you work', infoBtn('Learning how you work', LEARNINGS_INFO)),
         el('div', { class: 'learn-sub' },
           el('b', {}, fmtInt(l.patterns) + ' patterns'), ' from ', el('b', {}, fmtInt(l.trajectories) + ' workflows'),
           when ? ' · ' + when : ''))),
@@ -1656,7 +1725,7 @@ function renderMemory(mem) {
   main.push(el('div', { class: 'memory-top' },
     dial(score),
     el('div', { class: 'mem-summary' },
-      el('h3', {}, h.project ? `${h.project} — memory quality` : 'Memory quality'),
+      el('h3', {}, h.project ? `${h.project} — memory quality` : 'Memory quality', infoBtn('Memory quality', MEMORY_INFO)),
       el('p', { class: 'mem-line' }, h.summary ||
         'A quality score, not a liveness light: a store can be up, populated, and still never surface the thing you need.'),
       el('p', { class: 'fineprint' },
@@ -1838,7 +1907,7 @@ function renderRouterEngine(re) {
 
   return el('details', { class: 'mh-profiles' },
     el('summary', { class: 'rp-summary' },
-      el('span', { class: 'rp-sum-t' }, 'Who routes your work — and with what'),
+      el('span', { class: 'rp-sum-t' }, 'Who routes your work — and with what', infoBtn('Who routes your work', ROUTER_ENGINE_INFO)),
       el('span', { class: 'rp-sum-s' }, `rUv’s learned router · your prices · ${eng.mode.toLowerCase().replace('-', ' ')}`),
       el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
     el('div', { class: 'rp-body' },
@@ -1997,7 +2066,7 @@ function renderProviders(sv) {
         ` ${KEY_NAME[id]}`);
     }));
   const planBox = el('div', { class: 'plan-box' },
-    el('span', { class: 'plan-label' }, 'Your plan'),
+    el('span', { class: 'plan-label' }, 'Your plan', infoBtn('Your plan and OpenRouter', PROVIDERS_INFO)),
     head('is-house', houseName, action('Change', 'provider')),
     el('p', { class: 'plan-sub' }, `MetaHarness's main work runs here at no extra cost.`),
     checklist);
@@ -2090,7 +2159,8 @@ function renderSavings(sv) {
       el('b', {}, 'MetaHarness'), ' tunes everything wrapped around your model — the planning, the ',
       'context, the retries, which model each task goes to — and keeps only the changes that ',
       el('b', {}, 'measurably win'), '. The model itself never changes. rUv leaves it ',
-      el('b', {}, 'off by default'), ' on purpose: he’d rather you choose it than have it forced on you.'),
+      el('b', {}, 'off by default'), ' on purpose: he’d rather you choose it than have it forced on you.',
+      infoBtn('Smart model routing', SAVINGS_INFO)),
     el('figure', { class: 'mh-diagram' },
       el('img', {
         // NOT lazy: at 6.5KB this saves nothing, and the card sits far enough down the page that the
@@ -2618,7 +2688,8 @@ function renderTrust(t) {
   body.replaceChildren(
     el('p', { class: 'lead-stat' },
       'Provenance you can check, not take on faith — ', el('b', {}, String(liveCount)),
-      ` measurement${liveCount === 1 ? ' is' : 's are'} live today; the rest of this card names exactly what v3.3 will measure.`),
+      ` measurement${liveCount === 1 ? ' is' : 's are'} live today; the rest of this card names exactly what v3.3 will measure.`,
+      infoBtn('Trust & provenance', TRUST_CARD_INFO)),
     el('div', { class: 'trust-list', 'data-trust-ready': '1' }, ...rows),
   );
 }
@@ -2762,7 +2833,8 @@ function renderGates(g) {
       : '',
     dupes.length
       ? el('span', { class: 'muted' }, ` Wired twice, so it runs twice: ${dupes.join(', ')}.`)
-      : ''));
+      : '',
+    infoBtn('What caught Claude', GATES_INFO)));
 
   if (caught) {
     // Deliberately NOT the .wire-lane grid: its fixed columns are sized for (count, label, meaning)
@@ -3235,7 +3307,8 @@ function renderLessons(data) {
   body.replaceChildren(
     el('p', { class: 'loading-note' },
       'These are the rules I now work by on this machine. You can switch any of them off — ',
-      'nothing here is permanent, and off is reversible.'),
+      'nothing here is permanent, and off is reversible.',
+      infoBtn('What it’s learned from you', LESSONS_INFO)),
     ...partitionLessons(list, rows));
 }
 
