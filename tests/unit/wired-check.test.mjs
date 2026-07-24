@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { audit, callerPattern } from '../../scripts/wired-check.mjs';
+import { audit, callerPattern, hookWiringAudit, lessonTriggerAudit } from '../../scripts/wired-check.mjs';
 
 let repo;
 const w = (rel, body) => {
@@ -160,5 +160,148 @@ describe('callerPattern', () => {
     expect(callerPattern('widget.mjs').test("import x from './widget.mjs'")).toBe(true);
     expect(callerPattern('widget.mjs').test('the widget module')).toBe(false);
     expect(callerPattern('widget.mjs').test('run: node scripts/widget.mjs')).toBe(true);
+  });
+});
+
+// ── CHECK B: HOOK WIRING — a hook is not a module with an in-repo caller ──────────────────────────
+//
+// route-dispatch.sh already had a REAL caller under the module predicate above (hook-shim.mjs quotes
+// its filename in TABLE) — so the module check alone would never have proven the real gap this class
+// exists to catch: is the hook actually reachable from a live Claude Code config (hooks.json, this
+// repo's .claude/settings.json, or the user's real ~/.claude/settings.json), not merely mentioned
+// somewhere. Every test here uses a synthetic ~/.claude/settings.json stand-in (`homeSettingsFile`)
+// so it never touches the real machine file.
+describe('hook wiring — reachable from a real hook config, not merely mentioned', () => {
+  const NO_HOME = () => path.join(repo, 'no-such-home-settings.json');
+
+  it('FAILS a hook-intended script wired to nothing at all', () => {
+    w('plugin/scripts/my-gate.sh', '#!/bin/bash\n# my-gate.sh — PreToolUse gate on Bash. Blocks a bad thing.\necho hi\n');
+    const res = hookWiringAudit({ repo, homeSettingsFile: NO_HOME(), held: {} });
+    expect(res.rows.find((r) => r.file === 'my-gate.sh').state).toBe('unwired');
+  });
+
+  it('WIRES a hook named directly in plugin/hooks/hooks.json', () => {
+    w('plugin/scripts/my-gate.sh', '#!/bin/bash\n# my-gate.sh — PreToolUse gate on Bash.\necho hi\n');
+    w('plugin/hooks/hooks.json', JSON.stringify({
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command',
+        command: 'bash "${CLAUDE_PLUGIN_ROOT}/scripts/my-gate.sh"' }] }] },
+    }));
+    const res = hookWiringAudit({ repo, homeSettingsFile: NO_HOME(), held: {} });
+    expect(res.rows.find((r) => r.file === 'my-gate.sh').state).toBe('wired');
+  });
+
+  it('resolves hook-shim.mjs\'s id-based TABLE indirection — the exact route-dispatch.sh shape', () => {
+    // hooks.json never spells "my-gate.sh" — only the bare id "my-id" after hook-shim.mjs, exactly
+    // like the real "route-dispatch" id in this repo's own hooks.json. Proving this resolves is the
+    // whole point: a naive "does hooks.json contain this filename" check would miss it.
+    w('plugin/scripts/my-gate.sh', '#!/bin/bash\n# my-gate.sh — PreToolUse gate on Bash.\necho hi\n');
+    w('plugin/scripts/hook-shim.mjs', "const TABLE = {\n"
+      + "  'my-id': { file: 'my-gate.sh', interpreter: 'bash', mode: 'blocking' },\n};\n");
+    w('plugin/hooks/hooks.json', JSON.stringify({
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command',
+        command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs" my-id' }] }] },
+    }));
+    const res = hookWiringAudit({ repo, homeSettingsFile: NO_HOME(), held: {} });
+    const row = res.rows.find((r) => r.file === 'my-gate.sh');
+    expect(row.state).toBe('wired');
+    expect(row.sources.join(' ')).toMatch(/hook-shim id "my-id"/);
+  });
+
+  it('WIRES a hook found ONLY in ~/.claude/settings.json — the real route-dispatch.sh fix, reproduced', () => {
+    // Nothing in the repo's own hooks.json or .claude/settings.json mentions this file — only the
+    // (synthetic) home settings.json does, exactly what Stuart did for route-dispatch.sh.
+    w('plugin/scripts/my-gate.sh', '#!/bin/bash\n# my-gate.sh — PreToolUse gate on subagent dispatch.\necho hi\n');
+    const home = path.join(repo, 'fake-home-settings.json');
+    w('fake-home-settings.json', JSON.stringify({
+      hooks: { PreToolUse: [{ matcher: 'Task', hooks: [{ type: 'command',
+        command: '/bin/bash "/Users/x/.claude/plugins/marketplaces/ruvnet-brain/plugin/scripts/my-gate.sh"' }] }] },
+    }));
+    const res = hookWiringAudit({ repo, homeSettingsFile: home, held: {} });
+    const row = res.rows.find((r) => r.file === 'my-gate.sh');
+    expect(row.state).toBe('wired');
+    expect(row.sources.join(' ')).toMatch(/~\/\.claude\/settings\.json/);
+  });
+
+  it('does NOT false-positive on a helper whose header wording mimics a self-declared hook '
+    + '(hook-input.mjs\'s real phrasing: "every PreToolUse gate uses")', () => {
+    w('plugin/scripts/hook-input.mjs', '#!/usr/bin/env node\n'
+      + '// the ONE parser every PreToolUse gate uses to read the payload\n');
+    const res = hookWiringAudit({ repo, homeSettingsFile: NO_HOME(), held: {} });
+    // Excluded from the census entirely — not reported wired, not reported unwired, not reported at all.
+    expect(res.rows.find((r) => r.file === 'hook-input.mjs')).toBeUndefined();
+  });
+
+  it('resolves the transitive spawn hop (unprompted-runtime.mjs -> anticipate.sh), the shape this '
+    + 'repo uses today for the unprompted-speech chokepoint', () => {
+    w('plugin/scripts/anticipate.sh', '#!/bin/sh\n# anticipate.sh — a UserPromptSubmit hook that reads the prompt.\necho hi\n');
+    w('plugin/scripts/unprompted-runtime.mjs', "import path from 'node:path';\n"
+      + "const ANTICIPATE = { argv: ['/bin/bash', path.join('SCRIPTS_DIR', 'anticipate.sh')] };\n");
+    w('plugin/hooks/hooks.json', JSON.stringify({
+      hooks: { UserPromptSubmit: [{ matcher: '*', hooks: [{ type: 'command',
+        command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/unprompted-runtime.mjs" UserPromptSubmit' }] }] },
+    }));
+    const res = hookWiringAudit({ repo, homeSettingsFile: NO_HOME(), held: {} });
+    const row = res.rows.find((r) => r.file === 'anticipate.sh');
+    expect(row.state).toBe('wired');
+    expect(row.sources.join(' ')).toMatch(/spawned by plugin\/scripts\/unprompted-runtime\.mjs/);
+    // The runtime itself is plumbing, not a hook body — never part of the census either.
+    expect(res.rows.find((r) => r.file === 'unprompted-runtime.mjs')).toBeUndefined();
+  });
+
+  it('a genuinely unwired hook reports HELD (not unwired, not build-breaking) when explicitly named', () => {
+    w('plugin/scripts/my-gate.sh', '#!/bin/bash\n# my-gate.sh — PreToolUse gate on Bash.\necho hi\n');
+    const res = hookWiringAudit({
+      repo, homeSettingsFile: NO_HOME(), held: { 'my-gate.sh': 'accepted pre-existing gap, owner\'s call' },
+    });
+    expect(res.rows.find((r) => r.file === 'my-gate.sh').state).toBe('held');
+  });
+});
+
+// ── CHECK C: LESSON-TRIGGER WIRING — a ratified trigger nothing requests is inert ─────────────────
+describe('lesson-trigger wiring — inert is a trigger no event in lesson-hooks.sh requests', () => {
+  const lesson = (id, trigger, status = 'ratified') => ({
+    id,
+    statement: 'a statement long enough to pass the schema gate',
+    trigger,
+    enforcement: 'checklist',
+    evidence: ['seen at least once'],
+    origin: 'user-stated',
+    status,
+  });
+  const caseBlock = (mapping) => '#!/bin/bash\ncase "$EVENT" in\n'
+    + Object.entries(mapping).map(([evt, trig]) => `  ${evt}) TRIGGERS="${trig}"; CLAUDE_EVENT="X" ;;\n`).join('')
+    + '  *) exit 0 ;;\nesac\n';
+
+  it('FLAGS a ratified lesson whose trigger NO case branch requests — the L16 shape before its fix', () => {
+    w('plugin/scripts/lesson-hooks.sh', caseBlock({ 'PreToolUse-write': 'write-code' }));
+    const lessonsFile = path.join(repo, 'lessons.json');
+    w('lessons.json', JSON.stringify({ lessons: [lesson('L-inert', 'relay-number')] }));
+    const res = lessonTriggerAudit({ repo, lessonsFile });
+    expect(res.inert.map((l) => l.id)).toContain('L-inert');
+  });
+
+  it('does NOT flag a ratified lesson whose trigger a case branch DOES request — the L16 shape after its fix', () => {
+    w('plugin/scripts/lesson-hooks.sh', caseBlock({ UserPromptSubmit: 'choose-work' }));
+    const lessonsFile = path.join(repo, 'lessons-wired.json');
+    w('lessons-wired.json', JSON.stringify({ lessons: [lesson('L16-parallel-by-default', 'choose-work')] }));
+    const res = lessonTriggerAudit({ repo, lessonsFile });
+    expect(res.inert.map((l) => l.id)).not.toContain('L16-parallel-by-default');
+    expect(res.requested).toContain('choose-work');
+  });
+
+  it('ignores a CANDIDATE lesson even with an unrequested trigger — only ratified/active lessons count', () => {
+    w('plugin/scripts/lesson-hooks.sh', caseBlock({}));
+    const lessonsFile = path.join(repo, 'lessons-candidate.json');
+    w('lessons-candidate.json', JSON.stringify({ lessons: [lesson('L-pending', 'relay-number', 'candidate')] }));
+    const res = lessonTriggerAudit({ repo, lessonsFile });
+    expect(res.checked).toBe(0);
+    expect(res.inert.map((l) => l.id)).not.toContain('L-pending');
+  });
+
+  it('degrades gracefully when the lesson store is absent — a fresh machine, not a failure', () => {
+    w('plugin/scripts/lesson-hooks.sh', caseBlock({}));
+    const res = lessonTriggerAudit({ repo, lessonsFile: path.join(repo, 'does-not-exist.json') });
+    expect(res.checked).toBe(0);
+    expect(res.inert).toEqual([]);
   });
 });

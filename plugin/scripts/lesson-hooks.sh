@@ -127,7 +127,25 @@ case "$EVENT" in
   # This is the same defect the header table already recorded for `report-status` ("enforcing? yes /
   # wired to a hook that runs? no ← this is why the model still stopped"). Fixed there, missed here.
   # One bug, found once, fixed once, left everywhere else.
-  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done choose-work"; CLAUDE_EVENT="UserPromptSubmit" ;;
+  # `relay-number` ADDED 2026-07-24 — the SECOND inert lesson found the same day, and this one is
+  # about the failure it was itself unable to prevent.
+  #
+  # L04-never-relay-a-number ("never repeat a score, benchmark, or subagent result without re-checking
+  # the underlying artifact yourself") is RATIFIED and taught 5 times, and no event has ever requested
+  # its trigger — so it had never fired, in any session, ever. Found by the new lesson-trigger audit in
+  # wired-check.mjs, which exists because L16 had exactly this defect hours earlier. The audit's first
+  # real run immediately found a second instance: evidence the class was systemic, not a one-off.
+  #
+  # The irony is the useful part, not the joke: on the day this was found, three subagents reported
+  # results and TWO of them contained a confident claim the artifact contradicted (a "1,266 = 14"
+  # equality that a single query disproves, and an upgrade-notice fix reported missing because the grep
+  # demanded `function` on a `const` arrow). The lesson that would have flagged both was in force,
+  # weighted, and mute.
+  #
+  # UserPromptSubmit is the right event: relaying happens while composing a reply, and this is the last
+  # observable moment before that. It cannot BLOCK there (surface `text`), which matches its
+  # `checklist` enforcement exactly — advisory delivered beats enforcing never.
+  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done choose-work relay-number"; CLAUDE_EVENT="UserPromptSubmit" ;;
   *) exit 0 ;;
 esac
 

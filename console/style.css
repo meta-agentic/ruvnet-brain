@@ -1130,6 +1130,13 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   /* the machine readout only — chrome. The tips door no longer shares this class
      (it once did, which made tips.html unreachable on phones — see THE TIPS DOOR below). */
   .host-chip { display: none; }
+  /* Pre-existing header overflow, caught while verifying this pass at 375px (confirmed present on
+     the unmodified file too, so unrelated to the card-grouping work above): the update-gong's full
+     sentence ("update available · vX.Y.Z-dev — click to update") is `white-space: nowrap` with no
+     width cap, so on a narrow phone it pushes the whole header wider than the viewport and forces a
+     page-wide horizontal scrollbar. Cap + ellipsis keeps the click target and the full text in the
+     title tooltip; nothing about the update claim is hidden, only its overflow. */
+  .update-gong { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
   .fact { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .dim { grid-template-columns: auto minmax(0, 1fr); }
   .dim-ded { grid-row: auto; grid-column: 2; }
@@ -1874,3 +1881,82 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 }
 .vm-good { color: var(--green-text); background: color-mix(in srgb, var(--green) 15%, transparent); }
 .vm-look { color: var(--amber-text); background: color-mix(in srgb, var(--amber) 18%, transparent); }
+
+/* ============================== 21 · QUESTION GROUPS — 12→4 merge (design-grade -5, 2026-07-24) =====
+   Twelve peer <details class="card"> read as a wall of identical collapsed drawers. Fix: four
+   top-level sections, one per question a person actually asks (index.html carries the full
+   rationale comment). A `.qgroup` is a plain <section>, always visible — it reuses `.card`'s own
+   box (background/border/radius/shadow/rail-stripe/entrance-animation all come free from the
+   existing `.card` + `.rail-*` rules below, since those select on CLASS, not on the <details> tag)
+   but its header is a bare div, not a <summary>: no chevron, no hover state, no click cursor. A
+   container that cannot toggle must never borrow the affordance that says it can.
+   Nested cards get `.sub-card` — quieter (no shadow, no deep-shadow-on-open) so they read as the
+   CONTENTS of the open section rather than five more drawers in the row. */
+.qgroup-head {
+  display: flex; align-items: center; gap: 16px;
+  padding: clamp(16px, 2.6vw, 22px) clamp(16px, 3vw, 26px);
+}
+.qgroup-body {
+  padding: 6px clamp(16px, 3vw, 26px) clamp(20px, 3vw, 26px);
+  border-top: 1px solid var(--hair);
+  display: grid; gap: 12px;
+}
+.qgroup-body > .card { margin: 0; }
+.qgroup-body > .card:first-child { margin-top: 10px; }
+
+.card.sub-card { box-shadow: none; border-color: var(--hair-strong); }
+.card.sub-card[open] { box-shadow: none; border-color: var(--line); }
+/* A sub-card's own h2 no longer needs to compete with the group's h2 above it. */
+.card.sub-card .card-head h2 { font-size: var(--fs-1); }
+
+@media (max-width: 40em) {
+  .qgroup-head { gap: 12px; }
+}
+
+/* Explicit stagger for the 4 top-level peers. The generic `.card:nth-of-type(n)` rule above counts
+   by TAG among siblings, and the top level now mixes three `.qgroup` <section>s with the standalone
+   `#card-lessons` <details> — tag-based counting no longer lines up with reading order (a <details>
+   would jump the queue over a later <section>). ID selectors sidestep the ambiguity outright and
+   win on specificity regardless of source order. */
+#group-inventory { animation-delay: 0.06s; }
+#group-suggested { animation-delay: 0.12s; }
+#card-lessons    { animation-delay: 0.18s; }
+#group-prove     { animation-delay: 0.24s; }
+
+/* ============================== 22 · ACTIVITY CARD — reduce visual weight (design-grade -1) ========
+   "Activity card renders a dense monospace log table at user altitude." The feed itself is rendered
+   by activity.js, which appends its OWN <style data-owner="card-activity"> to <head> at runtime —
+   AFTER this file loads. Equal-specificity rules there would win by source order, so every selector
+   below adds one extra ID ancestor (#main, which already wraps the whole page) purely to win the
+   cascade regardless of load order; the values are the only thing that matters, activity.js itself
+   is untouched. Three changes, per the brief: shrink the scrollable window so the log can never
+   dominate its card, soften the typography so it reads as a quiet receipt instead of a terminal
+   dump, and keep every row — nothing here removes information, only its visual weight. */
+#main #card-activity .ab-feed {
+  max-height: 168px;                 /* was 252 in activity.js's own rule — a receipt window, not a dump */
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 1.5%, transparent);
+  padding: 2px 6px;
+}
+#main #card-activity .ab-feed.ab-expanded { max-height: 300px; }
+#main #card-activity .ab-row {
+  padding: 5px 8px;
+  border-radius: 7px;
+}
+#main #card-activity .ab-row .ab-ts {
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--faint);
+}
+#main #card-activity .ab-row .ab-txt { font-size: 13px; }
+#main #card-activity .ab-badge {
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  border-color: var(--hair);
+  background: transparent;
+}

@@ -211,118 +211,251 @@
     <span class="lg"><span class="lg-dot d-amber"></span>amber acts — only with your consent</span>
   </p>
 
-  <!-- ============================================== 0 · BRAIN ACTIVITY -->
-  <!-- ================================================= 0 · YOUR STACK (leads; Stuart 2026-07-16)
-       Starts EXPANDED only when it has something to say: an action to take, or the user's first
-       visit. A clean, all-current stack on a repeat visit starts collapsed — app.js decides. -->
-  <details class="card rail-mirror" id="card-stack">
-    <summary>
+  <!-- ===========================================================================================
+       FOUR SECTIONS, ONE PER QUESTION A PERSON ACTUALLY ASKS (design-grade -5, 2026-07-24 owner spec).
+       Twelve peer <details class="card"> used to sit flat under <main> — five of them thin collapsed
+       strips in a row ("memory / routing / published / settings / which-copy"), reading as a wall of
+       unopened drawers. The fix is structural, not cosmetic: group the same 12 cards under 4 top-level
+       sections, each answering one question. Every #body-*/#chips-* id app.js hydrates by is untouched
+       and unmoved in meaning — only the PARENT element changed, so hydration keeps working unmodified.
+
+       A question-group (`.qgroup`) is a plain, ALWAYS-VISIBLE <section>, not a fifth flavor of
+       collapsible chrome that can't actually toggle — it reuses `.card`'s box (border/shadow/rail/
+       radius) for visual consistency, but its header has no chevron and no hover state, so nobody
+       expects a click that would do nothing. Every card nested inside keeps its own independent
+       open/closed state and its own `app.js`-driven behavior exactly as before (e.g. `#card-stack`'s
+       "only expand when it has something to say" logic is a plain `getElementById` lookup and does
+       not care how deep it's nested). Nested cards get `.sub-card`, a quieter variant (no shadow, no
+       deep-shadow-on-open) so they read as the CONTENTS of an open section, not more drawers in a row. -->
+
+  <!-- ================================================= GROUP 1 · WHAT HAVE I GOT? -->
+  <section class="card qgroup rail-mirror" id="group-inventory" aria-labelledby="group-inventory-h">
+    <div class="qgroup-head">
       <span class="card-ic ic-mirror" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z"/><path d="M4.5 12 12 16l7.5-4"/><path d="M4.5 16 12 20l7.5-4"/></svg>
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.8"/><rect x="13" y="3" width="8" height="8" rx="1.8"/><rect x="3" y="13" width="8" height="8" rx="1.8"/><rect x="13" y="13" width="8" height="8" rx="1.8"/></svg>
       </span>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
-        <h2>Your stack</h2>
-        <span class="q">Every rUv tool on your machine, kept at its best — and one click when anything drifts.</span>
+        <h2 id="group-inventory-h">What have I got?</h2>
+        <span class="q">Every rUv tool on this machine — what's installed, whether it's really what we published, and where each project launches it from.</span>
       </span>
-      <span class="chips" id="chips-stack"><span class="chip tone-wait">checking…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-stack">
-      <div class="skeleton" aria-hidden="true">
-        <div class="sk-bar w35"></div>
-        <div class="sk-bar w90"></div>
-        <div class="sk-bar w85"></div>
-        <div class="sk-bar w88"></div>
-        <div class="sk-bar w60"></div>
-      </div>
-      <p class="loading-note">Auditing your installed packages against the registry — this one touches
-      the network and usually takes 5–20 seconds. Private by design: the registry only ever sees
-      ordinary version lookups — nothing about you or your projects leaves this machine. Everything
-      below is already live.</p>
     </div>
-  </details>
+    <div class="qgroup-body">
 
-  <!-- ============================================ 0b · WHAT'S ON, WHAT'S OFF
-       THE MURK, NAMED (owner, 2026-07-22): "a ton of people don't know what is or isn't turned on
-       because it's very much a black box." The stack card above answers "what is installed"; this
-       one answers the question people actually have, which is "and is any of it DOING anything".
-       Starts open on purpose — a card that answers the central complaint must not be behind a click.
-       Every row is rendered from /api/capabilities at runtime; there is deliberately not one
-       capability name in this markup, so a capability added server-side appears here with no HTML
-       change (and no chance of this file drifting into a stale hardcoded list). -->
-  <details class="card rail-mirror" id="card-capabilities" open>
-    <summary>
-      <span class="card-ic ic-mirror" aria-hidden="true">
-        <!-- two switches, one thrown each way — the card's whole question in one glyph -->
-        <svg viewBox="0 0 24 24"><rect x="2.6" y="4.2" width="18.8" height="7.2" rx="3.6"/><circle cx="17.8" cy="7.8" r="1.7"/><rect x="2.6" y="12.6" width="18.8" height="7.2" rx="3.6"/><circle cx="6.2" cy="16.2" r="1.7"/></svg>
+      <!-- 1a · YOUR STACK (leads; Stuart 2026-07-16)
+           Starts EXPANDED only when it has something to say: an action to take, or the user's first
+           visit. A clean, all-current stack on a repeat visit starts collapsed — app.js decides. -->
+      <details class="card sub-card rail-mirror" id="card-stack">
+        <summary>
+          <span class="card-ic ic-mirror" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 3.5 7.5 12 12l8.5-4.5L12 3Z"/><path d="M4.5 12 12 16l7.5-4"/><path d="M4.5 16 12 20l7.5-4"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-mirror">Mirror</span>
+            <h2>Your stack</h2>
+            <span class="q">Every rUv tool on your machine, kept at its best — and one click when anything drifts.</span>
+          </span>
+          <span class="chips" id="chips-stack"><span class="chip tone-wait">checking…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-stack">
+          <div class="skeleton" aria-hidden="true">
+            <div class="sk-bar w35"></div>
+            <div class="sk-bar w90"></div>
+            <div class="sk-bar w85"></div>
+            <div class="sk-bar w88"></div>
+            <div class="sk-bar w60"></div>
+          </div>
+          <p class="loading-note">Auditing your installed packages against the registry — this one touches
+          the network and usually takes 5–20 seconds. Private by design: the registry only ever sees
+          ordinary version lookups — nothing about you or your projects leaves this machine. Everything
+          below is already live.</p>
+        </div>
+      </details>
+
+      <!-- 1b · TRUST & PROVENANCE (v3.3 preview)
+           PROVE-stage: what you install is what we published. One number is REAL today (the release
+           bundle's published sha256); the empty rows say exactly what will fill them and when —
+           never placeholder data. -->
+      <details class="card sub-card rail-prove" id="card-trust">
+        <summary>
+          <span class="card-ic ic-prove" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.4 2.9 7.5 7 9 4.1-1.5 7-4.6 7-9V6l-7-2.5Z"/><path d="m8.8 12 2.3 2.3 4.1-4.6"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-prove">Prove</span>
+            <h2>Is this really what we published?</h2>
+            <span class="q">Is the Brain you're running the one we published? Checked against the release, not asserted.</span>
+          </span>
+          <span class="chips" id="chips-trust"><span class="chip tone-wait">checking…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-trust">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
+          <p class="loading-note">Reading the published release fingerprint from GitHub (read-only metadata —
+          the one network touch this card makes) and your plugin cache on disk.</p>
+        </div>
+      </details>
+
+      <!-- 1c · HOW IT'S WIRED -->
+      <details class="card sub-card rail-mirror" id="card-wiring">
+        <summary>
+          <span class="card-ic ic-mirror" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.2"/><path d="M6.6 17.4 11 13h5.5"/><rect x="16.5" y="9.5" width="5.5" height="7" rx="1.6"/><path d="M11 13V6.5h5.5"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-mirror">Explain</span>
+            <h2>Which copy of the tools each project runs</h2>
+            <span class="q">Where each project launches rUv's tools from — and one click to the fastest, safest wiring.</span>
+          </span>
+          <span class="chips" id="chips-wiring"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-wiring">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
+          <p class="loading-note">Scanning your projects' hook files locally — how you launch your tools is
+          personal, and it stays on this machine.</p>
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ================================================= GROUP 2 · WHAT'S ON — AND WHAT WE'D SUGGEST -->
+  <section class="card qgroup rail-act" id="group-suggested" aria-labelledby="group-suggested-h">
+    <div class="qgroup-head">
+      <span class="card-ic ic-act" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16 16.2 9.6"/><circle cx="12" cy="16" r="1.6"/></svg>
       </span>
       <span class="card-head">
-        <span class="stage st-mirror">Mirror</span>
-        <h2>What's on, what's off</h2>
-        <span class="q">The black box, opened: every capability with its state, what it buys you, and the evidence we actually observed.</span>
+        <span class="stage st-rec">Recommend</span>
+        <h2 id="group-suggested-h">What's on — and what we'd suggest</h2>
+        <span class="q">The black box opened: every capability's real state, the settings you actually control, and the specific fixes we'd propose — each with evidence and an undo.</span>
       </span>
-      <span class="chips" id="chips-capabilities"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-capabilities">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w80"></div><div class="sk-bar w65"></div></div>
-      <p class="loading-note">Checking each capability against this machine — local and read-only.
-      Anything we can't establish is reported as “not checked”, never as “off”.</p>
     </div>
-  </details>
+    <div class="qgroup-body">
 
-  <!-- ===================================== 2b · WHAT "PROACTIVE" MEANS (the L0-L5 ladder)
-       The product's central adjective was used everywhere and defined nowhere: a grep of this whole
-       console for "proactive" returned zero hits across index.html, app.js and tips.html, while
-       docs/adr/0028 had specified a five-level ladder and named the level this build has actually
-       reached. A word the user is asked to trust, with no way to find out what it commits us to.
+      <!-- 2a · WHAT'S ON, WHAT'S OFF
+           THE MURK, NAMED (owner, 2026-07-22): "a ton of people don't know what is or isn't turned on
+           because it's very much a black box." Starts open on purpose — a card that answers the
+           central complaint must not be behind a click. Every row is rendered from /api/capabilities
+           at runtime; there is deliberately not one capability name in this markup. -->
+      <details class="card sub-card rail-mirror" id="card-capabilities" open>
+        <summary>
+          <span class="card-ic ic-mirror" aria-hidden="true">
+            <!-- two switches, one thrown each way — the card's whole question in one glyph -->
+            <svg viewBox="0 0 24 24"><rect x="2.6" y="4.2" width="18.8" height="7.2" rx="3.6"/><circle cx="17.8" cy="7.8" r="1.7"/><rect x="2.6" y="12.6" width="18.8" height="7.2" rx="3.6"/><circle cx="6.2" cy="16.2" r="1.7"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-mirror">Mirror</span>
+            <h2>What's on, what's off</h2>
+            <span class="q">The black box, opened: every capability with its state, what it buys you, and the evidence we actually observed.</span>
+          </span>
+          <span class="chips" id="chips-capabilities"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-capabilities">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w80"></div><div class="sk-bar w65"></div></div>
+          <p class="loading-note">Checking each capability against this machine — local and read-only.
+          Anything we can't establish is reported as “not checked”, never as “off”.</p>
+        </div>
+      </details>
 
-       STATIC MARKUP, ON PURPOSE. This is the one card that must render before any fetch resolves and
-       on a machine where nothing is installed — same reasoning as .stage-legend. It describes what
-       the SOFTWARE is, not what the machine has, so hydrating it from an endpoint would make the
-       definition of our own claim contingent on a network call succeeding.
+      <!-- 2b · SETTINGS -->
+      <details class="card sub-card rail-act" id="card-settings">
+        <summary>
+          <span class="card-ic ic-act" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 4v6.5M5 15v5"/><circle cx="5" cy="12.8" r="2.1"/><path d="M12 4v2M12 10.5v9.5"/><circle cx="12" cy="8.3" r="2.1"/><path d="M19 4v9M19 17.5V20"/><circle cx="19" cy="15.3" r="2.1"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-rec">Apply</span>
+            <h2>Settings</h2>
+            <span class="q">Tune how much of the stack works for you — saves one file in your user folder, nothing else changes.</span>
+          </span>
+          <span class="chips" id="chips-settings"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-settings">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w65"></div></div>
+          <p class="loading-note">Reading one settings file from your user folder — local, yours, and the
+          only thing this page ever writes.</p>
+        </div>
+      </details>
 
-       Closed by default, and placed directly under the card it explains. No version literal appears
-       here by design (a CI gate greps for one); the level marker is prose, and it moves when the
-       ladder is actually climbed — not when a number is bumped. -->
-  <details class="card rail-mirror" id="card-proactive">
-    <summary>
-      <span class="card-ic ic-mirror" aria-hidden="true">
-        <!-- a rising flight of steps: the ladder itself, five treads, one of them marked -->
-        <svg viewBox="0 0 24 24"><path d="M2.5 20.5h4v-4h4v-4h4v-4h4v-4"/><circle cx="10.5" cy="12.5" r="1.6"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-mirror">Mirror</span>
-        <h2>What “proactive” means here</h2>
-        <!-- "Five levels" over a six-rung L0-L5 list, and a tooltip saying "the top TWO are not
-             built" directly above fineprint saying "L3, L4 and L5 are not built". Three separate
-             counts of the same ladder on one card. ADR-0028 is the authority and says six rungs,
-             L0-L5, with three unbuilt; this now matches it and the fineprint below. -->
-        <span class="q">Six levels, L0 to L5, and an honest marker of which one this build has actually reached.</span>
-      </span>
-      <span class="chips"><span class="chip tone-nt" title="Where this build sits on the ladder below — L3, L4 and L5 are not built.">at level 2 of 5</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body">
-      <p>“Proactive” is the claim this whole product rests on, so here is exactly what it commits us
-      to — and where it currently stops.</p>
-      <ol class="ladder">
-        <li class="lv done"><b>L0 · Reactive</b><span>Answers when you ask. A question gets a grounded, cited answer.</span></li>
-        <li class="lv done"><b>L1 · Observant</b><span>Notices and displays the state of your machine — the card above this one.</span></li>
-        <li class="lv here"><b>L2 · Advocating</b><span>Finds a dormant capability, proposes the fix, applies it once you consent, and can undo it. Every suggestion resolves to one working executor and one real undo. <b>This build is here.</b></span></li>
-        <li class="lv todo"><b>L3 · Contextual</b><span>Speaks up inside your working session, at the moment it matters, without you opening this page.</span></li>
-        <li class="lv todo"><b>L4 · Anticipatory</b><span>Works out what you are trying to do and names the better path before you commit to the worse one.</span></li>
-        <li class="lv todo"><b>L5 · Compounding</b><span>Checks whether its own advice was right, and promotes what held up so every project inherits it.</span></li>
-      </ol>
-      <p class="fineprint">L3, L4 and L5 are <b>not built</b>, and this page will not imply otherwise —
-      each level is a falsifiable test, not a mood, and the top three do not pass yet. The card above
-      is L1 doing its job; anything with an undo behind it is L2. Full definitions and the tests each
-      level has to pass: <code>docs/adr/0028</code>.</p>
+      <!-- 2c · WHAT WE'D SUGGEST -->
+      <details class="card sub-card rail-act" id="card-recs">
+        <summary>
+          <span class="card-ic ic-act" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M9.7 18h4.6"/><path d="M10.4 21h3.2"/><path d="M8.6 14.4C7 13.1 6 11.3 6 9.4a6 6 0 1 1 12 0c0 1.9-1 3.7-2.6 5-.6.5-.9 1.3-.9 2.1v.5H9.5v-.5c0-.8-.3-1.6-.9-2.1Z"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-rec">Recommend</span>
+            <h2>What we'd suggest</h2>
+            <span class="q">Evidence, cost, and an undo for every proposal — Apply is always your call.</span>
+          </span>
+          <span class="chips" id="chips-recs"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-recs">
+          <div id="recs-list"></div>
+          <p class="pending-note" id="recs-pending">Still auditing your stack — more suggestions may appear here in a moment.</p>
+          <div id="recs-empty" hidden></div>
+        </div>
+      </details>
+
+      <!-- 2d · WHAT "PROACTIVE" MEANS (the L0-L5 ladder)
+           The product's central adjective was used everywhere and defined nowhere. STATIC MARKUP, ON
+           PURPOSE: this is the one card that must render before any fetch resolves, so hydrating it
+           from an endpoint would make the definition of our own claim contingent on a network call.
+           Closed by default. Nested HERE, in the settings/suggestions group, rather than floating
+           between two unrelated cards — it explains the software; the one real control it names
+           (the advocacy dial) lives in the Settings card right above it in this same section, and
+           the pointer paragraph at the end of this card's body links straight to it. -->
+      <details class="card sub-card rail-mirror" id="card-proactive">
+        <summary>
+          <span class="card-ic ic-mirror" aria-hidden="true">
+            <!-- a rising flight of steps: the ladder itself, five treads, one of them marked -->
+            <svg viewBox="0 0 24 24"><path d="M2.5 20.5h4v-4h4v-4h4v-4h4v-4"/><circle cx="10.5" cy="12.5" r="1.6"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-mirror">Mirror</span>
+            <h2>What “proactive” means here</h2>
+            <!-- "Five levels" over a six-rung L0-L5 list, and a tooltip saying "the top TWO are not
+                 built" directly above fineprint saying "L3, L4 and L5 are not built". ADR-0028 is the
+                 authority and says six rungs, L0-L5, with three unbuilt; this matches it. -->
+            <span class="q">Six levels, L0 to L5, and an honest marker of which one this build has actually reached.</span>
+          </span>
+          <span class="chips"><span class="chip tone-nt" title="Where this build sits on the ladder below — L3, L4 and L5 are not built.">at level 2 of 5</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body">
+          <p>“Proactive” is the claim this whole product rests on, so here is exactly what it commits us
+          to — and where it currently stops.</p>
+          <ol class="ladder">
+            <li class="lv done"><b>L0 · Reactive</b><span>Answers when you ask. A question gets a grounded, cited answer.</span></li>
+            <li class="lv done"><b>L1 · Observant</b><span>Notices and displays the state of your machine — the capabilities card above, in this section.</span></li>
+            <li class="lv here"><b>L2 · Advocating</b><span>Finds a dormant capability, proposes the fix, applies it once you consent, and can undo it. Every suggestion resolves to one working executor and one real undo. <b>This build is here.</b></span></li>
+            <li class="lv todo"><b>L3 · Contextual</b><span>Speaks up inside your working session, at the moment it matters, without you opening this page.</span></li>
+            <li class="lv todo"><b>L4 · Anticipatory</b><span>Works out what you are trying to do and names the better path before you commit to the worse one.</span></li>
+            <li class="lv todo"><b>L5 · Compounding</b><span>Checks whether its own advice was right, and promotes what held up so every project inherits it.</span></li>
+          </ol>
+          <p class="fineprint">L3, L4 and L5 are <b>not built</b>, and this page will not imply otherwise —
+          each level is a falsifiable test, not a mood, and the top three do not pass yet. The capabilities
+          card in this section is L1 doing its job; anything with an undo behind it is L2. Full definitions
+          and the tests each level has to pass: <code>docs/adr/0028</code>.</p>
+          <p class="fineprint">The one thing on this list you can actually set is the volume on advocacy
+          itself: the <a href="#field-advocacy"><b>“How much it volunteers”</b></a> dial, in the Settings
+          card in this same section. Everything above is a description of the software, not a switch.</p>
+        </div>
+      </details>
+
     </div>
-  </details>
+  </section>
 
-  <!-- ===================================== 3 · WHAT IT'S LEARNED FROM YOU (the Learn pillar)
+  <!-- ===================================== GROUP 3 · WHAT IT'S LEARNED FROM YOU (the Learn pillar)
+       No wrapper needed — this card already answers its own question on its own, so it stands as the
+       third top-level peer exactly as before (still open, still first of the four to load).
+
        THE GAP THIS CLOSES. Sixteen lessons — thirteen of them the owner's OWN WORDS, one enforcing at
        BLOCK level — lived in a JSON file with a CLI over it and appeared NOWHERE on this page. The
        owner's phrasing (2026-07-24): "murky things in a .claude file nobody sees." lesson-store.mjs's
@@ -359,188 +492,107 @@
     </div>
   </details>
 
-  <details class="card rail-mirror" id="card-activity" open>
-    <summary>
-      <span class="card-ic ic-mirror" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-mirror">Mirror</span>
-        <h2>What is happening in <em>this</em> project</h2>
-        <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
-      </span>
-      <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-activity">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
-    </div>
-  </details>
-
-  <!-- ============================================== 2 · MEMORY HEALTH -->
-  <details class="card rail-prove" id="card-memory">
-    <summary>
+  <!-- ================================================= GROUP 4 · PROVE IT'S WORKING -->
+  <section class="card qgroup rail-prove" id="group-prove" aria-labelledby="group-prove-h">
+    <div class="qgroup-head">
       <span class="card-ic ic-prove" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="m8.2 12.4 2.6 2.6 5.2-5.6"/></svg>
       </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>Your memory, across <em>every</em> project</h2>
-        <span class="q">Your system learns and shares intelligence across projects — this card tests it live, so you never have to wonder.</span>
+        <h2 id="group-prove-h">Prove it's working</h2>
+        <span class="q">Live checks, not claims: what your AI has actually done, whether memory really crosses projects, whether routing is saving anything, and what the guardrails have stopped.</span>
       </span>
-      <span class="chips" id="chips-memory"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-memory">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
-      <p class="loading-note">Reading your local memory stores — everything stays on this machine. Recall quality is
-      reported as not-tested until a real probe runs; nothing here is scored on a guess.</p>
     </div>
-  </details>
+    <div class="qgroup-body">
 
+      <details class="card sub-card rail-mirror" id="card-activity" open>
+        <summary>
+          <span class="card-ic ic-mirror" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-mirror">Mirror</span>
+            <h2>What is happening in <em>this</em> project</h2>
+            <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
+          </span>
+          <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-activity">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+        </div>
+      </details>
 
-  <!-- ==================================== 3 · SMART ROUTING (MetaHarness)
-       NOT `open`, and no longer titled with a proper noun. A newcomer used to meet this card
-       expanded, headed "MetaHarness", claiming to be "one of the stack's most powerful pieces" and
-       instructing them to "turn it on" — an unexplained name, a superlative, and an imperative, all
-       before a single word of explanation (the gloss lived inside the body, below the fold of the
-       pitch). That is the pattern the never-pushy standing order exists to ban.
+      <!-- MEMORY HEALTH -->
+      <details class="card sub-card rail-prove" id="card-memory">
+        <summary>
+          <span class="card-ic ic-prove" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-prove">Prove</span>
+            <h2>Your memory, across <em>every</em> project</h2>
+            <span class="q">Your system learns and shares intelligence across projects — this card tests it live, so you never have to wonder.</span>
+          </span>
+          <span class="chips" id="chips-memory"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-memory">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+          <p class="loading-note">Reading your local memory stores — everything stays on this machine. Recall quality is
+          reported as not-tested until a real probe runs; nothing here is scored on a guess.</p>
+        </div>
+      </details>
 
-       It is also a ranking error: a card ASKING FOR A DECISION was outranking the cards REPORTING
-       STATE. State first, choices second — the user decides after they can see their machine, not
-       before. The engine keeps its real name inside the body, where naming it is information rather
-       than a hurdle. -->
-  <details class="card rail-prove" id="card-savings">
-    <summary>
-      <span class="card-ic ic-prove" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M3.5 12h5c3.5 0 3.5-5.5 7-5.5h4.5"/><path d="M8.5 12c3.5 0 3.5 5.5 7 5.5H20"/><path d="m17.5 3.8 3 2.7-3 2.7"/><path d="m17.5 14.8 3 2.7-3 2.7"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-prove">Prove</span>
-        <h2>Smart model routing</h2>
-        <span class="q">Cheap tasks go to cheap models, and every routing decision leaves a receipt. Off by default — rUv would rather you chose it. (The engine is called MetaHarness; it's explained inside.)</span>
-      </span>
-      <span class="chips" id="chips-savings"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-savings">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
-      <p class="loading-note">Reading your real routing receipts from this machine — local and private,
-      measured from your own work, never projected.</p>
+      <!-- SMART ROUTING (MetaHarness)
+           NOT `open`: a card ASKING FOR A DECISION outranking cards REPORTING STATE was a ranking
+           error. State first, choices second. The engine keeps its real name inside the body, where
+           naming it is information rather than a hurdle. -->
+      <details class="card sub-card rail-prove" id="card-savings">
+        <summary>
+          <span class="card-ic ic-prove" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3.5 12h5c3.5 0 3.5-5.5 7-5.5h4.5"/><path d="M8.5 12c3.5 0 3.5 5.5 7 5.5H20"/><path d="m17.5 3.8 3 2.7-3 2.7"/><path d="m17.5 14.8 3 2.7-3 2.7"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-prove">Prove</span>
+            <h2>Smart model routing</h2>
+            <span class="q">Cheap tasks go to cheap models, and every routing decision leaves a receipt. Off by default — rUv would rather you chose it. (The engine is called MetaHarness; it's explained inside.)</span>
+          </span>
+          <span class="chips" id="chips-savings"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-savings">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
+          <p class="loading-note">Reading your real routing receipts from this machine — local and private,
+          measured from your own work, never projected.</p>
+        </div>
+      </details>
+
+      <!-- WHAT CAUGHT CLAUDE
+           The wiring card (in "What have I got?") says where tools launch from. This one answers the
+           question the whole harness exists for: what stands between the model and your machine, and
+           has it ever actually stopped it? An empty ledger says "nothing caught yet" — it never guesses. -->
+      <details class="card sub-card rail-prove" id="card-gates" open>
+        <summary>
+          <span class="card-ic ic-prove" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+          </span>
+          <span class="card-head">
+            <span class="stage st-prove">Prove</span>
+            <h2>What the guardrails stopped</h2>
+            <span class="q">Your AI doesn't work alone here — gates read every move before it lands. This is what they stopped.</span>
+          </span>
+          <span class="chips" id="chips-gates"><span class="chip tone-wait">…</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </summary>
+        <div class="body" id="body-gates">
+          <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
+        </div>
+      </details>
+
     </div>
-  </details>
-
-  <!-- ============================================ 3b · TRUST & PROVENANCE (v3.3 preview)
-       PROVE-stage: what you install is what we published. One number is REAL today (the release
-       bundle's published sha256); the empty rows say exactly what will fill them and when —
-       never placeholder data. -->
-  <details class="card rail-prove" id="card-trust">
-    <summary>
-      <span class="card-ic ic-prove" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.4 2.9 7.5 7 9 4.1-1.5 7-4.6 7-9V6l-7-2.5Z"/><path d="m8.8 12 2.3 2.3 4.1-4.6"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-prove">Prove</span>
-        <h2>Is this really what we published?</h2>
-        <span class="q">Is the Brain you're running the one we published? Checked against the release, not asserted.</span>
-      </span>
-      <span class="chips" id="chips-trust"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-trust">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w70"></div></div>
-      <p class="loading-note">Reading the published release fingerprint from GitHub (read-only metadata —
-      the one network touch this card makes) and your plugin cache on disk.</p>
-    </div>
-  </details>
-
-  <!-- =================================================== 4 · SETTINGS -->
-  <details class="card rail-act" id="card-settings">
-    <summary>
-      <span class="card-ic ic-act" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M5 4v6.5M5 15v5"/><circle cx="5" cy="12.8" r="2.1"/><path d="M12 4v2M12 10.5v9.5"/><circle cx="12" cy="8.3" r="2.1"/><path d="M19 4v9M19 17.5V20"/><circle cx="19" cy="15.3" r="2.1"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-rec">Apply</span>
-        <h2>Settings</h2>
-        <span class="q">Tune how much of the stack works for you — saves one file in your user folder, nothing else changes.</span>
-      </span>
-      <span class="chips" id="chips-settings"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-settings">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w65"></div></div>
-      <p class="loading-note">Reading one settings file from your user folder — local, yours, and the
-      only thing this page ever writes.</p>
-    </div>
-  </details>
-
-  <!-- ─────── Advanced: diagnostics & recommendations, below the essentials ─────── -->
-
-  <!-- =============================================== 5 · HOW IT'S WIRED -->
-  <details class="card rail-mirror" id="card-wiring">
-    <summary>
-      <span class="card-ic ic-mirror" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.2"/><path d="M6.6 17.4 11 13h5.5"/><rect x="16.5" y="9.5" width="5.5" height="7" rx="1.6"/><path d="M11 13V6.5h5.5"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-mirror">Explain</span>
-        <h2>Which copy of the tools each project runs</h2>
-        <span class="q">Where each project launches rUv's tools from — and one click to the fastest, safest wiring.</span>
-      </span>
-      <span class="chips" id="chips-wiring"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-wiring">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
-      <p class="loading-note">Scanning your projects' hook files locally — how you launch your tools is
-      personal, and it stays on this machine.</p>
-    </div>
-  </details>
-
-  <!-- ============================================ 5b · WHAT CAUGHT CLAUDE
-       The wiring card says where tools launch from. This one answers the question the whole harness
-       exists for: what stands between the model and your machine, and has it ever actually stopped it?
-       Armed count is read from the real hook configs; catches are receipts written at the moment of
-       refusal. An empty ledger says "nothing caught yet" — it never guesses. -->
-  <details class="card rail-prove" id="card-gates" open>
-    <summary>
-      <span class="card-ic ic-prove" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 8.2 7.5 9 4.3-.8 7.5-4.6 7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-prove">Prove</span>
-        <h2>What the guardrails stopped</h2>
-        <span class="q">Your AI doesn't work alone here — gates read every move before it lands. This is what they stopped.</span>
-      </span>
-      <span class="chips" id="chips-gates"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-gates">
-      <div class="skeleton" aria-hidden="true"><div class="sk-bar w50"></div><div class="sk-bar w80"></div></div>
-    </div>
-  </details>
-
-  <!-- ============================================ 6 · WHAT WE'D SUGGEST -->
-  <details class="card rail-act" id="card-recs">
-    <summary>
-      <span class="card-ic ic-act" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M9.7 18h4.6"/><path d="M10.4 21h3.2"/><path d="M8.6 14.4C7 13.1 6 11.3 6 9.4a6 6 0 1 1 12 0c0 1.9-1 3.7-2.6 5-.6.5-.9 1.3-.9 2.1v.5H9.5v-.5c0-.8-.3-1.6-.9-2.1Z"/></svg>
-      </span>
-      <span class="card-head">
-        <span class="stage st-rec">Recommend</span>
-        <h2>What we'd suggest</h2>
-        <span class="q">Evidence, cost, and an undo for every proposal — Apply is always your call.</span>
-      </span>
-      <span class="chips" id="chips-recs"><span class="chip tone-wait">…</span></span>
-      <span class="chev" aria-hidden="true">›</span>
-    </summary>
-    <div class="body" id="body-recs">
-      <div id="recs-list"></div>
-      <p class="pending-note" id="recs-pending">Still auditing your stack — more suggestions may appear here in a moment.</p>
-      <div id="recs-empty" hidden></div>
-    </div>
-  </details>
+  </section>
 
 </main>
 

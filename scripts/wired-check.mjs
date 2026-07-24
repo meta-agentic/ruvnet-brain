@@ -49,6 +49,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { loadLessons, TRIGGERS, STATUS } from './lesson-store.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '..');
 const argv = process.argv.slice(2);
@@ -397,6 +399,245 @@ export function audit({ repo = REPO, standalone = STANDALONE, held = HELD } = {}
   return { rows, dupes, inventory: all.length };
 }
 
+/**
+ * ── WHAT CHANGED, 2026-07-24: TWO NEW CHECK CLASSES ─────────────────────────────────────────────
+ *
+ * This gate closes THE PREVIOUS GAP: everything above proves a MODULE has a CALLER — an import, a
+ * require, an npm/yml `run:` line. That is the right predicate for a module. It is the wrong
+ * predicate for a HOOK and for a LESSON, and three real instances found the seam on 2026-07-24:
+ *
+ *   1. scripts/capability-audit.mjs — a module with no caller. THIS gate already caught it (HELD,
+ *      above). Proof the existing predicate works when the thing being checked really is a module.
+ *   2. plugin/scripts/route-dispatch.sh — a PreToolUse gate, written 2026-07-13, never added to
+ *      ~/.claude/settings.json. This gate MISSED it, because "wired" for a hook does not mean
+ *      "some file mentions my filename" — hook-shim.mjs's dispatch table happens to quote every
+ *      hook's filename, so the module predicate stumbles onto the right answer for anything shipped
+ *      through hooks.json, BY COINCIDENCE OF QUOTING STYLE, and has ZERO visibility into
+ *      ~/.claude/settings.json — the one file that proves a hook is actually LIVE on THIS machine
+ *      rather than merely shipped in the plugin payload. That is a different question, and nothing
+ *      above asked it.
+ *   3. L16-parallel-by-default (~/.config/ruvnet-brain/lessons.json) — RATIFIED, taught FOUR times,
+ *      and never once delivered in any session, because its trigger `choose-work` was never
+ *      requested by any event in plugin/scripts/lesson-hooks.sh's dispatch table. A lesson's
+ *      trigger is not a module either — no import, no require, nothing the predicate above can see.
+ *
+ * Same root failure as ADR-037's original defect (a gap in the shape of the exact bug the gate
+ * exists to prevent), different surface. Two new, narrow predicates, each modelling the REAL
+ * mechanism Claude Code / the lesson dispatcher actually uses, not a generic text search:
+ *
+ *   CHECK B — HOOK WIRING. Walks the real reachability chain: plugin/hooks/hooks.json (what we
+ *   ship) → hook-shim.mjs's own TABLE (resolving its id-based indirection explicitly, since a hook
+ *   id like "route-dispatch" is not the string "route-dispatch.sh") → this repo's own
+ *   .claude/settings.json → the user's REAL ~/.claude/settings.json (what is actually installed on
+ *   THIS machine — never checked before). One further hop is closed by a small fixed-point pass
+ *   (the unprompted-speech runtime spawns anticipate.sh/lesson-hooks.sh as candidate producers),
+ *   reusing this file's own invocation-shaped predicate (`callerPattern`/`stripComments`) but
+ *   restricted to files already PROVEN reachable from a real hook entry point — not "does anything
+ *   in the repo mention it", which is the weaker, accidentally-right-sometimes question above.
+ *
+ *   CHECK C — LESSON-TRIGGER WIRING. Every ratified/active lesson names a `trigger`
+ *   (scripts/lesson-store.mjs's TRIGGERS enum). plugin/scripts/lesson-hooks.sh's
+ *   `case "$EVENT" in` block is the single authority on which triggers any real Claude Code event
+ *   actually requests. A trigger no branch requests is INERT — the store says armed, the machine
+ *   says unconnected, exactly the L16 finding — and is reported loudly, by name, every run.
+ *
+ * BOTH checks read HOOK_PLUMBING/HOOK_HELD in the same spirit as STANDALONE/HELD above: explicit,
+ * printed every run, a true reason required — never a silent exemption.
+ *
+ * THE --check DECISION, made deliberately (not a default carried over from the module check):
+ *   • Check B (hook wiring) HARD-FAILS on a genuinely new unwired hook — same as an unwired module
+ *     above, because a hook script IS a shippable module: this repo owns hooks.json, this repo's
+ *     own .claude/settings.json, and (per HOOK_PLUMBING/HOOK_HELD) can name every known exception.
+ *     kling-preflight.sh is the one PRE-EXISTING, already-documented gap (STANDALONE says the same
+ *     thing above) — it is HELD, not unwired, so today's run does not break release.mjs for a
+ *     condition this task did not introduce and was not asked to fix.
+ *   • Check C (lesson triggers) is ADVISORY ONLY, NEVER fails --check, by deliberate design: the
+ *     lesson store lives at ~/.config/ruvnet-brain/lessons.json (or $RUVNET_LESSON_STORE) — per-user,
+ *     per-machine state OUTSIDE this repo. A fresh machine has none (loadLessons() degrades to []
+ *     gracefully, not a failure). Hard-failing the ship path on the CONTENTS of a file the repo does
+ *     not own, cannot reproduce in CI, and varies by whose machine runs it would gate a push on data
+ *     that has nothing to do with the commit being shipped. It is reported loudly instead — printed
+ *     every run, impossible to miss — which is the same bar HELD already sets for a known gap: never
+ *     silent, never blocking.
+ */
+
+const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'SessionEnd', 'PreCompact', 'Stop'];
+const HOOK_EVENT_RE = new RegExp(`(${HOOK_EVENTS.join('|')})[^.\\n]{0,40}?\\b(hook|gate)\\b`, 'i');
+
+/**
+ * Files that MENTION a hook event in their header but are plumbing, not a hook body: a dispatcher, a
+ * shared parser, a shared logger. Needed because the header heuristic below is deliberately loose —
+ * hook-input.mjs's own header reads "the ONE parser every PreToolUse gate uses", which matches
+ * "PreToolUse gate" exactly as a genuine self-declaration would. Same STANDALONE-style honesty bar:
+ * explicit, printed every run, a TRUE reason — the fix for a heuristic false positive is a named
+ * exception, not a cleverer regex that will just find the next false positive.
+ */
+const HOOK_PLUMBING = [
+  ['hook-shim.mjs', 'the Stable Spine dispatcher — routes EVERY event via its own TABLE (parsed below); '
+    + 'it is what hooks.json calls, not a single-event hook body itself'],
+  ['hook-input.mjs', 'the shared JSON-payload parser "every PreToolUse gate uses" (its own words) — a '
+    + 'library, never itself registered as a hook'],
+  ['gate-receipt.sh', 'the shared receipt-logger a blocking gate calls just before it exits non-zero — a '
+    + 'library, never itself registered as a hook'],
+  ['unprompted-runtime.mjs', 'the unprompted-speech chokepoint (ADR-040) — registered once in hooks.json, '
+    + 'and itself spawns anticipate.sh + lesson-hooks.sh as candidate producers; it is the runtime, not a '
+    + 'single-purpose hook body'],
+  ['update-apply.mjs', 'the Stable Spine writer — a human/nightly CLI (see STANDALONE above), not a hook body'],
+];
+const HOOK_PLUMBING_NAMES = new Set(HOOK_PLUMBING.map(([n]) => n));
+
+/**
+ * DELIBERATELY HELD, same bar as HELD above: a hook-intended script genuinely not reachable from
+ * hooks.json or any settings.json today, and NOT a gap this check can silently close — the owner's
+ * call, already recorded once (STANDALONE's kling-preflight entry above) and reproduced here so
+ * --check does not fail the ship path on a pre-existing, already-documented, non-regression condition.
+ */
+const HOOK_HELD = {
+  'kling-preflight.sh': 'PreToolUse (Bash) gate — ships inert by design (SECURITY.md), ownership moved to '
+    + 'the Kling skill by ADR-0014 (confirmed live: a copy ships at '
+    + '~/.claude/skills/klingai/scripts/kling-preflight.sh). Not currently wired into plugin/hooks/'
+    + 'hooks.json, this repo\'s .claude/settings.json, or ~/.claude/settings.json — matching '
+    + 'STANDALONE\'s own entry for this file above. Honestly dormant until a user opts in, not a silent '
+    + 'gap this check introduces.',
+};
+
+/** Read+JSON.parse a file. null on ANY failure (missing, unreadable, malformed) — never throws. */
+function readJsonSafe(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+/** Every `command` string inside a hooks.json / settings.json shaped `{ hooks: {...} }` document. */
+function commandStrings(hooksNode) {
+  const out = [];
+  const walk = (node) => {
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (node && typeof node === 'object') {
+      if (typeof node.command === 'string') out.push(node.command);
+      for (const v of Object.values(node)) walk(v);
+    }
+  };
+  walk(hooksNode);
+  return out;
+}
+
+/** Plugin-script basenames (.mjs/.sh) mentioned literally in one command string. */
+function basenamesIn(cmd) { return cmd.match(/[\w.-]+\.(?:mjs|sh)\b/g) || []; }
+
+/** The hook-shim dispatch id passed as hook-shim.mjs's first CLI argument, if this command calls it. */
+function hookShimIdIn(cmd) {
+  const m = cmd.match(/hook-shim\.mjs["'`]?\s+([a-zA-Z][\w-]*)/);
+  return m ? m[1] : null;
+}
+
+/** hook-shim.mjs's own dispatch TABLE: id -> file. Parsed, not re-implemented — it IS the authority. */
+function hookShimTable(repo) {
+  let src = '';
+  try { src = fs.readFileSync(path.join(repo, 'plugin/scripts/hook-shim.mjs'), 'utf8'); } catch { return {}; }
+  const map = {};
+  const re = /'([\w-]+)':\s*{\s*file:\s*'([\w.-]+)'/g;
+  let m; while ((m = re.exec(src))) map[m[1]] = m[2];
+  return map;
+}
+
+/**
+ * A hook body self-declares its event in its header — "a UserPromptSubmit hook", "PreToolUse gate on
+ * Bash" — read from a handful of real headers in this repo (ADR-037's own convention: read a few
+ * headers to see the shape). Deliberately loose; HOOK_PLUMBING above is the deliberate, honest
+ * correction for where it over-fires, rather than a fragile attempt at a perfect regex.
+ */
+function hookHeaderDeclares(src) { return HOOK_EVENT_RE.test(src.slice(0, 1600)); }
+
+/**
+ * CHECK B — HOOK WIRING. See the file-level comment above for the full reasoning. Walks the real
+ * chain from the real entry points (plugin/hooks/hooks.json, this repo's .claude/settings.json, the
+ * user's actual ~/.claude/settings.json) through hook-shim.mjs's id-based indirection, then closes
+ * one further hop with a small fixed-point pass restricted to files already proven reachable.
+ */
+export function hookWiringAudit({
+  repo = REPO,
+  homeSettingsFile = path.join(os.homedir(), '.claude', 'settings.json'),
+  held = HOOK_HELD,
+} = {}) {
+  const table = hookShimTable(repo);
+  const reached = new Map(); // basename -> Set(reason)
+  const add = (name, reason) => {
+    if (!name) return;
+    if (!reached.has(name)) reached.set(name, new Set());
+    reached.get(name).add(reason);
+  };
+
+  const scanConfig = (file, label) => {
+    const doc = readJsonSafe(file);
+    if (!doc || !doc.hooks) return;
+    for (const cmd of commandStrings(doc.hooks)) {
+      for (const b of basenamesIn(cmd)) add(b, label);
+      const id = hookShimIdIn(cmd);
+      if (id && table[id]) add(table[id], `${label} (hook-shim id "${id}")`);
+    }
+  };
+  scanConfig(path.join(repo, 'plugin/hooks/hooks.json'), 'plugin/hooks/hooks.json');
+  scanConfig(path.join(repo, '.claude/settings.json'), '.claude/settings.json (this repo)');
+  scanConfig(homeSettingsFile, '~/.claude/settings.json (this machine)');
+
+  // Fixed point: anything already reachable may itself spawn another plugin script by a real,
+  // invocation-shaped reference — reusing the module check's own predicate, never a comment.
+  const scriptsDir = path.join(repo, 'plugin/scripts');
+  let all = [];
+  try { all = fs.readdirSync(scriptsDir).filter((f) => /\.(mjs|sh)$/.test(f)); } catch { /* no dir */ }
+  for (let i = 0; i < 10; i++) {
+    let changed = false;
+    for (const from of [...reached.keys()]) {
+      let src = ''; try { src = fs.readFileSync(path.join(scriptsDir, from), 'utf8'); } catch { continue; }
+      const stripped = stripComments(src, path.extname(from));
+      for (const cand of all) {
+        if (reached.has(cand)) continue;
+        if (callerPattern(cand).test(stripped)) { add(cand, `spawned by plugin/scripts/${from}`); changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+
+  const rows = [];
+  for (const f of all) {
+    if (HOOK_PLUMBING_NAMES.has(f)) continue; // plumbing, not a hook body — never part of the census
+    let src = ''; try { src = fs.readFileSync(path.join(scriptsDir, f), 'utf8'); } catch { continue; }
+    const declared = hookHeaderDeclares(src);
+    const isReached = reached.has(f);
+    if (!declared && !isReached) continue; // not hook-intended at all — outside the census
+    if (isReached) rows.push({ file: f, state: 'wired', sources: [...reached.get(f)] });
+    else if (held[f]) rows.push({ file: f, state: 'held', why: held[f] });
+    else rows.push({ file: f, state: 'unwired' });
+  }
+  return { rows, plumbing: HOOK_PLUMBING };
+}
+
+/** The trigger tokens requested by lesson-hooks.sh's `case "$EVENT" in` block — the sole authority. */
+function lessonHooksRequestedTriggers(repo) {
+  let src = '';
+  try { src = fs.readFileSync(path.join(repo, 'plugin/scripts/lesson-hooks.sh'), 'utf8'); } catch { return new Set(); }
+  const stripped = stripComments(src, '.sh');
+  const requested = new Set();
+  const re = /TRIGGERS="([^"]*)"/g;
+  let m;
+  while ((m = re.exec(stripped))) { for (const t of m[1].split(/\s+/)) if (t) requested.add(t); }
+  return requested;
+}
+
+/**
+ * CHECK C — LESSON-TRIGGER WIRING. See the file-level comment above for the full reasoning
+ * (advisory-only, deliberately, because the store is per-user/per-machine state outside this repo).
+ */
+export function lessonTriggerAudit({ repo = REPO, lessonsFile = undefined } = {}) {
+  const requested = lessonHooksRequestedTriggers(repo);
+  const lessons = loadLessons(lessonsFile);
+  const live = lessons.filter((l) => !l.demoted && (l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE));
+  const labelOf = (trigger) => Object.values(TRIGGERS).find((t) => t.key === trigger)?.label || trigger;
+  const inert = live
+    .filter((l) => !requested.has(l.trigger))
+    .map((l) => ({ id: l.id, trigger: l.trigger, label: labelOf(l.trigger) }));
+  return { requested: [...requested], checked: live.length, inert };
+}
+
 const invokedDirectly = process.argv[1]
   && path.resolve(process.argv[1]).endsWith(`wired-check${path.extname(process.argv[1])}`);
 
@@ -404,6 +645,12 @@ if (invokedDirectly) {
   const { rows, dupes, inventory } = audit();
   const by = (s) => rows.filter((r) => r.state === s);
   const unwired = by('unwired');
+
+  const hookAudit = hookWiringAudit();
+  const hookBy = (s) => hookAudit.rows.filter((r) => r.state === s);
+  const hookUnwired = hookBy('unwired');
+
+  const lessonAudit = lessonTriggerAudit();
 
   if (!argv.includes('--quiet')) {
     console.log(`\n  ${inventory} first-party module(s) in the inventory`);
@@ -425,8 +672,49 @@ if (invokedDirectly) {
     for (const h of by('held')) console.log(`    ⏸ ${h.rel}\n       ${h.why}\n`);
 
     if (dupes.length) console.log(`  ✗ DUPLICATE exemption(s): ${dupes.join(', ')}\n`);
+
+    // ── CHECK B: HOOK WIRING ──────────────────────────────────────────────────────────────────
+    console.log(`\n  ── HOOK WIRING — plugin/scripts/*.sh|*.mjs vs plugin/hooks/hooks.json, `
+      + `.claude/settings.json, ~/.claude/settings.json ──\n`);
+    console.log(`  ${hookAudit.rows.length} hook-intended script(s) in the census`);
+    console.log(`    ${hookBy('wired').length} wired · ${hookBy('held').length} held · `
+      + `${hookUnwired.length} UNWIRED\n`);
+
+    for (const u of hookUnwired) {
+      console.log(`    ✗ plugin/scripts/${u.file}  — declares a hook event and is invoked by nothing`);
+    }
+    if (hookUnwired.length) {
+      console.log(`\n  A hook script nothing points at will never fire. Wire it into hooks.json or a`);
+      console.log(`  settings.json, or add it to HOOK_HELD in this file WITH A TRUE REASON.\n`);
+    }
+
+    for (const h of hookBy('held')) console.log(`    ⏸ plugin/scripts/${h.file}\n       ${h.why}\n`);
+
+    for (const w of hookBy('wired')) {
+      console.log(`    ✓ plugin/scripts/${w.file}\n       via ${w.sources.join('; ')}`);
+    }
+
+    console.log(`\n  ${HOOK_PLUMBING.length} plumbing file(s) excluded from the census (dispatchers/`
+      + `parsers/loggers, not hook bodies), and why:\n`);
+    for (const [n, why] of HOOK_PLUMBING) console.log(`    ○ plugin/scripts/${n}\n       ${why}`);
+
+    // ── CHECK C: LESSON-TRIGGER WIRING (advisory — see the file-level comment for why) ─────────
+    console.log(`\n  ── LESSON-TRIGGER WIRING — ratified lessons vs plugin/scripts/lesson-hooks.sh's `
+      + `case block ──\n`);
+    console.log(`  ${lessonAudit.checked} ratified/active lesson(s) checked (requested triggers: `
+      + `${lessonAudit.requested.join(', ') || '(none)'})`);
+    console.log(`    ${lessonAudit.inert.length} INERT\n`);
+    for (const l of lessonAudit.inert) {
+      console.log(`    ✗ ${l.id}  — trigger "${l.trigger}" (${l.label}) is ratified but NO event `
+        + `requests it; this lesson will NEVER be delivered`);
+    }
+    if (lessonAudit.inert.length) {
+      console.log(`\n  ADVISORY ONLY — the lesson store is per-user machine state, not part of this`);
+      console.log(`  repo, so this never fails --check. Fix by adding the trigger to a case branch in`);
+      console.log(`  plugin/scripts/lesson-hooks.sh.\n`);
+    }
   }
 
-  const bad = unwired.length || dupes.length;
+  const bad = unwired.length || dupes.length || hookUnwired.length;
   process.exit(argv.includes('--check') && bad ? 1 : 0);
 }

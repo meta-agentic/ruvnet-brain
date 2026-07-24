@@ -115,18 +115,34 @@ describe('the learner row reports what it measured, never what it failed to read
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   }, 60_000);
 
-  it('says off — not on — for a learner that has recorded nothing in over a year', () => {
+  it('says idle — never on, and no longer off — for a learner that has recorded nothing in over a year', () => {
     // The registry had NO staleness check at all: a learner last adapted 400 days ago reported
     // "on — 457 work sessions recorded", while learning-enable called the same file "IDLE — nothing
     // in 400 days". STALE_DAYS now has one definition, imported rather than re-typed.
+    //
+    // UPDATED 2026-07-24: the expectation moved from 'off' to 'idle', and the reason matters more
+    // than the string. The INVARIANT this test has always guarded is "a dead learner must never read
+    // as on" — it asserted 'off' only because 'off' was the sole non-on state that existed when it
+    // was written. STATE.IDLE now names this case exactly ("ran before, nothing is calling it"), and
+    // 'off' has become the WRONG answer here: off means "we looked and it is not running" and points
+    // the user at turnOn, which for a learner already holding 457 trajectories is the category error
+    // that put "457 patterns learned" beside an invitation to enable it. Found by Fable 5 in the
+    // ADR-047 duel.
+    //
+    // The `.not.toBe('on')` line below is the load-bearing one and is kept EXPLICIT rather than
+    // implied by toBe('idle'): if a future refactor invents another state, this test must still fail
+    // for the original reason, not silently pass because the string happened to change.
     const home = tmpHome();
     try {
       fs.writeFileSync(path.join(home, '.claude-flow/neural/stats.json'), JSON.stringify({
         trajectoriesRecorded: 457, patternsLearned: 457, lastAdaptation: Date.now() - 400 * 86_400_000,
       }));
       const r = JSON.parse(inHome(home, detect('workflow-pattern-learning')).out);
-      expect(r.state, 'a learner dead for 400 days is not "on"').toBe('off');
+      expect(r.state, 'a learner dead for 400 days is NEVER "on"').not.toBe('on');
+      expect(r.state, 'a populated-but-quiet learner is idle (wiring gap), not off (never used)').toBe('idle');
       expect(r.evidence).toMatch(/400 days/);
+      // It must not send the user to switch on a thing that already ran.
+      expect(r.evidence, 'idle evidence must not read as "never used"').toMatch(/ran before|not off/i);
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   }, 60_000);
 });

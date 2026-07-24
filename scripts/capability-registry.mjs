@@ -349,7 +349,15 @@ export const CAPABILITIES = [
       if (d.total === 0) return row(STATE.ABSENT, 'the memory store is empty, so there is nothing to distill yet');
       if (d.learns) return row(STATE.ON, `${d.patterns} reusable patterns distilled from ${d.real} memories (${(d.cover * 100).toFixed(1)}% embedded)`);
       if (d.patterns === 0) return row(STATE.OFF, `${d.total} memories stored and ${(d.cover * 100).toFixed(1)}% embedded, but 0 have been distilled into patterns — the store records and forgets`);
-      return row(STATE.OFF, `only ${d.patterns} patterns from ${d.real} memories — distillation has barely run`);
+      // "BARELY RUN" IS NOT "NOT RUNNING". This returned STATE.OFF while its own sentence says the
+      // thing has produced patterns — used-and-weak reported as never-used. OFF is a claim that we
+      // looked and found it stopped; here we looked and found it working, thinly. Reporting a working
+      // capability as off sends the user to switch on something already on, and it corrupts the
+      // dormancy predicate that ADR-047 wants to build offers from: a capability that HAS run is not
+      // a dormancy finding, whatever its ratio. The weak ratio is still said out loud — it belongs in
+      // the evidence, which is where a concern with no action attached should live.
+      // Found by Fable 5 in the ADR-047 duel, 2026-07-24.
+      return row(STATE.ON, `only ${d.patterns} patterns from ${d.real} memories — distillation has run, but thinly`);
     },
   },
 
@@ -405,7 +413,19 @@ export const CAPABILITIES = [
         case 'INITIALISED_EMPTY':
           return row(STATE.OFF, 'the learner file exists and genuinely records 0 trajectories and 0 patterns — it has been created but never fed');
         case 'IDLE':
-          return row(STATE.OFF, `${traj} work sessions and ${pat} patterns were recorded, but nothing in ${days} days — the learner ran before and has gone quiet`);
+          // WAS STATE.OFF UNTIL 2026-07-24, AND THAT WAS THE SAME BUG THIS FILE ADDED STATE.IDLE TO END.
+          //
+          // The verdict is literally named IDLE and its own sentence says "ran before and has gone
+          // quiet" — the textbook definition of the state added to the top of this file hours earlier.
+          // It kept returning OFF because STATE.IDLE was wired into exactly ONE detector
+          // (cheap-model-routing) and no others. One bug, found once, fixed once, left everywhere else.
+          //
+          // WHY IT MATTERS BEYOND TIDINESS: OFF means "we looked and it is not running" and points the
+          // user at turnOn. A learner holding hundreds of trajectories is not off — it worked, and
+          // something stopped calling it. Offering to "turn on" an already-populated learner is the
+          // category error that put "457 patterns learned" next to an invitation to enable it.
+          // Found by Fable 5 in the ADR-047 duel, one file over from where I had just fixed it.
+          return row(STATE.IDLE, `${traj} work sessions and ${pat} patterns were recorded, but nothing in ${days} days — the learner ran before and has gone quiet. It is not off; something that fed it stopped.`);
         default:
           return row(STATE.ON, `${traj} work sessions recorded and ${pat} patterns learned${days === null ? '' : `, last updated ${days} day${days === 1 ? '' : 's'} ago`}`);
       }
@@ -577,7 +597,10 @@ export const CAPABILITIES = [
         const tier = p.value.provenanceTier || 'unknown provenance';
         return row(STATE.ON, `an evolved policy is active machine-wide (${String(p.value.championId).slice(0, 20)}…, provenance ${tier}${age === null ? '' : `, applied ${age} day${age === 1 ? '' : 's'} ago`})`);
       }
-      if (haveArchive) return row(STATE.OFF, 'self-improvement has run in this repo but no evolved policy is currently in force — nothing it discovered is being used');
+      // IDLE, not OFF: the sentence says it HAS RUN. Off means never used and points at turnOn;
+      // this ran and stopped, which is a wiring question. Same class as the learner fix above.
+      // Found by GPT-5.6-Sol in the ADR-047 duel, 2026-07-24.
+      if (haveArchive) return row(STATE.IDLE, 'self-improvement has run in this repo but no evolved policy is currently in force — nothing it discovered is being used');
       return row(STATE.ABSENT, 'self-improvement has never run here and no evolved policy is active');
     },
   },
@@ -601,7 +624,11 @@ export const CAPABILITIES = [
       // `gate` beside it was not. Small, but this surface is read by people deciding whether to
       // trust it, and sloppy copy reads as sloppy measurement.
       const gates = (n) => `${n} gate${n === 1 ? '' : 's'}`;
-      if (!s.blocking) return row(STATE.OFF, `${gates(s.armed)} ${s.armed === 1 ? 'is' : 'are'} wired but ${s.armed === 1 ? 'it cannot' : 'none of them can'} actually refuse anything — ${s.armed === 1 ? 'it is' : 'they are'} advisory`);
+      // ON, not OFF: gates ARE wired and ARE reading every move — they just cannot refuse one. That
+      // is a weaker MODE of running, not an absence of running. Reporting it OFF tells the user to
+      // switch on something already on, and hides that they have advisory coverage today.
+      // Found by GPT-5.6-Sol in the ADR-047 duel, 2026-07-24.
+      if (!s.blocking) return row(STATE.ON, `${gates(s.armed)} ${s.armed === 1 ? 'is' : 'are'} wired but ${s.armed === 1 ? 'it cannot' : 'none of them can'} actually refuse anything — ${s.armed === 1 ? 'it is' : 'they are'} advisory`);
       // Receipts began only once the ledger was added, so "0 caught" is genuinely ambiguous between
       // "never fired" and "fired before we were counting". Say armed, and say the caveat.
       const caught = s.caughtTotal || 0;
@@ -654,7 +681,11 @@ export const CAPABILITIES = [
       // ran or that it succeeded when it did, and claiming captured state from a config file would be
       // exactly the fabricated status this registry exists to refuse.
       if (pre && end) return row(STATE.ON, 'a state-saving hook is registered at both boundaries: one before compaction and one at session end — registered, which is not the same as proven to have captured anything');
-      if (pre || end) return row(STATE.OFF, `a state-saving hook is registered only at ${pre ? 'the pre-compaction' : 'the session-end'} boundary — the other one loses its state`);
+      // ON, not OFF: one boundary IS covered. Partially configured is not never-used — half the
+      // sessions are being saved today, and calling that "off" both understates what they have and
+      // invites them to re-enable a thing already running. The gap is named in the evidence, which is
+      // where a real but partial shortfall belongs. Found by GPT-5.6-Sol, 2026-07-24.
+      if (pre || end) return row(STATE.ON, `a state-saving hook is registered only at ${pre ? 'the pre-compaction' : 'the session-end'} boundary — the other one loses its state`);
       return row(STATE.OFF, 'no hook that saves session state is registered at either boundary, so nothing is kept when a session compacts or closes');
     },
   },
