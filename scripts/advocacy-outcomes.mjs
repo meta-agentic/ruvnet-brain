@@ -126,6 +126,56 @@ export const HARD_DISMISSAL_CAP = 5;
 export const PRECISION_TARGET = 0.60;
 export const MIN_PRECISION_SAMPLES = 5;
 
+/**
+ * THE GOODHART GUARD FOR PRECISION — the one the 4.0 briefing named and left open ("the fixture's
+ * separation-of-authorities design guards recall; the equivalent guard for precision needs the real
+ * ledger to exist first").
+ *
+ * It turns out not to need the ledger at all, because the hole is arithmetic. Once a metric gates a
+ * release it becomes a target, and precision = applied/offered has an obvious exploit: OFFER LESS.
+ * Suggest only the sure thing, and precision approaches 1.00 while the product helps nobody — which
+ * is the exact behaviour ADR-028 exists to prevent, certified by the metric meant to detect it.
+ *
+ * The old `meetsTarget: value >= PRECISION_TARGET` compared the POINT ESTIMATE, so 4 applied out of
+ * 6 offers read 0.667 >= 0.60 and passed, while the true rate consistent with that evidence goes far
+ * below 0.30. Worse, MIN_PRECISION_SAMPLES = 5 cannot support the target under ANY outcome: a
+ * perfect 5/5 bounds at 0.05^(1/5) = 54.9%, still short of 0.60. The floor was unreachable and the
+ * comparison was to the wrong number.
+ *
+ * Comparing the 95% LOWER BOUND to the target closes both. Fewer offers widen the interval, so
+ * withholding offers can no longer manufacture a passing score — it makes the metric report "not
+ * yet judgeable" instead. The incentive now points the right way: the only route to a certified
+ * precision is to offer MORE and be right.
+ *
+ * Exact Clopper-Pearson: the lower bound solves P(X >= k | n, p) = alpha. Computed by bisection on
+ * the binomial tail with exact terms (n is tiny here). Self-checkable: at k = n it must reduce to
+ * alpha^(1/n) — asserted in the tests rather than trusted, because a hand-rolled incomplete-beta in
+ * this same session returned 98.3% for n=3, which is absurd on its face.
+ */
+export const PRECISION_ALPHA = 0.05;
+
+export function precisionLowerBound(k, n, alpha = PRECISION_ALPHA) {
+  if (!Number.isFinite(k) || !Number.isFinite(n) || n <= 0 || k < 0 || k > n) return null;
+  if (k === 0) return 0;
+  const tailAtLeastK = (p) => {
+    // sum_{i=k}^{n} C(n,i) p^i (1-p)^(n-i), computed with a running coefficient to avoid factorials.
+    let sum = 0;
+    let coeff = 1;                                   // C(n,0)
+    for (let i = 0; i <= n; i++) {
+      if (i >= k) sum += coeff * Math.pow(p, i) * Math.pow(1 - p, n - i);
+      coeff = coeff * (n - i) / (i + 1);             // C(n,i) -> C(n,i+1)
+    }
+    return sum;
+  };
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    if (tailAtLeastK(mid) < alpha) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 // Field caps. These are a CORRECTNESS property, not tidiness — see appendLine() below: the atomicity
 // of a concurrent append depends on each record being one small write. EXPORTED so a test can assert
 // the arithmetic that makes the guard in appendLine() unreachable: every field is bounded, and the
@@ -730,8 +780,17 @@ export function precision({ file = OUTCOMES_PATH, all = null, since = null, id =
     offered, applied, dismissed, ignored,
     target: PRECISION_TARGET,
     sufficient,
-    meetsTarget: sufficient ? value >= PRECISION_TARGET : null,
-    reason: sufficient ? null : `only ${offered} offer(s) recorded — below the ${MIN_PRECISION_SAMPLES}-sample floor, so this is not yet judgeable against the target`,
+    // The lower bound, not the point estimate — see PRECISION_ALPHA above. `offered` is the sample
+    // and `applied` the successes, so withholding offers WIDENS this and can never buy a pass.
+    lowerBound: +(precisionLowerBound(applied, offered) ?? 0).toFixed(4),
+    meetsTarget: sufficient ? precisionLowerBound(applied, offered) >= PRECISION_TARGET : null,
+    reason: sufficient
+      ? (precisionLowerBound(applied, offered) >= PRECISION_TARGET
+        ? null
+        : `${applied}/${offered} applied — the point estimate is ${value}, but the 95% lower bound is `
+          + `${(precisionLowerBound(applied, offered) ?? 0).toFixed(3)}, below the ${PRECISION_TARGET} target. `
+          + 'More offers, not fewer, is the only way this clears.')
+      : `only ${offered} offer(s) recorded — below the ${MIN_PRECISION_SAMPLES}-sample floor, so this is not yet judgeable against the target`,
   };
 }
 

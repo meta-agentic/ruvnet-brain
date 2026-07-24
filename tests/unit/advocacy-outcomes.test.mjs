@@ -278,7 +278,18 @@ describe('numeric — precision is ADR-028\'s metric, and it cannot be gamed upw
     const p = precision({ file });
     expect(p).toMatchObject({ applied: 3, dismissed: 1, ignored: 1, offered: 5, precision: 0.6 });
     expect(p.target).toBe(PRECISION_TARGET);
-    expect(p.meetsTarget, '0.60 is the target and the boundary is inclusive').toBe(true);
+
+    // RETARGETED 2026-07-24, and the reversal is the point of this describe block finally being true.
+    //
+    // This used to assert meetsTarget === true because 3/5 = 0.60 and "the boundary is inclusive".
+    // The ratio is right and the verdict was not: five offers are not evidence that the true rate is
+    // at or above 0.60 — the 95% lower bound for 3/5 is about 0.19. Certifying a target from that is
+    // the exact "gamed upward" failure the block is named for, which it was asserting rather than
+    // preventing. meetsTarget now compares the LOWER BOUND, so offering less widens the interval
+    // instead of buying a pass. The point estimate is unchanged and still checked above.
+    expect(p.precision, 'the ratio itself is unchanged').toBe(0.6);
+    expect(p.meetsTarget, 'five offers cannot certify a 0.60 floor, whatever the ratio').toBe(false);
+    expect(p.lowerBound).toBeLessThan(PRECISION_TARGET);
   });
 
   it('a dismissal is in the denominator and NEVER in the numerator', () => {
