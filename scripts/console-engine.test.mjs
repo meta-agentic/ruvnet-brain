@@ -2,7 +2,7 @@
 // Tests for the pure console engine. The point of these is the SAFETY invariants: a recommendation
 // that could become an irreversible or unexplained machine change must be impossible to construct.
 import assert from 'node:assert/strict';
-import { makeRecommendation, buildStackRecommendations, buildWiringRecommendations, scoreMemoryHealth, summarizeWiring } from './console-engine.mjs';
+import { makeRecommendation, buildStackRecommendations, buildWiringRecommendations, buildCapabilityRecommendations, scoreMemoryHealth, summarizeWiring } from './console-engine.mjs';
 
 let pass = 0;
 const t = (name, fn) => { fn(); pass++; console.log(`  ok  ${name}`); };
@@ -67,6 +67,52 @@ t('memory score: a single FAIL caps the score below healthy (≤49)', () => {
 });
 t('memory score: nothing probed → null (never a number we did not measure)', () => {
   assert.equal(scoreMemoryHealth({ probes: {} }).score, null);
+});
+
+t('buildCapabilityRecommendations: OFF + verified command + evidence -> one rec, bound to enable:<key>', () => {
+  const recs = buildCapabilityRecommendations({ capabilities: [{
+    key: 'memory-distillation', label: 'Memory distillation', scope: 'project', state: 'off',
+    whatItBuysYou: 'Loose notes get mined into reusable patterns.',
+    turnOn: { human: "Mine this project's stored memories into reusable patterns", cmd: 'node /x/distill-project.mjs' },
+    evidence: '10 memories stored and 80.0% embedded, but 0 have been distilled into patterns',
+  }] });
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].id, 'enable:memory-distillation');
+  assert.equal(recs[0].scope, 'project');
+  assert.equal(recs[0].touchesMachine, false);          // project scope -> never the machine-touch banner
+  assert.ok(recs[0].undo.human.length > 0);              // schema gate: undo always present
+  assert.ok(recs[0].evidence[0].observed.includes('80.0% embedded'));
+});
+t('buildCapabilityRecommendations: ON, IDLE, UNKNOWN, and ABSENT are never offered', () => {
+  for (const state of ['on', 'idle', 'unknown', 'absent']) {
+    const recs = buildCapabilityRecommendations({ capabilities: [{
+      key: 'memory-distillation', scope: 'project', state,
+      turnOn: { human: 'do it', cmd: 'node /x/distill-project.mjs' }, evidence: 'something observed',
+    }] });
+    assert.equal(recs.length, 0, `state=${state} must not produce a recommendation`);
+  }
+});
+t('buildCapabilityRecommendations: a capability off the proven-undo map is never offered, even OFF with a verified command', () => {
+  const recs = buildCapabilityRecommendations({ capabilities: [{
+    key: 'workflow-pattern-learning', scope: 'user', state: 'off',
+    turnOn: { human: 'Bootstrap the learner from this repository', cmd: 'ruflo hooks pretrain' },
+    evidence: 'the learner file exists and genuinely records 0 trajectories and 0 patterns',
+  }] });
+  assert.equal(recs.length, 0);
+});
+t('buildCapabilityRecommendations: a command with a blank to fill in is never offered', () => {
+  const recs = buildCapabilityRecommendations({ capabilities: [{
+    key: 'memory-distillation', scope: 'project', state: 'off',
+    turnOn: { human: 'do it', cmd: 'node /x/distill-project.mjs --task "<text>"' }, evidence: 'something observed',
+  }] });
+  assert.equal(recs.length, 0);
+});
+t('buildCapabilityRecommendations: no evidence -> never offered (the schema gate, not fabricated)', () => {
+  const recs = buildCapabilityRecommendations({ capabilities: [{
+    key: 'memory-distillation', scope: 'project', state: 'off',
+    turnOn: { human: 'do it', cmd: 'node /x/distill-project.mjs' }, evidence: '',
+  }] });
+  assert.equal(recs.length, 0);
 });
 
 t('summarizeWiring counts by mechanism and unique npx projects', () => {

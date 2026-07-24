@@ -1700,6 +1700,57 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 }
 .cap-turnon-none { color: var(--muted); }
 
+/* ── capability-row checkbox — the ONE clickable control on this card, and only on rows that cleared
+   every gate in capCheckboxEligible() (state=OFF, a zero-blank verified command, a schema-gated rec,
+   scope != machine). Everything else on this card stays "reading matter, not a control" — see the
+   note on .cap-turnon just above these rules. ──────────────────────────────────────────────────── */
+.cap-toggle-wrap {
+  margin: 9px 0 0; padding-top: 8px; border-top: 1px dotted var(--hair);
+}
+.cap-toggle-label {
+  display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+  font-size: 12.5px; color: var(--ink); font-weight: 600;
+}
+.cap-toggle {
+  /* Deliberately NOT the browser default box — a checkbox that looks identical to a form checkbox
+     invites the assumption that unchecked==off in the generic sense; this one only ever means "not
+     yet applied," and giving it its own skin keeps that from being confused with a settings toggle
+     elsewhere on the page. */
+  appearance: none; width: 18px; height: 18px; flex: none; margin: 0;
+  border: 1.5px solid var(--amber); border-radius: 5px;
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  display: grid; place-items: center; transition: border-color 0.15s var(--ease);
+}
+.cap-toggle:hover { border-color: color-mix(in srgb, var(--amber) 70%, var(--ink)); }
+.cap-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+/* Checked state is reachable ONLY by recheckMachine() re-rendering the row as state=on — see
+   capRow(), which stops emitting capCheckbox() at all once known !== 'OFF'. There is therefore no
+   client code path that sets this attribute directly; it is drawn here so the browser has somewhere
+   to paint it if a future refactor ever does bind it declaratively. */
+.cap-toggle:checked { background: var(--green); border-color: var(--green); }
+.cap-toggle:checked::after {
+  content: ''; width: 9px; height: 5px; border-left: 2px solid var(--on-accent);
+  border-bottom: 2px solid var(--on-accent); transform: rotate(-45deg) translateY(-1px);
+}
+.cap-toggle-text { line-height: 1.4; }
+.cap-toggle-note {
+  margin: 4px 0 0 27px; max-width: 56ch; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+}
+.cap-toggle-pending .cap-toggle-text { color: var(--muted); font-weight: 500; }
+
+/* ── honest, explicitly-not-a-checkbox marks for idle / unknown rows ───────────────────────────── */
+.cap-honest-mark {
+  margin: 9px 0 0; padding-top: 8px; border-top: 1px dotted var(--hair);
+  font-size: 12.5px; line-height: 1.55; color: var(--muted); display: flex; gap: 8px; align-items: flex-start;
+  max-width: 62ch;
+}
+.cap-honest-mark .mark-glyph {
+  flex: none; font-family: var(--mono); font-size: 13px; line-height: 1.4;
+  width: 16px; text-align: center; color: var(--faint);
+}
+.cap-honest-mark.is-idle .mark-glyph { color: var(--amber-text); }
+.cap-honest-mark.is-unknown .mark-glyph { color: var(--faint); }
+
 /* The key, stated before the rows so nobody has to reverse-engineer the colours from the data. */
 /* max-width:none is load-bearing, not tidying: the global `p { max-width: 70ch }` measures a prose
    column, and this <p> is a horizontal key, so 70ch broke every entry onto its own line with half
@@ -1743,6 +1794,8 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 .cap-legend .k-idle { border-top-color: var(--amber); border-top-style: dotted; }
 .cap-legend .k-absent { border-top-color: var(--hair-strong); }
 .cap-legend .k-unknown { border-top-style: dashed; }
+/* Legend addendum for the checkbox affordance — see capLegend() in app.js. */
+.cl-checkbox-note { flex-basis: 100%; color: var(--faint); font-style: italic; }
 
 @media (max-width: 40em) {
   /* Status rides up beside the name; the plain-words column takes the full width beneath both —

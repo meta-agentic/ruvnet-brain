@@ -585,8 +585,9 @@ const STACK_INFO = ['Every rUv package installed globally on this computer, chec
   + 'at what version — not whether it’s actually running; that’s the wiring card, further down.'];
 const CAPABILITIES_INFO = ['Every capability this stack can offer — routing, learning, guardrails, and '
   + 'the rest — with the state we actually observed on this machine: on, off, set up but idle, not '
-  + 'installed, or not checked. This card only reads; nothing here is a switch. Anything worth turning '
-  + 'on shows up in “What we’d suggest” below, with evidence and an undo.'];
+  + 'installed, or not checked. This card mostly reads. A few rows carry a tickable box, and even there '
+  + 'ticking only opens the consent-gated proposal in “What we’d suggest” below — nothing runs until '
+  + 'you confirm it there, with its evidence, its cost, and its undo.'];
 const LEARNINGS_INFO = ['A separate, smaller stream from the memory below it: not what your projects '
   + 'contain, but patterns in how you work — noticed across every project and reused everywhere. Your '
   + 'project facts stay isolated; this strip is the one thing that deliberately crosses that boundary.'];
@@ -916,6 +917,29 @@ function capState(raw) {
 }
 const capBucket = (row) => capState(row && row.state) || 'UNKNOWN';
 
+/* THE ONE GATE THAT DECIDES WHETHER A ROW EARNS A CHECKBOX AT ALL.
+ *
+ * A checkbox is a STRONGER promise than the plain-text turn-on line above it: a button says "you
+ * could run this"; a checkbox says "this is a switch, and I am telling you its current position." So
+ * the bar is at least as strict as the bar for text, and in one respect stricter — the server only
+ * ever stamps `row.recId` once it built a full, schema-gated Recommendation (evidence, cost, change,
+ * undo all present — see console-engine.mjs's makeRecommendation()) AND capability-registry.mjs's own
+ * proven-undo map accepted the row (buildCapabilityRecommendations() there — currently exactly
+ * memory-distillation, and only while OFF). See that file's header for the full "why".
+ *
+ * This is intentionally REDUNDANT with what the server already guarantees. A client-side check that
+ * merely trusted `row.recId` being truthy would work today and silently stop meaning anything the
+ * moment a future edit stamped it for the wrong reason — exactly the shape of "a field-name typo made
+ * one repo permanently unverified" (fix(3.9.69)). Re-derive every gate here; never just trust the flag. */
+function capCheckboxEligible(row, known) {
+  if (known !== 'OFF') return false;                                  // never ON / IDLE / UNKNOWN / ABSENT
+  if (String(row.scope || '').toLowerCase() === 'machine') return false; // machine-wide: full rec-card path only, never an inline tick
+  const cmd = row.turnOn && typeof row.turnOn === 'object' && typeof row.turnOn.cmd === 'string' ? row.turnOn.cmd : '';
+  if (!cmd || /<[^>]+>/.test(cmd)) return false;                       // no verified command, or one with a blank to fill in
+  if (typeof row.recId !== 'string' || !row.recId) return false;       // the server never vouched for this one
+  return true;
+}
+
 /* Evidence arrives in whichever shape the detector that produced it already uses: a plain string,
    a list of strings, or capability-audit.mjs's own [{ observed }] records. Accept all three rather
    than force one, and silently drop nothing-shaped entries — an empty bullet is noise, not evidence. */
@@ -928,6 +952,74 @@ function capEvidence(ev) {
     if (typeof t === 'string' && t.trim()) out.push(t.trim());
   }
   return out;
+}
+
+/* THE CAPABILITIES CARD'S ONLY INTERACTIVE CONTROL, and it does not itself apply anything — it points
+ * at the one place that does. The console already has exactly one tested state machine for "show
+ * evidence/cost/undo, get consent, apply, confirm, offer undo": the rec cards in "What we'd suggest"
+ * (buildRecCard/doApply/showConfirm/applied/doUndo above), fed by makeRecommendation()'s schema gate,
+ * which cannot construct a Recommendation missing evidence, cost, change, or undo. A checkbox that
+ * POSTed to /api/apply on its own, carrying its own payload, would be a SECOND, unaudited way to
+ * trigger a machine mutation — precisely the "two answers to one question" failure this project has
+ * already shipped more than once (capability-registry.mjs's learningEnable story, the hooks-list
+ * story). So this rides jumpToRec(recId) unchanged, the exact pattern the stack card's "attention" rows
+ * already use.
+ *
+ * The box must never visually move on its own click. It only ever shows checked once recheckMachine()
+ * has re-run the real detector and the row re-renders with state 'on' — at which point capRow() stops
+ * calling capCheckboxEligible entirely (known !== 'OFF') and this function is never called again for
+ * that row. There is no code path that sets `.checked = true` directly; clicking this box always
+ * preventDefault()s and only ever opens the real card. */
+function capCheckbox(row) {
+  const id = `capbox-${row.key}`;
+  const humanAction = (row.turnOn && row.turnOn.human) || `Turn on ${row.label || row.key}`;
+
+  // GUARD FOR "the rec hasn't loaded yet". /api/state, /api/stack, and /api/memory settle at
+  // different times (see stateRecsSettled/stackRecsSettled/healthRecsSettled), and jumpToRec()
+  // silently no-ops if `#rec-<id>` isn't in the DOM yet. Rather than let a click do nothing with no
+  // explanation, an eligible row whose card has not rendered yet gets an honest, disabled placeholder
+  // instead of a clickable box that might fail silently.
+  const recNode = document.getElementById(`rec-${row.recId}`);
+  if (!recNode) {
+    return el('div', { class: 'cap-toggle-wrap cap-toggle-pending' },
+      el('span', { class: 'cap-toggle-text muted' }, `${humanAction} — still loading the full proposal…`));
+  }
+
+  const cb = el('input', {
+    type: 'checkbox', id, class: 'cap-toggle', checked: false, disabled: false,
+    'aria-describedby': `${id}-note`,
+    onclick: (ev) => {
+      // preventDefault() keeps it unchecked; jumpToRec is what actually moves the world.
+      ev.preventDefault();
+      jumpToRec(row.recId);
+      announce(`Opening the one-click control for ${row.label || row.key} — nothing has changed yet.`);
+    },
+  });
+  return el('div', { class: 'cap-toggle-wrap' },
+    el('label', { class: 'cap-toggle-label', for: id }, cb,
+      el('span', { class: 'cap-toggle-text' }, humanAction)),
+    el('p', { class: 'cap-toggle-note', id: `${id}-note` },
+      'Ticking this opens the full proposal below — evidence, cost, and the undo — and applies ',
+      'nothing until you confirm it there.'));
+}
+
+/* IDLE — never a checkbox (see capCheckboxEligible: known !== 'OFF' rules it out outright). Says so,
+   once, so the absence of a control here reads as a decision rather than an oversight — the same
+   "state one MORE fact" principle capLegend() already applies to the five state chips. */
+function capIdleNote() {
+  return el('p', { class: 'cap-honest-mark is-idle' },
+    el('span', { class: 'mark-glyph', 'aria-hidden': 'true' }, '◐'),
+    'Not a switch to flip — this ran before and something that should call it stopped. ',
+    'Fixing it means re-wiring the hook or gate named in the evidence above, not running a command.');
+}
+
+/* UNKNOWN (and its ABSENT sibling handled inline in capRow) — never a checkbox; we do not know the
+   current position, so there is nothing honest to show a box toggling from. Terse and low-weight on
+   purpose: this is the least actionable of the five states and should take the least space. */
+function capUnknownNote() {
+  return el('p', { class: 'cap-honest-mark is-unknown' },
+    el('span', { class: 'mark-glyph', 'aria-hidden': 'true' }, '?'),
+    'Not checked — nothing to tick here until this can be read.');
 }
 
 function capRow(row) {
@@ -959,6 +1051,11 @@ function capRow(row) {
   const turnOn = (row.turnOn && typeof row.turnOn === 'object'
     && typeof row.turnOn.cmd === 'string' && row.turnOn.cmd.trim()) ? row.turnOn : null;
   const wantsAdvice = known === 'OFF' || known === 'ABSENT';
+  // THE ONE ROW-LEVEL DECISION THAT CAN PROMOTE PLAIN TEXT TO A REAL CONTROL. See
+  // capCheckboxEligible()'s own header for the full gate list; checked FIRST and narrowly, so a row
+  // that fails even one gate falls straight through to the exact same honest text this card already
+  // rendered before checkboxes existed — nothing about the non-eligible path changes.
+  const checkboxEligible = capCheckboxEligible(row, known);
 
   return el('div', { class: `cap-row ${st.klass}` },
     el('span', { class: 'cap-name' },
@@ -992,17 +1089,27 @@ function capRow(row) {
               el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
           : el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
         : el('p', { class: 'cap-ev-none cell-dim' }, 'No evidence was recorded for this row.'),
-      wantsAdvice
-        ? (turnOn
-          ? el('p', { class: 'cap-turnon' },
-              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
-              String(turnOn.human || 'run'), ' — ', el('code', {}, String(turnOn.cmd)))
-          : el('p', { class: 'cap-turnon cap-turnon-none' },
-              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
-              'No verified one-line command exists for this one, so none is offered — a command that ',
-              'sends you to a terminal to be told “unknown subcommand” would cost you trust in every ',
-              'other row on this page.'))
-        : null),
+      checkboxEligible
+        ? capCheckbox(row)
+        : wantsAdvice
+          ? (turnOn
+            ? el('p', { class: 'cap-turnon' },
+                el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+                String(turnOn.human || 'run'), ' — ', el('code', {}, String(turnOn.cmd)))
+            : el('p', { class: 'cap-turnon cap-turnon-none' },
+                el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+                'No verified one-line command exists for this one, so none is offered — a command that ',
+                'sends you to a terminal to be told “unknown subcommand” would cost you trust in every ',
+                'other row on this page.'))
+          // Neither "wants advice" nor eligible for a checkbox: IDLE and UNKNOWN still get an honest,
+          // non-interactive mark rather than silence — the same "state one more fact" principle the
+          // legend below already applies to the five state chips. ON says nothing further; its chip
+          // already is the whole answer.
+          : known === 'IDLE'
+            ? capIdleNote()
+            : known === 'UNKNOWN'
+              ? capUnknownNote()
+              : null),
     el('span', { class: 'cap-status' }, chip(label, st.tone, hint)));
 }
 
@@ -1023,7 +1130,13 @@ function capLegend() {
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-idle' }), 'set up, not running — nothing is calling it'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-off' }), 'off — present, not running'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-absent' }), 'not installed — we looked, it isn’t here'),
-    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'));
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'),
+    // NEW — states one MORE fact: a checkbox appearing at all is itself informative (state off, a
+    // verified command, a proven undo), so say what its absence means too. Same principle as adding
+    // IDLE to this legend in the first place: the reader should never have to infer "nothing to tick
+    // here" from silence alone.
+    el('span', { class: 'cl cl-checkbox-note' },
+      '☐ a tickable box only appears where flipping it is single-step, reversible, and proven — everything else explains itself in words, on purpose'));
 }
 
 function renderCapabilities(data) {
@@ -1149,11 +1262,14 @@ function renderCapabilities(data) {
   }
   main.push(...groups);
 
-  // No control that can't act: this card reads state, it does not flip switches. Say where the
-  // acting happens instead of growing a button with no executor and no undo behind it.
+  // Almost no control that can't act: this card mostly reads. The one exception — a row whose
+  // checkbox cleared capCheckboxEligible()'s full gate list — still never applies anything itself; it
+  // only opens the real, consent-gated card below. Say where the acting happens either way, instead of
+  // growing a button (or a checkbox) with no executor and no undo behind it.
   main.push(el('p', { class: 'fineprint' },
-    'This card only reads — nothing here changes your machine. Anything worth switching on shows up ',
-    'in ', el('b', {}, 'What we’d suggest'), ' below, with its evidence, its cost, and its undo recorded first.',
+    'This card mostly reads. A few rows carry a tickable box — even there, ticking only opens the ',
+    'consent-gated proposal below; nothing runs until you confirm it ', el('b', {}, 'there'),
+    ', with its evidence, its cost, and its undo.',
     infoBtn('What’s on, what’s off', CAPABILITIES_INFO)));
 
   body.replaceChildren(withIllo('capabilities', ...main));
