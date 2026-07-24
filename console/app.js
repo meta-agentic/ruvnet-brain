@@ -1452,6 +1452,22 @@ function addRecommendations(recs, source) {
   updateRecsChip();
 }
 
+/* The owner's "user-level vs per-project" question, answered per card: the blast radius of applying
+ * this suggestion. `null` scope shows a muted "scope not stated" pill rather than being silently
+ * folded into either side — the same honesty the rest of the console holds to (never guess a state).
+ * A full grouped-sections layout is a deliberate follow-up: its group order and whether user/machine
+ * split into two visible groups are product decisions the owner reserved. */
+const REC_SCOPE_LABEL = {
+  project: { text: 'Just this project', tone: 'cyan', title: 'Applying this changes only the project you are in right now.' },
+  user: { text: 'Every project · your account', tone: 'amber', title: 'Applying this changes behaviour for every project under your user account.' },
+  machine: { text: 'Every project · this machine', tone: 'amber', title: 'Applying this changes behaviour for every project on this computer.' },
+};
+function recScopePill(scope) {
+  const s = REC_SCOPE_LABEL[scope];
+  if (!s) return chip('scope not stated', 'grey', 'We did not establish whether this is project-only or machine-wide — it is not guessed.');
+  return chip(s.text, s.tone, s.title);
+}
+
 function buildRecCard(rec) {
   const status = el('p', { class: 'rec-status', 'aria-live': 'polite' });
   const actions = el('div', { class: 'rec-actions' });
@@ -1615,6 +1631,7 @@ function buildRecCard(rec) {
   card.append(
     el('div', { class: 'rec-top' },
       el('h3', {}, rec.title || rec.id),
+      recScopePill(rec.scope),
       chip(rec.severity || 'INFO', SEV_TONE[rec.severity] || 'grey')),
     rec.rationale ? el('p', { class: 'rationale' }, rec.rationale) : null,
     impact,

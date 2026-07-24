@@ -17,10 +17,16 @@ import { cmpVersion } from './stack-sync.mjs';
 // ── Recommendation factory — the schema gate ─────────────────────────────────────────────────────
 // Throws, loudly, on any recommendation that could become an irreversible or unexplained mutation.
 // A throw here is a developer error caught at construction, not a runtime surprise for the user.
+// Blast-radius of a recommendation, mirroring capability-registry.mjs's SCOPE (kept as literals here
+// to avoid importing that whole module into the engine). `null` is the honest "scope not stated" —
+// the console groups those into their own bucket rather than guessing which side they fall on.
+const REC_SCOPES = new Set(['project', 'user', 'machine']);
+
 export function makeRecommendation(spec) {
-  const { id, title, rationale, severity, touchesMachine, plainImpact, evidence, cost, change, undo } = spec;
+  const { id, title, rationale, severity, touchesMachine, plainImpact, evidence, cost, change, undo, scope } = spec;
   const err = (m) => { throw new Error(`Recommendation "${id ?? '?'}" invalid: ${m}`); };
 
+  if (scope != null && !REC_SCOPES.has(scope)) err(`bad scope ${scope} (expected project|user|machine or omitted)`);
   if (!id || typeof id !== 'string') err('missing id');
   if (!title) err('missing title');
   if (!['INFO', 'SUGGESTED', 'IMPORTANT'].includes(severity)) err(`bad severity ${severity}`);
@@ -40,6 +46,10 @@ export function makeRecommendation(spec) {
     severity,
     touchesMachine: touchesMachine === true,
     plainImpact: plainImpact ?? null,
+    // The owner's "user-level vs per-project" question, made answerable: does applying this change
+    // just this project, or every project on the machine? null = we did not state it (grouped
+    // separately, never guessed). See the scope groups in addRecommendations().
+    scope: scope ?? null,
     evidence, cost, change, undo,
   });
 }
@@ -74,6 +84,7 @@ export function buildHealthRecommendations({ memory = null, learning = null } = 
   if (corrupt) {
     recs.push(makeRecommendation({
       id: 'repair:memory-index',
+      scope: 'project',
       title: 'Repair your memory store',
       rationale: 'A corrupt index makes counts and lookups wrong — it is why saved lessons can read as zero when they are still there.',
       severity: 'IMPORTANT',
@@ -93,6 +104,7 @@ export function buildHealthRecommendations({ memory = null, learning = null } = 
   if (Number.isFinite(depth) && depth > 50) {
     recs.push(makeRecommendation({
       id: 'learning:flush',
+      scope: 'user',
       title: 'Feed your captured work into the learner',
       rationale: 'Your AI captured this work, but none of it has reached the learner yet — so none of it has taught it anything.',
       severity: 'IMPORTANT',
@@ -114,6 +126,7 @@ export function buildHealthRecommendations({ memory = null, learning = null } = 
   if (Number.isFinite(age) && age > STALE_TRAIN_SECONDS) {
     recs.push(makeRecommendation({
       id: 'learning:train',
+      scope: 'user',
       title: 'Your learner has gone quiet',
       rationale: 'It is installed and switched on, but it has not learned anything recently — so it is not getting smarter.',
       severity: 'SUGGESTED',
@@ -173,6 +186,7 @@ export function buildHealthRecommendations({ memory = null, learning = null } = 
     }
     recs.push(makeRecommendation({
       id: 'learning:distill-fleet',
+      scope: 'machine',
       title: 'You are storing memories that teach your AI nothing',
       rationale:
         'These projects captured plenty and embedded it — but nothing has ever mined it into reusable '
@@ -205,6 +219,7 @@ export function buildStackRecommendations({ rows = [], stale = [] } = {}) {
   for (const r of behind) {
     recs.push(makeRecommendation({
       id: `sync:${r.name}`,
+      scope: 'machine',
       title: `Update ${r.name} — ${r.installed} → ${r.target}`,
       rationale: `A newer version is available on the @${r.tag} track you follow.`,
       severity: 'SUGGESTED',
@@ -222,6 +237,7 @@ export function buildStackRecommendations({ rows = [], stale = [] } = {}) {
   for (const r of broken) {
     recs.push(makeRecommendation({
       id: `repair:${r.name}`,
+      scope: 'machine',
       title: `Repair ${r.name} — installed copy is unreadable`,
       rationale: `A copy is present but has no readable version, usually a half-finished install.`,
       severity: 'IMPORTANT',
@@ -239,6 +255,7 @@ export function buildStackRecommendations({ rows = [], stale = [] } = {}) {
     const names = [...new Set(stale.map((s) => s.name))];
     recs.push(makeRecommendation({
       id: 'purge:shadows',
+      scope: 'machine',
       title: `Remove ${stale.length} stale duplicate cop${stale.length === 1 ? 'y' : 'ies'}`,
       rationale: `Older duplicate copies in a temporary cache can preempt your up-to-date global copy.`,
       severity: 'IMPORTANT',
@@ -271,6 +288,7 @@ export function buildWiringRecommendations({ sites = [] } = {}) {
   for (const [project, npxSites] of byProject) {
     recs.push(makeRecommendation({
       id: `reconcile:${project}`,
+      scope: 'project',
       title: `Speed up “${project}” — ${npxSites.length} tool call${npxSites.length === 1 ? '' : 's'} download a fresh copy each time`,
       rationale: `These launch RuvNet tools via npx, which re-downloads on every run and can silently use a stale copy.`,
       severity: 'SUGGESTED',
