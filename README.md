@@ -142,9 +142,12 @@ answers the question the owner has been asking for weeks — **"what is actually
   had zero call sites; the client referenced it only in comments. Built-tested-unwired is this
   project's signature failure, and it happened three times in one night.
 
-Honest limit: this is **3.6, not 4.0**. 4.0 requires levels 3–5 of ADR-028's proactivity ladder
-(contextual, anticipatory, compounding) and all three remain unbuilt — see `docs/4.0-READINESS.md`,
-which grades the current state at **L2** with evidence for every mark.
+Honest limit: this is still a dev release, **not 4.0**. 4.0 requires levels 3–5 of ADR-028's ladder
+(contextual, anticipatory, compounding) **shipped and independently graded ≥95**. The mechanisms now
+exist — L3's delivery seam (the chokepoint), an L4 goal surface, and L5 cross-project promotion (lessons
+promoted to your global brain, survival proven by isolation) — but the ladder still grades **L2**,
+because L3 is built rather than live (deploy-gated) and the five acceptance metrics aren't all measured.
+See `docs/4.0-READINESS.md` and `docs/4.0-EXECUTIVE-BRIEFING.md` (last independent grade: 70/100 overall).
 
 <details>
 <summary><b>Earlier &#8212; what 3.5 shipped</b> &#183; it stopped waiting to be asked. <i>Expand for the receipts.</i></summary>
