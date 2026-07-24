@@ -63,3 +63,27 @@ policy** (Fable 5's category-correctness):
 **Net:** each duelist defeated the other's central error — GPT-5.6 killed "unenforceable," Fable 5 killed
 "lessons under the dial" — and the convergence keeps both corrections. Neither branch moves the pillar
 score (deploy-gated); this is an honesty-and-enforcement fix, which is why it was worth doing right.
+
+## GPT-5.6-Sol implementation red-team (2026-07-24) — VERDICT: REJECT, now hardened
+
+The duel above ratified the DESIGN. A later focused GPT-5.6-Sol pass was asked to red-team the
+IMPLEMENTATION (`unprompted-runtime.mjs`) and to RUN it — and it **rejected** the code, empirically proving
+three bugs both the original Fable and GPT-5.6 *design* passes missed (a design review does not catch these;
+only running the byte-owner does):
+
+1. **Channel spoofing** — the registry declared no per-producer channel allowlist, so any producer could
+   emit `{channel:'alarm'}` (always-delivered) or `lesson:block` (force exit 2) and bypass its intended
+   policy, defeating the whole per-channel point. Fixed: each producer is bound to an authorised `channels`
+   set; a candidate on a channel the producer is not authorised for is dropped, and `hookEventName` is now
+   derived from the runtime's own EVENT, not a producer-stamped value.
+2. **Failed producers failed OPEN** — output was accepted after a non-zero exit, a timeout kill, or a
+   `maxBuffer` overflow, and sequential 4s per-producer timeouts could sum past the 5s hook budget. Fixed:
+   output is used only when `!error && status===0 && !signal`; a single global deadline caps total time.
+3. **Delivery truncated** — `process.stdout.write()` then `process.exit()` drops buffered bytes on a pipe
+   (GPT-5.6-Sol measured 900,082 bytes arriving as 8,192). Fixed: synchronous `fs.writeSync(1|2, …)` plus an
+   8 KB per-candidate copy cap.
+
+All three fixed with break-it tests (`unprompted-speech-registry.test.mjs`, 21 pass). **The lesson: a design
+duel is not an implementation duel — the byte-owner needed a grader that RAN it, and the real GPT-5.6-Sol
+did.** (This is also where the session's later false "codex degraded" claim is disproven twice over: codex's
+model is `gpt-5.6-sol`, it works, and the design duel above already used it.)

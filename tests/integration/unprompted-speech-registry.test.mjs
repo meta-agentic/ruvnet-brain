@@ -427,3 +427,46 @@ describe('the drop rule: raw bytes are a protocol violation; alarms bypass every
     expect(JSON.parse(r.stdout).hookSpecificOutput.additionalContext).toContain('BRAIN STORE UNREADABLE');
   });
 });
+
+describe('GPT-5.6-Sol REJECT → hardened: channel binding, fail-closed producers, capped synchronous delivery', () => {
+  it('BREAK IT: a producer authorised ONLY for advocacy CANNOT emit an alarm (channel binding)', () => {
+    const cand = JSON.stringify({ channel: 'alarm', effect: 'advisory', copy: 'SPOOFED ALARM', hookEventName: 'UserPromptSubmit' });
+    const producers = [{ ...emitter('spoof.sh'), channels: ['advocacy'] }];
+    const r = fireRuntime('UserPromptSubmit', { producers, env: { CANDIDATE_LINE: cand } });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe('');   // alarm from an advocacy-only producer → dropped, nothing delivered
+  });
+
+  it('TEETH: the SAME alarm from a producer authorised for alarm IS delivered (the check is not vacuous)', () => {
+    const cand = JSON.stringify({ channel: 'alarm', effect: 'advisory', copy: 'REAL ALARM', hookEventName: 'UserPromptSubmit' });
+    const producers = [{ ...emitter('alarm.sh'), channels: ['alarm'] }];
+    const r = fireRuntime('UserPromptSubmit', { producers, env: { CANDIDATE_LINE: cand } });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('REAL ALARM');
+  });
+
+  it('BREAK IT: a producer that EXITS NON-ZERO has its partial output discarded (fail-closed)', () => {
+    const cand = JSON.stringify({ channel: 'alarm', effect: 'advisory', copy: 'FROM A CRASHED PRODUCER', hookEventName: 'UserPromptSubmit' });
+    const p = path.join(dir, 'crash.sh');
+    fs.writeFileSync(p, `#!/bin/bash\nprintf '%s\\n' '${cand}'\nexit 1\n`);
+    fs.chmodSync(p, 0o755);
+    const producers = [{ argv: ['/bin/bash', p], feedStdin: true, channels: ['alarm'] }];
+    const r = fireRuntime('UserPromptSubmit', { producers });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe('');   // nonzero exit → untrustworthy output → discarded, never a fragment
+  });
+
+  it('BREAK IT: a 900KB copy is CAPPED to 8192 and delivered WHOLE (size cap + synchronous write)', () => {
+    const cand = JSON.stringify({ channel: 'alarm', effect: 'advisory', copy: 'X'.repeat(900000), hookEventName: 'UserPromptSubmit' });
+    const candFile = path.join(dir, 'big.json');
+    fs.writeFileSync(candFile, cand + '\n');
+    const p = path.join(dir, 'big.sh');
+    fs.writeFileSync(p, `#!/bin/bash\ncat "$BIGCAND"\n`);
+    fs.chmodSync(p, 0o755);
+    const producers = [{ argv: ['/bin/bash', p], feedStdin: true, channels: ['alarm'] }];
+    const r = fireRuntime('UserPromptSubmit', { producers, env: { BIGCAND: candFile } });
+    expect(r.code).toBe(0);
+    const env = JSON.parse(r.stdout);   // MUST parse — the old async write truncated a big envelope mid-JSON
+    expect(env.hookSpecificOutput.additionalContext.length).toBe(8192);
+  });
+});

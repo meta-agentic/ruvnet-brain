@@ -110,8 +110,11 @@ function silent() { process.exit(0); }
 // TEST SEAM: RUVNET_UNPROMPTED_PRODUCERS, when set to a JSON array of {argv:[...],feedStdin:bool},
 // REPLACES the built-in registry for every event — so a test can inject a fake block-emitter, an
 // advocacy-emitter, or a rogue raw-bytes emitter without touching real producers.
-const ANTICIPATE = { argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'anticipate.sh')], feedStdin: true };
-const lesson = (subEvent) => ({ argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'lesson-hooks.sh'), subEvent], feedStdin: true });
+// `channels` binds each producer to the ONLY channels it is authorised to emit (GPT-5.6-Sol anti-spoof).
+// Without it, any producer could emit `{channel:'alarm'}` (always-delivered) or `lesson:block` (force
+// exit 2) and bypass its intended per-channel policy — defeating the whole point of the chokepoint.
+const ANTICIPATE = { argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'anticipate.sh')], feedStdin: true, channels: ['advocacy', 'promotion'] };
+const lesson = (subEvent) => ({ argv: ['/bin/bash', path.join(SCRIPTS_DIR, 'lesson-hooks.sh'), subEvent], feedStdin: true, channels: ['lesson'] });
 
 const BUILTIN_REGISTRY = {
   'UserPromptSubmit': [ANTICIPATE, lesson('UserPromptSubmit')],
@@ -128,7 +131,13 @@ function resolveProducers(event) {
       if (Array.isArray(specs)) {
         return specs
           .filter((s) => s && Array.isArray(s.argv) && s.argv.length && s.argv.every((a) => typeof a === 'string'))
-          .map((s) => ({ argv: s.argv, feedStdin: s.feedStdin !== false }));
+          .map((s) => ({
+            argv: s.argv,
+            feedStdin: s.feedStdin !== false,
+            // The test seam may declare `channels` to exercise the anti-spoof; absent, it defaults to all
+            // (a test injects a trusted fake). Production spoof-protection lives on the built-in entries.
+            channels: Array.isArray(s.channels) ? s.channels.filter((c) => VALID_CHANNELS.has(c)) : [...VALID_CHANNELS],
+          }));
       }
     } catch { /* malformed override → fall through to the built-in registry */ }
   }
@@ -151,34 +160,46 @@ if (!producers.length) silent();   // unknown event, or nothing wired for it —
 // stdio is piped (input buffer for stdin; stdout/stderr captured into the result). NOTHING a producer
 // writes touches the real streams — that is what makes the runtime the sole writer, and what drops a
 // rogue producer's raw bytes before they can reach a terminal.
-const rawLines = [];
+// ONE global deadline for ALL producers combined (GPT-5.6-Sol): sequential per-producer timeouts could
+// otherwise sum past the 5s hook budget. Each producer gets only the remaining budget; once it is spent,
+// no further producer runs. rawLines carries each line WITH its producer's authorised channel set.
+const rawLines = [];   // { s, channels }
+const DEADLINE = Date.now() + PRODUCER_TIMEOUT_MS;
 for (const p of producers) {
+  const remaining = DEADLINE - Date.now();
+  if (remaining <= 0) break;                 // global budget spent → run no more producers
   let out = '';
   try {
     const r = spawnSync(p.argv[0], p.argv.slice(1), {
       input: p.feedStdin ? payload : Buffer.alloc(0),
       env: { ...process.env, RUVNET_EMIT_CANDIDATES: '1' },
-      timeout: PRODUCER_TIMEOUT_MS,
+      timeout: remaining,
       maxBuffer: MAX_BUFFER,
     });
-    out = r.stdout ? r.stdout.toString('utf8') : '';
+    // FAIL CLOSED (GPT-5.6-Sol): a producer that errored, exited non-zero, was signalled (a timeout kill),
+    // or overflowed maxBuffer has UNTRUSTWORTHY partial output — discard it, never deliver a fragment.
+    if (!r.error && r.status === 0 && !r.signal && r.stdout) out = r.stdout.toString('utf8');
   } catch { out = ''; }   // a failed spawn contributes no candidates — never a failure of the turn
   for (const line of out.split('\n')) {
     const s = line.trim();
-    if (s) rawLines.push(s);
+    if (s) rawLines.push({ s, channels: p.channels });
   }
 }
 
 // ── Parse candidates. Anything that is not a well-formed candidate object is dropped here, which is
 // where the "raw bytes are a protocol violation" guarantee is actually enforced. ───────────────────
+const MAX_COPY = 8192;   // a real advisory is short; cap so a rogue/buggy 900KB emission cannot bloat delivery
 const candidates = [];
-for (const s of rawLines) {
+for (const { s, channels } of rawLines) {
   let c;
   try { c = JSON.parse(s); } catch { continue; }              // not JSON → drop (a rogue's raw line)
   if (!c || typeof c !== 'object' || Array.isArray(c)) continue;
   if (!VALID_CHANNELS.has(c.channel)) continue;               // unknown/absent channel → drop
+  if (!channels.includes(c.channel)) continue;                // ANTI-SPOOF (GPT-5.6-Sol): this producer is
+                                                              // not authorised for this channel → drop
   if (!VALID_EFFECTS.has(c.effect)) continue;                 // unknown/absent effect → drop
   if (typeof c.copy !== 'string' || !c.copy.trim()) continue; // nothing to say → drop
+  c.copy = c.copy.slice(0, MAX_COPY);                         // cap size; delivery below is synchronous
   candidates.push(c);
 }
 if (!candidates.length) silent();
@@ -288,24 +309,22 @@ for (const c of candidates) {
 
 // ── Deliver. A surviving block dominates everything. ───────────────────────────────────────────────
 if (blocks.length) {
-  // Exit 2: stdout is ignored by the harness and MUST be byte-empty; stderr becomes the model's
-  // refusal reason. Advisories collected this pass are deliberately discarded — a refusal supersedes.
-  process.stderr.write(blocks.join('\n') + '\n');
+  // Exit 2: stdout is ignored by the harness and MUST be byte-empty; stderr becomes the model's refusal
+  // reason. SYNCHRONOUS write (GPT-5.6-Sol) — process.exit() after an async write drops buffered bytes on a
+  // pipe (measured 900KB→8KB). Advisories collected this pass are discarded: a refusal supersedes.
+  try { fs.writeSync(2, blocks.join('\n') + '\n'); } catch { /* nothing else to do at the boundary */ }
   process.exit(2);
 }
 
 if (!advisories.length) silent();
 
-// One envelope, one additionalContext string. hookEventName MUST name the firing CC event or the
-// harness discards the envelope — prefer what the producer stamped on the candidate (it knows the real
-// event, e.g. "PreToolUse" not "PreToolUse-bash"); fall back to the leading segment of the token the
-// shim forwarded.
-const hookEventName =
-  advisories.find((a) => a.hookEventName)?.hookEventName ||
-  (EVENT ? EVENT.split('-')[0] : 'UserPromptSubmit');
+// hookEventName MUST name the firing CC event or the harness discards the envelope. DERIVE it from the
+// runtime's own EVENT (GPT-5.6-Sol) rather than trusting a producer-stamped value — the runtime knows the
+// real event and a producer must not be able to restamp it. "PreToolUse-bash" → "PreToolUse".
+const hookEventName = EVENT ? EVENT.split('-')[0] : 'UserPromptSubmit';
 
+// SYNCHRONOUS write — the truncation fix on the byte-owner itself (see the block path above).
 const additionalContext = advisories.map((a) => a.copy).join('\n\n');
-process.stdout.write(JSON.stringify({
-  hookSpecificOutput: { hookEventName, additionalContext },
-}));
+try { fs.writeSync(1, JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } })); }
+catch { /* if even the final write fails, silence is the fail-safe */ }
 process.exit(0);
