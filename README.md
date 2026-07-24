@@ -145,7 +145,7 @@ answers the question the owner has been asking for weeks — **"what is actually
 Honest limit: this is still a dev release, **not 4.0**. 4.0 requires levels 3–5 of ADR-028's ladder
 (contextual, anticipatory, compounding) **shipped and independently graded ≥95**. The mechanisms now
 exist — L3's delivery seam (the chokepoint), an L4 goal surface, and L5 cross-project promotion (lessons
-promoted to your global brain, survival proven by isolation) — but the ladder still grades **L2**,
+promoted to your global brain, survival proven by isolation) — but the ladder still grades **L2–L3**,
 because L3 is built rather than live (deploy-gated) and the five acceptance metrics aren't all measured.
 See `docs/4.0-READINESS.md` and `docs/4.0-EXECUTIVE-BRIEFING.md` (last independent grade: 70/100 overall).
 
