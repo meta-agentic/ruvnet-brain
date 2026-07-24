@@ -36,6 +36,7 @@ import { getVersion } from './version.mjs';
 // OFFERED-then-now-`on` transition becomes an APPLIED — the numerator of the precision metric that
 // tells the owner whether advocacy is landing or nagging. Both are pure reads/appends and never throw.
 import { reconcileApplied, reconcileIgnored, pendingOffers, precision as advocacyPrecision } from './advocacy-outcomes.mjs';
+import { recordObservation as recordCapabilityStates } from './latency-to-surface.mjs';
 import { loadCatalog as engineCatalog, catalogSource as engineCatalogSource, loadProfile as engineProfile, applyProfile, PROFILE_PATH } from './model-router-engine.mjs';
 import { effectivePrices, loadLabelledRows, MIN_LABELS, OUTCOMES } from './metaharness-router.mjs';
 import { utilization } from './router-utilization.mjs';
@@ -675,6 +676,16 @@ function computeCapabilities() {
     // full day is `ignored`. Runs AFTER reconcileApplied so a capability the user just switched on is
     // never miscounted as ignored in the same pass.
     reconciledIgnored = reconcileIgnored(findStaleOffers(rows));
+    // LATENCY-TO-SURFACE's missing half (ADR-028:103, "the single best summary metric"). The
+    // registry is a pure detector with no memory: it can say "this is off", never "this has been off
+    // since Tuesday" — so the subtraction had no left-hand side and the metric was uncomputable.
+    // Appending state TRANSITIONS here, on the audit that already runs, supplies it.
+    //
+    // Deliberately inside the try and deliberately non-fatal: a capability audit must never fail
+    // because a metric could not be written. recordObservation() already swallows its own IO errors
+    // and returns [] — this is the second belt, because the console rendering is load-bearing for
+    // the user and the measurement is not.
+    try { recordCapabilityStates(rows); } catch { /* the metric is never worth breaking the page for */ }
   } catch (e) {
     // A failed audit must NOT render as "everything is off" — the precise lie this surface kills.
     rows = [{ key: 'audit', label: 'Capability audit', state: 'unknown', scope: 'machine',

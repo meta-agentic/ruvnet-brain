@@ -44,7 +44,14 @@ export const FULL_HINTS = {
   'cognitum-seed': 'crates,src,firmware,scripts,tests,examples,benches,docs/adr',
   'cognitum-v0-appliance': 'crates,src,scripts,tests,examples,deploy,docs/adr',
   'cognitum-open-design': 'src,app,apps,packages,electron,scripts,tests,server',
-  'cognitum-claude-plugin': 'src,scripts,plugin,plugins,mcp,tests',
+  // cognitum-claude-plugin: REMOVED 2026-07-24. It declared 'src,scripts,plugin,plugins,mcp,tests'
+  // and only `plugins/` exists — but the whole repo, measured, is 233 .md + 108 .json + 1 .yml and
+  // ZERO source files, so it can never produce a full-body SOURCE passage. corpus-qa's S2 check
+  // ("declares --full but has 0 full bodies — silent depth loss") was therefore unsatisfiable by
+  // construction, and it FAILED THE NIGHTLY PUBLISH: self-update aborts fail-closed on any failed
+  // repo build, so no GitHub Release was cut while npm advanced. That is how the release channel
+  // reached v3.9.56 while npm was at 3.9.57 — a correct gate firing on a false declaration.
+  // It belongs with the docs-content group below: default depth IS the right depth here.
   'cognitum-spoton': 'src,crates,scripts,tests,harness',
   // cognitum-platform-docs / cognitum-meta-llm-docs / cognitum-meta-proxy-dist: docs/dist content —
   // default depth is the right depth; no full-body prefixes needed.

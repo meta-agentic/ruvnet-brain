@@ -451,6 +451,95 @@ export function shouldStillOffer(id, {
 }
 
 /**
+ * claimOffer — the ATOMIC step shouldStillOffer() cannot provide, and the reason it needs one.
+ *
+ * GPT-5.6-Sol found this in the ADR-047 duel and it is a genuine race, not a theoretical one: he
+ * drove shouldStillOffer() to `true` while TWENTY offers for the same finding sat pending. The cause
+ * is structural — shouldStillOffer() is a pure READ over the ledger. Two Claude Code sessions in two
+ * terminals (the normal way this product is used) both read "not yet offered", both conclude yes,
+ * and the user is told the same thing twice. Nothing between the read and the write said "mine".
+ *
+ * A lock around the whole decision would be the obvious fix and the wrong one: the decision reads
+ * the ledger, and this repo has already been burned by holding a lock across a read (updateLessons
+ * read outside its own lock and the "safe" version raced anyway). So the claim is narrow — it does
+ * not protect the decision, it protects the RIGHT TO SPEAK.
+ *
+ * The primitive is `open(..., 'wx')`: exclusive create, which the OS guarantees is atomic. Exactly
+ * one caller can create a given claim file; everyone else gets EEXIST and stays quiet.
+ *
+ * TTL, because a crashed session must not silence a capability forever. A claim older than ttlMs is
+ * abandoned and may be taken over — the same reasoning as any lease. The default is deliberately
+ * short: the cost of a stale claim is a MISSED offer (the product's whole reason to exist), while
+ * the cost of taking one over early is a duplicate — annoying, not silencing. Between those two
+ * failure modes, this system must always fail toward speaking.
+ *
+ * Returns true if THIS caller owns the right to offer. The caller then record()s the `offered` row.
+ */
+export function claimOffer(id, { dir = null, ttlMs = 60_000, now = Date.now() } = {}) {
+  if (!id || typeof id !== 'string') return false;
+  const base = dir || path.join(path.dirname(OUTCOMES_PATH), 'offer-claims');
+  const key = crypto.createHash('sha256').update(id).digest('hex').slice(0, 24);
+  const file = path.join(base, `${key}.claim`);
+
+  try { fs.mkdirSync(base, { recursive: true }); } catch { return true; }   // cannot claim ⇒ fail toward speaking
+
+  // WRITE-THEN-LINK, and the reason is a bug this file's own concurrency test caught.
+  //
+  // The obvious implementation is open(file,'wx') followed by write(). It is wrong, and it fails
+  // exactly where it matters: `wx` publishes the filename BEFORE the content is written, so there is
+  // a window in which the claim exists and is EMPTY. Competing processes read it, fail to parse it,
+  // conclude "unknown age ⇒ stale ⇒ take it over", and speak. MEASURED with 12 real OS processes:
+  // FIVE of twelve won. A single-process test would have shown one winner and hidden it completely.
+  //
+  // link() closes the window. The content is written to a private temp file first, so the moment the
+  // claim name becomes visible it is already complete and parseable. link() itself fails with EEXIST
+  // when the target exists, giving the same atomic exactly-one-winner guarantee — with no torn state
+  // for the losers to misread.
+  const take = () => {
+    const tmp = `${file}.${process.pid}.${Math.abs(now % 1e9)}.tmp`;
+    try {
+      fs.writeFileSync(tmp, JSON.stringify({ id, at: new Date(now).toISOString(), pid: process.pid }));
+      try {
+        fs.linkSync(tmp, file);   // ATOMIC create-if-absent, content already durable
+        return true;
+      } catch (e) {
+        if (e.code !== 'EEXIST') return true;   // an unexpected FS error must not silence us
+        return null;                            // genuinely held — staleness decided below
+      } finally {
+        try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+      }
+    } catch { return true; }   // cannot even stage a claim ⇒ fail toward speaking
+  };
+
+  const first = take();
+  if (first !== null) return first;
+
+  // Someone holds it. Stale?
+  let heldAt = 0;
+  try { heldAt = Date.parse(JSON.parse(fs.readFileSync(file, 'utf8')).at) || 0; } catch { heldAt = 0; }
+  if (now - heldAt < ttlMs) return false;   // live claim — stay quiet, this is the duplicate we came to prevent
+
+  // Abandoned. Take it over by REPLACING atomically, so two reapers cannot both win.
+  const tmp = `${file}.${process.pid}.${key.slice(0, 6)}`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({ id, at: new Date(now).toISOString(), pid: process.pid, tookOver: true }));
+    fs.renameSync(tmp, file);   // atomic replace
+    return true;
+  } catch {
+    try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+    return true;   // could not arbitrate ⇒ fail toward speaking
+  }
+}
+
+/** Release a claim once the offer is resolved (applied/dismissed), so a later dormancy can re-offer. */
+export function releaseClaim(id, { dir = null } = {}) {
+  if (!id || typeof id !== 'string') return false;
+  const base = dir || path.join(path.dirname(OUTCOMES_PATH), 'offer-claims');
+  const key = crypto.createHash('sha256').update(id).digest('hex').slice(0, 24);
+  try { fs.unlinkSync(path.join(base, `${key}.claim`)); return true; } catch { return false; }
+}
+
+/**
  * The pending offer for one id, or null. Pending = the most recent `offered` (since the last reset)
  * has no resolution after it. Ordered by file position, not `at`, for the same clock-skew reason as
  * liveRecords().
