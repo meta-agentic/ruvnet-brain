@@ -43,6 +43,9 @@ import { learnings } from './learnings.mjs';
 import { gatesSurvey } from './gates.mjs';
 // The write-safety primitives, borrowed rather than re-implemented. See saveConfig for why.
 import { withLock, writeAtomic, LOCK_WAIT_MS, loadSettings, saveSettings, SETTINGS_SCHEMA as USER_SETTINGS_SCHEMA } from './user-settings.mjs';
+// Lessons: read model + the two user verbs. Every mutation goes through lesson-store's own
+// updateLessons/ratify/demote/restore — this file adds a SURFACE, never a second writer.
+import { loadLessons, updateLessons, ratify, demote, restore, pending, weightOf, TRIGGERS, ENFORCEMENT, ORIGIN, STATUS } from './lesson-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -446,6 +449,135 @@ function saveAdvocacy(values) {
   };
 }
 
+/**
+ * ── LESSONS: the surface the store was written for and never got ────────────────────────────────
+ *
+ * lesson-store.mjs:391 says of `pending()`: "what the management surface must show first." There was
+ * no management surface. Sixteen lessons — thirteen of them the owner's own words, one of them
+ * enforcing at BLOCK level — lived in a JSON file with a CLI over it, which is the owner's exact
+ * complaint: "murky things in a .claude file nobody sees." A rule you cannot SEE is a rule you
+ * cannot consent to, and an unconsented rule that blocks your work is the fastest route to someone
+ * deleting the whole product.
+ *
+ * Two honesty constraints, both learned the hard way in this repo:
+ *
+ *  1. NO JARGON IN THE PRIMARY LINE. `origin: 'user-stated'` renders as "you taught me this";
+ *     `enforcement: 'block'` renders as what it DOES to you, not what it is called internally.
+ *  2. THE STATE IS READ, NEVER ASSERTED. Every field below comes from the store on this request.
+ */
+const TRIGGER_BY_KEY = new Map(Object.values(TRIGGERS).map((t) => [t.key, t]));
+
+// What each enforcement level actually DOES to the user — the info-bubble text. Written as
+// consequence-to-you, because "checklist" is a word about our implementation, not about their day.
+const ENFORCEMENT_MEANING = {
+  block: { label: 'Stops me', detail: 'I am interrupted at this moment and cannot continue until the check passes. This is the strongest level, and only lessons you stated yourself can reach it.' },
+  checklist: { label: 'Checklist', detail: 'I get a checklist item I have to tick at this moment. It does not stop me — it makes skipping it a visible choice rather than an accident.' },
+  review: { label: 'Reminder', detail: 'I am reminded at this moment. No stop, no checklist — it shapes what I pay attention to.' },
+};
+
+function gatherLessons() {
+  let all;
+  try { all = loadLessons(); }
+  catch (e) { return { ok: false, error: String(e && e.message || e), lessons: [], counts: null }; }
+
+  const lessons = all.map((l) => {
+    const trig = TRIGGER_BY_KEY.get(l.trigger);
+    const meaning = ENFORCEMENT_MEANING[l.enforcement] || { label: l.enforcement, detail: '' };
+    const userStated = l.origin === ORIGIN.USER_STATED;
+    return {
+      id: l.id,
+      statement: l.statement,
+      // The moment it fires, in the second person. This is the load-bearing column: a lesson with no
+      // observable moment is prose, and the store refuses to construct one (lesson-store.mjs:131).
+      when: trig ? `when I'm ${trig.label}` : '(no trigger — this lesson cannot fire)',
+      surface: trig ? trig.surface : null,
+      enforcement: l.enforcement,
+      enforcementLabel: meaning.label,
+      enforcementDetail: meaning.detail,
+      // Provenance drives trust, so it is stated plainly and never flattened into a badge colour.
+      origin: userStated ? 'you taught me this' : 'I inferred this from what happened',
+      userStated,
+      taughtCount: l.repeatCount || 0,
+      projects: Array.isArray(l.projects) ? l.projects : [],
+      evidence: l.evidence || null,
+      weight: Number(weightOf(l).toFixed(4)),
+      status: l.status,
+      ratified: l.status === STATUS.RATIFIED || l.status === STATUS.ACTIVE,
+      demoted: !!l.demoted,
+      // The one thing the user is being ASKED, as opposed to merely shown.
+      awaitingYou: l.status === STATUS.CANDIDATE && !l.demoted,
+      // Honest ceiling: ratifying a model-inferred lesson can NOT raise it to block
+      // (lesson-store.mjs:380). Say so before they click, not after.
+      canReachBlock: userStated,
+      intendedEnforcement: l.intendedEnforcement || null,
+    };
+  });
+
+  // Highest-consequence first — blast radius, not alphabetical. Something that STOPS me outranks a
+  // reminder; among equals, the one I have taught most often.
+  const rank = { block: 0, checklist: 1, review: 2 };
+  lessons.sort((a, b) => {
+    if (a.awaitingYou !== b.awaitingYou) return a.awaitingYou ? -1 : 1;
+    if (a.demoted !== b.demoted) return a.demoted ? 1 : -1;
+    const r = (rank[a.enforcement] ?? 9) - (rank[b.enforcement] ?? 9);
+    if (r) return r;
+    return b.taughtCount - a.taughtCount;
+  });
+
+  return {
+    ok: true,
+    lessons,
+    counts: {
+      total: lessons.length,
+      active: lessons.filter((l) => l.ratified && !l.demoted).length,
+      awaitingYou: lessons.filter((l) => l.awaitingYou).length,
+      off: lessons.filter((l) => l.demoted).length,
+      blocking: lessons.filter((l) => l.enforcement === 'block' && l.ratified && !l.demoted).length,
+    },
+  };
+}
+
+/**
+ * The three user verbs, each one an existing lesson-store function. `updateLessons` re-reads the
+ * store inside its own transform, so a second console session cannot clobber this one — the same
+ * property saveConfig gets from withLock, obtained here from the store rather than re-built.
+ */
+const LESSON_ACTIONS = {
+  ratify:  { fn: ratify,  past: 'turned on'  },
+  demote:  { fn: demote,  past: 'turned off' },
+  restore: { fn: restore, past: 'restored'   },
+};
+
+function setLesson(body) {
+  const id = body && typeof body.id === 'string' ? body.id : null;
+  const action = body && typeof body.action === 'string' ? body.action : null;
+  if (!id) return { ok: false, log: 'nothing changed — no lesson id supplied' };
+  const spec = LESSON_ACTIONS[action];
+  if (!spec) {
+    return { ok: false, log: `nothing changed — action must be one of ${Object.keys(LESSON_ACTIONS).join(', ')}, got ${JSON.stringify(action)}` };
+  }
+  const before = loadLessons().find((l) => l.id === id);
+  if (!before) return { ok: false, log: `nothing changed — no lesson with id ${id}` };
+
+  try {
+    updateLessons((fresh) => spec.fn(id, fresh));
+  } catch (e) {
+    return { ok: false, log: `could not save: ${String(e && e.message || e)}` };
+  }
+
+  const after = loadLessons().find((l) => l.id === id);
+  // Report what MOVED, read back from disk. An "ok" that was never re-read is the failure mode
+  // user-settings.mjs was built to end: every writer returned ok:true while losing the write.
+  return {
+    ok: true,
+    id,
+    action,
+    log: `${id} ${spec.past}.`,
+    now: after ? { status: after.status, enforcement: after.enforcement, demoted: !!after.demoted } : null,
+    was: { status: before.status, enforcement: before.enforcement, demoted: !!before.demoted },
+  };
+}
+
 // ── Brain activity read-model (ADR-0018) — read-only, file reads + sqlite3 CLI only ──────────────
 // Fleet scan is cached for 10 min: ~50 stores × a CLI spawn each is fine once, not per poll.
 // 2026-07-17 (Stuart: "work faster" — measured 49s cold vs 1.8s warm): the cache now PERSISTS to
@@ -523,15 +655,60 @@ function kickRefresh() {
 }
 // Serve <file>'s cached data instantly; on a cold miss, compute once via <compute>, seed the cache,
 // and serve that. Always kicks a background refresh so the next reader gets fresher data.
+/* HARD CEILING ON CACHED TRUTH.
+ *
+ * Measured 2026-07-24: this function served a capability cache stamped 2026-07-22T04:52Z — TWO DAYS
+ * OLD — as the present-tense state of the user's machine. It reported "all 12 recorded lessons are
+ * still candidates … none of them can influence anything yet" while the live store held 16 lessons
+ * with 13 ratified and in force. The registry was right the whole time; the cache spoke over it.
+ *
+ * The defect was structural, not a wrong number: there was NO age limit. Any cache file that existed
+ * was served, forever, with a background refresh that only ever helped the NEXT visitor. So a user
+ * could open the console, read a confident sentence about their own machine, and be told something
+ * false — which is the single failure this product cannot survive, because every other claim it
+ * makes is then worth nothing.
+ *
+ * Stale data is still useful (a 49s cold scan is why the cache exists). What is not acceptable is
+ * stale data WEARING THE COSTUME OF FRESH DATA. So: under the ceiling, serve it and stamp its age;
+ * over the ceiling, refuse to serve it as truth and measure again, in-band, even though that costs
+ * the user a slow page. A slow honest page beats a fast lying one. */
+const CACHE_MAX_AGE_MS = 15 * 60 * 1000;
+
 function serveCached(res, file, compute, decorate = (d) => d) {
   let c = readJSON(file);
+  const ageOf = (rec) => {
+    const t = rec && rec.at ? Date.parse(rec.at) : NaN;
+    return Number.isFinite(t) ? Date.now() - t : Infinity;   // unparseable stamp ⇒ treat as ancient
+  };
+
+  // Over the ceiling (or unstamped) is the same as absent: it may not be served as current state.
+  if (c && c.data && ageOf(c) > CACHE_MAX_AGE_MS) c = null;
+
   if (!c || !c.data) {
     try { const { at, data } = compute(); writeCache(file, at, data); c = { at, data }; }
-    catch (e) { return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) })); }
+    catch (e) {
+      // The recompute failed AND we refused the stale copy. Say both things — never silently fall
+      // back to serving the old numbers, which is how the two-day-old claim reached the page.
+      const old = readJSON(file);
+      return sendJSON(res, 200, decorate({
+        warming: true,
+        error: String(e && e.message || e),
+        staleAvailableFrom: old && old.at ? old.at : null,
+      }));
+    }
   } else {
     kickRefresh();
   }
-  return sendJSON(res, 200, { ...decorate(c.data), fromCache: true, cachedAt: c.at });
+  const ageMs = ageOf(c);
+  return sendJSON(res, 200, {
+    ...decorate(c.data),
+    fromCache: true,
+    cachedAt: c.at,
+    // Explicit, so the UI can never render an age it did not compute — and so "how old is this?"
+    // is answerable without the client re-deriving it from a timestamp format it might misparse.
+    ageMs: Number.isFinite(ageMs) ? ageMs : null,
+    stale: Number.isFinite(ageMs) ? ageMs > CACHE_MAX_AGE_MS : true,
+  });
 }
 /**
  * @returns {boolean} whether anything was actually restored — the caller uses this to decide
@@ -1494,6 +1671,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         return serveCached(res, STACK_CACHE, () => ({ at: new Date().toISOString(), data: gatherStack() }));
       }
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
+      if (req.method === 'GET' && url === '/api/lessons') return sendJSON(res, 200, gatherLessons());
       if (req.method === 'GET' && url === '/api/trust') return sendJSON(res, 200, await gatherTrust());
       if (req.method === 'GET' && url === '/tips') { req.url = '/tips.html'; return serveStatic(req, res); }
       if (req.method === 'POST') {
@@ -1503,6 +1681,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         if (url === '/api/save-config') return sendJSON(res, 200, saveConfig(body.values || {}));
         if (url === '/api/save-advocacy') return sendJSON(res, 200, saveAdvocacy(body.values || {}));
         if (url === '/api/undo') return sendJSON(res, 200, undo(body.undoToken));
+        if (url === '/api/set-lesson') return sendJSON(res, 200, setLesson(body));
         return sendJSON(res, 404, { error: 'unknown endpoint' });
       }
       if (req.method === 'GET') return serveStatic(req, res);

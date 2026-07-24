@@ -403,7 +403,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-mirror">Depth 1 · always on</span>
-        <h2 id="d1-h">The cyan ones need nothing from you</h2>
+        <h2 id="d1-h">Already on — you do not have to do anything</h2>
         <p class="q">Grounding, memory capture and the gates run on every prompt once the plugin is
         wired — whether or not you think about them. Type normally, like it's plain Claude.</p>
       </div>
@@ -435,7 +435,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-rec">Depth 2 · when you ask</span>
-        <h2 id="d2-h">The amber ones are one sentence away</h2>
+        <h2 id="d2-h">One sentence away — just ask, in plain English</h2>
         <p class="q">No syntax to learn. These phrases are live triggers, verbatim from the shipped
         plugin — say one and the right machinery wakes up.</p>
       </div>
@@ -494,7 +494,7 @@
       </svg>
       <div class="depth-title">
         <span class="stage st-prove">Depth 3 · when you name it</span>
-        <h2 id="d3-h">The green ones are one command away</h2>
+        <h2 id="d3-h">One command away — paste a single line in your terminal</h2>
         <p class="q">When you know exactly what you want, reach for it by name. This is the complete
         board — nothing hidden, nothing extra.</p>
       </div>
@@ -734,6 +734,81 @@
       <b>Small ask, world-class return.</b> How many are actually on is a question this page cannot
       answer — the console reads your machine and tells you, live.</p>
     </div>
+  </section>
+
+  <!-- ================================================= THE PARTS DRAWER
+       Owner, 2026-07-24: "you'd like to know that there are a lot of tools at your disposal that you
+       can reach for and bring in intelligence when you need it… a one-liner per could be useful."
+       And: this page gets re-read, the installer page is seen once — so the reference belongs here.
+
+       EVERY LINE IS GROUNDED. Each entry below was read out of rUv's own source this session via
+       search_ruvnet and carries the file it came from. Nothing here is recalled, and nothing is
+       inferred from a name that merely sounds right — inventing a rUv capability is the single
+       worst failure this project has on record.
+
+       THE FRAME IS LOAD-BEARING. These are parts that exist IN RUV'S SOURCE. Most are NOT wired
+       into the reader's machine, and saying so plainly is the difference between a catalogue and a
+       lie: the console next door reports what you actually have, and it must never be contradicted
+       by this page. "You don't need most of these" is also true, and says so. -->
+  <section class="depth card rail-mirror" id="parts" aria-labelledby="parts-h">
+    <header class="depth-head">
+      <div class="depth-title">
+        <span class="stage st-mirror">the parts drawer · reach for one when the problem calls for it</span>
+        <h2 id="parts-h">The pieces inside. <em>You will not need them all.</em></h2>
+        <p class="q">These live in rUv's source, and most are <strong>not</strong> switched on for you —
+        that is normal and fine. Using every advanced part in every project is overkill. The point of a
+        list like this is that when you hit the problem, you know the part already exists and you can
+        reach for it instead of building it. Your console shows what you actually have running today.</p>
+      </div>
+    </header>
+
+    <div class="parts-grid">
+      <div class="parts-col">
+        <h3>Finding things</h3>
+        <dl>
+          <dt>HNSW index</dt><dd>Approximate nearest-neighbour search — the default when the corpus is big. <code>ruvector-core/src/index/hnsw.rs</code></dd>
+          <dt>Flat index</dt><dd>Exact search, no approximation, for when the corpus is small enough. <code>ruvector-core/src/index/flat.rs</code></dd>
+          <dt>Hyperbolic HNSW</dt><dd>Poincaré-ball geometry for tree-shaped data — parent/child distances survive the embedding. For taxonomies and code trees. <code>ruvector-hyperbolic-hnsw/src/hnsw.rs</code></dd>
+          <dt>RaBitQ quantisation</dt><dd>32× memory reduction with a Hamming prefilter — reach for it when a large corpus stops fitting comfortably. <code>ruflo · embeddings_rabitq_build</code></dd>
+          <dt>Product quantisation</dt><dd>Compressed vectors, smaller index. <code>ruvector-core/src/advanced_features/product_quantization.rs</code></dd>
+          <dt>Matryoshka embeddings</dt><dd>Progressive retrieval: a cheap coarse pass first, full precision only for finalists. <code>advanced_features/matryoshka.rs</code></dd>
+          <dt>Hybrid search</dt><dd>Combines several vector representations in one query. <code>advanced_features/hybrid_search.rs</code></dd>
+          <dt>Multi-vector search</dt><dd>Joint embeddings — one item represented by several vectors. <code>advanced_features/multi_vector.rs</code></dd>
+          <dt>Filtered search</dt><dd>Vector search with metadata predicates applied. <code>advanced_features/filtered_search.rs</code></dd>
+          <dt>Sparse vectors</dt><dd>Efficiency gains where the representation is mostly zeros. <code>advanced_features/sparse_vector.rs</code></dd>
+          <dt>Graph RAG</dt><dd>Retrieval-augmented generation over a graph rather than a flat list. <code>advanced_features/graph_rag.rs</code></dd>
+        </dl>
+      </div>
+
+      <div class="parts-col">
+        <h3>Getting better over time</h3>
+        <dl>
+          <dt>SONA</dt><dd>Self-Optimising Neural Architecture — trajectory tracking, pattern recognition, and memory protection so new learning does not erase old. <code>ruvllm/src/sona.ts</code></dd>
+          <dt>Micro-LoRA</dt><dd>A deliberately tiny adapter (rank 1–2) driving SONA's instant loop — adaptation without retraining anything large. <code>ruvllm/src/sona.ts</code></dd>
+          <dt>MicroLoRA SDK</dt><dd>Browser-based LoRA fine-tuning of small models, built for edge deployment and a minimal memory footprint. <code>edge-net/pkg/models/microlora.js</code></dd>
+          <dt>EWC++</dt><dd>Continual learning that avoids catastrophic forgetting — the reason adaptation does not cost you yesterday's behaviour. <code>@ruvector/sona</code></dd>
+        </dl>
+
+        <h3>Remembering things</h3>
+        <dl>
+          <dt>Agent memory</dt><dd>Thousands of memory clusters with coherence-weighted compaction — old memory is condensed, not truncated. <code>ruvector-agent-memory</code></dd>
+          <dt>Hopfield associative memory</dt><dd>Recall a whole pattern from a partial cue. <code>ruvector-nervous-system · hopfield::ModernHopfield</code></dd>
+          <dt>Dentate-gyrus separation</dt><dd>Keeps similar memories from blurring into each other. <code>ruvector-nervous-system · separate::DentateGyrus</code></dd>
+          <dt>BTSP</dt><dd>One-shot learning — a single exposure is enough to lay something down. <code>ruvector-nervous-system · plasticity::btsp</code></dd>
+        </dl>
+
+        <h3>Everything else in the drawer</h3>
+        <dl>
+          <dt>Sparse inference embeddings</dt><dd>PowerInfer-style sparse feed-forward nets with a configurable sparsity ratio. <code>ruvector-sparse-inference</code></dd>
+          <dt>CNN backbone</dt><dd>MobileNetV3 (small and large) for image features. <code>ruvector-cnn/src/backbone/mod.rs</code></dd>
+          <dt>Attention CLI</dt><dd>compute · benchmark · convert · serve · repl, driven by a YAML config. <code>ruvector-attention-cli</code></dd>
+        </dl>
+      </div>
+    </div>
+
+    <p class="parts-foot">Every line above was read out of rUv's source, and names the file it came from,
+    so you can go look. If something here is not in your console, it is not running on your
+    machine — this drawer is what is <em>available</em>, not what is <em>on</em>.</p>
   </section>
 
   <!-- ================================================= SETUP · INSTALL PATHS -->

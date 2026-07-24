@@ -83,6 +83,19 @@
         <p class="motto mono" aria-label="How this console works, in order">
           <span class="m m-mirror">Mirror</span><span class="sep">→</span><span class="m m-mirror">Explain</span><span class="sep">→</span><span class="m m-rec">Recommend</span><span class="sep">→</span><span class="m m-rec">Apply</span><span class="m-note">with your consent</span><span class="sep">→</span><span class="m m-undo">Undo</span>
         </p>
+
+        <!-- THE CONTRACT. The owner's own words (2026-07-24), near-verbatim and deliberately placed
+             ABOVE the fold rather than in a footer: the people this page is for are experienced
+             enough to be wary of a tool that touches their environment, and wariness is answered
+             before the first switch is seen or not at all. "Nothing is permanent" is not a slogan
+             here — every control on this page has a verified reverse, and any capability whose undo
+             we cannot verify is rendered as instructions instead of as a switch. -->
+        <p class="contract">
+          <strong>You don't need to decide any of this right now.</strong> Nothing here is permanent —
+          every switch on this page is reversible, and you stay in control the whole way through.
+          We'll make recommendations, but you know your system better than we do. This is here to make
+          more of the rUv stack easy to reach, not to make choices for you.
+        </p>
       </div>
 
       <!-- Machine meta (user · platform · node · npm) is a grid sibling of the copy, not part
@@ -298,6 +311,43 @@
     </div>
   </details>
 
+  <!-- ===================================== 3 · WHAT IT'S LEARNED FROM YOU (the Learn pillar)
+       THE GAP THIS CLOSES. Sixteen lessons — thirteen of them the owner's OWN WORDS, one enforcing at
+       BLOCK level — lived in a JSON file with a CLI over it and appeared NOWHERE on this page. The
+       owner's phrasing (2026-07-24): "murky things in a .claude file nobody sees." lesson-store.mjs's
+       own `pending()` is documented as "what the management surface must show first"; there was no
+       management surface. A rule you cannot SEE is a rule you never consented to, and an unconsented
+       rule that BLOCKS your work is the shortest path to someone deleting this product.
+
+       AMBER, NOT CYAN. This card's first job is the count awaiting YOUR decision — it is a decision
+       surface, not a mirror. It shares the palette of Recommend/Apply because it asks the same thing
+       of you. No fourth colour was invented for it; the palette has three semantic colours and a
+       fourth would be decoration pretending to be meaning.
+
+       Every row carries provenance in plain words ("you taught me this" vs "I inferred this"), because
+       the ratification boundary is the whole trust story: the model may not ratify its own rules, and
+       a model-inferred lesson can never reach BLOCK however often it fires (lesson-store.mjs:380). -->
+  <details class="card rail-act" id="card-lessons" open>
+    <summary>
+      <span class="card-ic ic-rec" aria-hidden="true">
+        <!-- an open book with a check — what was learned, and what you signed off on -->
+        <svg viewBox="0 0 24 24"><path d="M3 5.2h6.4a2.6 2.6 0 0 1 2.6 2.6v11a2.2 2.2 0 0 0-2.2-2.2H3Z"/><path d="M21 5.2h-6.4a2.6 2.6 0 0 0-2.6 2.6v11a2.2 2.2 0 0 1 2.2-2.2H21Z"/><path d="m15.4 11.3 1.5 1.5 3-3"/></svg>
+      </span>
+      <span class="card-head">
+        <span class="stage st-rec">Learn</span>
+        <h2>What it's learned from you</h2>
+        <span class="q">Every rule this AI now works by — where it came from, what it does to me, and a switch on each one. Nothing here was ratified by the model itself.</span>
+      </span>
+      <span class="chips" id="chips-lessons"><span class="chip tone-wait">…</span></span>
+      <span class="chev" aria-hidden="true">›</span>
+    </summary>
+    <div class="body" id="body-lessons">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w45"></div><div class="sk-bar w85"></div><div class="sk-bar w70"></div></div>
+      <p class="loading-note">Reading the lesson store on this machine — local and read-only.
+      Turning one off is reversible: it hides the rule without deleting the record of where you taught it.</p>
+    </div>
+  </details>
+
   <details class="card rail-mirror" id="card-activity" open>
     <summary>
       <span class="card-ic ic-mirror" aria-hidden="true">
@@ -305,7 +355,7 @@
       </span>
       <span class="card-head">
         <span class="stage st-mirror">Mirror</span>
-        <h2>Brain activity</h2>
+        <h2>What is happening in <em>this</em> project</h2>
         <span class="q">What your AI learned &amp; did — live from AgentDB.</span>
       </span>
       <span class="chips" id="chips-activity"><span class="chip tone-wait">…</span></span>
@@ -324,7 +374,7 @@
       </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>Your memory, proven</h2>
+        <h2>Your memory, across <em>every</em> project</h2>
         <span class="q">Your system learns and shares intelligence across projects — this card tests it live, so you never have to wonder.</span>
       </span>
       <span class="chips" id="chips-memory"><span class="chip tone-wait">…</span></span>
@@ -380,7 +430,7 @@
       </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>Trust &amp; provenance</h2>
+        <h2>Is this really what we published?</h2>
         <span class="q">Is the Brain you're running the one we published? Checked against the release, not asserted.</span>
       </span>
       <span class="chips" id="chips-trust"><span class="chip tone-wait">…</span></span>
@@ -424,7 +474,7 @@
       </span>
       <span class="card-head">
         <span class="stage st-mirror">Explain</span>
-        <h2>How it's wired</h2>
+        <h2>Which copy of the tools each project runs</h2>
         <span class="q">Where each project launches rUv's tools from — and one click to the fastest, safest wiring.</span>
       </span>
       <span class="chips" id="chips-wiring"><span class="chip tone-wait">…</span></span>
@@ -449,7 +499,7 @@
       </span>
       <span class="card-head">
         <span class="stage st-prove">Prove</span>
-        <h2>What caught Claude</h2>
+        <h2>What the guardrails stopped</h2>
         <span class="q">Your AI doesn't work alone here — gates read every move before it lands. This is what they stopped.</span>
       </span>
       <span class="chips" id="chips-gates"><span class="chip tone-wait">…</span></span>

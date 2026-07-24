@@ -838,3 +838,30 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
   .mo-bar:nth-child(5) .mo-bar-fill { animation-delay: 0.37s; }
 }
 @keyframes mo-grow { to { transform: scaleX(1); } }
+
+/* ── THE PARTS DRAWER ────────────────────────────────────────────────────────────────────────────
+   A reference list, styled as one: dense, scannable, two columns on desktop, no illustration. It is
+   deliberately the plainest block on the page — everything above it is argument, this is inventory,
+   and dressing inventory up as argument is how a catalogue starts to read as a sales pitch. */
+.parts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(18px, 3vw, 38px); padding: 0 clamp(16px, 3vw, 34px) 4px; }
+@media (max-width: 860px) { .parts-grid { grid-template-columns: 1fr; } }
+.parts-col h3 {
+  font-size: .82rem; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); margin: 1.1rem 0 .5rem; font-weight: 650;
+}
+.parts-col h3:first-child { margin-top: 0; }
+.parts-col dl { margin: 0; }
+.parts-col dt { font-weight: 650; font-size: .93rem; margin-top: .7rem; }
+.parts-col dd {
+  margin: .15rem 0 0; font-size: .89rem; line-height: 1.5; color: var(--muted-strong, var(--ink));
+  opacity: .92;
+}
+.parts-col dd code {
+  display: inline-block; margin-top: .18rem; font-size: .78rem;
+  color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: .06em .38em; border-radius: 4px; word-break: break-word;
+}
+.parts-foot {
+  margin: 1.3rem clamp(16px, 3vw, 34px) 0; padding-top: .9rem;
+  border-top: 1px solid var(--hair); font-size: .87rem; color: var(--muted); max-width: 74ch;
+}

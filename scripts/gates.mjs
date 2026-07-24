@@ -111,11 +111,28 @@ export function gatesSurvey({ repo } = {}) {
   const weekAgo = Date.now() - 7 * 864e5;
   const recent = blocks.filter((b) => Date.parse(b.at || 0) >= weekAgo);
 
+  // THREE NUMBERS, ONE UNIT. This block used to mix two: `blocking` was DEDUPLICATED
+  // (distinct event:name) while `advisory` was `all.length - blocking.length`, computed from the
+  // RAW array. So `blocking + advisory` fell short of `armed` by exactly the number of duplicated
+  // blocking wirings, and the console printed "N gates armed — B can stop a call. The other A add
+  // context" where B + A ≠ N. On a machine with 4 duplicate blocking gates the sentence silently
+  // lost four of them — in the one sentence whose entire job is to account for all of them.
+  //
+  // It summed correctly on any machine with no duplicates, which is why it survived: the defect was
+  // invisible exactly where it was most often looked at. Found by Fable 5, 2026-07-24, by adding up
+  // the numbers on the owner's own console.
+  //
+  // Fixed by reporting all three in WIRED-ENTRY units, so armed = blocking + advisory holds by
+  // construction. The distinct-gate count is still exported — it is genuinely the more meaningful
+  // number for "how many different things can refuse" — but under its own name, where it cannot be
+  // mistaken for a term in that sum.
+  const blockingWired = blocking.length;
   return {
     summary: {
       armed: all.length,
-      blocking: uniqueBlocking,          // distinct gates that can refuse — never the wired count
-      advisory: all.length - blocking.length,
+      blocking: blockingWired,           // wired entries that can refuse — same unit as `armed`
+      advisory: all.length - blockingWired,
+      blockingDistinct: uniqueBlocking,  // distinct gates that can refuse; ≤ blocking when wired twice
       duplicated,                        // wired twice; runs twice
       caughtTotal: blocks.length,
       caughtThisWeek: recent.length,
