@@ -89,6 +89,42 @@ changes only **which candidates are eligible to be emitted**, never who writes t
 5. Fable 5 × GPT-5.6-Sol duel recorded in `docs/reviews/0045-*.md` — with GPT-5.6-Sol asked to RUN it,
    which is what caught three REJECT-level defects in ADR-040/043 that design-only review missed.
 
+## Duel outcome (2026-07-24) — GPT-5.6-Sol: REJECT. Detection is a PRECONDITION, not a parallel track.
+
+GPT-5.6-Sol was asked to RUN the code, and rejected this ADR. One of its claims was wrong and is recorded
+as such: it reported live state as 8 on / 1 off / 2 unknown; re-measured directly, the actual counts are
+**8 on / 2 off / 1 unknown** — the ADR's original numbers were right. Everything below survived verification.
+
+**FINDING 1 — both "off" rows are FALSE POSITIVES. This ADR's motivating example was itself a false alarm.**
+- `cross-project-lessons` reads OFF while the promoted block **is present** in `~/.claude/CLAUDE.md`
+  (promoted 2026-07-24). Its evidence — *"7 processes … still trapped at project level"* — shows the probe
+  measures **promotable candidates remaining**, never **whether promotion is in effect**. It therefore reads
+  OFF permanently, however many times the user promotes.
+- `nightly-refresh` reads OFF on evidence *"2 nightly refresh jobs loaded, and 1 last exited non-zero."* The
+  jobs are installed and scheduled; the non-zero exit is the publish guard **correctly** refusing to release
+  from a non-main branch. A working guard is being reported as a dormant capability.
+- **Fix (blocking):** the dormancy predicate must measure EFFECT-IN-FORCE, not remaining candidates, and must
+  distinguish "failed" from "correctly declined." Nothing may be offered on an `unknown` state.
+
+**FINDING 2 — the teaching paragraph cannot be built from the current data.** `turnOn` is `null` for
+`nightly-refresh` and `learning-hooks`, and a structured `{human, cmd}` object (not a string) for the rest —
+direct rendering yields `[object Object]`. The registry has no `whatChanges` and no `undo` field at all, so
+the four-part explanation this ADR *requires* is underivable. **Fix:** an explicit, validated offer schema
+(`whatIs`, `whatItBuysYou`, `whatChanges`, `turnOn`, `undo`); a row failing validation is never offered.
+
+**FINDING 3 — the ceiling and the permanence guarantee do not exist.** The effective ceiling is 2, not 1.
+`anticipate-state.json` uses unlocked read-modify-rename, so two subprocesses can read the same empty session
+and both emit (atomic rename prevents torn files, not duplicate claims). `--dismiss` omits `scope:"forever"`,
+so "dismissed" is not permanent. **Fix:** a transactional claim unique on `(session_id, offer_slot)`;
+one-action dismissal that actually writes `forever`; and RETAIN goal-match's subject/intent veto as a
+relevance filter even after it stops being the gate — without it, a false row can interrupt any unrelated turn.
+
+**The inversion this forces, and the reason the REJECT is correct:** this ADR assumed *detection works,
+delivery is broken*. Both are broken, and the silence is the only thing that has prevented the user being
+told something false about their own machine. **Detection accuracy is now a blocking precondition of
+delivery.** Shipping the delivery half first would have made a confident, wrong offer the user's first
+experience of "proactive" — the exact trust cost ADR-028 fixes at zero.
+
 ## Consequences
 
 This is the change that makes the Proactive pillar real rather than latent: the detector's findings stop
