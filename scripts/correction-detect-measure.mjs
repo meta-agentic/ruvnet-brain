@@ -175,6 +175,37 @@ async function main() {
   console.log(`Use --dump-pool <path> to write a labellable candidate pool; the holdout half is the`);
   console.log(`only one whose precision/recall counts as an unbiased measurement.`);
 
+  // ── CAN THE ≥90% FLOOR EVEN BE CERTIFIED FROM THIS MUCH DATA? ────────────────────────────────────
+  // ADR-033 holds lesson auto-extraction behind a ≥90% precision floor, and the open work item read
+  // "raise correction-detect precision 27% -> 90%" — which frames it as a TUNING problem. It is not,
+  // and stating the arithmetic here is what stops it being mistaken for one again.
+  //
+  // Precision is estimated from the detections, not from the candidate pool, so the holdout FIRING
+  // count is the sample size. With every single detection correct, the exact (Clopper-Pearson) 95%
+  // one-sided lower bound is p = alpha^(1/n) — closed form, checkable by hand: for n=3 that is the
+  // cube root of 0.05, 36.8%. Clearing 90% needs n >= 29 CONSECUTIVE correct detections, and any
+  // error pushes the requirement higher still.
+  //
+  // So a "77.8% at n=19" measurement cannot certify a 90% floor even in principle — at n=19 a PERFECT
+  // 19/19 bounds at only 85.4%. Tuning the regex until the point estimate crosses 0.90 on a sample
+  // this small is fitting the sample, not the property, and it would produce exactly the confident
+  // wrong number this project keeps catching elsewhere.
+  const holdoutHits = bySplit.holdout.hits;
+  const lowerBoundIfPerfect = holdoutHits > 0 ? Math.pow(0.05, 1 / holdoutHits) : 0;
+  const N_FOR_90 = 29;
+  console.log(`\ncertifiability of the ADR-033 >=90% precision floor, from THIS run:`);
+  console.log(`  holdout detections (the precision sample) : ${holdoutHits}`);
+  console.log(`  best possible 95% lower bound (all correct): ${(lowerBoundIfPerfect * 100).toFixed(1)}%`);
+  if (lowerBoundIfPerfect >= 0.90) {
+    console.log(`  => the sample is LARGE ENOUGH to certify 90% — hand-label the holdout detections.`);
+  } else {
+    console.log(`  => NOT CERTIFIABLE at any precision: ${holdoutHits} detections cannot bound above`);
+    console.log(`     ${(lowerBoundIfPerfect * 100).toFixed(1)}%, and >=90% requires n >= ${N_FOR_90} consecutive correct.`);
+    console.log(`     N3 is blocked on LABELLED VOLUME, not on the detector. Tuning against a sample`);
+    console.log(`     this small overfits it. The unblock is more transcript corpus (or a broader net`);
+    console.log(`     that fires more often), then hand-labelling — not another regex pass.`);
+  }
+
   if (DUMP_POOL) {
     fs.writeFileSync(DUMP_POOL, poolRows.map((r) => JSON.stringify(r)).join('\n') + (poolRows.length ? '\n' : ''));
     console.log(`\nWrote ${poolRows.length} candidate(s) to ${DUMP_POOL} for hand-labelling.`);
