@@ -566,6 +566,17 @@ function setLesson(body) {
     return { ok: false, log: `could not save: ${String(e && e.message || e)}` };
   }
 
+  // THE WRITE LANDED, SO EVERY CACHE THAT SPEAKS ABOUT LESSONS IS NOW WRONG.
+  //
+  // `capability-registry.mjs` derives two rows from this exact store — `lessons-in-force` (it reads
+  // ratified-vs-candidate counts) and `cross-project-lessons`. Left alone, the capabilities card
+  // would keep asserting the pre-click state for up to a full ceiling, one card away from the lessons
+  // card showing the truth, on the same screen. That is the original two-day-old incident in
+  // miniature, and this time WE would have caused it.
+  //
+  // Expired, not deleted — see expireCachesEmbedding for why deleting would resurrect the hang.
+  expireCachesEmbedding([CAPABILITY_CACHE]);
+
   const after = loadLessons().find((l) => l.id === id);
   // Report what MOVED, read back from disk. An "ok" that was never re-read is the failure mode
   // user-settings.mjs was built to end: every writer returned ok:true while losing the write.
@@ -604,6 +615,78 @@ const STATE_CACHE  = path.join(CONFIG_DIR, 'state-cache.json');
 const STACK_CACHE  = path.join(CONFIG_DIR, 'stack-audit-cache.json');
 const MEMORY_CACHE = path.join(CONFIG_DIR, 'memory-cache.json');
 const CAPABILITY_CACHE = path.join(CONFIG_DIR, 'capability-cache.json');
+
+/**
+ * READ-AFTER-WRITE INVALIDATION — the hole a wall clock cannot close.
+ *
+ * Fable 5, 2026-07-24: age-based freshness gives you "stale by at most N minutes", which is NOT the
+ * product's promise. The promise is that it never lies about your machine. The gap is exact and
+ * demonstrable: the user toggles a lesson; `/api/lessons` re-reads live and tells the truth; and
+ * `/api/capabilities` goes on serving its `lessons-in-force` row from a cache that is under the
+ * ceiling, correctly stamped, fully compliant with the new freshness contract — and false, on the
+ * same screen, one card away, **caused by the user's own click.**
+ *
+ * That is the ORIGINAL incident (a cache speaking over the lesson store) reappearing inside the fix
+ * written for it. No ceiling short of zero closes it, because the staleness is not caused by time
+ * passing — it is caused by a write.
+ *
+ * EXPIRE, DO NOT DELETE. The obvious move is `unlink`. That would be a bug: with no cache file the
+ * next request takes the COLD path, which computes inline — reintroducing the 13-49s server freeze
+ * fixed one commit ago. Instead we back-date the stamp. The next reader gets the old value marked
+ * `stale: true` with an honest age (fast, non-blocking) and the detached refresher replaces it. The
+ * claim is withdrawn the instant the user's write lands, without any request paying for it.
+ *
+ * PRECISION IS PART OF THE CONTRACT: expire only caches whose payload actually embeds the mutated
+ * fact. Blanket-expiring everything would be cheap to write and would turn every toggle into a
+ * machine-wide re-scan, which is how a correctness fix becomes a performance complaint.
+ */
+/**
+ * The capability read-model, computed in ONE place because it has TWO writers.
+ *
+ * It was inline in the `/api/capabilities` handler, and the background refresher did not write this
+ * cache at all. Adding the refresher meant either duplicating this logic or extracting it — and the
+ * duplicate was already half-written when the MEMORY_CACHE comment forty lines below caught it: that
+ * exact mistake ("a cache writer that knew about half the payload") once made a background refresh
+ * silently ERASE the advocacy block, so the page showed recommendations on the first request and
+ * none ever after. The draft here reproduced it precisely, omitting `advocacy`.
+ *
+ * One computer, two callers. A shape that cannot drift because there is only one of it.
+ */
+function computeCapabilities() {
+  let rows = [];
+  let reconciled = [];
+  let reconciledIgnored = [];
+  try {
+    rows = capabilityAuditAll();
+    // Credit APPLIED for anything we offered that the user has since switched on. Derived from this
+    // live audit, never guessed; safe on a read (idempotent — a resolved offer is no longer pending).
+    reconciled = reconcileApplied(rows);
+    // THE DENOMINATOR'S MISSING THIRD (ADR-028 L5): an offer that has sat PENDING, still off, for a
+    // full day is `ignored`. Runs AFTER reconcileApplied so a capability the user just switched on is
+    // never miscounted as ignored in the same pass.
+    reconciledIgnored = reconcileIgnored(findStaleOffers(rows));
+  } catch (e) {
+    // A failed audit must NOT render as "everything is off" — the precise lie this surface kills.
+    rows = [{ key: 'audit', label: 'Capability audit', state: 'unknown', scope: 'machine',
+      whatItBuysYou: 'a clear picture of what you own and what is switched on',
+      evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
+  }
+  // null (not 0) until enough offers have resolved — an honest "not yet judgeable", never a
+  // fabricated score. Computed AFTER both reconciles so a freshly-resolved outcome is reflected.
+  const prec = advocacyPrecision();
+  return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled, reconciledIgnored } } };
+}
+
+function expireCachesEmbedding(files) {
+  for (const f of files) {
+    try {
+      const j = readJSON(f);
+      if (!j || !j.data) continue;
+      j.at = new Date(0).toISOString();      // epoch ⇒ unambiguously past any ceiling
+      writeCache(f, j.at, j.data);
+    } catch { /* a cache we cannot rewrite is one the next reader will recompute anyway */ }
+  }
+}
 
 /**
  * THE THIRD OUTCOME, WIRED (ADR-028 L5). `ignored` had ZERO callers: precision = applied ÷
@@ -1648,34 +1731,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       // each state, which is far too slow for a first paint but is exactly why the answers are
       // trustworthy: every row is DERIVED on this machine, never asserted.
       if (req.method === 'GET' && url === '/api/capabilities') {
-        return serveCached(res, CAPABILITY_CACHE, () => {
-          let rows = [];
-          let reconciled = [];
-          let reconciledIgnored = [];
-          try {
-            rows = capabilityAuditAll();
-            // Credit APPLIED for anything we offered that the user has since switched on. Derived from
-            // this live audit, never guessed; safe on a read (idempotent — a resolved offer is no
-            // longer pending) and it never throws.
-            reconciled = reconcileApplied(rows);
-            // THE DENOMINATOR'S MISSING THIRD (ADR-028 L5): an offer that has sat PENDING, still off,
-            // for a full day is `ignored` — see findStaleOffers() above for the staleness rule and why
-            // it is this file's decision, not advocacy-outcomes.mjs's. Runs AFTER reconcileApplied so a
-            // capability the user just switched on is never miscounted as ignored in the same pass.
-            reconciledIgnored = reconcileIgnored(findStaleOffers(rows));
-          } catch (e) {
-            // A failed audit must NOT render as "everything is off" — that is the precise lie this
-            // surface exists to kill. An error yields an explicit unknown, and says why.
-            rows = [{ key: 'audit', label: 'Capability audit', state: 'unknown', scope: 'machine',
-              whatItBuysYou: 'a clear picture of what you own and what is switched on',
-              evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
-          }
-          // The precision the owner asked "is my advocacy landing?" of. null (not 0) until enough
-          // offers have resolved — an honest "not yet judgeable", never a fabricated score. Computed
-          // AFTER both reconciles above so a freshly-resolved applied/ignored is reflected in it.
-          const prec = advocacyPrecision();
-          return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled, reconciledIgnored } } };
-        });
+        return serveCached(res, CAPABILITY_CACHE, computeCapabilities);
       }
       if (req.method === 'GET' && url === '/api/memory') {
         // THE THESIS, FINALLY CONNECTED (ADR-027, 2026-07-22).
@@ -1779,6 +1835,28 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
       } catch { /* advisory only */ }
       writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet, recommendations });
     } catch { /* keep prior */ }
+
+    // CAPABILITY_CACHE WAS NOT IN THIS LIST — the single most consequential omission in the file.
+    //
+    // Measured 2026-07-24: after the freshness ceiling landed, a capability cache past the ceiling was
+    // correctly marked stale and `kickRefresh()` was fired — and this child, the only thing that ever
+    // refreshes anything in the background, did not know CAPABILITY_CACHE existed. Polled every 5s for
+    // a minute: it never came back fresh. It could not. The only other writer is serveCached's COLD
+    // path, which requires the file to be absent, and it never is.
+    //
+    // So capabilities had NO refresher whatsoever. Under the old code that was invisible, because the
+    // cache was served forever while *looking* current — the two-day-old lie was not a stale-cache bug
+    // with an unlucky timestamp, it was this: a read-model nothing was ever going to recompute. The
+    // ceiling did not cause the problem, it EXPOSED it, by turning a silent lie into a visible refusal.
+    //
+    // Found only because a test's PRECONDITION failed: waiting for the cache to become fresh so the
+    // real assertion could run. Had the precondition been assumed rather than checked, the run would
+    // have passed and reported a guarantee that does not exist.
+    try {
+      const { at, data } = computeCapabilities();   // the SAME computer the handler uses
+      writeCache(CAPABILITY_CACHE, at, data);
+    } catch { /* keep prior — a failed audit must never blank the card */ }
+
     process.exit(0);
   }
   else if (args.includes('--serve') || args.length === 0) {
