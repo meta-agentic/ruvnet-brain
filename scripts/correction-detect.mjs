@@ -429,6 +429,40 @@ const sentencesOf = (text) =>
 const anyMatch = (patterns, text) => patterns.some((re) => re.test(text));
 
 /**
+ * REPROACH-AS-QUESTION DISCRIMINATOR (found 2026-07-24: the corpus widened from 1 project to 9,
+ * 4,083 transcripts, 19 detections, three blind independent raters — holdout precision came back at
+ * 77.8%, below ADR-033 §2's ≥90% floor). Both holdout false positives, and every tune-half borderline,
+ * were the SAME named shape: "you keep telling me it's working and then it doesn't — why?", "You keep
+ * giving partial solutions. Do I need to restart?". These satisfy Signal 3 and Signal 4 on the SAME
+ * lexical fact — "you keep" (or an ordinal "that's the third time you've…") is simultaneously a
+ * BOUND_SECOND_PERSON hit and VALENCE's own "reproach" bucket — which is the identical double-hat
+ * shape the temporal-scope guard above already refuses, just with a different marker. A real recurring
+ * complaint like this states THAT something happened again; it states nothing about what should happen
+ * instead, and a human reads it as complaint, not instruction.
+ *
+ * This is deliberately NOT "suppress anything with a question mark". An utterance carrying both the
+ * reproach AND a stated rule ("…— from now on, never do that again") must still fire, and does: the
+ * moment ANY hit is a genuine forward directive — an explicit "always/never"-class bound quantifier,
+ * `stop <gerund>`, a clause-initial imperative, or a temporal-scope marker — isDirectiveHit is true for
+ * that hit and the guard below does not apply, regardless of how many question marks are nearby. It
+ * fires ONLY when every hit is a WEAK recurrence marker: bare "you keep"/"keep on", the copula "still"
+ * form, or an ordinal "Nth time" — none of which assert a universal or an imperative on their own —
+ * valence carries nothing but reproach, and the utterance asks a question somewhere. Two genuine true
+ * positives already in this file's test suite share the exact same weak-marker shape with NO question
+ * present ("You keep committing behaviour changes… Every push bumps it, same commit." / "That's the
+ * third time you've hardcoded the version in the script.") and must keep firing — the question-mark
+ * condition, not the marker, is what tells the two classes apart.
+ */
+const WEAK_RECURRENCE_MARKER = /\bkeep(?:\s+on)?\b|\bstill\b/;
+const ORDINAL_TIME_MARKER = /\b(?:second|third|fourth|fifth|sixth|\d+(?:st|nd|rd|th))\s+time\b/;
+function isDirectiveHit(hit) {
+  // stop-gerund / clause-initial-imperative / temporal-scope are stated rules by construction — only
+  // the second-person bucket mixes genuine universals ("you always/never") in with bare recurrence.
+  if (hit.binding !== 'second-person') return true;
+  return !(WEAK_RECURRENCE_MARKER.test(hit.marker) || ORDINAL_TIME_MARKER.test(hit.marker));
+}
+
+/**
  * SIGNALS 2+3, as one predicate — see the header. Returns the markers that bind a quantifier to the
  * agent within this sentence, or [] if the sentence quantifies over something else (a program, a
  * spec, a third party) or does not quantify at all.
@@ -535,6 +569,15 @@ export function detectCorrection(promptText, context = {}) {
   const bindings = new Set(signals.map((s) => s.binding));
   if (bindings.size === 1 && bindings.has('temporal-scope')
       && valence.length === 1 && valence[0] === 'change-of-behaviour') {
+    return null;
+  }
+
+  // REPROACH PHRASED AS A QUESTION — see isDirectiveHit's header comment for the full reasoning.
+  // Fires only when nothing anywhere in the utterance is a genuine forward directive, valence is
+  // reproach and nothing else, and the utterance asks a question somewhere: a recurring complaint
+  // with no stated rule, not a standing order.
+  const hasDirectiveSignal = signals.some(isDirectiveHit);
+  if (!hasDirectiveSignal && valence.length === 1 && valence[0] === 'reproach' && /\?/.test(raw)) {
     return null;
   }
 

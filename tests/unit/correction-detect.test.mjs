@@ -282,6 +282,60 @@ describe('write-code trigger vocabulary widened to bare "write" (found 2026-07-2
   });
 });
 
+describe('reproach-as-question discriminator (found 2026-07-24, fixed)', () => {
+  // 9-project holdout measurement, 3 blind independent raters: precision 77.8% (7/9), below the >=90%
+  // floor. Both false positives, and every tune-half borderline, were this one shape: a genuine
+  // recurring complaint ("you keep…") that also happens to satisfy VALENCE's reproach bucket on the
+  // SAME lexical fact — but states no rule for what should happen instead, and trails off into a
+  // question. A human reads these as complaint, not instruction.
+  test('bare "you keep" reproach followed by a separate question sentence — no stated rule — is silent', () => {
+    expect(detectCorrection(
+      'You keep giving me partial solutions. Do I need to restart from scratch?',
+      AFTER_ACTION,
+    )).toBeNull();
+  });
+
+  test('the ordinal "Nth time" reproach shape, same test: a question with no stated rule is silent', () => {
+    // Contrast this directly with the POSITIVE_UTTERANCES case below using the identical "third time
+    // you've…" marker with NO question and NO rule missing that context — that one still fires. The
+    // question mark, not the marker, is what separates the two.
+    expect(detectCorrection(
+      "That's the third time you've given me a broken build. Why does this keep happening?",
+      AFTER_ACTION,
+    )).toBeNull();
+  });
+
+  test('reproach WITH a stated rule must still fire — this is not "suppress any question mark"', () => {
+    // Same "third time you've…" weak marker as the case above that is silent, but this one pairs the
+    // complaint with an explicit clause-initial "never" directive — the exact combination the task
+    // requires: BOTH a reproach and a forward rule in one utterance must still detect.
+    const got = detectCorrection(
+      "That's the third time you've shipped without running the tests. From now on, never ship without running both suites.",
+      AFTER_ACTION,
+    );
+    expect(got).not.toBeNull();
+    expect(got.trigger).toBe('ship');
+  });
+
+  test('an existing true positive with the same weak "you keep" marker and no question keeps firing (no regression)', () => {
+    const got = detectCorrection(
+      'You keep committing behaviour changes without bumping the version. Every push bumps it, same commit.',
+      AFTER_ACTION,
+    );
+    expect(got).not.toBeNull();
+    expect(got.trigger).toBe('ship');
+  });
+
+  test('an existing true positive with the same ordinal "Nth time" marker and no question keeps firing (no regression)', () => {
+    const got = detectCorrection(
+      "That's the third time you've hardcoded the version in the script.",
+      AFTER_ACTION,
+    );
+    expect(got).not.toBeNull();
+    expect(got.trigger).toBe('write-code');
+  });
+});
+
 // ── The positive table ───────────────────────────────────────────────────────────────────────────
 
 const POSITIVE_UTTERANCES = [
