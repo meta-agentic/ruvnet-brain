@@ -653,6 +653,31 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
 }
 .btn-console:active { transform: none; }
 
+/* RESTING MOTION. Owner, on the earlier version: "it just looks like a window, not a button."
+   Making it a filled amber button fixed the shape; it still sat perfectly still until touched, so
+   nothing on a long page said "this one is clickable." Everything here is deliberately understated —
+   a slow breath on the shadow and a periodic nudge of the arrow, both idling most of the cycle. The
+   goal is peripheral-vision pickup, not a demand for attention: a CTA that jitters continuously
+   reads as an advert, which on a page whose whole argument is "we tell you the truth quietly" would
+   cost more trust than the click is worth.
+   Pauses on hover, where the existing lift takes over and a second motion would just be noise. */
+@keyframes btn-console-breathe {
+  0%, 100% { box-shadow: 0 10px 26px -14px color-mix(in srgb, var(--amber) 65%, transparent); }
+  50%      { box-shadow: 0 12px 30px -13px color-mix(in srgb, var(--amber) 85%, transparent); }
+}
+@keyframes btn-console-nudge {
+  0%, 78%, 100% { transform: translateX(0); }
+  86%           { transform: translateX(3px); }
+  93%           { transform: translateX(0); }
+}
+.btn-console { animation: btn-console-breathe 3.2s var(--ease) infinite; }
+.btn-console:hover { animation: none; }
+.btn-console > span[aria-hidden] {
+  display: inline-block;                 /* transform needs a block box; inline ignores translateX */
+  animation: btn-console-nudge 3.2s var(--ease) infinite;
+}
+.btn-console:hover > span[aria-hidden] { animation: none; transform: translateX(3px); }
+
 .foot { border-top: 1px solid var(--hair); margin-top: clamp(1.5rem, 4vw, 3rem); }
 .foot-inner { padding-block: 22px; }
 .foot-line { font-size: var(--fs--1); color: var(--muted); margin: 0; }
@@ -664,6 +689,12 @@ main { padding-bottom: clamp(2rem, 5vw, 4rem); }
   .intro, .card { animation: none; }
   .ring-halo, .caret { animation: none; }
   .btn-console, .theme-toggle, .back-chip { transition: none; }
+  /* The resting breathe/nudge is an attention cue, which is exactly the class of motion this query
+     exists to switch off. Killing it on the arrow too — a looping transform is the part most likely
+     to bother someone who asked for less movement. The button keeps its colour and hover states, so
+     nothing about its affordance depends on the animation being present. */
+  .btn-console, .btn-console > span[aria-hidden] { animation: none; }
+  .btn-console:hover > span[aria-hidden] { transform: none; }
 }
 
 /* ── So what IS MetaHarness? ──────────────────────────────────────────────────────────────────────
