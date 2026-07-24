@@ -1139,7 +1139,9 @@ function capLegend() {
       '☐ a tickable box only appears where flipping it is single-step, reversible, and proven — everything else explains itself in words, on purpose'));
 }
 
+let lastCapabilities = null;   // kept so the card can re-render once the rec cards its checkboxes point at have mounted
 function renderCapabilities(data) {
+  lastCapabilities = data;
   const body = $('#body-capabilities');
   const rows = Array.isArray(data && data.rows)
     ? data.rows.filter((r) => r && typeof r === 'object')
@@ -1521,6 +1523,16 @@ function maybeRecsEmpty() {
 function recsSettled(source, ok) {
   if (source === 'state') stateRecsSettled = true;
   if (source === 'health') healthRecsSettled = true;
+  // A capability checkbox only renders once the rec card it opens (`#rec-enable:<key>`) is in the
+  // DOM — before that it shows an honest "still loading" placeholder (see capCheckbox). Those rec
+  // cards arrive with the recommendations, AFTER capabilities have already rendered once. Without
+  // this, the placeholder never upgrades and the checkbox never appears. Re-render capabilities once
+  // the recs that back them have settled, but ONLY if a pending placeholder is actually waiting —
+  // no cards waiting means no reason to repaint.
+  if ((source === 'state' || source === 'health') && lastCapabilities
+      && document.querySelector('#card-capabilities .cap-toggle-pending')) {
+    renderCapabilities(lastCapabilities);
+  }
   if (source === 'stack') {
     stackRecsSettled = true;
     const pending = $('#recs-pending');
