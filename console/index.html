@@ -44,6 +44,13 @@
         <circle class="n2" cx="24" cy="27" r="4" /><circle class="n1" cx="40" cy="24.5" r="4" /><circle class="n3" cx="41" cy="36.5" r="4" />
       </svg>
       <span class="brand-text">RuvNet Brain <span class="brand-sub">Onboarding Console</span></span>
+      <!-- The MARK stays version-free; the heading no longer is (owner, 2026-07-24: "put the version
+           in the heading so it's very clear what version they're on"). The gong sounds ONLY on a
+           KNOWN newer release, and — because an update has no verified undo — clicking hands you
+           the command (instructions, not a switch), per the contract in the intro. -->
+      <span class="ver-chip mono" id="brain-ver" hidden title="The RuvNet-Brain version running on this machine"></span>
+      <button class="update-gong mono" id="brain-update" hidden type="button"
+        title="A newer release is out — click to copy the update command"></button>
     </div>
     <div class="head-right">
       <!-- Its own class on purpose: this is a DOOR, not machine chrome. It once borrowed

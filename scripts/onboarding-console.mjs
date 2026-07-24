@@ -31,6 +31,7 @@ import { findStores, diagnose } from './memory-doctor.mjs';
 import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
 import { planFor } from './remedy-registry.mjs';
 import { auditAll as capabilityAuditAll } from './capability-registry.mjs';
+import { getVersion } from './version.mjs';
 // L5 (ADR-028): the audit is the one place that observes live capability state, so it is where an
 // OFFERED-then-now-`on` transition becomes an APPLIED — the numerator of the precision metric that
 // tells the owner whether advocacy is landing or nagging. Both are pure reads/appends and never throw.
@@ -951,6 +952,13 @@ async function fetchReleaseDigest() {
     source: `github.com/${TRUST_REPO}/releases/latest`,
   };
 }
+// The header wears the product version openly (owner, 2026-07-24: "put the version of RuvNet-Brain
+// in the heading of the console"). Plugin-cache dir first — the truth on installed machines — then
+// the repo's plugin.json for dev checkouts. null hides the chip rather than guessing.
+function brainVersionOnDisk() {
+  try { const v = readInstallChannel().version; if (v) return String(v).replace(/^v/, ''); } catch { /* fall through */ }
+  try { return getVersion(); } catch { return null; }
+}
 function readInstallChannel() {
   const reg = readJSON(path.join(HOME, '.claude/plugins/installed_plugins.json'));
   const entries = reg && reg.plugins && reg.plugins['ruvnet-brain@ruvnet-brain'];
@@ -1115,7 +1123,7 @@ function gatherState(cwd, { fleet = true } = {}) {
     token: TOKEN,
     generatedAt: new Date().toISOString(),
     preStateHash,
-    host: { user: os.userInfo().username, platform: process.platform, node: process.version, npmPrefix: NPM_PREFIX.replace(HOME, '~') },
+    host: { user: os.userInfo().username, platform: process.platform, node: process.version, npmPrefix: NPM_PREFIX.replace(HOME, '~'), brainVersion: brainVersionOnDisk() },
     sections: { wiring, memory, savings, config, userSettings, gates, recommendations },
   };
   // Cache the last good state so repeat page-loads paint instantly, same as the stack audit does.

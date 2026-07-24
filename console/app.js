@@ -349,6 +349,12 @@ function renderHost(host, generatedAt) {
     found.host = `${host.user}@${osName(host.platform)}`;
     const hc = $('#host-chip');
     if (hc) { hc.textContent = found.host; hc.hidden = false; }
+    // Header version chip (owner, 2026-07-24): the version is worn openly, next to the wordmark.
+    if (host.brainVersion) {
+      BRAIN_INSTALLED_VERSION = String(host.brainVersion);
+      const vc = $('#brain-ver');
+      if (vc) { vc.textContent = `v${BRAIN_INSTALLED_VERSION}`; vc.hidden = false; }
+    }
     const meta = $('#host-meta');
     if (meta) {
       meta.replaceChildren(
@@ -2575,10 +2581,41 @@ function trustSkeleton() {
   setChips('chips-trust', [chip('checking…', 'wait')]);
 }
 
+/* ---------------------------------------------- header update gong (owner, 2026-07-24) */
+
+let BRAIN_INSTALLED_VERSION = null; // set by renderHost from /api/state's host.brainVersion
+
+// Numeric x.y.z only; -dev/-rc suffixes are deliberately ignored so a tie is NEVER "newer" —
+// a false gong is the nag this page promises not to be. Latest unreachable (null) is UNKNOWN,
+// never "update available" (same rule the trust section already lives by).
+function cmpVer(a, b) {
+  const num = (v) => String(v).replace(/^v/, '').split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = num(a); const pb = num(b);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }
+  return 0;
+}
+
+// An update has no verified undo, so per the intro contract the gong is INSTRUCTIONS, not a
+// switch: one click copies the exact command and says so — nothing runs behind your back.
+function renderUpdateGong(t) {
+  const btn = $('#brain-update');
+  if (!btn) return;
+  const latest = t && t.release && t.release.tag ? String(t.release.tag).replace(/^v/, '') : null;
+  if (!BRAIN_INSTALLED_VERSION || !latest || cmpVer(latest, BRAIN_INSTALLED_VERSION) <= 0) { btn.hidden = true; return; }
+  const cmd = 'npx ruvnet-brain --update';
+  btn.textContent = `⟳ update available · v${latest} — click to update`;
+  btn.onclick = async () => {
+    try { await navigator.clipboard.writeText(cmd); btn.textContent = `copied — paste in any terminal: ${cmd}`; }
+    catch { btn.textContent = `run in any terminal: ${cmd}`; }
+  };
+  btn.hidden = false;
+}
+
 async function loadTrust() {
   try {
     const t = await getJSON('/api/trust');
     renderTrust(t);
+    renderUpdateGong(t);
   } catch (err) {
     setChips('chips-trust', [chip('unavailable', 'grey')]);
     inlineError('body-trust', String(err.message || err), () => { trustSkeleton(); loadTrust(); });
