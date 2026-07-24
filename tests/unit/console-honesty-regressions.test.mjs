@@ -115,6 +115,43 @@ describe('the learner row reports what it measured, never what it failed to read
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   }, 60_000);
 
+  it('reports ONE fact when trajectories and patterns are identical — not two achievements', () => {
+    // Fable 5's catch, measured live 2026-07-24: trajectoriesRecorded 1114, patternsLearned 1114.
+    // Rendered as "N recorded AND N learned" that reads as two independent wins and implies a
+    // distillation step between them. A sharp reader sees the 1:1 and concludes the counter is
+    // counting itself — so the copy must name the identity rather than let it imply reduction.
+    //
+    // NOTE ON WHAT THIS DOES NOT ASSERT: nothing here claims ruflo's learner is wrong. rUv's own
+    // persistent-sona.ts deduplicates patterns, so a below-1:1 ratio is the designed behaviour and an
+    // exact 1:1 is unexplained — unexplained is not false. The test only guards OUR rendering.
+    const home = tmpHome();
+    try {
+      fs.writeFileSync(path.join(home, '.claude-flow/neural/stats.json'), JSON.stringify({
+        trajectoriesRecorded: 1114, patternsLearned: 1114, lastAdaptation: Date.now(),
+      }));
+      const r = JSON.parse(inHome(home, detect('workflow-pattern-learning')).out);
+      expect(r.state).toBe('on');
+      expect(r.evidence, 'the 1:1 identity must be stated, not implied away').toMatch(/matches it exactly|no reduction/i);
+      expect(r.evidence, 'must not read as two independent achievements')
+        .not.toMatch(/1114 work sessions recorded and 1114 patterns learned/);
+    } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  }, 60_000);
+
+  it('still reports BOTH numbers when they genuinely differ', () => {
+    // The fix must not flatten real signal: a genuine reduction is the interesting case and must
+    // survive. If this ever starts collapsing unequal counts, the honesty fix has overreached.
+    const home = tmpHome();
+    try {
+      fs.writeFileSync(path.join(home, '.claude-flow/neural/stats.json'), JSON.stringify({
+        trajectoriesRecorded: 900, patternsLearned: 120, lastAdaptation: Date.now(),
+      }));
+      const r = JSON.parse(inHome(home, detect('workflow-pattern-learning')).out);
+      expect(r.evidence).toMatch(/900/);
+      expect(r.evidence).toMatch(/120/);
+      expect(r.evidence).not.toMatch(/matches it exactly/);
+    } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  }, 60_000);
+
   it('says idle — never on, and no longer off — for a learner that has recorded nothing in over a year', () => {
     // The registry had NO staleness check at all: a learner last adapted 400 days ago reported
     // "on — 457 work sessions recorded", while learning-enable called the same file "IDLE — nothing

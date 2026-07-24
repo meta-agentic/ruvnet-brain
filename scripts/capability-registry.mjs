@@ -426,8 +426,30 @@ export const CAPABILITIES = [
           // category error that put "457 patterns learned" next to an invitation to enable it.
           // Found by Fable 5 in the ADR-047 duel, one file over from where I had just fixed it.
           return row(STATE.IDLE, `${traj} work sessions and ${pat} patterns were recorded, but nothing in ${days} days — the learner ran before and has gone quiet. It is not off; something that fed it stopped.`);
-        default:
-          return row(STATE.ON, `${traj} work sessions recorded and ${pat} patterns learned${days === null ? '' : `, last updated ${days} day${days === 1 ? '' : 's'} ago`}`);
+        default: {
+          // TWO IDENTICAL NUMBERS ARE ONE FACT, NOT TWO ACHIEVEMENTS.
+          //
+          // Measured live 2026-07-24: trajectoriesRecorded 1114, patternsLearned 1114 — exactly 1:1.
+          // Rendered as "1114 work sessions recorded AND 1114 patterns learned", that reads as two
+          // independent wins and implies a distillation step. Fable 5's verdict, and it is right: a
+          // sharp reader sees the 1:1 instantly and concludes the counter is counting itself.
+          //
+          // WHAT I DID NOT CONCLUDE: that ruflo's learner is fake. Grounded in rUv's own source
+          // (ruflo/v3/@claude-flow/memory/src/persistent-sona.ts), extractPatternsFromTrajectory()
+          // stores a pattern ONLY when findSimilarPatterns() finds no near-duplicate — so patterns
+          // ARE deduplicated by design and the ratio should sit below 1:1. I cannot explain an exact
+          // 1:1 from the code I have read, and the counters in ~/.claude-flow/neural/stats.json may
+          // be written by a different path than that module. Unexplained is not the same as false.
+          //
+          // So this says only what is observed. When the two counts are equal we report ONE number
+          // and name the identity out loud, which is both honest and the more interesting signal —
+          // it tells the reader something is worth asking about instead of quietly inflating.
+          const when = days === null ? '' : `, last updated ${days} day${days === 1 ? '' : 's'} ago`;
+          if (traj === pat && traj > 0) {
+            return row(STATE.ON, `${traj} work sessions recorded, and the pattern count matches it exactly (${pat}) — one pattern per session, with no reduction between them${when}`);
+          }
+          return row(STATE.ON, `${traj} work sessions recorded and ${pat} patterns learned${when}`);
+        }
       }
     },
   },
