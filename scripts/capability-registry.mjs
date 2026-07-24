@@ -311,8 +311,27 @@ export const CAPABILITIES = [
     label: 'Memory distillation',
     whatItBuysYou: 'Loose notes from past sessions get mined into reusable patterns, so your AI recalls the lesson instead of re-reading every old note to find it.',
     scope: SCOPE.PROJECT,
-    // VERIFIED: `ruflo memory distill --help` lists subcommands run | status | config.
-    turnOn: { human: 'Mine this project\'s stored memories into reusable patterns', cmd: 'ruflo memory distill run' },
+    // The offer points at scripts/distill-project.mjs, NOT at bare `ruflo memory distill run`, and the
+    // difference is the whole reason ADR-047 was rejected. Both duelists found the same hole: the
+    // registry offers `turnOn` commands whose promised undo lives on a DIFFERENT execution path than
+    // the action actually handed to the user. Here that was literal — the inverse advertised for
+    // distillation restores snapshots that `health-repair.mjs --distill-fleet` takes, while this line
+    // used to hand over the raw command, which (verified against `--help`) takes no snapshot at all.
+    // Run it, dislike the result, and there was nothing to go back to.
+    //
+    // The wrapper sequences rUv's own commands so the operation is reversible: WAL-safe
+    // `ruflo memory backup` FIRST (cp on a live WAL DB silently amputates the newest transactions —
+    // this project has lost data that way), a durable fsync'd receipt fail-closed BEFORE any mutation,
+    // `distill run --db` scoped to THIS project rather than whatever the cwd implies, and a verified
+    // pattern delta reported as a measurement. `--restore` is the tested inverse.
+    //
+    // PROVEN end to end against the real store, 2026-07-24: 644 → 648 patterns (+4), restore → 644,
+    // re-run → 648, five durable receipts, $0.0000. This is the ONE capability whose undo has actually
+    // been run rather than merely promised — which is precisely what makes it the only one offerable.
+    turnOn: {
+      human: 'Mine this project\'s stored memories into reusable patterns (snapshots first; reversible)',
+      cmd: selfScript('scripts/distill-project.mjs'),
+    },
     detect({ project = process.cwd() } = {}) {
       const db = path.join(project, '.swarm/memory.db');
       if (!fs.existsSync(db)) return row(STATE.ABSENT, `no memory store exists for this project yet (${path.join(path.basename(project), '.swarm/memory.db')} is not present)`);
