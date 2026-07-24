@@ -437,8 +437,28 @@ export const CAPABILITIES = [
       const scanned = result?.scanned || {};
       const promotable = result?.promotable || [];
       if (!scanned.lessons) return row(STATE.ABSENT, 'no per-project lessons were found to compare, so there is nothing to promote yet');
+
+      // EFFECT IN FORCE, not backlog remaining. REJECTED by both duelists 2026-07-24: the old rule was
+      // ON iff promotable.length === 0, so teaching two new lessons anywhere flipped a WORKING capability
+      // to OFF — permanently, since the backlog always re-arms. Measured on this machine: it read OFF
+      // while the promoted block was sitting in the user's global CLAUDE.md, put there the same day.
+      // Worse, the evidence string carries a live counter and stateHashOf() hashes that prose, so every
+      // tick minted a fresh "the world changed, you may speak again" token — a perpetual-nag engine.
+      // Dormant must mean INSTALLED, USABLE, NEVER USED. Promotion writes a marked block into the user's
+      // global instructions; the presence of that block is the only honest evidence it is in use.
+      let promotedInForce = false;
+      try {
+        promotedInForce = fs.readFileSync(path.join(HOME, '.claude', 'CLAUDE.md'), 'utf8')
+          .includes('BEGIN ruvnet-brain: promoted-lessons');
+      } catch { promotedInForce = false; }
+
+      if (promotedInForce) {
+        return row(STATE.ON, promotable.length
+          ? `cross-project promotion is in force in your global instructions; ${promotable.length} further process${promotable.length === 1 ? '' : 'es'} ${promotable.length === 1 ? 'has' : 'have'} since become eligible (from ${scanned.lessons} lessons across ${scanned.projects} projects)`
+          : `cross-project promotion is in force in your global instructions, and nothing further is waiting (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
+      }
       if (promotable.length === 0) return row(STATE.ON, `${scanned.lessons} lessons across ${scanned.projects} projects scanned, and none are stuck at project level`);
-      return row(STATE.OFF, `${promotable.length} process${promotable.length === 1 ? '' : 'es'} you have taught in multiple separate projects ${promotable.length === 1 ? 'is' : 'are'} still trapped at project level (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
+      return row(STATE.OFF, `promotion has never been applied on this machine, and ${promotable.length} process${promotable.length === 1 ? '' : 'es'} you have taught in multiple separate projects ${promotable.length === 1 ? 'is' : 'are'} still trapped at project level (from ${scanned.lessons} lessons across ${scanned.projects} projects)`);
     },
   },
 
@@ -629,8 +649,14 @@ export const CAPABILITIES = [
       }
 
       const name = (j) => j.label.replace('com.ruvnet.', '');
+      // FAILING IS NOT DORMANT. REJECTED by both duelists 2026-07-24: a job that is loaded, scheduled and
+      // has RUN is installed and IN USE — a non-zero exit is a HEALTH problem belonging to the alarm
+      // channel, never a "you should switch this on" offer. Reporting it OFF is a category error, and it
+      // fired here for the worst possible reason: brain-nightly exited non-zero because the publish guard
+      // CORRECTLY refused to release from a non-main branch. A working safety guard was being reported as
+      // a dormant capability the user should go turn on.
       const failing = jobs.filter((j) => j.exit !== '0' && j.exit !== '-');
-      if (failing.length) return row(STATE.OFF, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded, and ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${name(j)}=${j.exit}`).join(', ')})`);
+      if (failing.length) return row(STATE.ON, `${jobs.length} nightly refresh job${jobs.length === 1 ? '' : 's'} loaded and running, but ${failing.length} last exited non-zero (${failing.slice(0, 3).map((j) => `${name(j)}=${j.exit}`).join(', ')}) — installed and in use, so this is a health problem to look into, not a capability to switch on`);
 
       // "-" IS NOT "0". launchd prints "-" for a job that has never run in this boot, and the old
       // check lumped it in with success — so "every one last exited cleanly" could describe a job
