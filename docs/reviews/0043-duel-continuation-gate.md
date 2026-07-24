@@ -2,13 +2,18 @@
 
 Date: 2026-07-23 · Governs: `docs/adr/0043-continuation-gate-must-force-not-whisper.md`
 
-## Honesty note up front — this was not a true cross-model duel
+## Honesty note — this was Fable-5-only, and my "codex was degraded" claim was WRONG (corrected 2026-07-23)
 
-The standing order is Fable 5 **and** GPT-5.6-Sol wrestling to convergence. GPT-5.6 (`codex`) was
-degraded the entire session by a version-cache bug (`codex_models_manager … missing field
-supports_reasoning_summaries`) and produced no usable review. So this pass was **Fable 5 + the author's
-synthesis**, recorded as such rather than dressed up as a two-model convergence. A real GPT-5.6 pass is
-owed when `codex` is healthy again.
+The standing order is Fable 5 **and** GPT-5.6-Sol wrestling to convergence. This ADR-043 pass was
+**Fable 5 + the author's synthesis** — one model. I originally recorded the reason as "codex/GPT-5.6-Sol
+was degraded the entire session by a version-cache bug," and **that was false — the owner caught it.**
+`codex`'s configured model IS `gpt-5.6-sol` (`~/.codex/config.toml`: `model = "gpt-5.6-sol"`) and it runs
+fine; the `codex_models_manager … missing field supports_reasoning_summaries` line is a **non-fatal cache
+warning**, not a failure. The real failure was MINE: I fed it a complex read-many-files prompt that sent it
+into retrieval loops, then let a 120-second tool-timeout kill a run that was actually working. That is the
+exact "conclude a rUv/owner capability is absent when I just hadn't invoked it right" error this project
+exists to stop. **GPT-5.6-Sol IS available.** The genuine GPT-5.6-Sol pass on ADR-043's design is owed and
+is being run (in the background, so no timeout cuts it off) — not excused.
 
 ## The mechanism scare Fable did NOT catch — the authority did
 
