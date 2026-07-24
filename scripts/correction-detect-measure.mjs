@@ -38,6 +38,30 @@
  *       precedingAssistantAction, split, detectorResult) to <path> for hand-labelling. Defaults to
  *       tune+holdout combined; pass --split to isolate one side.
  *
+ * HAND-LABELLED FINDINGS, 2026-07-24 — N3 IS A RECALL PROBLEM, NOT A PRECISION PROBLEM.
+ *
+ * The open work item read "raise correction-detect precision 27% -> 90%". A hand-labelling pass over
+ * this pool says that framing is wrong, and it is worth writing down before anyone tunes a regex again.
+ *
+ *   PRECISION, holdout firings: 2 of 3 correct. Also uncertifiable — see the certifiability block at
+ *   the bottom of main(): three firings cannot bound precision above 36.8% no matter what, and >=90%
+ *   needs n >= 29. No regex change moves that; only more firings do.
+ *
+ *   BASE RATE, 28-row holdout sample of NON-firing candidates: after discarding harness artifacts,
+ *   13 of 20 real user turns (65%) were genuine corrections the detector did not catch.
+ *
+ *   RECALL, extrapolated over 156 holdout non-firings: roughly 73 missed against 2 caught, i.e.
+ *   ABOUT 3%. The detector misses ~97% of the corrections in front of it.
+ *
+ * So precision was never the binding constraint. And the two problems share ONE fix: broadening the
+ * net raises recall AND produces the firing volume that certifying precision requires. Tuning for
+ * precision on n=3 does neither, while looking like progress.
+ *
+ * CAVEAT ON THESE LABELS, stated because it bounds them: they are ONE rater's judgement (mine), not
+ * the blind 3-rater majority the earlier 77.8% figure used. Treat them as a direction-finding
+ * measurement that reframes the problem, not as a certified precision number. The certified number
+ * still requires the volume above.
+ *
  * THE NUMBERS THIS PRODUCED ON 2026-07-23 are recorded in correction-detect.mjs's own header
  * (search that file for "MEASURED ON THE REAL CORPUS, 2026-07-23") rather than duplicated here,
  * since a measurement script that also claims to BE the measurement is how numbers rot out of sync
@@ -49,7 +73,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
-import { detectCorrection } from './correction-detect.mjs';
+import { detectCorrection, HARNESS_TEMPLATES } from './correction-detect.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -159,7 +183,15 @@ async function main() {
       });
       if (got) bySplit[split].hits += 1;
 
-      if (DUMP_POOL && (SPLIT_FILTER === 'all' || SPLIT_FILTER === split)
+      // Harness artifacts are excluded from the LABELLING POOL, not just from detection. The
+      // detector already rejects them (correction-detect.mjs HARNESS_TEMPLATES), so they could never
+      // fire — but they were still written out for a human to label. MEASURED in a 28-row holdout
+      // sample: 8 of them (29%) were <local-command-caveat> blocks, i.e. a third of the labelling
+      // effort spent on rows that are not user speech and whose answer is definitionally "no".
+      // Labelled examples are the scarcest resource in this problem; spending 29% of them on
+      // harness noise is why the pool looked bigger than it usefully was.
+      const isArtifact = HARNESS_TEMPLATES.some((re) => re.test(row.promptText));
+      if (DUMP_POOL && !isArtifact && (SPLIT_FILTER === 'all' || SPLIT_FILTER === split)
           && row.promptText.length <= 2000 && BROAD_NET.test(row.promptText)) {
         poolRows.push({ ...row, split, detectorResult: got });
       }

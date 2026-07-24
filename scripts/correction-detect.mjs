@@ -215,8 +215,17 @@ export const ACCEPTED_MISSES = Object.freeze([
 // ── HARD EXCLUSIONS ──────────────────────────────────────────────────────────────────────────────
 // Applied before any signal. Each entry killed a real false-positive class, named in the comment.
 
-/** Not an utterance at all. The single highest-scoring hit in ADR-033's measurement was one of these. */
-const HARNESS_TEMPLATES = [
+/**
+ * Not an utterance at all. The single highest-scoring hit in ADR-033's measurement was one of these.
+ *
+ * EXPORTED as of 2026-07-24 so the MEASUREMENT harness can apply the same filter when it writes the
+ * hand-labelling pool. It could not before, and the consequence was measured rather than guessed: in
+ * a 28-row sample of the holdout pool, EIGHT (29%) were `<local-command-caveat>` blocks — not user
+ * speech at all. The detector was right to ignore them; the pool handed them to a human to label
+ * anyway, burning ~29% of the scarcest resource in this whole problem (labelled examples) on rows
+ * whose answer is definitionally "no", and diluting the base rate with them.
+ */
+export const HARNESS_TEMPLATES = [
   /\[Your previous response/i,
   /\[Request interrupted/i,
   /<\/?system-reminder>/i,
