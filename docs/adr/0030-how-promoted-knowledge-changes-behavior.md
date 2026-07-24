@@ -3,7 +3,7 @@ id: ADR-030
 title: Latent knowledge is not knowledge — few gates, many lessons, retrieved at the decision point
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
 authors: [Stuart Kerr, Claude Code]
 tags: [learning, enforcement, gates, context-budget, compounding, 4.0]
 supersedes: []
@@ -247,8 +247,10 @@ pieces; nothing turned a promoted lesson into an interruption, so nothing change
 2. ❌ Measured context cost of the constitution + per-gate retrieval is **below** today's baseline.
    The claim above is a calculation, not a measurement, and must not be repeated as fact until
    instrumented.
-3. ❌ A promoted lesson survives `npx ruvnet-brain --update` and a nightly refresh (shared with
-   ADR-029 #3).
+3. ⚠️ A promoted lesson survives `npx ruvnet-brain --update` and a nightly refresh (shared with
+   ADR-029 #3) — demonstrated by isolation 2026-07-23 (unique promotion markers vs the installer's
+   own `ruvnet-brain:start` block; no update-path writes to `CLAUDE.md`; idempotent), not yet by live
+   execution. Full evidence in ADR-029 #3.
 4. ⚠️ PARTIAL (2026-07-22). `scripts/lesson-ratify.mjs --list` shows every lesson with trigger,
    force, provenance, weight and evidence; `--demote` sets a sticky flag the miner must honour.
    Still ❌: demotion stickiness has NOT been proven across an actual subsequent mining run, and

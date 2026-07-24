@@ -3,7 +3,7 @@ id: ADR-031
 title: The compounding brain — rUv's corpus + the user's working knowledge + accumulated experience, made operative
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-23
 authors: [Stuart Kerr, Claude Code]
 tags: [learning, darwin, policy-surfaces, compounding, north-star, 4.0]
 supersedes: []
@@ -176,6 +176,8 @@ optimised to stop doing.
 3. ❌ `evolve --bench` promotes at least one variant above 0.765 under the graded gate, reproducibly.
 4. ❌ A promoted lesson measurably changes a Darwin score — proving the objective function is wired
    to the user's knowledge and not just adjacent to it.
-5. ❌ The user corpus survives `--update` and a nightly refresh (shared with ADR-029 #3, ADR-030 #3).
+5. ⚠️ The user corpus survives `--update` and a nightly refresh (shared with ADR-029 #3, ADR-030 #3) —
+   demonstrated by isolation 2026-07-23 (unique promotion markers, no update-path writes to `CLAUDE.md`,
+   idempotent), not yet by live execution. See ADR-029 #3 for the full evidence.
 6. ❌ Adversarial cross-model review (Claude vs GPT-5.6) recorded for this ADR and its DDD, per the
    standing order — outstanding for ADR-027 through ADR-031 inclusive.
