@@ -50,7 +50,9 @@ describe('ADR corpus is machine-readable', () => {
       it('has a Status line ruflo-adr can parse (colon OUTSIDE the bold)', () => {
         const s = statusOf(src);
         expect(s, `no parseable "**Status**: X" line in ${f}`).toBeTruthy();
-        expect(['Proposed', 'Accepted', 'Implemented', 'Superseded', 'Deprecated']).toContain(s);
+        // 'Rejected' joined the vocabulary 2026-07-24 with ADR-045, the first double-REJECT — a
+        // rejected ADR is a kept record, not a deleted one, so the corpus check must admit it.
+        expect(['Proposed', 'Accepted', 'Implemented', 'Superseded', 'Deprecated', 'Rejected']).toContain(s);
       });
 
       it('every **Related** reference resolves to an ADR that exists', () => {
