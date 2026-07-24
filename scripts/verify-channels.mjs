@@ -114,6 +114,41 @@ async function run() {
   const bundleUrl = `https://github.com/${REPO}/releases/latest/download/ruvnet-brain.zip`;
   { const h = await head(bundleUrl); check('release bundle downloads', h.ok, `releases/latest/…/ruvnet-brain.zip → HTTP ${h.status}`); }
 
+  // 3b) …AND IT IS THE VERSION WE ARE SHIPPING. Reachability is not currency.
+  //
+  // MEASURED 2026-07-24, and this gate reported SHIPPED while it was false. npm was moved to
+  // 3.9.50-dev by `release.mjs --publish`; the GitHub Release stayed at v3.9.18-dev from 2026-07-23,
+  // THIRTY-TWO versions behind. Every check above passed — the manifest resolved, the bundle
+  // downloaded, the signature was present — because they all ask "does the latest release respond?"
+  // and none asked "is the latest release the one we just built?" A 32-version-old bundle answers
+  // HTTP 200 perfectly well.
+  //
+  // WHY THE GAP EXISTED AT ALL: the ship path is SPLIT and nothing said so. `release.mjs --publish`
+  // publishes to npm and contains zero `gh release` calls; GitHub Releases are cut only by
+  // `self-update.mjs`, which runs from the NIGHTLY. The nightly had been aborting since 2026-07-23 on
+  // its (correct) main-only branch guard, so releases silently froze while npm advanced. Two channels,
+  // two owners, one of them broken, and a verifier that could not tell.
+  //
+  // This is the same defect shape this repo has now fixed four times in one day: a proxy measured in
+  // place of the thing (receipt-count for "is routing running", backlog-remaining for "is promotion in
+  // force", cache-exists for "is this measurement current"). Reachability is the proxy; version is the
+  // thing. Users updating via the release bundle get whatever THIS says, not whatever npm says.
+  {
+    let tag = null, err = null;
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+        headers: { 'User-Agent': 'ruvnet-brain-verify-channels' },
+      });
+      if (r.ok) tag = (await r.json()).tag_name || null; else err = `HTTP ${r.status}`;
+    } catch (e) { err = String(e && e.message || e); }
+    // Tags carry a leading `v`; the version does not. Compare the bare versions.
+    const bare = (s) => String(s || '').replace(/^v/, '');
+    check('GitHub Release IS the shipping version', tag != null && bare(tag) === bare(V),
+      tag == null
+        ? `could not read releases/latest (${err}) — release currency NOT verified`
+        : `release=${tag} · shipping=${V}${bare(tag) === bare(V) ? '' : `  ← ${bare(tag) !== bare(V) ? 'STALE: the release channel is behind npm. Cut the release, or users on --update stay on ' + tag : ''}`}`);
+  }
+
   // 4) release signature present (auto-apply verifies against it)
   { const h = await head(`${bundleUrl}.sig`); check('release signature present', h.ok, `ruvnet-brain.zip.sig → HTTP ${h.status}`); }
 
