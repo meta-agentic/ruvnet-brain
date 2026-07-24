@@ -1,7 +1,7 @@
 ---
 id: ADR-046
 title: Every rendered claim carries its as-of, and every user action is one transaction
-status: Proposed
+status: Rejected
 date: 2026-07-24
 updated: 2026-07-24
 authors: [Stuart Kerr, Claude Code]
@@ -15,7 +15,50 @@ governs:
   - console/activity.js
 ---
 
-**Status**: Proposed (2026-07-24). Governed DDD: `docs/ddd/0011-freshness-context.md`.
+**Status**: **REJECTED** by Fable 5 (50/100), 2026-07-24 — rewrite required before any of this is
+built. Governed DDD: `docs/ddd/0011-freshness-context.md`.
+
+> **Decision 2 was not merely wrong — it was a regression, and it shipped.** "Recompute in-band past
+> the ceiling" reintroduced the outage documented forty lines above the edit in
+> `scripts/onboarding-console.mjs` (the 2026-07-17 demo-hang fix): inline compute freezes a
+> single-threaded server for 13–49s, and `curl` saw 000 on roughly one request in three. Because the
+> console is opened occasionally rather than polled, **over-ceiling is the common case** — so it made
+> the documented hang the default path.
+>
+> **Fixed in 3.9.44** by doing what this ADR's own DDD had already licensed and the ADR then
+> overrode: DDD-0011 INV-4 makes withholding first-class, and its event table says
+> `MeasurementExpired` triggers "re-measure **or withhold**." Past the ceiling we now serve the value
+> with `stale: true` and its real age — the claim is *withdrawn, not disguised* — and refresh in a
+> detached child. Proven on the failing case: 58ms, marked stale, `/api/state` still answering in
+> 3.6ms alongside it. Inline compute survives only when no prior measurement exists.
+>
+> **Five further changes required before this can be Accepted. None are built.**
+>
+> 1. **Read-after-write invalidation.** A successful mutation must delete every cache whose payload
+>    embeds the mutated fact. Without it the motivating incident *recurs inside the new rules*: the
+>    user toggles a lesson, and `/api/capabilities` keeps serving a claim about that same lesson that
+>    is under-ceiling, fully stamped, fully compliant — and false, caused by the user's own click.
+>    Wall-clock freshness cannot deliver read-your-own-writes.
+> 2. **Decision 4's `enabled` boolean erases intent the store deliberately defends.** `restore()`
+>    documents that it does NOT restore status — "un-hiding something is not the same act as agreeing
+>    to it." A boolean collapses *undecided*, *declined*, *agreed* and *agreed-then-switched-off* into
+>    two values, and makes un-hiding mean agreeing. Needs `desired: on | off | undecided`.
+> 3. **INV-2 ("the boundary is the pixel") has no enforcement and is already violated.** `ageMs`,
+>    `stale` and `warming` have zero consumers in the client. Needs a fetch wrapper that refuses
+>    un-enveloped data, one shared freshness badge, and a browser test that plants an old cache and
+>    asserts the rendered DOM. All five of the ADR's verification items were server-side.
+> 4. **The Age definition contradicts itself.** A server-computed age freezes at response time, so a
+>    page left open shows "2 minutes old" three hours later. The client must tick from `measuredAt`;
+>    the server value is the initial one, not the eternal one.
+> 5. **One named ceiling constant** (the tree currently has 15m, 10m, 10m, and none), `writeCache`
+>    made tmp+rename like `saveLessons`, and `measuredAt` stamped at MEASUREMENT rather than at
+>    cache-write — the DDD's own second table row forbids the latter and every producer violates it.
+>
+> **DDD-0011's bounded-context claim is also rejected.** Freshness and Currency (DDD-0008) are one
+> invariant — *no claim without a verifiable as-of; past tolerance, withdraw it* — on two entity types
+> with two clocks. And the Intent/atomicity aggregate (INV-5..7) has nothing to do with freshness; it
+> is write atomicity for the lesson store, in this document because it came from the same duel rather
+> than the same domain. It should be a policy under DDD-0008, not a context of its own.
 
 ## The measurement that forced this ADR
 
