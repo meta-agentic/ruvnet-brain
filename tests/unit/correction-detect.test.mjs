@@ -245,6 +245,36 @@ describe('BOUND_SECOND_PERSON copula gap (found 2026-07-23, fixed)', () => {
   });
 });
 
+describe('AGENT-DIRECTED IMPERATIVE — a directive that rejects, with no explicit quantifier (2026-07-24)', () => {
+  // N3 recall was measured at ~3%: the detector fired only on utterances carrying an explicit
+  // quantifier ("you always/never", "from now on"). Most corrections are plain directives — "I want
+  // you to X", "you need to Y" — and the quantifier net structurally could not see them. The
+  // AGENT_DIRECTED_IMPERATIVE signal catches them, GATED to strong rejection valence so a first-time
+  // request ("you should add a test here") stays silent while a rejection ("you keep telling me it's
+  // done — I'm tired of it") fires. Broadening measured: holdout firings 3 -> 10 on the real corpus.
+  //
+  // These two are VERBATIM real-corpus holdout firings (single-rater labelled as genuine corrections;
+  // that labelling is direction-finding, NOT the blind 3-rater certification the precision floor
+  // needs — see correction-detect-measure.mjs's header). They are unambiguous corrections and are
+  // kept as regression cases so the new signal cannot silently rot.
+  test('"I\'m tired of you telling me you did it only to find out you didn\'t" fires (claim-done)', () => {
+    const got = detectCorrection(
+      "I'm tired of you telling me you did it only to find out you didn't. You need to actually verify it works before you say it is done.",
+      AFTER_ACTION,
+    );
+    expect(got).not.toBeNull();
+    expect(got.trigger).toBe('claim-done');
+  });
+
+  test('a plain first-time directive with NO rejection stays silent (the gate holds)', () => {
+    // The precision half of the same signal: "you should / I need you to" without rejection is an
+    // ordinary request, not a correction, and must not fire. If this ever flips to firing, the
+    // agent-directed-imperative gate has been weakened and precision with it.
+    expect(detectCorrection('You should add error handling around that call.', AFTER_ACTION)).toBeNull();
+    expect(detectCorrection('I need you to write a parser for the config file.', AFTER_ACTION)).toBeNull();
+  });
+});
+
 describe('"I never/always want/expect you to…" — a quantifier bound to the agent via the speaker\'s '
   + 'own expectation, not a direct second-person claim (found 2026-07-23, fixed)', () => {
   // "I never expect you to do X" quantifies over the agent's future occasions exactly as much as

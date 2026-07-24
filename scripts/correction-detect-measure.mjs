@@ -38,6 +38,24 @@
  *       precedingAssistantAction, split, detectorResult) to <path> for hand-labelling. Defaults to
  *       tune+holdout combined; pass --split to isolate one side.
  *
+ * BROADENING RESULT, 2026-07-24 (agent-directed-imperative signal, see correction-detect.mjs).
+ *
+ * Acting on the recall finding below: added one gated signal class — directives whose object is the
+ * agent ("I want you to X", "you need to Y"), which the quantifier net structurally could not see —
+ * requiring strong rejection valence so a first-time request stays silent. MEASURED effect on the
+ * real corpus: holdout firings 3 -> 10 (total 7 -> 19). All 94 detector unit tests stay green, so no
+ * blind-rater-certified case regressed.
+ *
+ * THE TRADE, stated honestly: single-rater inspection of the 10 holdout firings read ~7 genuine
+ * corrections and ~3 borderline false positives (directives phrased as questions). That is a ~70%
+ * point estimate — HIGHER RECALL, slightly LOWER precision point-estimate than the narrow net's
+ * 77.8%. Neither is certifiable: 10 firings still cannot bound precision above 74.1% (needs n>=29),
+ * and single-rater labels are direction-finding, not the blind 3-rater majority a floor claim needs.
+ * The structural win is the VOLUME: 10 is most of the way to the n>=29 that any future >=90%
+ * certification requires — you cannot certify a floor on n=3 at all. Deliberately NOT tuned further
+ * against the holdout firings above: tuning on the set you measure with corrupts the only unbiased
+ * measurement you have. Further tuning belongs on the tune split, with blind labelling.
+ *
  * HAND-LABELLED FINDINGS, 2026-07-24 — N3 IS A RECALL PROBLEM, NOT A PRECISION PROBLEM.
  *
  * The open work item read "raise correction-detect precision 27% -> 90%". A hand-labelling pass over

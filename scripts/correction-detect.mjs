@@ -349,6 +349,33 @@ const BOUND_SECOND_PERSON = [
 const STOP_GERUND = /\bstop\s+(?:\w+\s+){0,2}?(?!(?:doing|being|having)\b)\w+ing\b/i;
 
 /**
+ * AGENT-DIRECTED IMPERATIVE (added 2026-07-24 for N3 recall — GATED, see the detector).
+ *
+ * The detector's recall was measured at ~3%: it fired only on utterances carrying an explicit
+ * quantifier ("you always/never", "from now on"). Most real corrections are plain directives with no
+ * quantifier at all — "I want you to pick it up", "you need to run both suites". This catches the
+ * class the quantifier net structurally cannot.
+ *
+ * It is grammatically AGENT-BOUND by construction — the object of the directive is "you" — which is
+ * exactly what keeps it clear of the negative classes that sink a naive broadening. Every false-
+ * positive class in the test suite addresses an ARTIFACT, not the agent: "Make sure the parser never
+ * accepts…", "The retry policy should always back off", "It always crashes". None of them say "you".
+ * So "you need to / you must / I need you to" cannot match them.
+ *
+ * A directive is NOT a correction on its own, though — "you should add error handling here" is an
+ * ordinary first-time request. So this binding is the ONE signal the detector refuses to let stand
+ * alone: when it is the only quantifier signal, the detector requires STRONG negative valence
+ * (a prohibition, reproach, or rejection — not a bare temporal scope) before it fires. A directive
+ * that also REJECTS something is a correction; a directive that merely instructs is not. See the
+ * `directive-imperative`-only gate in detectCorrection.
+ */
+const AGENT_DIRECTED_IMPERATIVE = [
+  /\bi\s+(?:really\s+|just\s+)?(?:need|want|expect|require)\s+you\s+to\b/i,
+  /\byou\s+(?:need|have|ought)\s+to\b/i,
+  /\byou\s+(?:must|should)\b/i,
+];
+
+/**
  * Temporal scope markers. These quantify over future occasions, but say nothing about WHOSE — so
  * they only count when the utterance also addresses the agent (second person, or a clause-initial
  * prohibition). "From now on, close the issue yourself" counts; "From now on the parser should
@@ -488,6 +515,14 @@ function agentBoundQuantifiers(sentence) {
   const stop = STOP_GERUND.exec(sentence);
   if (stop) hits.push({ marker: stop[0].toLowerCase(), binding: 'imperative' });
 
+  // Agent-directed imperative — a directive whose object is "you". GATED: on its own it is an
+  // ordinary request, so the detector fires on it only alongside strong rejection valence (see the
+  // directive-imperative gate). Recorded here as its own binding so that gate can find it.
+  for (const re of AGENT_DIRECTED_IMPERATIVE) {
+    const m = re.exec(sentence);
+    if (m) { hits.push({ marker: m[0].toLowerCase().replace(/\s+/g, ' '), binding: 'directive-imperative' }); break; }
+  }
+
   for (const clause of sentence.split(CLAUSE_SPLIT)) {
     const m = CLAUSE_INITIAL_QUANT.exec(clause.trim());
     if (m) hits.push({ marker: m[1].toLowerCase(), binding: 'clause-initial-imperative' });
@@ -578,6 +613,19 @@ export function detectCorrection(promptText, context = {}) {
   const bindings = new Set(signals.map((s) => s.binding));
   if (bindings.size === 1 && bindings.has('temporal-scope')
       && valence.length === 1 && valence[0] === 'change-of-behaviour') {
+    return null;
+  }
+
+  // AGENT-DIRECTED-IMPERATIVE GATE. A directive whose only signal is "you need to / I want you to"
+  // is an ordinary forward request unless it also REJECTS something. "You should add a test here" is
+  // not a correction; "You should have run the tests — you keep skipping them" is. So when the
+  // directive-imperative binding stands alone (no genuine quantifier beside it), require a STRONG
+  // valence class — a prohibition, reproach, or rejection — and refuse on a bare change-of-behaviour
+  // temporal marker, which any forward-looking request carries. This is the price of the recall the
+  // binding buys: it fires on directives that reject, never on directives that merely instruct.
+  const STRONG_VALENCE = new Set(['prohibition', 'reproach', 'rejection']);
+  if (bindings.size === 1 && bindings.has('directive-imperative')
+      && !valence.some((v) => STRONG_VALENCE.has(v))) {
     return null;
   }
 
