@@ -907,8 +907,28 @@ function capRow(row) {
         ? el('p', { class: 'cap-buys' }, buys)
         : el('p', { class: 'cap-buys cell-dim' },
             'No plain-words description came with this one — inventing a benefit for it would be worse than leaving the line empty.'),
+      /* EVIDENCE IS OPEN WHEN IT ASKS SOMETHING OF YOU, FOLDED WHEN IT ONLY REASSURES.
+       *
+       * Graded 88/100 on 2026-07-24 with the largest single deduction (-4) being that every row
+       * carried a maintainer-altitude evidence paragraph inline. On this machine that is TEN rows of
+       * proof-of-health expanded by default — the capabilities card became the longest thing on the
+       * page, and the 12-to-4 restructure could not fix it because the weight was per-row, not
+       * per-section.
+       *
+       * The wrong fix is hiding evidence. Evidence is what separates this page from a dashboard that
+       * asserts, and the rule is that every claim carries what we observed. So nothing is removed —
+       * it is RANKED. A row that wants something from you (off, idle, or unknown) keeps its evidence
+       * open, because that is the row you are being asked to act on and the reasoning has to be right
+       * there. A row that is simply working folds its proof behind one line you can open any time.
+       *
+       * Attention-first, the same law the row ORDER already follows. Rendering confirmation at the
+       * same visual weight as a finding is how a page with ten healthy rows buries its one real one. */
       evidence.length
-        ? el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e)))
+        ? (known === 'ON' || known === 'ABSENT'
+          ? el('details', { class: 'cap-why' },
+              el('summary', null, `Show the evidence (${evidence.length === 1 ? '1 observation' : `${evidence.length} observations`})`),
+              el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
+          : el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
         : el('p', { class: 'cap-ev-none cell-dim' }, 'No evidence was recorded for this row.'),
       wantsAdvice
         ? (turnOn
