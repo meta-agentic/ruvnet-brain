@@ -151,11 +151,11 @@
         },
         {
           "name": "agentic-qe",
-          "org": "proffesor-for-testing",
           "stars": 0,
           "pushed": "2026-07-07",
           "sha": "RESOLVE_AT_BUILD",
-          "note": "rUv QE fleet — 51 agents; collaborator org"
+          "note": "rUv QE fleet — 51 agents; collaborator org",
+          "owner": "proffesor-for-testing"
         }
       ]
     },

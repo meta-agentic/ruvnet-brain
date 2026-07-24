@@ -164,7 +164,14 @@ const plan = [];
 // REFUSES to claim anything (exit 1), letting the wrapper's retry + escalation do their job.
 let probeFailures = 0;
 for (const r of inScope) {
-  const live = remoteHead(r.owner || 'ruvnet', r.repo || r.name);
+  // `r.org` is read as well as `r.owner`, because the registry uses BOTH spellings and reading only
+  // one silently mis-resolves the other. MEASURED 2026-07-24: agentic-qe carries org:
+  // "proffesor-for-testing", the code read r.owner (undefined), fell through to the 'ruvnet' default,
+  // and probed github.com/ruvnet/agentic-qe — which 404s. The repo was reported "unverified (probe
+  // failed)" on every single run, which reads as "the remote is down" when the truth was that we
+  // asked about a repository that does not exist. Live check: ruvnet/agentic-qe -> 404,
+  // proffesor-for-testing/agentic-qe -> 200.
+  const live = remoteHead(r.owner || r.org || 'ruvnet', r.repo || r.name);
   if (live === null) probeFailures++;
   const built = builtSha[r.name.toLowerCase()] || null;
   let action = 'up-to-date';
@@ -218,7 +225,7 @@ for (const p of todo) {
     if (!fs.existsSync(path.join(dir, '.git'))) {
       console.log(`[clone] ${p.name}`);
       fs.mkdirSync(CLONE_DIR, { recursive: true });
-      execFileSync('git', ['clone', '--depth', '1', `https://github.com/${p.owner || 'ruvnet'}/${p.repo || p.name}`, dir], { stdio: 'inherit' });
+      execFileSync('git', ['clone', '--depth', '1', `https://github.com/${p.owner || p.org || 'ruvnet'}/${p.repo || p.name}`, dir], { stdio: 'inherit' });
     } else {
       execFileSync('git', ['-C', dir, 'fetch', '--depth', '1', 'origin'], { stdio: 'inherit' });
       execFileSync('git', ['-C', dir, 'reset', '--hard', 'origin/HEAD'], { stdio: 'inherit' });
