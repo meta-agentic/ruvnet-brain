@@ -1,6 +1,6 @@
 # RuvNet-Brain ↔ Agentic-Kit — Sync Briefing
 
-Updated: 2026-07-24 10:10:00 EDT | Version 1.0.0
+Updated: 2026-07-24 10:30:00 EDT | Version 1.1.0
 Created: 2026-07-24 10:10:00 EDT
 
 **From:** Stuart Kerr (RuvNet-Brain, `stuinfla/ruvnet-brain`)
@@ -8,7 +8,10 @@ Created: 2026-07-24 10:10:00 EDT
 **Purpose:** Our two products now touch at several points. Both were built with the best
 intentions; neither should have to guess what the other does. This document states — with
 file-and-line citations from **both** codebases — where they meet, where they could conflict,
-and a proposed contract so a shared user only ever sees one coherent story.
+and a proposed contract so a shared user only ever sees one coherent story. It also describes,
+for the first time outside our repo, what RuvNet-Brain 4.0 is turning on — because you
+shouldn't have to reverse-engineer our roadmap to know we're not building against you. We're
+not. Several 4.0 pieces get *better* because agentic-kit exists.
 
 Everything below was verified on 2026-07-24 against `@pacphi/agentic-kit` **4.0.0-alpha.21**
 (cloned from GitHub) and `ruvnet-brain` **3.9.39-dev** source — read, not recalled.
@@ -22,25 +25,72 @@ Everything below was verified on 2026-07-24 against `@pacphi/agentic-kit` **4.0.
   *"is Claude grounded in rUv's real source, and is the stack you installed actually being
   used?"* (knowledge + usage state). A machine can be 100% ak-green and still have dormant,
   never-used capability — that gap is the brain's territory; the install/heal/prove territory
-  is ak's.
+  is ak's. 4.0 doubles down on our side of that line (§2).
 - **ak already manages ruvnet-brain as a subsystem — and does it thoughtfully.** Install,
   drift, dashboard, statusline, CLAUDE.md block, and single-update-ownership are all handled in
   `src/lib/ruvnet-brain.mjs` + `src/lib/heal.mjs`. We're not asking to change that model. We
   want to **bless it, formalize the contract it implicitly depends on, and close the few edges
   where a shared user could see the products disagree.**
-- **Five touchpoints need a joint decision** (§5). Four of the fixes are on the brain side;
-  one is joint. A decision checklist for the call is at the end (§7).
+- **Five touchpoints need a joint decision** (§6). Four of the fixes are on the brain side;
+  one is joint. A decision checklist for the call is at the end (§8).
 
-## 2. The proposed seam — who owns what
+## 2. What RuvNet-Brain 4.0 is turning on — so nothing surprises you
+
+Today's shipped brain is two things: **grounding** (the `search_ruvnet` offline KB over the
+rUv repos, plus hooks that make Claude cite real source instead of stale training priors) and
+a **console** you can open to see installed rUv capability, real faults, and one-click fixes
+that can also be undone. Useful — but you have to go look.
+
+4.0 exists because of one measured finding: the brain once had everything it needed to say
+*"36 stores embedded, never distilled — 6,858 memories teaching nothing"* and said nothing for
+**21 days**, because nothing was structurally obliged to speak. Our thesis for 4.0: *a page
+you have to visit is a dashboard, not proactivity.* What we're turning on:
+
+- **In-session advocacy (L3).** The brain speaks *inside* the Claude Code session, once, at
+  the relevant moment: "X is installed, usable, and has **never been used** — here's what it
+  would do for this task, and here's the one-click way to try or silence it." All unprompted
+  speech flows through a single delivery chokepoint with hard anti-nag rules: fires once per
+  state change, dismissible, one-action permanent mute, advisory-only (it can never block or
+  gate anything the user didn't explicitly opt a rule into).
+- **Dormancy detection done honestly.** "Dormant" is defined as *installed + usable + never
+  used* — a capability the user couldn't actually run doesn't count, so the alarm is about
+  value left on the table, never about salesmanship. The detector's accuracy is itself under
+  measurement (a ground-truth fixture with an independent oracle and mutation tests that prove
+  the metrics collapse if the detector breaks).
+- **Anticipation (L4)** — naming the better path *before* the user commits to a worse one.
+  Status: in redesign; our own adversarial review process rejected the first design, so this
+  is intent, not build.
+- **Compounding lessons (L5).** Corrections a user explicitly ratifies in one project get
+  promoted machine-wide and must survive updates — a brain that learns across projects instead
+  of keeping notebooks per repo.
+- **Self-implementation.** The brain audits and scores its own harness and proposes its own
+  fixes, on the same evidence rules as everything else.
+
+**Status, honestly:** all of this lives behind a release fence on a dev branch. None of it is
+live on any user machine, and when it ships it arrives as an ordinary release — which your
+drift check sees like any other.
+
+**Why this complements agentic-kit rather than competing with it:**
+
+1. Your green checkmark is our *precondition*. Dormancy detection asks the question that comes
+   **after** "installed, current, wired" — and on an ak-managed machine our signal is cleaner,
+   because you've removed the configuration noise that would otherwise look like dormancy.
+2. When our advocacy encounters machine-level drift, the fix we *want* to recommend is
+   **`ak sync`** — your verb, not a rebuilt one. We have no ambition to own install/heal.
+3. 4.0's new surfaces add **no new writers to anything ak manages**: in-session speech is hook
+   runtime output, lessons live in `~/.config/ruvnet-brain/`, and neither touches your managed
+   CLAUDE.md blocks, `kit.json`, or any file in your MANAGED-TOOLS table.
+
+## 3. The proposed seam — who owns what
 
 | Layer | Question it answers | Owner |
 |---|---|---|
 | Install / upgrade / heal / machine drift (ruflo, aqe, agentdb, hosts, MCP, natives) | "Is it installed, current, wired?" | **agentic-kit** |
 | Brain install + release drift, when ak is present | "Is the brain present and on the current release?" | **agentic-kit** (`ak sync`) |
 | Knowledge grounding (`search_ruvnet`), KB integrity, usage/dormancy intelligence, in-session advocacy, lessons | "Is Claude grounded, and is the installed stack being *used*?" | **ruvnet-brain** |
-| Rendering the other side's state | Each product renders the other's **published, machine-readable truth** — never re-derives it | both, via the contract in §4 |
+| Rendering the other side's state | Each product renders the other's **published, machine-readable truth** — never re-derives it | both, via the contract in §5 |
 
-## 3. What agentic-kit already does with the brain (the facts, from your source)
+## 4. What agentic-kit already does with the brain (the facts, from your source)
 
 For the record — and because we verified rather than assumed:
 
@@ -68,7 +118,7 @@ single owner with honest disowning, same-namespace comparisons, one drift story 
 surfaces) is exactly the philosophy the brain project enforces internally ("the product can
 never lie"). We independently converged on the same rules. That's why this sync should be easy.
 
-## 4. What ruvnet-brain commits to (the contract, formalized)
+## 5. What ruvnet-brain commits to (the contract, formalized)
 
 These are the guarantees your code currently *assumes*; we propose to make them explicit and
 regression-locked on our side:
@@ -95,10 +145,10 @@ regression-locked on our side:
    machine, `ak sync` owns brain updates and Evergreen-off is correct — not broken.* This
    kills the "the two tools are fighting" perception before any user forms it.
 
-## 5. The five touchpoints (risk today → proposal)
+## 6. The five touchpoints (risk today → proposal)
 
 1. **Update ownership.** Both our Evergreen nightly and `ak sync` want to own updates. Your
-   side already resolves it (suppress + disable, reversibly). **Proposal:** we bless it (§4.5),
+   side already resolves it (suppress + disable, reversibly). **Proposal:** we bless it (§5.5),
    and optionally our installer learns to detect an ak-managed machine and default the nightly
    offer to off — so the two never even meet.
 2. **Dashboard overlap.** Our `/rvbc` console has a "what's installed + one-click fix" corner
@@ -115,19 +165,19 @@ regression-locked on our side:
 4. **Version namespaces.** You documented our three tracks (plugin semver / bundle version /
    release tag) more clearly than we had. **Proposal:** we adopt that framing in our own
    MAINTAINER docs and commit that the **release tag** remains the sole interop namespace
-   (§4.2). Dev machines with locally-built KBs will read as "outdated" to ak — expected, and
+   (§5.2). Dev machines with locally-built KBs will read as "outdated" to ak — expected, and
    `ruvnetBrain:false` in `kit.json` is the right setting there (we'll document that too).
 5. **npm dist-tag hygiene (ours).** `ruvnet-brain`'s npm `latest` currently carries a `-dev`
    version (3.9.18-dev, checked live 2026-07-24) — it works with your `ruvnet-brain@latest`
    spec, but it's not the stable/next split you model with your own channels. **Open
    question** for us; flagging it so it never surprises you.
 
-## 6. Edge cases we verified so nobody re-derives them
+## 7. Edge cases we verified so nobody re-derives them
 
 - **Fresh installs overwrite per-entry, not per-directory** (`bin/install.mjs:412-421`): KB
   entries the public bundle doesn't ship (locally-added or private stores, plus their manifest)
   survive a reinstall. True today by construction; not yet locked by a test — it will be, as
-  part of §4's contract work.
+  part of §5's contract work.
 - **`--update` never silently falls back to a fresh install on an empty dir**
   (`bin/install.mjs:1162-1174`) — restored 2026-07-18 after a fallback briefly swallowed that
   branch. Relevant to you only as: `--version`-pinned fresh installs and `--update` are
@@ -135,13 +185,14 @@ regression-locked on our side:
 - **`disableRuvnetBrainNightly` touches only `com.ruvnet.brain-update`** — verified against
   our installer's `NIGHTLY_LABEL`; none of our other LaunchAgents share it.
 
-## 7. For the call — five decisions
+## 8. For the call — six decisions
 
-1. Bless the seam table in §2 as the standing division of labor?
-2. Flag-stability contract (§4.1) — anything else your code depends on that we missed?
-3. `--doctor --json` shape — what fields would ak actually render?
-4. Dashboard deferral (§5.2) — is `ak status --json`'s schema stable enough for us to consume?
-5. The duplicate-CLAUDE.md-block case (§5.3) — whose side fixes it? (We volunteer.)
+1. Anything in §2 (what 4.0 turns on) that worries you, or that you'd want to integrate with?
+2. Bless the seam table in §3 as the standing division of labor?
+3. Flag-stability contract (§5.1) — anything else your code depends on that we missed?
+4. `--doctor --json` shape — what fields would ak actually render?
+5. Dashboard deferral (§6.2) — is `ak status --json`'s schema stable enough for us to consume?
+6. The duplicate-CLAUDE.md-block case (§6.3) — whose side fixes it? (We volunteer.)
 
 On our side, whatever we agree to becomes an ADR with an adversarial cross-model review before
 we build it (our standing process), and each contract item ships with the regression test that
