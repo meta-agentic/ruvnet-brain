@@ -1577,7 +1577,7 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   border: 1px solid color-mix(in srgb, var(--amber) 26%, transparent);
 }
 .tc-glyph svg { width: 46px; height: 46px; display: block; }
-.tc-glyph circle { fill: none; stroke-linecap: round; }
+.tc-glyph line { fill: none; stroke-linecap: round; }
 .tc-r1 { stroke: var(--cyan);  stroke-width: 2.6; }
 .tc-r2 { stroke: var(--amber); stroke-width: 2.2; stroke-dasharray: 4 4.6; }
 .tc-r3 { stroke: var(--green); stroke-width: 2.2; stroke-dasharray: 1.6 6.4; opacity: 0.9; }
