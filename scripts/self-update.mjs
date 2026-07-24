@@ -10,6 +10,7 @@
 //
 // Designed to be invoked by deploy/com.ruvnet.brain-nightly.plist (LaunchAgent — NOT auto-installed).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -61,13 +62,27 @@ const ONLY = arg('--repo', null);
 // destructive" move this repo has already been burned by once (see the -readonly/timeout lesson in
 // CLAUDE.md Rule 19). An aborted nightly that logs clearly and reruns tomorrow costs nothing; a
 // checkout that clobbers a developer's working tree cannot be undone.
-if (APPLY && has('--publish')) {
-  const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (branch !== 'main') {
-    console.error(`\n[FATAL] --publish requires 'main' to be checked out in ${ROOT} — found '${branch}' instead. Refusing to commit/push/release onto it (this is exactly how commit 4a10833 "Nightly brain refresh v3.4.21-dev" ended up stranded on feat/meta-proxy-passthrough instead of main on 2026-07-19). Nothing was touched — check out main yourself once it's free and re-run, or drop --publish to just rebuild.`);
-    process.exit(1);
-  }
-}
+// ── THE BRANCH GUARD IS GONE, AND THAT IS THE FIX (2026-07-24) ──────────────────────────────────
+//
+// It used to FATAL here when ROOT was not on main. That guard was CORRECT for what it knew: these
+// git commands act on whatever branch is checked out, and on 2026-07-19 that stranded commit 4a10833
+// on feat/meta-proxy-passthrough. Refusing beat clobbering a developer's working tree.
+//
+// But refusing had a cost nobody was watching. This file is the ONLY thing that cuts GitHub Releases
+// (`release.mjs --publish` does npm and contains zero `gh release` calls). So on 2026-07-23 the
+// nightly hit this guard — the repo was on branch 4.0 — aborted correctly, and the release channel
+// froze at v3.9.18-dev while npm advanced to 3.9.50. Thirty-two versions of drift produced by a guard
+// working exactly as designed, invisible because the channel verifier only checked the bundle was
+// REACHABLE, never that it was CURRENT.
+//
+// The dilemma was false. It only existed because the version commit ran in ROOT. It now runs in a
+// worktree pinned to origin/main (see the PUBLISH block), so the developer's tree is never touched
+// AND the release is never blocked by what they have checked out. Neither horn, rather than a better
+// choice between them.
+//
+// Nothing replaces this check because nothing needs to: ROOT's branch is now irrelevant to publishing.
+// If the worktree cannot be prepared, THAT fails loudly and refuses to fall back to committing in
+// ROOT — the guarantee this guard existed to provide, kept, without the outage it caused.
 // --fresh-window <days>: LIVE-scan the org(s) and take every non-fork/non-archived repo pushed within
 // N days, bypassing the static registry.tiers.json AND the nightly T3 skip. This is THE fix for
 // "new repos rUv shipped never got ingested" — a brand-new repo is discovered and built the same night
@@ -367,11 +382,68 @@ if (has('--publish')) {
     // Propagate `next` to package.json / kb/package.json / manifest / primer / explainer — NOT just the
     // four files this block used to add. Otherwise those surfaces drift behind plugin.json (the exact
     // 2026-07-19 3.4.19-vs-3.4.20 split that reddened repo-count + version gates).
-    execFileSync(NODE, ['scripts/sync-version.mjs'], { cwd: ROOT, stdio: 'inherit' });
+    //
+    // ── THE VERSION COMMIT RUNS IN A MAIN-PINNED WORKTREE, NEVER IN ROOT ────────────────────────────
+    //
+    // WHY (measured, twice). These four git commands operate on whatever branch ROOT happens to have
+    // checked out. On 2026-07-19 that produced commit 4a10833 "Nightly brain refresh v3.4.21-dev"
+    // stranded on feat/meta-proxy-passthrough. The guard at the top of this file was added in
+    // response and is CORRECT — it aborts rather than checking out main under a developer's
+    // uncommitted work, which would be unrecoverable.
+    //
+    // But an abort has a cost nobody was watching. This file is the ONLY thing that cuts GitHub
+    // Releases; `release.mjs --publish` does npm and contains zero `gh release` calls. So on
+    // 2026-07-23 the nightly aborted (repo was on branch 4.0), releases froze at v3.9.18-dev, npm kept
+    // advancing, and the channel verifier could not see it because it only checked the bundle was
+    // REACHABLE, never that it was CURRENT. A correct guard, a real abort, and 32 versions of drift.
+    //
+    // A worktree dissolves the dilemma instead of trading one failure for the other: a separate
+    // directory pinned to origin/main, so the developer's tree is never touched AND the release is
+    // never blocked by what they have checked out. Git refuses the same BRANCH in two worktrees, so it
+    // is DETACHED at origin/main and pushed as HEAD:main.
+    //
+    // The build artifacts stay in ROOT — only the version-bump commit moves. Convention follows
+    // scripts/issue-fix.mjs's WORKTREE_ROOT rather than inventing a second one.
+    const PUBLISH_WT = process.env.RUVNET_PUBLISH_WORKTREE
+      || path.join(os.homedir(), '.cache', 'ruvnet-brain', 'publish-worktree');
+    const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let wt = null;
+    try {
+      git(['fetch', 'origin', 'main'], ROOT);
+      // Reuse a healthy worktree; rebuild it if a prior run left it wedged. `prune` first so a
+      // manually-deleted directory does not leave a stale registration that blocks `add`.
+      git(['worktree', 'prune'], ROOT);
+      if (!fs.existsSync(path.join(PUBLISH_WT, '.git'))) {
+        fs.mkdirSync(path.dirname(PUBLISH_WT), { recursive: true });
+        try { git(['worktree', 'remove', '--force', PUBLISH_WT], ROOT); } catch { /* not registered */ }
+        fs.rmSync(PUBLISH_WT, { recursive: true, force: true });
+        git(['worktree', 'add', '--detach', PUBLISH_WT, 'origin/main'], ROOT);
+      } else {
+        // Existing worktree: hard-reset to the real origin/main so a half-finished prior run cannot
+        // contribute stale files to this release.
+        git(['reset', '--hard', 'origin/main'], PUBLISH_WT);
+        git(['clean', '-fd'], PUBLISH_WT);
+      }
+      wt = PUBLISH_WT;
+      console.log(`[publish] version commit will run in ${PUBLISH_WT} (detached at origin/main) — ROOT is untouched`);
+    } catch (e) {
+      console.error(`[publish] FATAL: could not prepare the main-pinned publish worktree (${String(e.message || e).split('\n')[0]}).`);
+      console.error('[publish] Refusing to fall back to committing in ROOT — that is the exact stranded-commit bug this replaces.');
+      process.exit(1);
+    }
+
+    // Seed the worktree with the new version, then let sync-version.mjs fan it out from its single
+    // source of truth exactly as it does in ROOT.
+    const wtPlugin = path.join(wt, 'plugin', '.claude-plugin', 'plugin.json');
+    const wtDoc = JSON.parse(fs.readFileSync(wtPlugin, 'utf8'));
+    wtDoc.version = next;
+    fs.writeFileSync(wtPlugin, JSON.stringify(wtDoc, null, 2) + '\n');
+    execFileSync(NODE, ['scripts/sync-version.mjs'], { cwd: wt, stdio: 'inherit' });
     execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'package.json', 'kb/package.json',
-      'data/manifest.json', 'primer/ruvnet-primer.md', 'explainer/index.html'], { cwd: ROOT, stdio: 'inherit' });
-    execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: ROOT, stdio: 'inherit' });
-    execFileSync('git', ['push', 'origin', 'main'], { cwd: ROOT, stdio: 'inherit' });
+      'data/manifest.json', 'primer/ruvnet-primer.md', 'explainer/index.html'], { cwd: wt, stdio: 'inherit' });
+    execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: wt, stdio: 'inherit' });
+    execFileSync('git', ['push', 'origin', 'HEAD:main'], { cwd: wt, stdio: 'inherit' });
     // npm publish — ATOMIC with the GitHub Release so npm `latest` can NEVER lag behind it. This block
     // previously shipped GitHub + plugin but never touched npm, so every nightly left npm further behind
     // (the 2026-07-19 npm 3.4.18 / GitHub 3.4.20 drift). Fail LOUD if npm cannot be published — GitHub

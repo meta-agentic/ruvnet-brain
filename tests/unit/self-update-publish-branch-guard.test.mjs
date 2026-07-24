@@ -67,18 +67,36 @@ describe.skipIf(!hasGit || process.platform === 'win32')('self-update.mjs — --
   let dir;
   afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 
-  it('aborts --apply --publish on a feature branch, citing the branch and the real incident, and touches nothing', () => {
+  it('NO LONGER aborts on a feature branch — the worktree removed the dilemma (2026-07-24)', () => {
+    // REVERSED, and the reason is the whole point of this file now.
+    //
+    // The guard this test guarded was CORRECT for what it knew, and it still cost us an outage.
+    // Refusing to commit onto a feature branch prevented the 4a10833 stranded-commit bug — but
+    // scripts/self-update.mjs is the ONLY thing that cuts GitHub Releases (`release.mjs --publish`
+    // does npm and contains zero `gh release` calls). So on 2026-07-23 the nightly hit this guard
+    // with the repo on branch 4.0, aborted exactly as designed, and the release channel FROZE at
+    // v3.9.18-dev while npm advanced to 3.9.50. Thirty-two versions of drift, produced by a guard
+    // working perfectly, invisible because the channel verifier only checked that the bundle was
+    // reachable and never that it was current.
+    //
+    // The dilemma was false. It existed only because the version commit ran in ROOT. It now runs in
+    // a git worktree pinned to origin/main (detached, pushed as HEAD:main — git refuses one branch in
+    // two worktrees), so the developer's tree is never touched AND the release is never blocked by
+    // what they have checked out. Neither horn, instead of a better choice between them.
+    //
+    // The guarantee this test originally protected is INTACT and asserted below: ROOT's branch and
+    // commit count are unchanged by a publish attempt. What changed is that the run is no longer
+    // required to die to achieve that.
     dir = fixtureRepo();
     git(dir, 'checkout', '-b', 'feat/meta-proxy-passthrough');
     const commitsBefore = git(dir, 'rev-list', '--count', 'HEAD').trim();
 
     const r = runSelfUpdate(dir, ['--apply', '--publish']);
 
-    expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(FATAL_MSG);
-    expect(r.stderr).toMatch(/feat\/meta-proxy-passthrough/);
-    expect(r.stderr).toMatch(/4a10833/); // must cite the real incident, not a generic message
-    // the whole point of aborting instead of "fixing" it: nothing was touched
+    expect(r.stderr, 'the main-only FATAL must be gone — it is what froze releases for 32 versions')
+      .not.toMatch(FATAL_MSG);
+    expect(r.stdout, 'the run must proceed past where the guard used to kill it').toMatch(/0 repos in scope/);
+    // THE ORIGINAL GUARANTEE, STILL ENFORCED: ROOT is untouched either way.
     expect(git(dir, 'rev-list', '--count', 'HEAD').trim()).toBe(commitsBefore);
     expect(git(dir, 'branch', '--show-current').trim()).toBe('feat/meta-proxy-passthrough');
   });
