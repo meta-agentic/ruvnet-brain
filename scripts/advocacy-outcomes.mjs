@@ -239,7 +239,34 @@ function appendLine(file, row) {
  * @param {{id:string, action:string, at?:Date|string, project?:string, severity?:string|null,
  *          stateHash?:string|null, scope?:'forever'|null}} spec
  */
+/**
+ * Under a test runner, writing to the DEFAULT (real, user-level) ledger is a bug, not a choice.
+ *
+ * Found by an independent grader on 2026-07-24: the live ledger at ~/.config/ruvnet-brain/ held
+ * exactly one row, `{"id":"f-adv-1","stateHash":"hash-1",...}` — fixture-shaped data in the user's
+ * real outcome record, describing an event that never happened. Every precision number this product
+ * reports is computed over that file, and it had junk in it from the first day it existed.
+ *
+ * It got there because a test called record() without passing `{file}`, so the default path won. The
+ * tempting fix is to blocklist ids that look like fixtures (`f-*`, `hash-*`), but that is a guess
+ * about naming, and the next fixture that does not match the pattern lands in the ledger exactly the
+ * same way. The defect is not the id — it is that a test can address the real file at all.
+ *
+ * So the write refuses instead. Under vitest, an explicit `file` (or RUVNET_ADVOCACY_OUTCOMES) is
+ * mandatory; the default is unreachable. That makes the pollution impossible by construction rather
+ * than unlikely by convention, and it fails LOUD at the moment the test is written rather than
+ * silently into a file nobody reads until a grader opens it thirteen months of commits later.
+ */
+const UNDER_TEST = !!(process.env.VITEST || process.env.VITEST_WORKER_ID);
+
 export function record(spec, { file = OUTCOMES_PATH } = {}) {
+  if (UNDER_TEST && file === OUTCOMES_PATH && !process.env.RUVNET_ADVOCACY_OUTCOMES) {
+    throw new Error(
+      'advocacy-outcomes.record() refused: a test tried to write to the REAL user ledger at '
+      + `${OUTCOMES_PATH}. Pass {file: <tmp path>} or set RUVNET_ADVOCACY_OUTCOMES. `
+      + '(A fixture row reached the live ledger this way once and was found only by an outside grader.)',
+    );
+  }
   const {
     id, action, at = new Date(), project = null,
     severity = null, stateHash = null, scope = null,

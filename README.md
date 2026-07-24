@@ -4,7 +4,7 @@
 
 # 🧠 RuvNet Brain
 
-### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.57-dev — updated 2026-07-23 04:06 EDT](https://img.shields.io/badge/version_3.9.57--dev-updated_2026--07--23_04:06_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
+### 🧠 RuvNet Brain — [![RuvNet Brain version 3.9.58-dev — updated 2026-07-23 04:06 EDT](https://img.shields.io/badge/version_3.9.58--dev-updated_2026--07--23_04:06_EDT-1E90FF?style=for-the-badge&labelColor=0757BA)](https://github.com/stuinfla/ruvnet-brain/blob/main/plugin/.claude-plugin/plugin.json)
 
 **A portable, source-grounded brain over Reuven Cohen's (rUv's) RuvNet stack — delivered as a Claude Code plugin that makes Claude _use_ the stack instead of fighting it.**
 
@@ -145,7 +145,9 @@ answers the question the owner has been asking for weeks — **"what is actually
 Honest limit: this is still a dev release, **not 4.0**. 4.0 requires levels 3–5 of ADR-028's ladder
 (contextual, anticipatory, compounding) **shipped and independently graded ≥95**. The mechanisms now
 exist — L3's delivery seam (the chokepoint), an L4 goal surface, and L5 cross-project promotion (lessons
-promoted to your global brain, survival proven by isolation) — but the ladder still grades **L2–L3**,
+promoted to your global brain, and survival across `--update` is now *tested* rather than argued —
+`tests/unit/promoted-lessons-survive-update.test.mjs` runs the real updater against a sandboxed HOME
+and asserts the promoted block is byte-identical afterward) — but the ladder still grades **L2–L3**,
 because L3 is built rather than live (deploy-gated) and the five acceptance metrics aren't all measured.
 See `docs/4.0-READINESS.md` and `docs/4.0-EXECUTIVE-BRIEFING.md` (last independent grade: 70/100 overall).
 

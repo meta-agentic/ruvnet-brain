@@ -1738,6 +1738,9 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 
 .cap-legend .k-on { border-top-color: var(--green); }
 .cap-legend .k-off { border-top-color: var(--amber); }
+/* IDLE — amber like off (both are "not doing anything"), dotted to separate the two at a glance:
+   off is dormant on purpose, idle is the one you THINK is working. See capLegend() in app.js. */
+.cap-legend .k-idle { border-top-color: var(--amber); border-top-style: dotted; }
 .cap-legend .k-absent { border-top-color: var(--hair-strong); }
 .cap-legend .k-unknown { border-top-style: dashed; }
 

@@ -949,8 +949,16 @@ function capRow(row) {
    answer different questions and must be free to move apart. */
 function capLegend() {
   return el('p', { class: 'cap-legend mono' },
-    el('span', { class: 'cl-cap' }, 'the four states'),
+    // FIVE, not four. Caught by an independent grader on 2026-07-24, and it is the sharpest possible
+    // defect for this particular card: the legend said "the four states" while renderCapabilities()
+    // below already emitted a fifth chip ("set up, not running") for STATE.IDLE. A machine with an
+    // idle capability displayed a state its own legend never defined — on the one card whose entire
+    // job is "the black box, opened." The product told a small lie about itself, which is the exact
+    // failure IDLE was added to expose in everything else. Adding the state without its legend row
+    // was my omission, not a pre-existing gap.
+    el('span', { class: 'cl-cap' }, 'the five states'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-on' }), 'on — observed here'),
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-idle' }), 'set up, not running — nothing is calling it'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-off' }), 'off — present, not running'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-absent' }), 'not installed — we looked, it isn’t here'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'));

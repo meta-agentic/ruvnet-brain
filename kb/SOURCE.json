@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-23T08:04:57.956Z",
+  "builtUtc": "2026-07-24T18:47:27.340Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "musica": {
-      "kbName": "musica",
-      "sourceRepo": "https://github.com/ruvnet/musica",
-      "sourceCommit": "e6fa3d4190cba6a11a4bea7ad9dbf8280165d9fc",
-      "sourceDescribe": "musica-vj-v0.8.3",
-      "builtUtc": "2026-07-23T08:04:57.956Z",
+    "ruview": {
+      "kbName": "ruview",
+      "sourceRepo": "https://github.com/ruvnet/RuView",
+      "sourceCommit": "f783df234eec22929b88e256422cbfc50579196b",
+      "sourceDescribe": "v2012",
+      "builtUtc": "2026-07-24T18:47:27.340Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/musica-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs musica"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruview-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruview"
     }
   }
 }
