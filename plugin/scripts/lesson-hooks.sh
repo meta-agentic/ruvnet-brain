@@ -106,7 +106,28 @@ case "$EVENT" in
   PreToolUse-write) TRIGGERS="write-code";                      CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-bash)  TRIGGERS="mutate-machine";                  CLAUDE_EVENT="PreToolUse" ;;
   PreToolUse-push)  TRIGGERS="ship";                            CLAUDE_EVENT="PreToolUse" ;;
-  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done"; CLAUDE_EVENT="UserPromptSubmit" ;;
+  # `choose-work` ADDED 2026-07-24 — the omission that made the Learning pillar look broken.
+  #
+  # THE FAILURE, in the owner's words: "why aren't you spinning up parallel swarms... isn't that a
+  # definition of a huge failure of the learning?" He was right, and the cause was one missing word on
+  # this line. L16-parallel-by-default ("when given multiple independent pieces of work, FAN OUT
+  # IMMEDIATELY... serial execution of independent work is a defect, not a style") is RATIFIED, taught
+  # FOUR times — and had never been delivered once, in any session, because nothing ever requested its
+  # trigger. The lesson was not ignored; it was never spoken.
+  #
+  # WHY IT WAS MISSED, and the trap worth naming: `choose-work`'s surface is `plan`, and lesson-store
+  # correctly refuses to let a `plan` lesson claim `block` enforcement — no hook can observe the
+  # instant a model forms an intention. That true statement was silently over-read as "plan lessons
+  # cannot be delivered at all," so the trigger was left off every event. But UserPromptSubmit IS the
+  # work-choice moment: a request arrives and the very next act is deciding how to attack it. The
+  # lesson cannot BLOCK there — it stays advisory, exactly as its enforcement says — but advisory
+  # delivered beats enforcing never. "Cannot be a gate" and "cannot be heard" are different claims,
+  # and conflating them cost four repetitions of the same correction.
+  #
+  # This is the same defect the header table already recorded for `report-status` ("enforcing? yes /
+  # wired to a hook that runs? no ← this is why the model still stopped"). Fixed there, missed here.
+  # One bug, found once, fixed once, left everywhere else.
+  UserPromptSubmit) TRIGGERS="assert-fact recommend-architecture report-status claim-done choose-work"; CLAUDE_EVENT="UserPromptSubmit" ;;
   *) exit 0 ;;
 esac
 

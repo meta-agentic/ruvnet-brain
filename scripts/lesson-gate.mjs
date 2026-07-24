@@ -463,9 +463,41 @@ const capped = event
   ? candidates.filter((l) => capExempt(l) || shownCount(gateState, l.id) < MAX_SHOWS)
   : candidates;
 const ranked = [...capped].sort((a, b) => (b.repeatCount || 0) - (a.repeatCount || 0));
+
+/* ONE VOICE PER DECISION POINT, BEFORE ANY SECOND VOICE.
+ *
+ * Ranking by repeatCount alone has a failure mode that hid a lesson for its entire life. An event can
+ * carry several triggers at once — UserPromptSubmit now fires five — and the character budget is
+ * spent strictly in repeat-count order. So the lessons attached to ONE trigger, if they happen to be
+ * the most-repeated, consume the whole budget and every OTHER decision point that genuinely fired
+ * goes silent.
+ *
+ * Measured 2026-07-24: L16-parallel-by-default (trigger `choose-work`, taught 4x, weight ~0.5) was
+ * competing against L14-architecture-recipe (36x, 4.13) and L02-check-before-you-assert (28x, 4.50).
+ * It could never win a slot — not because it was irrelevant to the moment, but because a DIFFERENT
+ * aspect of the same moment had louder lessons. The owner had to supply that correction by hand a
+ * fourth time, and the honest diagnosis was: the lesson was in force and structurally unseeable.
+ *
+ * repeatCount measures HOW OFTEN A LESSON HAS BEEN NEEDED. It does not measure how relevant it is to
+ * the decision in front of us, and treating it as a global priority silently converts "taught most
+ * often overall" into "the only thing you may be told right now."
+ *
+ * So: seed the set with the single highest-ranked lesson per DISTINCT TRIGGER that fired, then spend
+ * whatever budget remains by rank as before. Each decision point that fired gets to say one thing;
+ * the loudest lessons still fill the rest. The first-lesson overrun allowance is preserved.
+ */
+const seeded = [];
+const seenTriggers = new Set();
+for (const l of ranked) {
+  if (seenTriggers.has(l.trigger)) continue;
+  seenTriggers.add(l.trigger);
+  seeded.push(l);
+}
+const order = [...seeded, ...ranked.filter((l) => !seeded.includes(l))];
+
 const inForce = [];
 let spent = 0;
-for (const l of ranked) {
+for (const l of order) {
   const cost = renderLesson(l, '·').length;
   // Always admit the first lesson even if it alone exceeds the budget — a budget that can render
   // nothing is worse than a budget that overruns once.
@@ -473,6 +505,26 @@ for (const l of ranked) {
   inForce.push(l); spent += cost;
 }
 const trimmed = capped.length - inForce.length;
+
+/* EVERY DECISION POINT THAT FIRED GETS AT LEAST ONE LINE — compactly, if that is all that fits.
+ *
+ * Seeding one lesson per trigger (above) fixed the ORDER but not the outcome: a full render carries
+ * statement + evidence + repeat-count, ~400-600 chars, so the 1200-char budget is spent after TWO of
+ * them. Five triggers fire at UserPromptSubmit; three decision points still said nothing. Measured:
+ * L16 was seeded first for `choose-work` and still never reached the page.
+ *
+ * The budget exists to stop flooding, and that is right. But "do not flood" and "stay silent about
+ * three of the five things that just became relevant" are different policies, and the character cap
+ * was quietly enforcing the second. The repo's own standing rule on this is explicit: budget the
+ * COST, not the count, and a cap that trips is a signal to grow the container — never to drop the
+ * knowledge.
+ *
+ * So: any trigger left unrepresented after the budget is spent gets a ONE-LINE compact entry —
+ * statement only, clipped, no evidence, no counts. A clipped sentence the model actually reads beats
+ * a perfectly-formatted one it never sees. Full renders still go to the highest-ranked lessons.
+ */
+const representedTriggers = new Set(inForce.map((l) => l.trigger));
+const compactExtras = seeded.filter((l) => !representedTriggers.has(l.trigger));
 
 // isBlocking is defined above (the frequency cap keys its exemption on it). BLOCKING = four ANDed
 // conditions; the user's opt-in is necessary and NOT sufficient, and the security invariant lives there.
@@ -509,6 +561,12 @@ function renderBody() {
   lines.push('');
   for (const l of inForce) {
     lines.push(renderLesson(l, isBlocking(l) ? '⛔' : '·'));
+    lines.push('');
+  }
+  // The decision points that fired but lost the budget — one clipped line each, so none is silent.
+  if (compactExtras.length) {
+    lines.push('  Also live at this moment:');
+    for (const l of compactExtras) lines.push(`  · ${clip(String(l.statement), 150)}`);
     lines.push('');
   }
   // Say it out loud when the budget trips. A silent truncation reads as "that is all there is".
