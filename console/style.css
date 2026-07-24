@@ -1839,3 +1839,17 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   .tips-cta .tc-arrow { transform: translateX(4px); }
 }
 .catch-n { color: var(--amber-text); font-variant-numeric: tabular-nums; }
+
+/* THE VERDICT LINE — the answer, above the receipts. Larger than the ribbon beneath it because it
+   is the thing a person came for; quiet in colour because a verdict that shouts reads as marketing. */
+.verdict {
+  display: flex; gap: .6rem; align-items: baseline;
+  margin: 0 0 .5rem; font-size: 1.02rem; line-height: 1.5; max-width: 78ch;
+}
+.verdict-mark {
+  flex: 0 0 auto; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .82rem; font-weight: 700; transform: translateY(.12rem);
+}
+.vm-good { color: var(--green-text); background: color-mix(in srgb, var(--green) 15%, transparent); }
+.vm-look { color: var(--amber-text); background: color-mix(in srgb, var(--amber) 18%, transparent); }

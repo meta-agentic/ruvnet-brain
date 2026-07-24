@@ -272,6 +272,69 @@ function updateFoundStrip() {
     el('span', {}, '. Every number below traces to something we actually observed.'),
   );
   strip.hidden = false;
+  updateVerdict();
+}
+
+/**
+ * THE VERDICT LINE — the one sentence the page never said.
+ *
+ * Fable 5, 2026-07-24: "8,100px and the page never once says the one sentence the owner's success
+ * criterion demands: 'You're in good shape. One package needs a look; three suggestions below.'
+ * Every card makes you derive the verdict from chips." That is the whole gap between a dashboard and
+ * an answer, and it is why a careful reader can finish this page without ever learning how they are
+ * doing.
+ *
+ * THREE RULES IT OBEYS, all of them the product's existing rules applied to one sentence:
+ *
+ *  1. DERIVED, NEVER ASSERTED. Every number here is handed over by the card that measured it. This
+ *     function computes nothing about the machine; it only decides which sentence the measurements
+ *     support. That is also why it renders nothing until the counts arrive — an empty verdict is
+ *     honest, an early one is a guess.
+ *  2. UNKNOWN IS NOT GOOD NEWS. Capabilities we could not check are stated separately and never
+ *     folded into the good column, because "we could not tell" reported as "fine" is the exact lie
+ *     the four-state model exists to prevent.
+ *  3. GOOD NEWS IS ALLOWED TO SOUND LIKE GOOD NEWS. The owner's criterion is that someone smiles and
+ *     thinks "I have more tools than I realised." A page that can only ever hedge cannot deliver
+ *     that. When the evidence says things are in good shape, this says so plainly — and names the
+ *     exceptions in the same breath, which is what makes it believable rather than cheerful.
+ */
+function updateVerdict() {
+  const v = $('#verdict');
+  if (!v || found.capsTotal == null) return;      // nothing measured yet — say nothing
+
+  const behind = (found.pkgTotal != null && found.pkgCurrent != null)
+    ? found.pkgTotal - found.pkgCurrent : null;
+
+  // What actually wants the reader's attention, in blast-radius order.
+  const needsLook = [];
+  if (found.capsOff) needsLook.push(`${found.capsOff} capabilit${found.capsOff === 1 ? 'y is' : 'ies are'} off`);
+  if (behind) needsLook.push(`${behind} package${behind === 1 ? '' : 's'} behind`);
+
+  const caveats = [];
+  if (found.capsUnknown) caveats.push(`${found.capsUnknown} capabilit${found.capsUnknown === 1 ? "y" : "ies"} we could not check`);
+  if (found.memNotTested) caveats.push(`${found.memNotTested} memory dimension${found.memNotTested === 1 ? '' : 's'} not probed this session`);
+
+  const good = !needsLook.length;
+  const headline = good
+    ? 'You’re in good shape.'
+    : `Mostly good — ${needsLook.join(' and ')}.`;
+
+  const detail = `${found.capsOn} of ${found.capsTotal} capabilities are on`
+    + (found.capsAbsent ? `, ${found.capsAbsent} not installed` : '')
+    + (behind === 0 ? ', and every package on your stack is current' : '')
+    + '.';
+
+  v.replaceChildren(
+    el('span', { class: `verdict-mark ${good ? 'vm-good' : 'vm-look'}` }, good ? '✓' : '!'),
+    el('span', {},
+      el('b', {}, headline), ' ', detail,
+      // Caveats read as their own clause, not as a subordinate one. "We're not counting X, or Y as
+      // either" parsed badly out loud, and a sentence about honesty that the reader has to re-read
+      // is not doing its job.
+      caveats.length ? el('span', { class: 'muted' }, ` Not counted either way: ${caveats.join(' · ')}.`) : '',
+      !good ? el('span', { class: 'muted' }, ' Each one is named below, with its evidence and its undo.') : ''),
+  );
+  v.hidden = false;
 }
 
 /* ------------------------------------------------------------- section 0: host */
@@ -890,6 +953,11 @@ function renderCapabilities(data) {
   if (absent) chips.push(chip(`${fmtInt(absent)} not installed`, 'grey', CAP_STATE.ABSENT.hint));
   if (unknown) chips.push(chip(`${fmtInt(unknown)} not checked`, 'nt', CAP_STATE.UNKNOWN.hint));
   setChips('chips-capabilities', chips);
+  // Feed the verdict line. It needs the same counts this card just derived, and deriving them a
+  // second time somewhere else is how two surfaces start disagreeing about one machine.
+  found.capsOn = on; found.capsOff = off; found.capsAbsent = absent; found.capsUnknown = unknown;
+  found.capsTotal = rows.length;
+  updateFoundStrip();
 
   // Attention first, same law as every other list on this page (never alphabetical, never arrival
   // order): what you own but aren't getting, then what we couldn't answer, then what isn't here at

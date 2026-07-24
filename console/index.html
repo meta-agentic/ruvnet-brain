@@ -176,6 +176,9 @@
     </div>
 
     <!-- "We looked at your computer and found…" — filled from live state -->
+    <!-- THE VERDICT LINE. The one sentence the page never said — see updateVerdict() in app.js.
+         Sits ABOVE the ribbon of raw counts on purpose: the answer first, the receipts under it. -->
+    <p class="verdict" id="verdict" hidden></p>
     <div class="found-strip" id="found-strip" hidden></div>
     <!-- Page-level standby line: shown until the first card hydrates, then fades (app.js). -->
     <p class="standby-note" id="standby-note">Stand by — we're auditing how you use these tools
