@@ -63,7 +63,11 @@ function fireHook(cmd, args, payload, env = {}) {
 
 function tempLedger(items) {
   const p = path.join(os.tmpdir(), `hook-contract-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(p, JSON.stringify({ items }));
+  // Default a FRESH `at` on every item unless the test sets one — mirrors reality (--commit-to always
+  // stamps `at`), so the freshness TTL (which now treats a missing/invalid `at` as stale) doesn't
+  // silently make an unstamped fixture non-forceable.
+  const stamped = items.map((i) => ({ at: new Date().toISOString(), ...i }));
+  fs.writeFileSync(p, JSON.stringify({ items: stamped }));
   return p;
 }
 
@@ -153,6 +157,29 @@ describe('Stop-hook loop protection (the 2026-07-22 regression)', () => {
       { stop_hook_active: false, session_id: 'sess-stale' },
       { RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
     expect(r.stdout).toBe('');   // only stale items remain → silence, not a forced continuation
+  });
+
+  it('does NOT force on an empty {} payload — not a real Stop payload (GPT-5.6-Sol review)', () => {
+    // An empty-but-parseable {} passes the __source check; a real Stop payload carries session_id.
+    const ledger = tempLedger([{ text: 'real open work', done: false }]);
+    const r = spawnSync('node', [CONTINUATION_GATE], {
+      input: '{}',
+      encoding: 'utf8',
+      env: { ...process.env, RUVNET_WORK_LEDGER: ledger, RUVNET_CONTINUATION_COOLDOWN_MS: '0' },
+      timeout: 15000,
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout ?? '').toBe('');   // no session_id → not a confirmed real stop → no force
+  });
+
+  it('does NOT force on an item with a MISSING timestamp — unknown age must not force forever (GPT-5.6-Sol)', () => {
+    // A row without a valid `at` is now treated as STALE, not fresh — closes the TTL-bypass GPT-5.6-Sol found.
+    const p = path.join(os.tmpdir(), `hc-noat-${process.pid}-${Math.random().toString(36).slice(2)}.json`);
+    fs.writeFileSync(p, JSON.stringify({ items: [{ text: 'no timestamp', done: false }] }));  // NO `at`
+    const r = fireHook('node', [CONTINUATION_GATE],
+      { stop_hook_active: false, session_id: 'sess-noat' },
+      { RUVNET_WORK_LEDGER: p, RUVNET_CONTINUATION_COOLDOWN_MS: '0' });
+    expect(r.stdout).toBe('');   // missing/invalid `at` → stale → no force
   });
 
   it('stays silent when nothing is outstanding — a guard that always fires carries no information', () => {

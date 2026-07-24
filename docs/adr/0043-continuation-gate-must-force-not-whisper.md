@@ -3,7 +3,7 @@ id: ADR-043
 title: The continuation gate re-engages every stop, not once per session — the guard that killed "don't stop"
 status: Proposed
 date: 2026-07-23
-updated: 2026-07-23
+updated: 2026-07-24
 authors: [Stuart Kerr, Claude Code]
 tags: [proactive, learning, stop-hook, continuation, enforcement, dogfooding, 4.0]
 supersedes: []
@@ -114,12 +114,16 @@ this governs every project on the machine ("fixed permanently across all project
 4. No open work → exit 0 (silence carries no false alarm — ADR-028's zero-false-alarm bar).
 5. The Fable-5 × GPT-5.6 duel is recorded in `docs/reviews/0043-*.md`, including anything it defeated.
 
-## Duel outcome (2026-07-23) — Fable 5 red-team, GPT-5.6 unavailable
+## Duel outcome — Fable 5 (2026-07-23) + GPT-5.6-Sol (2026-07-24), a real two-model duel
 
-Recorded in `docs/reviews/0043-duel-continuation-gate.md`. **Honesty note: this was not a true cross-model
-duel.** `codex` (GPT-5.6-Sol) was degraded all session by a version-cache bug (`missing field
-supports_reasoning_summaries`) and produced no usable output, so the adversarial pass was Fable 5 + the
-author's synthesis, not two models converging. Stated plainly rather than dressed up.
+Recorded in `docs/reviews/0043-duel-continuation-gate.md`. **Correction (2026-07-24): I first recorded that
+"GPT-5.6-Sol was degraded and produced no output" — that was FALSE, and the owner caught it.** `codex`'s
+model IS `gpt-5.6-sol` and runs fine; the `missing field supports_reasoning_summaries` line is a non-fatal
+cache warning. My failures were invocation errors (a variadic `-i` ate the prompt; a 120s tool-timeout).
+The genuine GPT-5.6-Sol pass has since run — **VERDICT: SIGN-WITH-CHANGES** — and found three real residual
+holes Fable and I both missed (an empty `{}` still forced; the cooldown was fail-open + racy; a missing `at`
+bypassed the TTL and `--done` could clear a singleton by substring), all now fixed with tests. This is a
+true two-model duel: Fable REJECT-in-proposed-form → hardened, GPT-5.6-Sol SIGN-WITH-CHANGES → applied.
 
 Fable's verdict was **REJECT-in-proposed-form**, and it was right on the substance even though it reviewed
 the earlier exit-2 draft. Four findings were adopted into the committed fix, each with a falsifiable test:

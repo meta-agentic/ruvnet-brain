@@ -46,6 +46,29 @@ the duel); and the refusal to ceremony-up a DDD.
 promoted lesson enforce." It does not — it enforces the *ledger*, not the lesson, and discharge is one
 `--done` away. Reworded to "a forced re-confrontation with the open list — a strong, bounded nudge."
 
+## GPT-5.6-Sol review (2026-07-24) — the real second model, VERDICT: SIGN-WITH-CHANGES
+
+This is now a genuine two-model duel (after the owner corrected my false "codex degraded" claim).
+GPT-5.6-Sol read the ADR + the committed code and signed WITH CHANGES, finding **three real residual holes
+Fable and the author both missed** — all now fixed with falsifiable tests (hook-contract 20/20):
+
+1. **Empty-but-parseable stdin still forced.** LOOP-SAFETY 1 rejects an *unreadable* payload, but an empty
+   `{}` parses and gets `__source:'stdin'`, so it slipped through and forced. Fix: require `session_id` (a
+   real Stop payload always carries it). Test: `does NOT force on an empty {} payload`.
+2. **The cooldown was neither fail-closed nor race-safe.** A failed `save({lastForcedAt})` still forced
+   (fail-OPEN), and two hooks — the plugin's own Stop hook and the `settings.json` override wired to make
+   the fix live — could both read `lastForcedAt` before either wrote and both force. Fix: an
+   exclusive-create (`wx`) lock that doubles as the cooldown marker — no persist → no force (fail CLOSED),
+   and two racers can never both win.
+3. **The freshness fixes were incomplete.** A missing/invalid `at` bypassed the TTL forever (`!i.at` had
+   been treated as forceable), and the "unambiguous substring" `--done` could still clear a singleton via a
+   fragment. Fix: the TTL now requires a valid, recent timestamp (missing `at` → stale → no force); `--done`
+   is exact-text-only. Tests: `does NOT force on an item with a MISSING timestamp` + the `--done` change.
+
+**Convergence:** neither model rejected the design. Fable was REJECT-in-proposed-form (the exit-2 draft) →
+hardened; GPT-5.6-Sol was SIGN-WITH-CHANGES → the three above applied. The `stop_hook_active` primary guard
+and the `additionalContext`-at-exit-0 mechanism survived both reviews.
+
 ## Deferred, named not dropped
 
 - `projectKey()` keys by basename → same-named repos could share a ledger. Full-path hash is the fix;

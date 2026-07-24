@@ -103,19 +103,10 @@ if (has('--commit-to')) {
 if (has('--done')) {
   const led = load();
   const needle = arg('--done');
-  const openItems = led.items.filter((i) => !i.done);
-  // Exact match; else an UNAMBIGUOUS substring (exactly one open item). This kills the `--done "e"` /
-  // `--done " "` barn door that could silently clear the whole ledger — a zero-cost fake-completion
-  // valve under a gate that now applies real continuation pressure (ADR-043, Fable red-team #3).
-  let targets = openItems.filter((i) => i.text === needle);
-  if (!targets.length && needle) {
-    const subs = openItems.filter((i) => i.text.includes(needle));
-    if (subs.length === 1) targets = subs;
-    else if (subs.length > 1) {
-      console.error(`--done "${needle}" is ambiguous (matches ${subs.length} items); use the exact item text.`);
-      process.exit(1);
-    }
-  }
+  // EXACT text match only (GPT-5.6-Sol review). The earlier "unambiguous substring" fallback could still
+  // clear a SINGLETON open item via a fragment — a fake-completion valve under a gate that now applies real
+  // continuation pressure. Marking done requires the item's exact text (copy it from the ledger line).
+  const targets = led.items.filter((i) => !i.done && i.text === needle);
   for (const i of targets) { i.done = true; i.doneAt = new Date().toISOString(); }
   save(led);
   console.log(`marked done: ${targets.length}`);
@@ -163,33 +154,47 @@ if (hookInput.stop_hook_active) process.exit(EXIT_ALLOW);
 const led = load();
 const nowMs = Date.now();
 
-/**
- * LOOP-SAFETY 3 (belt-and-braces, a cap this file OWNS — Fable #1). The two guards above rest on one
- * harness field behaving as documented across all future versions; this one does not trust it. Never
- * force twice within the cooldown: a tight loop (empty payload, field rename, post-compaction reset) is
- * bounded to one force per window, while genuine re-engagement across real work (minutes apart) is
- * untouched. Configurable so tests exercise both re-engagement (0) and suppression (default).
- */
-const COOLDOWN_MS = Number(process.env.RUVNET_CONTINUATION_COOLDOWN_MS ?? 20000);
-if (led.lastForcedAt && (nowMs - Date.parse(led.lastForcedAt)) < COOLDOWN_MS) process.exit(EXIT_ALLOW);
+// LOOP-SAFETY 1b (GPT-5.6-Sol review) — an empty-but-parseable `{}` is NOT a real Stop payload; a genuine
+// one carries `session_id` (a documented Stop input). Without it we cannot confirm a real stop, so we never
+// force. This closes the empty-stdin hole that LOOP-SAFETY 1's `__source` check does not cover.
+if (!hookInput.session_id) process.exit(EXIT_ALLOW);
 
 const open = led.items.filter((i) => !i.done);
 if (!open.length) process.exit(EXIT_ALLOW);   // nothing outstanding: silence is correct
 
 /**
- * FRESHNESS (ADR-043 / Fable #3) — only FORCE for recently-committed work. A week-old abandoned item
- * that compels a continuation every turn breeds the exact fabrication this project kills
- * (mark-done-without-doing). Items with no timestamp are treated as fresh — they predate the `at`
- * field; fail toward the owner's intent. Stale items simply stop forcing; they are not re-nagged.
+ * FRESHNESS (ADR-043 / Fable #3, tightened by GPT-5.6-Sol) — only FORCE for work with a VALID, recent
+ * timestamp. A missing or unparseable `at` is treated as STALE and NOT forced: a real item always carries
+ * an `at` (set by --commit-to), so only a malformed/legacy row lacks one, and forcing forever on an item of
+ * UNKNOWN age is exactly the fabrication-pressure this guard exists to stop.
  */
 const STALE_MS = 24 * 60 * 60 * 1000;
-const forceable = open.filter((i) => !i.at || (nowMs - Date.parse(i.at)) < STALE_MS);
+const forceable = open.filter((i) => {
+  const t = Date.parse(i.at);
+  return Number.isFinite(t) && (nowMs - t) < STALE_MS;
+});
 if (!forceable.length) process.exit(EXIT_ALLOW);
 
-// RE-ENGAGE (ADR-043): no once-per-session cap — the loop-safety above bounds it, not a session counter.
-// Record this force so LOOP-SAFETY 3's cooldown can see it. `save` fails silently, so a read-only fs just
-// degrades to guards 1+2 rather than breaking the turn.
-save({ ...led, lastForcedAt: new Date().toISOString() });
+/**
+ * LOOP-SAFETY 3 (belt-and-braces this file OWNS — Fable #1, made fail-closed + race-safe by the GPT-5.6-Sol
+ * review). Claim the force ATOMICALLY via an exclusive-create lock that doubles as the cooldown marker:
+ *   - a fresh lock (another force within COOLDOWN_MS, incl. a concurrent second Stop hook) → do NOT force;
+ *   - the claim cannot be persisted → do NOT force (fail CLOSED — never a force we could not record);
+ *   - exclusive create (`wx`) serialises two racing hooks so they can never both win.
+ * This replaces a read-lastForcedAt-then-write that failed OPEN on a write error and let two hooks race.
+ */
+const COOLDOWN_MS = Number(process.env.RUVNET_CONTINUATION_COOLDOWN_MS ?? 20000);
+const LOCK = LEDGER + '.cooldown';
+function claimCooldown(now, windowMs) {
+  try {
+    const prev = Date.parse(fs.readFileSync(LOCK, 'utf8'));
+    if (Number.isFinite(prev) && (now - prev) < windowMs) return false; // fresh lock: someone forced recently
+    fs.unlinkSync(LOCK);                                                 // stale: clear it so we can re-claim
+  } catch { /* no lock yet */ }
+  try { fs.writeFileSync(LOCK, new Date(now).toISOString(), { flag: 'wx' }); return true; }
+  catch { return false; }                                               // lost the race / cannot persist → fail closed
+}
+if (!claimCooldown(nowMs, COOLDOWN_MS)) process.exit(EXIT_ALLOW);
 
 /**
  * DELIVERY. `additionalContext` in a Stop envelope forces the continuation (same protection as
