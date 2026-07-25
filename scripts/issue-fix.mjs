@@ -50,6 +50,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { BOT_MARKER, OWNER_LOGIN } from './issue-watch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'stuinfla/ruvnet-brain';
@@ -309,18 +310,28 @@ function spawnFixer(issue, wtPath, logPath) {
   });
 }
 
+/** Comments that are provably the automation's own: authored by the owner login AND opening with
+ * the bot marker (the child's hard rule in buildPrompt). Exported for tests. */
+export function botCommentCount(comments) {
+  return (comments || []).filter((c) => c.author?.login === OWNER_LOGIN
+    && String(c.body || '').trimStart().startsWith(BOT_MARKER)).length;
+}
+
 /** PROVE-IT, not self-report: independently check git + gh for what actually happened, rather than
- * trusting the child's own transcript. */
-function verifyOutcome(issue, beforeCommentCount, timedOut) {
+ * trusting the child's own transcript. Counts only MARKED bot comments — the old any-comment-count
+ * check credited a reporter replying mid-run as "triage posted", muting the retry+page path
+ * (caught in the 2026-07-24 F5×GPT-5.6 duel). beforeBotComments === null means the pre-run fetch
+ * failed: verification is unavailable, and unavailable verifies toward FAILURE, never success. */
+function verifyOutcome(issue, beforeBotComments, timedOut) {
   const branch = `issue-fix/${issue.number}`;
   if (remoteBranchExists(branch)) return { outcome: 'branch-pushed', branch };
 
-  let afterCommentCount = beforeCommentCount;
-  try {
-    const detail = ghJson(['issue', 'view', String(issue.number), '--repo', REPO, '--json', 'comments']);
-    afterCommentCount = (detail.comments || []).length;
-  } catch { /* leave as before; verification is best-effort, never fatal */ }
-  if (afterCommentCount > beforeCommentCount) return { outcome: 'triage-comment' };
+  if (beforeBotComments !== null) {
+    try {
+      const detail = ghJson(['issue', 'view', String(issue.number), '--repo', REPO, '--json', 'comments']);
+      if (botCommentCount(detail.comments) > beforeBotComments) return { outcome: 'triage-comment' };
+    } catch { /* fall through to failure — never to asserted success */ }
+  }
 
   return { outcome: timedOut ? 'timeout-failed' : 'no-action' };
 }
@@ -332,7 +343,7 @@ const CURRENT = { child: null, wtPath: null };
 // within the hour, loudly" rule assumed retries would eventually succeed; issue #38 proved the
 // other branch — 20+ retries, zero fixes, and every one of them public. An unattended fixer that
 // keeps failing in front of the reporter is worse than none.
-const MAX_FAILED_ATTEMPTS = Number(process.env.ISSUE_FIX_MAX_FAILED_ATTEMPTS || 2);
+const MAX_FAILED_ATTEMPTS = Number(process.env.ISSUE_FIX_MAX_FAILED_ATTEMPTS || 1);
 
 /** Pure eligibility judgment for one issue given its state record — exported so the breaker and
  * cooldown rules are unit-testable (a guard that was never tested across two consecutive failed
@@ -412,16 +423,16 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
     const ts = new Date(now).toISOString().replace(/[:.]/g, '-');
     const logPath = path.join(LOG_DIR, `issue-${issue.number}-${ts}.log`);
 
-    let beforeCommentCount = issue.comments ?? 0;
+    let beforeBotComments = null; // null = pre-run fetch failed → comment-verification unavailable
     try {
       const detail = ghJson(['issue', 'view', String(issue.number), '--repo', repo, '--json', 'comments']);
-      beforeCommentCount = (detail.comments || []).length;
-    } catch { /* fall back to list-view count */ }
+      beforeBotComments = botCommentCount(detail.comments);
+    } catch { /* stays null — unavailable verification leans failure, never false success */ }
 
     let outcome;
     try {
       const { code, signal, timedOut } = await spawnFixer(issue, wtPath, logPath);
-      const verified = verifyOutcome(issue, beforeCommentCount, timedOut);
+      const verified = verifyOutcome(issue, beforeBotComments, timedOut);
       outcome = { ...verified, exitCode: code, signal, timedOut, branch, logPath };
     } finally {
       cleanupWorktree(wtPath);
