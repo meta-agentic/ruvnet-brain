@@ -28,7 +28,7 @@ import { spawnSync, execFileSync, spawn } from 'node:child_process';
 
 import { auditModel, installedVersion } from './stack-sync.mjs';
 import { findStores, diagnose } from './memory-doctor.mjs';
-import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations } from './console-engine.mjs';
+import { buildStackRecommendations, buildWiringRecommendations, summarizeWiring, scoreMemoryHealth, buildHealthRecommendations, buildCapabilityRecommendations } from './console-engine.mjs';
 import { planFor } from './remedy-registry.mjs';
 import { auditAll as capabilityAuditAll } from './capability-registry.mjs';
 import { getVersion } from './version.mjs';
@@ -692,6 +692,17 @@ function computeCapabilities() {
       whatItBuysYou: 'a clear picture of what you own and what is switched on',
       evidence: `the audit could not run: ${String(e && e.message || e).slice(0, 160)}` }];
   }
+  // THE CAPABILITY ⇄ RECOMMENDATION BRIDGE. `recId` is stamped by the SERVER, and only when
+  // buildCapabilityRecommendations() actually constructed a schema-gated rec for this row — never
+  // guessed, never derived client-side. This is the field console/app.js's capCheckboxEligible() reads
+  // to decide whether a row earns a checkbox at all; see console-engine.mjs's header on that function
+  // for why the bar is proven-undo, not merely has-a-command. Wrapped in its own try/catch so a bug in
+  // the bridge degrades to "no checkbox anywhere" (recId: null everywhere), never a broken page — the
+  // same non-fatal discipline every other enrichment in this function already holds to.
+  try {
+    const wantIds = new Set(buildCapabilityRecommendations({ capabilities: rows }).map((r) => r.id));
+    for (const row of rows) row.recId = wantIds.has(`enable:${row.key}`) ? `enable:${row.key}` : null;
+  } catch { for (const row of rows) row.recId = null; }
   // null (not 0) until enough offers have resolved — an honest "not yet judgeable", never a
   // fabricated score. Computed AFTER both reconciles so a freshly-resolved outcome is reflected.
   const prec = advocacyPrecision();
@@ -767,8 +778,8 @@ function atomicWriteJSON(file, obj) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   writeAtomic(file, JSON.stringify(obj));
 }
-function writeCache(file, at, data) {
-  try { atomicWriteJSON(file, { at, data }); }
+function writeCache(file, at, data, scope = null) {
+  try { atomicWriteJSON(file, { at, data, scope }); }
   catch { /* a cache write must never break a response */ }
 }
 function kickRefresh() {
@@ -776,7 +787,17 @@ function kickRefresh() {
   if (now - LAST_REFRESH_KICK < 15000) return;   // debounce: at most one background refresh / 15s
   LAST_REFRESH_KICK = now;
   try {
-    const child = spawn(process.execPath, [SELF, '--refresh-cache'], { detached: true, stdio: 'ignore', cwd: REPO });
+    // cwd = the SERVED project, NOT REPO. This was `cwd: REPO` and it was a real console-honesty bug
+    // (found 2026-07-24): the refresh child calls gatherState(process.cwd()), so with cwd=REPO it
+    // recomputed PROJECT-SCOPED capabilities (memory-distillation, workflow-pattern-learning) for the
+    // PLUGIN's own directory and wrote them to the shared cache — meaning that after the first 15s
+    // refresh, /api/capabilities and /api/state reported the wrong directory's state for whatever
+    // project the user actually opened. That is precisely the "looks on but isn't" failure this
+    // console exists to prevent. The server's process.cwd() IS the served project, so the child must
+    // inherit it. Machine-level caches (stack/activity/trust) don't depend on cwd, so this is safe
+    // for them; it only fixes the project-scoped ones. NOT a change to the withhold-vs-recompute
+    // contract (the 2026-07-17 outage) — only to which project the background compute is about.
+    const child = spawn(process.execPath, [SELF, '--refresh-cache'], { detached: true, stdio: 'ignore', cwd: process.cwd() });
     child.unref();   // let it outlive this request; it writes the caches and exits on its own
   } catch { /* best-effort: a failed spawn just means the cache ages until the next kick */ }
 }
@@ -849,15 +870,23 @@ function freshnessOf(measuredAt) {
   };
 }
 
-function serveCached(res, file, compute, decorate = (d) => d) {
+function serveCached(res, file, compute, decorate = (d) => d, scopeKey = null) {
   const c = readJSON(file);
 
-  // COLD ONLY. No prior measurement means there is nothing to withhold and nothing to serve, so this
-  // one request eats the compute to seed the cache — the same bargain the 2026-07-17 fix struck.
-  if (!c || !c.data) {
+  // WRONG PROJECT IS AS GOOD AS NO DATA. When a caller passes a scopeKey (the served project, for the
+  // project-specific caches), a cached record computed for a DIFFERENT project must never be served —
+  // that is the cross-project "looks on but isn't" bug (found 2026-07-24: two consoles, or one opened
+  // in project B after A, sharing a user-level cache file). Treating a scope mismatch as cold makes
+  // the next line recompute for THIS project and re-stamp the scope. It is the same one-time cold
+  // cost as a first-ever load — NOT the warm-over-ceiling recompute the 2026-07-17 outage was about.
+  const scopeMismatch = scopeKey != null && (!c || c.scope !== scopeKey);
+
+  // COLD ONLY. No prior measurement (or a measurement for the wrong project) means there is nothing
+  // to serve, so this one request eats the compute to seed the cache — the 2026-07-17 bargain.
+  if (!c || !c.data || scopeMismatch) {
     try {
       const { at, data } = compute();
-      writeCache(file, at, data);
+      writeCache(file, at, data, scopeKey);
       return sendJSON(res, 200, { ...decorate(data), fromCache: false, ...freshnessOf(at) });
     } catch (e) {
       return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) }));
@@ -1333,6 +1362,14 @@ function gatherState(cwd, { fleet = true } = {}) {
   let gates = null;
   try { gates = gatesSurvey({ repo: REPO }); } catch { gates = null; }
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
+  // The capability ⇄ recommendation bridge (see computeCapabilities()'s recId stamp, same idea here):
+  // this is what makes `#rec-enable:memory-distillation` actually exist in the DOM for jumpToRec to
+  // scroll to. Advisory-only, so a bug here must degrade to "no capability recs offered", never break
+  // the rest of /api/state.
+  try {
+    const capRows = capabilityAuditAll({ project: cwd });
+    recommendations.push(...buildCapabilityRecommendations({ capabilities: capRows }));
+  } catch { /* an advisory surface must never break state */ }
   // Relevance order (never alphabetical/walk-order): machine-wide first, then projects by when
   // the user last actually worked in them — read from each project's own memory store.
   {
@@ -1367,7 +1404,7 @@ function gatherState(cwd, { fleet = true } = {}) {
   // other writer, because a reader can still land mid-truncate from THIS one. writeCache() is already
   // best-effort internally (never throws), so no extra try/catch is needed here.
   const { token, ...safe } = result;
-  writeCache(STATE_CACHE, result.generatedAt, safe);
+  writeCache(STATE_CACHE, result.generatedAt, safe, cwd);   // project-scoped stamp
   return result;
 }
 function gatherStack() {
@@ -1471,6 +1508,13 @@ function currentValidIds() {
     const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
     for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
   } catch { /* an advisory surface must never break the apply path */ }
+  // Capability recs (e.g. `enable:memory-distillation`) — without this, clicking the one recommended
+  // capability checkbox would always report "already resolved / your machine changed", because apply()
+  // only ever accepts ids this function has vouched for. Separate try from the health block above so a
+  // failure in one surface never silently hides the other's ids too.
+  try {
+    for (const r of buildCapabilityRecommendations({ capabilities: capabilityAuditAll({ project: process.cwd() }) })) ids.add(r.id);
+  } catch { /* an advisory surface must never break the apply path */ }
   return { ids, auditRows: a.rows };
 }
 function apply(ids) {
@@ -1500,12 +1544,23 @@ function apply(ids) {
       if (prev) undoSpec.prevVersion = prev; else { undoSpec.kind = 'auto-rebuild'; undoSpec.human = `no previous version of ${undoSpec.pkg} was readable, so there is nothing to roll back to`; }
     }
     if (undoSpec.kind === 'restore-memory-backup') undoSpec.db = path.join(process.cwd(), '.swarm/memory.db');
+    // The console is scoped to ONE project (process.cwd()) for its whole life — same fact
+    // `restore-memory-backup` just used above, recorded here too so undo() can hand it straight back
+    // to distill-project.mjs's own `--restore`.
+    if (undoSpec.kind === 'restore-project-distill') undoSpec.project = process.cwd();
 
     let args = [...plan.exec.args];
     if (plan.exec.resolveProject) {
       const i = args.indexOf('--project');
       if (i >= 0) args[i + 1] = resolveProjectDir(args[i + 1]);
     }
+    // `usesServerProject`: this remedy's script must run against the ACTUAL project the console is
+    // serving, never REPO — runNode() spawns every script with `cwd: REPO` (see its own comment),
+    // so a script that fell back to its own `process.cwd()` default would silently describe THIS
+    // package's checkout instead of the user's project. That exact REPO-vs-project confusion is
+    // capability-registry.mjs's own header's "single most damaging bug this file has shipped"; this
+    // flag exists so it cannot recur here.
+    if (plan.exec.usesServerProject) args = [...args, '--project', process.cwd()];
     if (plan.exec.needsReceipt) {
       const receipt = path.join(HOME, '.cache', 'ruvnet-brain', 'undo', `${plan.key}-${stamp()}.json`);
       undoSpec.receipt = receipt;
@@ -1739,6 +1794,19 @@ function undo(undoToken) {
     markUndoConsumed(undoToken);
     return { ok: true, log: `restored your memory store from the snapshot taken before the repair (${baks[baks.length - 1]})` };
   }
+  // `enable:memory-distillation`'s inverse. Deliberately handed BACK to distill-project.mjs's own
+  // `--restore` rather than re-derived here: it already knows where its snapshots live (that
+  // project's `.swarm/backups`) and its restore path is the one proven end to end (see the script's
+  // header: 644 → 648 → 644 → 648, 2026-07-24). Re-implementing "find the newest backup" a second time
+  // in this file is exactly the duplicate-inverse pattern ADR-047 was rejected for.
+  if (entry.kind === 'restore-project-distill' && entry.project) {
+    const r = spawnSync(process.execPath,
+      [path.join(REPO, 'scripts/distill-project.mjs'), '--project', entry.project, '--restore'],
+      { encoding: 'utf8', timeout: 5 * 60 * 1000 });
+    if (r.status === 0) markUndoConsumed(undoToken);
+    const out = `${r.stdout || ''}${r.stderr || ''}`.trim();
+    return { ok: r.status === 0, log: out.slice(-2000) || (r.status === 0 ? 'restored the pre-distill snapshot' : 'restore failed') };
+  }
   // Fleet distillation touches a set of stores discovered at run time, so its executor writes a
   // receipt naming each store it snapshotted. No receipt ⇒ we do not know what was touched, and we
   // say so instead of guessing — restoring the wrong snapshot over a live store is worse than
@@ -1772,7 +1840,7 @@ function undo(undoToken) {
 // registry against the REAL handler set rather than a hand-copied list that would drift from it.
 export const HANDLED_UNDO_KINDS = Object.freeze([
   'restore-config', 'reinstall-version', 'restore-backup',
-  'restore-memory-backup', 'restore-store-backups', 'auto-rebuild', 'none',
+  'restore-memory-backup', 'restore-store-backups', 'restore-project-distill', 'auto-rebuild', 'none',
 ]);
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────────────────────────
@@ -1841,7 +1909,8 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       if (req.method === 'GET' && url === '/api/state') {
         return serveCached(res, STATE_CACHE,
           () => { const st = gatherState(cwd, { fleet: false }); const { token, ...safe } = st; return { at: st.generatedAt, data: safe }; },
-          (d) => ({ ...d, token: TOKEN }));
+          (d) => ({ ...d, token: TOKEN }),
+          cwd);   // project-scoped: never serve another project's cached state
       }
       // ── /api/capabilities — "what do I own, and is it on?" ──────────────────────────────────────
       //
@@ -1859,7 +1928,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       // each state, which is far too slow for a first paint but is exactly why the answers are
       // trustworthy: every row is DERIVED on this machine, never asserted.
       if (req.method === 'GET' && url === '/api/capabilities') {
-        return serveCached(res, CAPABILITY_CACHE, computeCapabilities);
+        return serveCached(res, CAPABILITY_CACHE, computeCapabilities, (d) => d, cwd);
       }
       if (req.method === 'GET' && url === '/api/memory') {
         // THE THESIS, FINALLY CONNECTED (ADR-027, 2026-07-22).
@@ -1883,7 +1952,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
             recommendations = buildHealthRecommendations({ memory: health, learning: { ...observeLearning(), fleet } });
           } catch { /* advocacy is advisory — it may never break the page that shows your machine */ }
           return { at: new Date().toISOString(), data: { fleet, recommendations } };
-        });
+        }, (d) => d, cwd);   // project-scoped: memory health + recs are about THIS project
       }
       if (req.method === 'GET' && url === '/api/stack') {
         // TASK 3: `data: gatherStack()` must not be evaluated as a property inside the SAME object
@@ -1955,7 +2024,7 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
     // Runs as a DETACHED CHILD of the server (kickRefresh) — or standalone to pre-warm. Computes the
     // heavy read-models HERE, in a separate process, so the server's event loop is never blocked, and
     // writes each cache the moment it is ready (state first — it is what the page paints first).
-    try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe); } catch { /* leave the old cache in place */ }
+    try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe, process.cwd()); } catch { /* leave the old cache in place */ }
     // TASK 3: function-call arguments are evaluated left-to-right, so the previous
     // `writeCache(STACK_CACHE, new Date().toISOString(), gatherStack())` evaluated the timestamp
     // BEFORE gatherStack()'s ~22s scan ran — the same bug as the /api/stack handler above, duplicated
@@ -1976,7 +2045,7 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
         const health = scoreMemoryHealth({ project: path.basename(process.cwd()), probes: probeMemory(process.cwd()) });
         recommendations = buildHealthRecommendations({ memory: health, learning: { ...observeLearning(), fleet } });
       } catch { /* advisory only */ }
-      writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet, recommendations });
+      writeCache(MEMORY_CACHE, new Date().toISOString(), { fleet, recommendations }, process.cwd());
     } catch { /* keep prior */ }
 
     // CAPABILITY_CACHE WAS NOT IN THIS LIST — the single most consequential omission in the file.
@@ -1997,7 +2066,7 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
     // have passed and reported a guarantee that does not exist.
     try {
       const { at, data } = computeCapabilities();   // the SAME computer the handler uses
-      writeCache(CAPABILITY_CACHE, at, data);
+      writeCache(CAPABILITY_CACHE, at, data, process.cwd());
     } catch { /* keep prior — a failed audit must never blank the card */ }
 
     process.exit(0);
@@ -2026,3 +2095,6 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
 }
 
 export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy };
+// Exported for the cross-project cache-isolation test (console-cache-scope.test.mjs). serveCached's
+// scopeKey is the guard that stops one project's cached state being served for another.
+export { serveCached, writeCache };

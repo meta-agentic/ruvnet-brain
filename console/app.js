@@ -575,6 +575,69 @@ function infoBtn(title, beats) {
   }, 'i');
 }
 
+/* ── SECTION-LEVEL EXPLAINERS (2026-07-24) ───────────────────────────────────────────────────────
+ * The owner could not place several cards — "brain activity vs memory", "how it's wired", "trust &
+ * provenance", "what caught Claude". Every card now carries a one-click "i" that says, in the page's
+ * own quiet voice, what it shows and why it matters. One author wrote all of these so they read as
+ * one voice; each is attached via infoBtn() to a title node the render function already rebuilds. */
+const STACK_INFO = ['Every rUv package installed globally on this computer, checked against the npm '
+  + 'registry and grouped by family (ruflo, AgentDB, RuVector, and so on). This is what’s on disk and '
+  + 'at what version — not whether it’s actually running; that’s the wiring card, further down.'];
+const CAPABILITIES_INFO = ['Every capability this stack can offer — routing, learning, guardrails, and '
+  + 'the rest — with the state we actually observed on this machine: on, off, set up but idle, not '
+  + 'installed, or not checked. This card mostly reads. A few rows carry a tickable box, and even there '
+  + 'ticking only opens the consent-gated proposal in “What we’d suggest” below — nothing runs until '
+  + 'you confirm it there, with its evidence, its cost, and its undo.'];
+const LEARNINGS_INFO = ['A separate, smaller stream from the memory below it: not what your projects '
+  + 'contain, but patterns in how you work — noticed across every project and reused everywhere. Your '
+  + 'project facts stay isolated; this strip is the one thing that deliberately crosses that boundary.'];
+const MEMORY_INFO = [
+  { k: 'What is this?', t: 'A quality score for the memory system itself, not a feed of events. '
+      + '“What is happening in this project” shows individual things your AI did; this card asks whether '
+      + 'the memory behind every project is actually reliable — does it survive a compaction, does '
+      + 'recall really work, is it current.' },
+  { k: 'Why does it matter?', t: 'A memory store can be running and full of entries and still be '
+      + 'useless — the score is graded on real checks, never on whether the lights are on.' },
+  { k: 'How does it help me?', t: 'A dimension we couldn’t verify this session is shown grey and '
+      + 'excluded from the score, never guessed at — so a perfect number is never quietly covering for '
+      + 'something nobody tested.' },
+];
+const ROUTER_ENGINE_INFO = ['The routing engine itself, opened up: which package is actually deciding '
+  + '(rUv’s @metaharness/router, not a lookalike), whether it’s still learning your patterns or routing '
+  + 'on real history, and its most recent real decisions straight from its own log — never a simulation.'];
+const DISTRIBUTION_INFO = ['How your routed tasks split across mechanical/cheap/mid/frontier bands, '
+  + 'with the money saved for each stripe of the bar — from real receipts, matched one-for-one against '
+  + 'what running everything on the frontier model would have cost.'];
+const PROVIDERS_INFO = ['Two separate choices, not one: “Your plan” is which subscription the router '
+  + 'treats as free (the biggest cost lever you have); “OpenRouter” is an optional second lane for '
+  + 'offloading plain-text tasks to even cheaper models. Turning one on never changes the other.'];
+const SAVINGS_INFO = ['MetaHarness is explained just above; this card is its report card — real receipts '
+  + 'from tasks it has actually routed, never a projected or modelled number. Nothing here counts until '
+  + 'it’s actually happened.'];
+const TRUST_CARD_INFO = [
+  { k: 'What is this?', t: '“Provenance” means: can you check that what’s running on your machine is '
+      + 'really what rUv published, instead of taking it on faith? Each row below is one such check — the '
+      + 'release fingerprint, the parts list, how you get updates, and how cautious the console is allowed to be.' },
+  { k: 'Why does it matter?', t: 'Software you can’t verify is software you can only trust — verified '
+      + 'beats trusted, and this card is where that gets proven, row by row.' },
+  { k: 'How does it help me?', t: 'Every row says plainly whether it’s live today or still coming — '
+      + 'nothing here is dressed up as measured when it wasn’t.' },
+];
+const GATES_INFO = [
+  { k: 'What is this?', t: 'Gates are checks that run before your AI touches your machine — most just '
+      + 'add context, but some can refuse the action outright. This card is the ledger: what got refused, '
+      + 'by which gate, and why.' },
+  { k: 'Why does it matter?', t: '“Nothing caught yet” and “nothing is being checked” look identical '
+      + 'unless the count of armed gates is shown alongside it — this card gives you both, so silence '
+      + 'reads as silence, never as an all-clear.' },
+  { k: 'How does it help me?', t: 'Every catch names the gate, what it stopped, and when — recorded '
+      + 'since it was first armed, never guessed at for anything before that.' },
+];
+const LESSONS_INFO = ['Rules your AI now follows on this machine — not memory (facts it recalls) and '
+  + 'not activity (things it did): specific behavioral corrections, most of them in your own words, that '
+  + 'it applies from now on. Every one has a switch, and turning one off never deletes the record of '
+  + 'where you taught it.'];
+
 /* What/Why/How copy — three beats, every Settings row (WP4). */
 const SETTING_INFO = {
   qeFleet: [
@@ -706,7 +769,7 @@ function renderStack(data) {
     ahead ? el('span', {}, ', ', el('b', {}, fmtInt(ahead)), ' ahead of the registry (which is legal)') : '',
     broken ? el('span', {}, ', ', el('b', {}, fmtInt(broken)), ' broken') : '',
     behind ? el('span', {}, ', ', el('b', {}, fmtInt(behind)), ' behind') : '',
-    '.'));
+    '.', infoBtn('Your stack', STACK_INFO)));
 
   if (pkgs.length) {
     main.push(el('p', { class: 'impact-note' },
@@ -854,6 +917,29 @@ function capState(raw) {
 }
 const capBucket = (row) => capState(row && row.state) || 'UNKNOWN';
 
+/* THE ONE GATE THAT DECIDES WHETHER A ROW EARNS A CHECKBOX AT ALL.
+ *
+ * A checkbox is a STRONGER promise than the plain-text turn-on line above it: a button says "you
+ * could run this"; a checkbox says "this is a switch, and I am telling you its current position." So
+ * the bar is at least as strict as the bar for text, and in one respect stricter — the server only
+ * ever stamps `row.recId` once it built a full, schema-gated Recommendation (evidence, cost, change,
+ * undo all present — see console-engine.mjs's makeRecommendation()) AND capability-registry.mjs's own
+ * proven-undo map accepted the row (buildCapabilityRecommendations() there — currently exactly
+ * memory-distillation, and only while OFF). See that file's header for the full "why".
+ *
+ * This is intentionally REDUNDANT with what the server already guarantees. A client-side check that
+ * merely trusted `row.recId` being truthy would work today and silently stop meaning anything the
+ * moment a future edit stamped it for the wrong reason — exactly the shape of "a field-name typo made
+ * one repo permanently unverified" (fix(3.9.69)). Re-derive every gate here; never just trust the flag. */
+function capCheckboxEligible(row, known) {
+  if (known !== 'OFF') return false;                                  // never ON / IDLE / UNKNOWN / ABSENT
+  if (String(row.scope || '').toLowerCase() === 'machine') return false; // machine-wide: full rec-card path only, never an inline tick
+  const cmd = row.turnOn && typeof row.turnOn === 'object' && typeof row.turnOn.cmd === 'string' ? row.turnOn.cmd : '';
+  if (!cmd || /<[^>]+>/.test(cmd)) return false;                       // no verified command, or one with a blank to fill in
+  if (typeof row.recId !== 'string' || !row.recId) return false;       // the server never vouched for this one
+  return true;
+}
+
 /* Evidence arrives in whichever shape the detector that produced it already uses: a plain string,
    a list of strings, or capability-audit.mjs's own [{ observed }] records. Accept all three rather
    than force one, and silently drop nothing-shaped entries — an empty bullet is noise, not evidence. */
@@ -866,6 +952,74 @@ function capEvidence(ev) {
     if (typeof t === 'string' && t.trim()) out.push(t.trim());
   }
   return out;
+}
+
+/* THE CAPABILITIES CARD'S ONLY INTERACTIVE CONTROL, and it does not itself apply anything — it points
+ * at the one place that does. The console already has exactly one tested state machine for "show
+ * evidence/cost/undo, get consent, apply, confirm, offer undo": the rec cards in "What we'd suggest"
+ * (buildRecCard/doApply/showConfirm/applied/doUndo above), fed by makeRecommendation()'s schema gate,
+ * which cannot construct a Recommendation missing evidence, cost, change, or undo. A checkbox that
+ * POSTed to /api/apply on its own, carrying its own payload, would be a SECOND, unaudited way to
+ * trigger a machine mutation — precisely the "two answers to one question" failure this project has
+ * already shipped more than once (capability-registry.mjs's learningEnable story, the hooks-list
+ * story). So this rides jumpToRec(recId) unchanged, the exact pattern the stack card's "attention" rows
+ * already use.
+ *
+ * The box must never visually move on its own click. It only ever shows checked once recheckMachine()
+ * has re-run the real detector and the row re-renders with state 'on' — at which point capRow() stops
+ * calling capCheckboxEligible entirely (known !== 'OFF') and this function is never called again for
+ * that row. There is no code path that sets `.checked = true` directly; clicking this box always
+ * preventDefault()s and only ever opens the real card. */
+function capCheckbox(row) {
+  const id = `capbox-${row.key}`;
+  const humanAction = (row.turnOn && row.turnOn.human) || `Turn on ${row.label || row.key}`;
+
+  // GUARD FOR "the rec hasn't loaded yet". /api/state, /api/stack, and /api/memory settle at
+  // different times (see stateRecsSettled/stackRecsSettled/healthRecsSettled), and jumpToRec()
+  // silently no-ops if `#rec-<id>` isn't in the DOM yet. Rather than let a click do nothing with no
+  // explanation, an eligible row whose card has not rendered yet gets an honest, disabled placeholder
+  // instead of a clickable box that might fail silently.
+  const recNode = document.getElementById(`rec-${row.recId}`);
+  if (!recNode) {
+    return el('div', { class: 'cap-toggle-wrap cap-toggle-pending' },
+      el('span', { class: 'cap-toggle-text muted' }, `${humanAction} — still loading the full proposal…`));
+  }
+
+  const cb = el('input', {
+    type: 'checkbox', id, class: 'cap-toggle', checked: false, disabled: false,
+    'aria-describedby': `${id}-note`,
+    onclick: (ev) => {
+      // preventDefault() keeps it unchecked; jumpToRec is what actually moves the world.
+      ev.preventDefault();
+      jumpToRec(row.recId);
+      announce(`Opening the one-click control for ${row.label || row.key} — nothing has changed yet.`);
+    },
+  });
+  return el('div', { class: 'cap-toggle-wrap' },
+    el('label', { class: 'cap-toggle-label', for: id }, cb,
+      el('span', { class: 'cap-toggle-text' }, humanAction)),
+    el('p', { class: 'cap-toggle-note', id: `${id}-note` },
+      'Ticking this opens the full proposal below — evidence, cost, and the undo — and applies ',
+      'nothing until you confirm it there.'));
+}
+
+/* IDLE — never a checkbox (see capCheckboxEligible: known !== 'OFF' rules it out outright). Says so,
+   once, so the absence of a control here reads as a decision rather than an oversight — the same
+   "state one MORE fact" principle capLegend() already applies to the five state chips. */
+function capIdleNote() {
+  return el('p', { class: 'cap-honest-mark is-idle' },
+    el('span', { class: 'mark-glyph', 'aria-hidden': 'true' }, '◐'),
+    'Not a switch to flip — this ran before and something that should call it stopped. ',
+    'Fixing it means re-wiring the hook or gate named in the evidence above, not running a command.');
+}
+
+/* UNKNOWN (and its ABSENT sibling handled inline in capRow) — never a checkbox; we do not know the
+   current position, so there is nothing honest to show a box toggling from. Terse and low-weight on
+   purpose: this is the least actionable of the five states and should take the least space. */
+function capUnknownNote() {
+  return el('p', { class: 'cap-honest-mark is-unknown' },
+    el('span', { class: 'mark-glyph', 'aria-hidden': 'true' }, '?'),
+    'Not checked — nothing to tick here until this can be read.');
 }
 
 function capRow(row) {
@@ -897,6 +1051,11 @@ function capRow(row) {
   const turnOn = (row.turnOn && typeof row.turnOn === 'object'
     && typeof row.turnOn.cmd === 'string' && row.turnOn.cmd.trim()) ? row.turnOn : null;
   const wantsAdvice = known === 'OFF' || known === 'ABSENT';
+  // THE ONE ROW-LEVEL DECISION THAT CAN PROMOTE PLAIN TEXT TO A REAL CONTROL. See
+  // capCheckboxEligible()'s own header for the full gate list; checked FIRST and narrowly, so a row
+  // that fails even one gate falls straight through to the exact same honest text this card already
+  // rendered before checkboxes existed — nothing about the non-eligible path changes.
+  const checkboxEligible = capCheckboxEligible(row, known);
 
   return el('div', { class: `cap-row ${st.klass}` },
     el('span', { class: 'cap-name' },
@@ -930,17 +1089,27 @@ function capRow(row) {
               el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
           : el('ul', { class: 'cap-ev' }, ...evidence.map((e) => el('li', {}, e))))
         : el('p', { class: 'cap-ev-none cell-dim' }, 'No evidence was recorded for this row.'),
-      wantsAdvice
-        ? (turnOn
-          ? el('p', { class: 'cap-turnon' },
-              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
-              String(turnOn.human || 'run'), ' — ', el('code', {}, String(turnOn.cmd)))
-          : el('p', { class: 'cap-turnon cap-turnon-none' },
-              el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
-              'No verified one-line command exists for this one, so none is offered — a command that ',
-              'sends you to a terminal to be told “unknown subcommand” would cost you trust in every ',
-              'other row on this page.'))
-        : null),
+      checkboxEligible
+        ? capCheckbox(row)
+        : wantsAdvice
+          ? (turnOn
+            ? el('p', { class: 'cap-turnon' },
+                el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+                String(turnOn.human || 'run'), ' — ', el('code', {}, String(turnOn.cmd)))
+            : el('p', { class: 'cap-turnon cap-turnon-none' },
+                el('span', { class: 'cap-turnon-lb' }, 'to turn it on'),
+                'No verified one-line command exists for this one, so none is offered — a command that ',
+                'sends you to a terminal to be told “unknown subcommand” would cost you trust in every ',
+                'other row on this page.'))
+          // Neither "wants advice" nor eligible for a checkbox: IDLE and UNKNOWN still get an honest,
+          // non-interactive mark rather than silence — the same "state one more fact" principle the
+          // legend below already applies to the five state chips. ON says nothing further; its chip
+          // already is the whole answer.
+          : known === 'IDLE'
+            ? capIdleNote()
+            : known === 'UNKNOWN'
+              ? capUnknownNote()
+              : null),
     el('span', { class: 'cap-status' }, chip(label, st.tone, hint)));
 }
 
@@ -961,10 +1130,18 @@ function capLegend() {
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-idle' }), 'set up, not running — nothing is calling it'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-off' }), 'off — present, not running'),
     el('span', { class: 'cl' }, el('span', { class: 'cl-key k-absent' }), 'not installed — we looked, it isn’t here'),
-    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'));
+    el('span', { class: 'cl' }, el('span', { class: 'cl-key k-unknown' }), 'not checked — we couldn’t tell, and won’t guess'),
+    // NEW — states one MORE fact: a checkbox appearing at all is itself informative (state off, a
+    // verified command, a proven undo), so say what its absence means too. Same principle as adding
+    // IDLE to this legend in the first place: the reader should never have to infer "nothing to tick
+    // here" from silence alone.
+    el('span', { class: 'cl cl-checkbox-note' },
+      '☐ a tickable box only appears where flipping it is single-step, reversible, and proven — everything else explains itself in words, on purpose'));
 }
 
+let lastCapabilities = null;   // kept so the card can re-render once the rec cards its checkboxes point at have mounted
 function renderCapabilities(data) {
+  lastCapabilities = data;
   const body = $('#body-capabilities');
   const rows = Array.isArray(data && data.rows)
     ? data.rows.filter((r) => r && typeof r === 'object')
@@ -1087,11 +1264,15 @@ function renderCapabilities(data) {
   }
   main.push(...groups);
 
-  // No control that can't act: this card reads state, it does not flip switches. Say where the
-  // acting happens instead of growing a button with no executor and no undo behind it.
+  // Almost no control that can't act: this card mostly reads. The one exception — a row whose
+  // checkbox cleared capCheckboxEligible()'s full gate list — still never applies anything itself; it
+  // only opens the real, consent-gated card below. Say where the acting happens either way, instead of
+  // growing a button (or a checkbox) with no executor and no undo behind it.
   main.push(el('p', { class: 'fineprint' },
-    'This card only reads — nothing here changes your machine. Anything worth switching on shows up ',
-    'in ', el('b', {}, 'What we’d suggest'), ' below, with its evidence, its cost, and its undo recorded first.'));
+    'This card mostly reads. A few rows carry a tickable box — even there, ticking only opens the ',
+    'consent-gated proposal below; nothing runs until you confirm it ', el('b', {}, 'there'),
+    ', with its evidence, its cost, and its undo.',
+    infoBtn('What’s on, what’s off', CAPABILITIES_INFO)));
 
   body.replaceChildren(withIllo('capabilities', ...main));
 }
@@ -1161,6 +1342,12 @@ const WV_ICON_DRIFT = `
 
 function renderWiring(w) {
   const body = $('#body-wiring');
+  // Attach the "how it's wired" explainer to the card's static <h2> UNCONDITIONALLY. It used to live
+  // only inside the verdict banner, which mounts only when `total > 0` — so on a machine with zero
+  // wiring sites the whole explainer vanished, which is almost certainly why this card was the one the
+  // owner could never place. Idempotent because <h2> is a static node, not one rebuilt each render.
+  const wh2 = document.querySelector('#card-wiring h2');
+  if (wh2 && !wh2.querySelector('.info-btn')) wh2.append(infoBtn('How it’s wired', WIRING_INFO));
   if (!w) {
     setChips('chips-wiring', [chip('no data', 'grey')]);
     body.replaceChildren(el('p', { class: 'muted' }, 'No wiring data received.'));
@@ -1227,7 +1414,7 @@ function renderWiring(w) {
     main.push(el('div', { class: 'wire-verdict' + (driftN ? ' is-drift' : ' is-clean') },
       el('span', { class: 'wv-icon', 'aria-hidden': 'true' }, frag(driftN ? WV_ICON_DRIFT : WV_ICON_CLEAN)),
       el('div', { class: 'wv-text' },
-        el('p', { class: 'wv-title' }, title, infoBtn('How it’s wired', WIRING_INFO)),
+        el('p', { class: 'wv-title' }, title),
         el('p', { class: 'wv-sub' }, ...sub),
         driftN && driftSites.length ? el('ul', { class: 'wv-sites' },
           ...driftSites.slice(0, 8).map((x) => el('li', {},
@@ -1336,6 +1523,16 @@ function maybeRecsEmpty() {
 function recsSettled(source, ok) {
   if (source === 'state') stateRecsSettled = true;
   if (source === 'health') healthRecsSettled = true;
+  // A capability checkbox only renders once the rec card it opens (`#rec-enable:<key>`) is in the
+  // DOM — before that it shows an honest "still loading" placeholder (see capCheckbox). Those rec
+  // cards arrive with the recommendations, AFTER capabilities have already rendered once. Without
+  // this, the placeholder never upgrades and the checkbox never appears. Re-render capabilities once
+  // the recs that back them have settled, but ONLY if a pending placeholder is actually waiting —
+  // no cards waiting means no reason to repaint.
+  if ((source === 'state' || source === 'health') && lastCapabilities
+      && document.querySelector('#card-capabilities .cap-toggle-pending')) {
+    renderCapabilities(lastCapabilities);
+  }
   if (source === 'stack') {
     stackRecsSettled = true;
     const pending = $('#recs-pending');
@@ -1381,6 +1578,22 @@ function addRecommendations(recs, source) {
       `${dropped} proposal${dropped === 1 ? '' : 's'} arrived without evidence, cost, or an undo and ${dropped === 1 ? 'was' : 'were'} not rendered — the contract requires all three.`));
   }
   updateRecsChip();
+}
+
+/* The owner's "user-level vs per-project" question, answered per card: the blast radius of applying
+ * this suggestion. `null` scope shows a muted "scope not stated" pill rather than being silently
+ * folded into either side — the same honesty the rest of the console holds to (never guess a state).
+ * A full grouped-sections layout is a deliberate follow-up: its group order and whether user/machine
+ * split into two visible groups are product decisions the owner reserved. */
+const REC_SCOPE_LABEL = {
+  project: { text: 'Just this project', tone: 'cyan', title: 'Applying this changes only the project you are in right now.' },
+  user: { text: 'Every project · your account', tone: 'amber', title: 'Applying this changes behaviour for every project under your user account.' },
+  machine: { text: 'Every project · this machine', tone: 'amber', title: 'Applying this changes behaviour for every project on this computer.' },
+};
+function recScopePill(scope) {
+  const s = REC_SCOPE_LABEL[scope];
+  if (!s) return chip('scope not stated', 'grey', 'We did not establish whether this is project-only or machine-wide — it is not guessed.');
+  return chip(s.text, s.tone, s.title);
 }
 
 function buildRecCard(rec) {
@@ -1546,6 +1759,7 @@ function buildRecCard(rec) {
   card.append(
     el('div', { class: 'rec-top' },
       el('h3', {}, rec.title || rec.id),
+      recScopePill(rec.scope),
       chip(rec.severity || 'INFO', SEV_TONE[rec.severity] || 'grey')),
     rec.rationale ? el('p', { class: 'rationale' }, rec.rationale) : null,
     impact,
@@ -1605,7 +1819,7 @@ function renderLearnings(l) {
     el('div', { class: 'learn-head' },
       el('span', { class: 'learn-spark', 'aria-hidden': 'true' }, '✦'),
       el('div', { class: 'learn-headtext' },
-        el('div', { class: 'learn-title' }, 'Learning how you work'),
+        el('div', { class: 'learn-title' }, 'Learning how you work', infoBtn('Learning how you work', LEARNINGS_INFO)),
         el('div', { class: 'learn-sub' },
           el('b', {}, fmtInt(l.patterns) + ' patterns'), ' from ', el('b', {}, fmtInt(l.trajectories) + ' workflows'),
           when ? ' · ' + when : ''))),
@@ -1656,7 +1870,7 @@ function renderMemory(mem) {
   main.push(el('div', { class: 'memory-top' },
     dial(score),
     el('div', { class: 'mem-summary' },
-      el('h3', {}, h.project ? `${h.project} — memory quality` : 'Memory quality'),
+      el('h3', {}, h.project ? `${h.project} — memory quality` : 'Memory quality', infoBtn('Memory quality', MEMORY_INFO)),
       el('p', { class: 'mem-line' }, h.summary ||
         'A quality score, not a liveness light: a store can be up, populated, and still never surface the thing you need.'),
       el('p', { class: 'fineprint' },
@@ -1838,7 +2052,7 @@ function renderRouterEngine(re) {
 
   return el('details', { class: 'mh-profiles' },
     el('summary', { class: 'rp-summary' },
-      el('span', { class: 'rp-sum-t' }, 'Who routes your work — and with what'),
+      el('span', { class: 'rp-sum-t' }, 'Who routes your work — and with what', infoBtn('Who routes your work', ROUTER_ENGINE_INFO)),
       el('span', { class: 'rp-sum-s' }, `rUv’s learned router · your prices · ${eng.mode.toLowerCase().replace('-', ' ')}`),
       el('span', { class: 'rp-chev', 'aria-hidden': 'true' }, '›')),
     el('div', { class: 'rp-body' },
@@ -1997,7 +2211,7 @@ function renderProviders(sv) {
         ` ${KEY_NAME[id]}`);
     }));
   const planBox = el('div', { class: 'plan-box' },
-    el('span', { class: 'plan-label' }, 'Your plan'),
+    el('span', { class: 'plan-label' }, 'Your plan', infoBtn('Your plan and OpenRouter', PROVIDERS_INFO)),
     head('is-house', houseName, action('Change', 'provider')),
     el('p', { class: 'plan-sub' }, `MetaHarness's main work runs here at no extra cost.`),
     checklist);
@@ -2090,7 +2304,8 @@ function renderSavings(sv) {
       el('b', {}, 'MetaHarness'), ' tunes everything wrapped around your model — the planning, the ',
       'context, the retries, which model each task goes to — and keeps only the changes that ',
       el('b', {}, 'measurably win'), '. The model itself never changes. rUv leaves it ',
-      el('b', {}, 'off by default'), ' on purpose: he’d rather you choose it than have it forced on you.'),
+      el('b', {}, 'off by default'), ' on purpose: he’d rather you choose it than have it forced on you.',
+      infoBtn('Smart model routing', SAVINGS_INFO)),
     el('figure', { class: 'mh-diagram' },
       el('img', {
         // NOT lazy: at 6.5KB this saves nothing, and the card sits far enough down the page that the
@@ -2618,7 +2833,8 @@ function renderTrust(t) {
   body.replaceChildren(
     el('p', { class: 'lead-stat' },
       'Provenance you can check, not take on faith — ', el('b', {}, String(liveCount)),
-      ` measurement${liveCount === 1 ? ' is' : 's are'} live today; the rest of this card names exactly what v3.3 will measure.`),
+      ` measurement${liveCount === 1 ? ' is' : 's are'} live today; the rest of this card names exactly what v3.3 will measure.`,
+      infoBtn('Trust & provenance', TRUST_CARD_INFO)),
     el('div', { class: 'trust-list', 'data-trust-ready': '1' }, ...rows),
   );
 }
@@ -2762,7 +2978,8 @@ function renderGates(g) {
       : '',
     dupes.length
       ? el('span', { class: 'muted' }, ` Wired twice, so it runs twice: ${dupes.join(', ')}.`)
-      : ''));
+      : '',
+    infoBtn('What caught Claude', GATES_INFO)));
 
   if (caught) {
     // Deliberately NOT the .wire-lane grid: its fixed columns are sized for (count, label, meaning)
@@ -3235,7 +3452,8 @@ function renderLessons(data) {
   body.replaceChildren(
     el('p', { class: 'loading-note' },
       'These are the rules I now work by on this machine. You can switch any of them off — ',
-      'nothing here is permanent, and off is reversible.'),
+      'nothing here is permanent, and off is reversible.',
+      infoBtn('What it’s learned from you', LESSONS_INFO)),
     ...partitionLessons(list, rows));
 }
 

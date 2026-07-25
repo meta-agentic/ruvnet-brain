@@ -16,7 +16,7 @@
 
 import { test, expect } from 'vitest';
 
-import { buildHealthRecommendations, buildStackRecommendations, buildWiringRecommendations } from '../../scripts/console-engine.mjs';
+import { buildHealthRecommendations, buildStackRecommendations, buildWiringRecommendations, buildCapabilityRecommendations } from '../../scripts/console-engine.mjs';
 import { REMEDIES, planFor, resolveRemedy, assertRegistryClosure, sampleIdFor, UNDO_KINDS } from '../../scripts/remedy-registry.mjs';
 import { HANDLED_UNDO_KINDS } from '../../scripts/onboarding-console.mjs';
 
@@ -62,6 +62,19 @@ function allOfferableIds() {
     sites: [{ project: 'demo-project', mechanism: 'NPX', file: '.claude/settings.json', event: 'PreToolUse', spec: 'npx ruflo@latest hooks pre-edit' }],
   }).map((r) => r.id));
 
+  // Capability bridge: an OFF memory-distillation row with a verified, placeholder-free command and
+  // real evidence — the one shape capability-registry.mjs actually produces when this capability is
+  // off. This is the exact fixture that would have caught the "offered with no executor" bug if it
+  // had shipped here instead of in learning:enable-fleet.
+  ids.push(...buildCapabilityRecommendations({
+    capabilities: [{
+      key: 'memory-distillation', label: 'Memory distillation', scope: 'project', state: 'off',
+      whatItBuysYou: 'Loose notes from past sessions get mined into reusable patterns.',
+      turnOn: { human: "Mine this project's stored memories into reusable patterns (snapshots first; reversible)", cmd: 'node /repo/scripts/distill-project.mjs' },
+      evidence: '120 memories stored and 80.0% embedded, but 0 have been distilled into patterns — the store records and forgets',
+    }],
+  }).map((r) => r.id));
+
   return ids;
 }
 
@@ -88,6 +101,19 @@ test('the North Star recommendation is runnable — it was not, and that was the
   expect(plan.exec.args.includes('--distill-fleet')).toBeTruthy();
   expect(plan.undo.kind).toBe(UNDO_KINDS.RESTORE_STORE_BACKUPS);
   expect(plan.exec.needsReceipt, 'a fleet-wide change must record WHICH stores it touched, or its undo is a guess').toBeTruthy();
+});
+
+test('the capability checkbox is runnable — enable:memory-distillation resolves to distill-project.mjs, scoped to the server\'s own project, with a real undo', () => {
+  const ids = allOfferableIds();
+  expect(ids.includes('enable:memory-distillation'), 'the capability recommendation was not constructed at all').toBeTruthy();
+  const plan = planFor('enable:memory-distillation');
+  expect(plan, 'enable:memory-distillation has no remedy — a checkbox with no executor behind it').toBeTruthy();
+  expect(plan.exec.script).toBe('scripts/distill-project.mjs');
+  // No project baked into the args here — usesServerProject defers that to onboarding-console.mjs's
+  // apply(), which supplies process.cwd() (the ACTUAL project the console is serving), never REPO.
+  // See remedy-registry.mjs's own comment on this remedy for why that distinction matters.
+  expect(plan.exec.usesServerProject, 'must be scoped to the server\'s project, never left to default to REPO').toBeTruthy();
+  expect(plan.undo.kind).toBe(UNDO_KINDS.RESTORE_PROJECT_DISTILL);
 });
 
 test('repair:memory-index routes to the database repair, never to a package sync', () => {

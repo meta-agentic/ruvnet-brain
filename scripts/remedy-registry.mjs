@@ -40,6 +40,11 @@ export const UNDO_KINDS = Object.freeze({
   RESTORE_MEMORY_BACKUP: 'restore-memory-backup',
   RESTORE_STORE_BACKUPS: 'restore-store-backups',
   AUTO_REBUILD: 'auto-rebuild',
+  // distill-project.mjs's OWN `--restore` (see its header: a tested inverse, not a re-implementation
+  // of one). Distinct from RESTORE_MEMORY_BACKUP/RESTORE_STORE_BACKUPS because those restore backups
+  // *this server* located and named; this one hands the restore entirely to the same script that took
+  // the snapshot, which already knows where its own backups live.
+  RESTORE_PROJECT_DISTILL: 'restore-project-distill',
 });
 const K = UNDO_KINDS;
 
@@ -95,6 +100,27 @@ export const REMEDIES = [
     // health-repair snapshots each store with `ruflo memory backup` (rUv's own WAL-safe, rotated
     // snapshotter) before distilling it; the inverse restores those snapshots.
     inverse: () => ({ kind: K.RESTORE_STORE_BACKUPS }),
+  },
+  {
+    // THE CAPABILITY BRIDGE'S ONLY CURRENT MEMBER. buildCapabilityRecommendations() in
+    // console-engine.mjs offers `enable:memory-distillation` only while the capability is OFF; this
+    // is the executor behind it. See distill-project.mjs's header for why THIS script and not bare
+    // `ruflo memory distill run`: the wrapper snapshots first, fails closed on a receipt-write
+    // failure, and its `--restore` is the tested inverse (proven 644→648→644→648, 2026-07-24).
+    key: 'enable-memory-distillation',
+    summary: "mine this project's stored memories into reusable patterns (snapshots first; reversible)",
+    match: (id) => (id === 'enable:memory-distillation' ? {} : null),
+    // This console instance is always scoped to ONE project — the directory it was started in — the
+    // same assumption the memory-index/learning-flush/learning-train remedies above already make.
+    // `usesServerProject` asks onboarding-console.mjs (impure, process-aware) to supply that directory
+    // at call time; this file stays pure and never reads process.cwd() itself (see header).
+    plan: () => ({ script: 'scripts/distill-project.mjs', args: [], usesServerProject: true }),
+    // `--restore` with no path argument uses distill-project.mjs's OWN newestSnapshot() lookup inside
+    // this project's `.swarm/backups` — the exact mechanism its header proves end to end. Re-deriving
+    // which snapshot to restore here, instead of asking the tool that took it, is the kind of
+    // duplicate implementation this project has already been burned by once (ADR-047's rejected
+    // "offered command and promised undo live on different execution paths" bug).
+    inverse: () => ({ kind: K.RESTORE_PROJECT_DISTILL }),
   },
   {
     key: 'stack-sync',
@@ -208,6 +234,7 @@ export function sampleIdFor(remedy) {
     case 'learning-flush': return 'learning:flush';
     case 'learning-train': return 'learning:train';
     case 'distill-fleet': return 'learning:distill-fleet';
+    case 'enable-memory-distillation': return 'enable:memory-distillation';
     case 'stack-sync': return 'sync:ruflo';
     case 'purge-shadows': return 'purge:shadows';
     case 'reconcile-project': return 'reconcile:example';

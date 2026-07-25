@@ -80,6 +80,7 @@ const FLAG_UNINSTALL = argv.includes('--uninstall'); // reverse everything, in o
 const FLAG_WHAT_CHANGED = argv.includes('--what-changed'); // show our footprint on this machine
 // ── onboarding-experience flags (all optional; every offer is safe to decline) ──
 const FLAG_YES = argv.includes('--yes') || argv.includes('-y'); // accept every optional offer non-interactively
+const FLAG_PLAN = argv.includes('--plan') || argv.includes('--dry-run'); // show the interactive checklist, then exit — install NOTHING
 const FLAG_WITH_STACK = argv.includes('--with-stack'); // add missing Ruflo/RuVector without prompting
 const FLAG_NO_STACK = argv.includes('--no-stack'); // skip the toolkit offer entirely
 const FLAG_ENHANCE_CLAUDE_MD = argv.includes('--enhance-claude-md'); // add the CLAUDE.md section without prompting
@@ -1682,7 +1683,10 @@ export async function offerSpendGuard() {
   // NOT gated on FLAG_YES — second launchd job, same rule as the nightly updater above.
   if (!process.stdin.isTTY && !FLAG_ENABLE_SPEND_GUARD) { info(`No terminal to prompt on — install it any time with  ${c.bold('npx ruvnet-brain --enable-spend-guard')}`); return 'recommended'; }
   let yes = true;
-  if (!FLAG_ENABLE_SPEND_GUARD) {
+  const plannedSpend = plannedChoice('spend');
+  if (plannedSpend !== undefined) {
+    yes = plannedSpend;   // answered in the up-front checklist — never re-ask
+  } else if (!FLAG_ENABLE_SPEND_GUARD) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((resolve) => rl.question(`    ${c.cyan('?')} Install the spend watchdog? ${c.dim('[Y/n]')} `, resolve));
     rl.close();
@@ -1848,7 +1852,11 @@ export async function offerNightly() {
   }
 
   let yes = true;
-  if (!FLAG_ENABLE_NIGHTLY) {
+  const planned = plannedChoice('nightly');
+  if (planned !== undefined) {
+    // Already answered in the up-front checklist — don't ask twice (the owner's complaint).
+    yes = planned;
+  } else if (!FLAG_ENABLE_NIGHTLY) {
     // Not ask(): its parser treats anything but y/yes as no. Here the DEFAULT is yes — only an
     // explicit n/no declines (parseNightlyAnswer holds that contract, and the tests hold it there).
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -1925,7 +1933,10 @@ export async function offerTelemetry(cacheDir) {
   }
 
   let yes = true; // --yes accepts every optional offer, this one included
-  if (!FLAG_YES) {
+  const plannedTelemetry = plannedChoice('telemetry');
+  if (plannedTelemetry !== undefined) {
+    yes = plannedTelemetry;   // answered in the up-front checklist — never re-ask
+  } else if (!FLAG_YES) {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((resolve) =>
       rl.question(`    ${c.cyan('?')} Share anonymous usage counts (installs/searches — never your queries or code)? ${c.dim('[Y/n]')} `, resolve),
@@ -2004,66 +2015,96 @@ async function printPlanAndConfirm() {
   const H = os.homedir();
   const short = (p) => p.replace(H, '~');
 
-  const steps = [
-    { auto: true,  name: 'Download the knowledge base',
-      // short() already renders $HOME as "~"; prefixing another one produced "~~/.cache/…".
+  // The REQUIRED core — always runs, shown for transparency, never a question (nothing works without
+  // these, so asking would be theatre).
+  const core = [
+    { name: 'Download the knowledge base',
       cost: short(resolveCacheDir().cacheDir),
-      what: 'Real rUv source, on your disk, so answers cite files instead of guessing.',
-      undo: 'npx ruvnet-brain --uninstall' },
-    { auto: true,  name: 'Register the Claude Code plugin + MCP server',
+      what: 'Real rUv source, on your disk, so answers cite files instead of guessing.' },
+    { name: 'Register the Claude Code plugin + MCP server',
       cost: `an entry in ${short(path.join(H, '.claude'))}`,
-      what: 'Gives Claude a search_ruvnet tool. Adds no hooks you have not agreed to.',
-      undo: 'npx ruvnet-brain --uninstall' },
-    { ask: true,   name: 'Add rUv tools you are missing',
-      cost: 'npm installs, only the ones you pick',
-      what: 'So the brain can build with them, not just answer questions about them.',
-      undo: 'npm uninstall -g <tool>' },
-    { ask: true,   name: 'Nightly auto-updates',
-      cost: 'one LaunchAgent',
-      what: 'Keeps the KB and plugin current. Recommended — rUv ships fast, and a stale brain is the main way this stops being useful.',
-      undo: 'npx ruvnet-brain --disable-nightly' },
-    { ask: true,   name: 'Spend watchdog',
-      cost: 'one LaunchAgent',
+      what: 'Gives Claude a search_ruvnet tool. Adds no hooks you have not agreed to.' },
+  ];
+  // The OPTIONAL steps — each asked ONCE here, stored in PLAN_CHOICES, and consumed by its offer
+  // later (no second prompt). `def` is the pre-check: nightly + spend are recommended (default yes),
+  // the rest default off. `rec` tags the two recommended ones for the display grouping.
+  const optional = [
+    { key: 'nightly', rec: true,  name: 'Evergreen auto-updates',
+      what: 'Keeps the KB and plugin current — declining makes updates manual forever. rUv ships fast, and a stale brain is the main way this stops being useful.',
+      undo: 'npx ruvnet-brain --disable-nightly', def: true },
+    { key: 'spend',   rec: true,  name: 'Spend watchdog',
       what: 'Warns you if an agent fleet starts burning API credit unexpectedly.',
-      undo: 'npx ruvnet-brain --disable-spend-guard' },
-    { ask: true,   name: 'Status-bar version segment',
-      cost: 'one line in settings.json',
+      undo: 'npx ruvnet-brain --disable-spend-guard', def: true },
+    { key: 'stack',   name: 'Add rUv tools you are missing',
+      what: 'So the brain can build with them, not just answer questions about them. The brain answers grounded questions fine without them.',
+      undo: 'npm uninstall -g <tool>', def: false },
+    { key: 'statusline', name: 'Status-bar version segment',
       what: 'Shows which brain version is live while you work.',
-      undo: 'npx ruvnet-brain --no-statusline, or delete the statusLine entry' },
-    { ask: true,   name: 'Anonymous usage counts',
-      cost: 'a counter ping',
+      undo: 'npx ruvnet-brain --no-statusline', def: false },
+    { key: 'telemetry', name: 'Anonymous usage counts',
       what: 'Installs and searches only — never your queries, your code, or your paths.',
-      undo: 'npx ruvnet-brain --no-telemetry' },
+      undo: 'npx ruvnet-brain --no-telemetry', def: true },
   ];
 
   console.log(`  ${c.bold('Here is everything this will do.')} Nothing has happened yet.\n`);
-  for (const s of steps) {
-    const mark = s.auto ? c.green('✓') : c.cyan('?');
-    console.log(`  ${mark} ${c.bold(s.name)}  ${c.dim('· ' + s.cost)}`);
-    console.log(`      ${s.what}`);
-    console.log(`      ${c.dim('undo: ' + s.undo)}\n`);
+  console.log(`  ${c.bold('The core')} ${c.dim('— required; happens automatically')}`);
+  for (const s of core) {
+    console.log(`    ${c.green('✓')} ${c.bold(s.name)}  ${c.dim('· ' + s.cost)}`);
+    console.log(`        ${s.what}`);
   }
-  console.log(`  ${c.green('✓')} happens automatically.  ${c.cyan('?')} is asked first — and "no" is a complete answer.`);
-  console.log(`  ${c.dim('Every step is reversible, and `npx ruvnet-brain --what-changed` lists everything it touched.')}\n`);
+  console.log('');
 
-  // FLAG_YES means the caller already decided; a plan screen that blocks automation would break
-  // agentic-kit and every scripted install. Print it, then proceed — the information is the point,
-  // the pause is a courtesy to humans.
+  // FLAG_YES / non-TTY: the caller already decided (agentic-kit, scripted installs). Print the plan,
+  // leave PLAN_CHOICES empty, and let each offer honor its own flags/defaults as before. Never block.
   if (FLAG_YES || FLAG_AUTO || !process.stdin.isTTY) {
+    console.log(`  ${c.dim('The rest (auto-update, spend watchdog, extras) is handled non-interactively by each step.')}`);
+    if (FLAG_PLAN) {
+      console.log(`  ${c.dim('--plan: preview only. Nothing was installed.')}\n`);
+      process.exit(0);
+    }
     console.log(c.dim('  (non-interactive — continuing)\n'));
     return;
   }
+
+  // INTERACTIVE CHECKLIST — decide each optional ONCE, here, instead of being re-asked one by one.
+  console.log(`  ${c.bold('Choose the optional pieces')} ${c.dim('— press Enter to accept the [default]; every one is reversible')}\n`);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const a = await new Promise((r) => rl.question(`  ${c.cyan('?')} Continue? ${c.dim('[Y/n]')} `, r));
+  const askOne = (q, def) => new Promise((resolve) => {
+    const suffix = def ? c.dim('[Y/n]') : c.dim('[y/N]');
+    rl.question(`  ${def ? c.yellow('●') : c.dim('○')} ${c.bold(q)} ${suffix} `, (a) => {
+      const s = String(a).trim().toLowerCase();
+      resolve(s === '' ? def : (s === 'y' || s === 'yes'));
+    });
+  });
+  for (const s of optional) {
+    console.log(`      ${s.what}`);
+    console.log(`      ${c.dim('undo: ' + s.undo)}`);
+    // eslint-disable-next-line no-await-in-loop
+    PLAN_CHOICES[s.key] = await askOne(s.name + (s.rec ? c.dim(' (recommended)') : ''), s.def);
+    console.log('');
+  }
   rl.close();
-  if (/^n/i.test(String(a).trim())) {
-    console.log(`\n  Stopped. Nothing was changed.\n`);
+
+  const on = optional.filter((s) => PLAN_CHOICES[s.key]).map((s) => s.name);
+  console.log(`  ${c.green('✓')} Plan set — the core, plus: ${on.length ? c.bold(on.join(', ')) : c.dim('none of the optional pieces')}.`);
+  if (FLAG_PLAN) {
+    console.log(`  ${c.dim('--plan: preview only. Nothing was installed. Re-run without --plan to apply this.')}\n`);
     process.exit(0);
   }
-  console.log('');
+  console.log(`  ${c.dim('`npx ruvnet-brain --what-changed` lists everything it touched. Installing…')}\n`);
 }
 
-function ask(question, def = false, { blanketYes = true } = {}) {
+// THE CHECKLIST'S ANSWERS, collected ONCE up front in printPlanAndConfirm() and consumed by each
+// offer instead of a second serial prompt. The owner's complaint (2026-07-24): the plan screen
+// showed everything, then every offer asked again, one at a time. Now you decide once. Empty in the
+// non-interactive / --yes / CI paths (printPlanAndConfirm returns before populating it), so every
+// offer falls through to its existing flag/default behavior unchanged.
+export const PLAN_CHOICES = Object.create(null);
+/** The checklist's answer for `key`, or undefined if it wasn't collected (so the offer prompts as before). */
+export function plannedChoice(key) { return key in PLAN_CHOICES ? PLAN_CHOICES[key] : undefined; }
+
+export function ask(question, def = false, { blanketYes = true, planKey = null } = {}) {
+  if (planKey != null) { const p = plannedChoice(planKey); if (p !== undefined) return Promise.resolve(p); }
   if (FLAG_YES && blanketYes) return Promise.resolve(true);
   if (!process.stdin.isTTY) return Promise.resolve(def);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -2169,7 +2210,7 @@ async function offerStack(env) {
     return;
   }
 
-  const yes = FLAG_WITH_STACK || (await ask('Add the missing rUv tools now so the brain can build, not just answer?', false));
+  const yes = FLAG_WITH_STACK || (await ask('Add the missing rUv tools now so the brain can build, not just answer?', false, { planKey: 'stack' }));
   if (!yes) {
     info("No problem — nothing's missing for answers. To add the build tools any time:");
     printCmds();
@@ -2457,7 +2498,7 @@ export async function offerStatusline() {
     return 'not-asked';
   }
 
-  const yes = FLAG_STATUSLINE || (await ask('Add a RuvNet Brain version segment to your Claude Code status bar?', false, { blanketYes: false }));
+  const yes = FLAG_STATUSLINE || (await ask('Add a RuvNet Brain version segment to your Claude Code status bar?', false, { blanketYes: false, planKey: 'statusline' }));
 
   try {
     fs.mkdirSync(telemetryStateDir(), { recursive: true });
