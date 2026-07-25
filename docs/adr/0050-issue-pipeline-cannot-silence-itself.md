@@ -16,6 +16,8 @@ governs:
 
 # ADR-050 — The issue pipeline may never manufacture its own acknowledgment
 
+**Status**: Implemented
+
 ## Context: the 2026-07-24 incident
 
 Four real, high-quality user issues (#38, #39, #41, #42) sat open for up to 28 hours with
