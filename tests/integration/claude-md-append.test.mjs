@@ -69,6 +69,26 @@ describe('~/.claude/CLAUDE.md — append, never replace (corporate-machine repor
     expect(after).toContain(END);
   });
 
+  // L5 SURVIVAL (ADR-042 condition 1c, closed 2026-07-24). The compounding loop's last unproven
+  // link: a lesson promoted to the user's global instructions (lesson-promote.mjs --apply, the
+  // ADR-G008 win-twice block) must survive the brain's update path — whose only CLAUDE.md writer
+  // is offerClaudeMd(). Named as its own case, with the REAL block shape, so "promotion survives
+  // updates" is a measured claim about the actual artifact, never an inference from the generic
+  // append test above.
+  it('L5: a promoted cross-project-lessons block survives the update path intact', () => {
+    const promo = '## Cross-project lessons (promoted 2026-07-24)\n\n' +
+      '- **Prove it works before calling it done** — taught 88 times across 19 independent projects.\n' +
+      '- **Use the real tool; never hand-roll a substitute** — taught 5 times across 3 independent projects.\n';
+    writeClaudeMd('# My rules\n\n' + promo + '\nTail the user typed after promotion.\n');
+
+    runOffer(['--enhance-claude-md']);
+
+    const after = fs.readFileSync(claudeMd(), 'utf8');
+    expect(after).toContain(promo); // the promoted block, byte-for-byte
+    expect(after.indexOf(promo), 'promotion stays ABOVE the appended brain block').toBeLessThan(after.indexOf(START));
+    expect(after).toContain('Tail the user typed after promotion.');
+  });
+
   it('backs the file up before touching it', () => {
     writeClaudeMd(USER_CONTENT);
 
