@@ -12,6 +12,7 @@
     "claims:verify": "node scripts/claims-verify.mjs",
     "version:sync": "node scripts/sync-version.mjs",
     "test:unit": "vitest run tests/unit",
+    "qe:ux": "node scripts/qe/ux-suite.mjs",
     "test:cov": "vitest run tests/unit --coverage",
     "test:all": "npm run test:unit && npm run test:integration && npm test",
     "metaharness:receipts": "node scripts/metaharness-receipts.mjs",

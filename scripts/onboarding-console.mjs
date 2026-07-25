@@ -819,18 +819,28 @@ function kickRefresh() {
 function announceWhenLive(url) {
   const startedAt = Date.now();
   const deadline = startedAt + 45000;   // generous: a cold gatherState is ~13s; fleet longer
+  let lastPrint = startedAt;            // for the countdown ticks
   const timer = setInterval(() => {
     let landed = false;
     try { landed = fs.existsSync(STATE_CACHE) && fs.statSync(STATE_CACHE).mtimeMs >= startedAt - 1000; } catch { /* not yet */ }
-    const waited = Math.round((Date.now() - startedAt) / 1000);
+    const now = Date.now();
+    const waited = Math.round((now - startedAt) / 1000);
     if (landed) {
       clearInterval(timer);
       console.log(`      ✓ it's live — open ${url} (or refresh the tab) to see your machine  ·  ${waited}s\n`);
-    } else if (Date.now() >= deadline) {
+    } else if (now >= deadline) {
       clearInterval(timer);
-      console.log(`      still scanning after ${waited}s — the page fills in as data lands  ·  ${url}\n`);
+      console.log(`      still scanning after ${waited}s — the page fills in as data lands  ·  ${url}`);
+    } else if (now - lastPrint >= 2000) {
+      // The owner asked for "a COUNTDOWN or something" — one start line then silence reads as a hang
+      // on a slow scan. A tick every ~2s keeps the terminal alive (never a silent gap > 3s) and tells
+      // the user the scan is still moving, until the honest "it's live" lands. Measured 2026-07-24: the
+      // UX QE suite's max-dead-air WARN fired at ~3s with only start+end lines; a 2s tick on a 500ms
+      // poll fires at ~2s (not the old 3s boundary), keeping every gap safely under the 3s bar.
+      lastPrint = now;
+      console.log(`      …scanning (${waited}s)`);
     }
-  }, 1000);
+  }, 500);
   timer.unref?.();   // the server keeps the loop alive; never hold it open just for this announcer
 }
 // Serve <file>'s cached data instantly; on a cold miss, compute once via <compute>, seed the cache,

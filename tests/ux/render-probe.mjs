@@ -13,13 +13,23 @@
 // It runs the console WARM (against a pre-warmed temp HOME cache) so the number is the common-case
 // "open the console" experience, not a one-time cold scan. Cold-start behaviour (the "it's live"
 // completion signal) is a SEPARATE probe — command-probe.mjs — because it measures a different thing.
-import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+// Playwright is resolved via createRequire (CJS resolution), NOT a bare ESM `import`. Reason, verified
+// live 2026-07-24: on this Mac playwright is a GLOBAL install (~/.npm-global/lib/node_modules), and
+// Node's ESM bare-specifier resolver does not consult the global folder — only CJS require does. In CI
+// playwright is a node_modules devDependency, which createRequire also finds. So this one line makes
+// the probe portable across "global on the dev box" and "local in CI" without a machine-specific path.
+const require = createRequire(import.meta.url);
+let chromium = null, playwrightLoadError = null;
+try { ({ chromium } = require('playwright')); }
+catch (e) { try { ({ chromium } = require('@playwright/test')); } catch (e2) { playwrightLoadError = e.message; } }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -77,6 +87,9 @@ async function timeToSelector(browser, url, selector, label) {
 }
 
 export async function runRenderProbe() {
+  if (!chromium) {
+    return { results: [], notes: [`playwright not loadable (${playwrightLoadError}) — render probe NOT RUN, never faked as pass`] };
+  }
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'uxqe-home-'));
   fs.mkdirSync(path.join(home, '.claude', 'ruvnet-brain'), { recursive: true });
   const port = 7500 + (process.pid % 400);   // avoid the user's live 7411; vary per run without Date/random
