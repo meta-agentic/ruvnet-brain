@@ -61,6 +61,23 @@
 #      different, valid use: a persistent opt-out set in the shell that launches Claude Code itself —
 #      but that is a session-wide switch, not the documented per-command override.)
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# FIX (2026-07-24, issue #41, residual of #12 — reported by github.com/sparkling, design + reference
+# implementation supplied verbatim in the issue).
+#
+# #12's "command position" anchor — `(^|[;&|(${NL}])` — was matched against the RAW command with no
+# awareness of shell quoting: a `|`, `;`, `&`, `(`, or newline INSIDE a quoted string (a grep pattern's
+# regex alternation, an awk program, a `git commit -m` message) reads as a real shell separator, so
+# whatever follows is misread as command position. `grep -E "foo|ruflo init" file.txt` blocked on an
+# ordinary read-only search. Fixed by matching against a quote-masked SKELETON of the command
+# (`shellSkeleton()` in hook-input.mjs, ADR-0021's one shared parser) instead of the raw string:
+# quoted CONTENT is replaced with `_`, quote characters and everything outside quotes survive
+# byte-identical, so a `|` etc. inside quotes is masked away while a real shell separator outside
+# quotes still anchors the match. Capture groups are unaffected because any surviving match lies
+# outside quotes, where the skeleton equals the original. Computed once and reused by both the
+# help-recording branch and the blocking branch, which share MATCH_RE. Fails open (exit 0) if the
+# skeleton verb errors for any reason — same contract as every other step here.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 set -uo pipefail
 
@@ -86,6 +103,14 @@ TOOL_NAME=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" tool_name 2>/dev/nu
 
 CMD=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" command 2>/dev/null) || exit 0
 [ -n "$CMD" ] || exit 0
+
+# Quote-masked skeleton of CMD (issue #41, residual of #12): quoted CONTENT is replaced with `_`;
+# quote characters and everything outside quotes survive byte-identical. MATCH_RE below is matched
+# against SKEL, not CMD, so a `|`/`;`/`&`/`(`/newline INSIDE a quoted string (a grep pattern's regex
+# alternation, a commit message, an awk program) is no longer mistaken for a real shell separator.
+# Capture-group offsets for any surviving match are unaffected — a match can only survive outside
+# quotes, where SKEL equals CMD exactly. Computed once, used by both branches below.
+SKEL=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" skeleton 2>/dev/null) || exit 0
 
 # Per-command override (issue #12, defect 2). The block message tells the caller to set this ON THE
 # COMMAND — so check the command STRING, not this process's environment (which the caller never
@@ -116,7 +141,7 @@ NL=$'\n'
 MATCH_RE="(^|[;&|(${NL}])[[:space:]]*(npx[[:space:]]+)?($TOOLS)(@[A-Za-z0-9._-]+)?[[:space:]]+([a-z][a-z-]*)([[:space:]]+([a-z][a-z-]*))?"
 
 if [[ $CMD =~ (--help|-h)([[:space:]]|$) ]]; then   # reading help is ALWAYS allowed — and recorded
-  if [[ $CMD =~ $MATCH_RE ]]; then
+  if [[ $SKEL =~ $MATCH_RE ]]; then
     KEY="${BASH_REMATCH[3]}.${BASH_REMATCH[5]}${BASH_REMATCH[7]:+.${BASH_REMATCH[7]}}"
     mkdir -p "$HOME/.cache/ruvnet-brain/help-read" 2>/dev/null || true
     : > "$HOME/.cache/ruvnet-brain/help-read/$KEY" 2>/dev/null || true
@@ -126,7 +151,7 @@ if [[ $CMD =~ (--help|-h)([[:space:]]|$) ]]; then   # reading help is ALWAYS all
   exit 0
 fi
 
-[[ $CMD =~ $MATCH_RE ]] || exit 0
+[[ $SKEL =~ $MATCH_RE ]] || exit 0
 TOOL="${BASH_REMATCH[3]}"; SUB="${BASH_REMATCH[5]}${BASH_REMATCH[7]:+ ${BASH_REMATCH[7]}}"
 KEY="${BASH_REMATCH[3]}.${BASH_REMATCH[5]}${BASH_REMATCH[7]:+.${BASH_REMATCH[7]}}"
 

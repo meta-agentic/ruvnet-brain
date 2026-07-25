@@ -4,7 +4,7 @@
 // parser returns the whole string; the old regex returned everything up to the first `"` and the gate
 // failed open on it.
 import { describe, it, expect } from 'vitest';
-import { parseHookEvent, toolName, commandOf, field } from '../../plugin/scripts/hook-input.mjs';
+import { parseHookEvent, toolName, commandOf, field, shellSkeleton } from '../../plugin/scripts/hook-input.mjs';
 
 describe('hook-input — the shared PreToolUse payload parser (ADR-0021)', () => {
   it('KNOWN-BAD (the #13 fail-open): a command with embedded quotes is returned WHOLE, not truncated', () => {
@@ -49,5 +49,66 @@ describe('hook-input — the shared PreToolUse payload parser (ADR-0021)', () =>
     // the gate. This proves the parser does not itself mangle quoted content.
     const ev = parseHookEvent(JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'echo "run: ruflo memory search foo"' } }));
     expect(commandOf(ev)).toBe('echo "run: ruflo memory search foo"');
+  });
+});
+
+describe('shellSkeleton — quote-masked command, for command-position matching (issue #41)', () => {
+  it('empty string in, empty string out', () => {
+    expect(shellSkeleton('')).toBe('');
+  });
+
+  it('no quotes at all: passes through byte-identical', () => {
+    const cmd = 'ruflo memory search -q x';
+    expect(shellSkeleton(cmd)).toBe(cmd);
+  });
+
+  it('THE BUG (issue #41): a separator char INSIDE a double-quoted grep pattern is masked, not exposed', () => {
+    // `grep -E "foo|ruflo init" file.txt` — the `|` sits inside the pattern argument. The old raw-CMD
+    // anchor read it as a real shell separator and misread `ruflo init` as command position. The
+    // skeleton must remove that `|` from view while keeping the quote characters and everything
+    // outside the quotes untouched.
+    const skel = shellSkeleton('grep -E "foo|ruflo init" file.txt');
+    expect(skel).not.toContain('|'); // the separator character is gone — it was inside quotes
+    expect(skel).not.toContain('ruflo'); // so is the tool name that used to leak through
+    expect(skel.startsWith('grep -E "')).toBe(true);
+    expect(skel.endsWith('" file.txt')).toBe(true);
+    expect(skel.length).toBe('grep -E "foo|ruflo init" file.txt'.length); // offsets preserved
+  });
+
+  it('quote characters themselves survive; only the CONTENT between them is masked', () => {
+    const skel = shellSkeleton('echo "a|b" \'c;d\'');
+    expect(skel).toBe('echo "___" \'___\'');
+  });
+
+  it('a real, unquoted separator still survives the mask (command position is still detectable)', () => {
+    const skel = shellSkeleton('echo hi | ruflo memory search');
+    expect(skel).toContain('| ruflo memory search'); // outside any quotes — byte-identical to input
+  });
+
+  it('backslash-escaped quote inside a double-quoted string does not prematurely close the quote', () => {
+    // Mirrors the #13 fixture: an escaped `\"` is a literal `"` byte in the raw text but must not end
+    // the quoted region. The escape (backslash + escaped char) masks as two bytes; the real closing
+    // quote at the very end must still be recognized and preserved.
+    const cmd = 'git commit -m "fix: \\"quoted\\" thing"';
+    const skel = shellSkeleton(cmd);
+    expect(skel.length).toBe(cmd.length); // offsets preserved through the escape handling
+    expect(skel.startsWith('git commit -m "')).toBe(true);
+    expect(skel.endsWith('"')).toBe(true);
+    expect(skel).not.toContain('quoted'); // masked, including the text between the escaped quotes
+  });
+
+  it('single quotes take no escapes — a backslash inside them is ordinary masked content', () => {
+    // "a\|b" is 4 literal characters (a, \, |, b) — the backslash has no escaping power inside single
+    // quotes (real shell semantics), so it is masked like any other content byte, not consumed as an
+    // escape the way it would be inside double quotes.
+    const skel = shellSkeleton("echo 'a\\|b'");
+    expect(skel).toBe("echo '____'");
+  });
+
+  it('an unterminated quote masks to the end of the string — never throws, never hangs', () => {
+    expect(() => shellSkeleton('echo "never closes')).not.toThrow();
+    const skel = shellSkeleton('echo "never closes');
+    expect(skel).toBe('echo "____________');
+    expect(skel.length).toBe('echo "never closes'.length);
   });
 });
