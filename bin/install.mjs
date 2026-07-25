@@ -866,13 +866,14 @@ async function doctor() {
   have('git')
     ? ok('git present (not required by this installer, but handy)')
     : info('git not found — that\'s fine, this installer never needs it');
+  cleanupStrayRuvectorDb(); // issue #39: sweep a leftover empty scaffold from before this fix, if one's here
   const env = detectEnvironment();
   env.ruflo
     ? ok('Ruflo present — orchestration / swarms / SPARC available')
     : warn('Ruflo not found — answers still work. To build: npm install -g claude-flow@alpha  (or /plugin add ruvnet/claude-flow)');
   env.ruvector
     ? ok('RuVector present — vector CLI / MCP available')
-    : warn('RuVector not found — answers still work. To add: claude mcp add ruvector --scope user -- npx -y ruvector mcp start');
+    : warn(`RuVector not found — answers still work. To add: ${buildRuvectorMcpAddCommand(env).say}`);
   // Network probe (issue #27, Jan Lafko): in a network-restricted sandbox the cold-cache embedder
   // pull used to hang FOREVER. Diagnose the condition here, explicitly and in 3 seconds flat: if the
   // model host is unreachable AND no local model cache exists, the first query needs the network and
@@ -2157,12 +2158,79 @@ function detectEnvironment() {
   return env;
 }
 
+// ── issue #39: the ruvector MCP server's own native VectorDb defaults ITS storage to
+// "./ruvector.db" relative to whatever cwd it happens to be launched in — and Claude Code
+// always launches an MCP server with cwd = the current project, so every consumer project got
+// an empty ~1.5MB scaffold dropped in its own root. Traced live (2026-07-24) to
+// ruvector/dist/core/intelligence-engine.js `initVectorDb()`, which constructs the native
+// VectorDb with `{ dimensions, distanceMetric: 'Cosine' }` and NO storagePath at all — that
+// constructor runs unconditionally from a module-level `new Intelligence()` the instant
+// `ruvector mcp start` boots. `claude mcp add` has no --cwd flag, and `ruvector mcp start
+// --help` documents only `-h` (verified live) — no flag or env var lets us set the storage
+// path directly. So the fix has to live in the command we REGISTER: a tiny `node -e` launcher
+// that uses child_process's own `cwd` option (no shell, so it behaves the same on Windows) to
+// relocate into a fixed cache dir before delegating to the real `npx -y ruvector mcp start`.
+// Verified live: this reproduces the exact same empty scaffold, just under
+// ~/.cache/ruvnet-brain/ruvector-mcp instead of whatever project happens to be open.
+const RUVECTOR_MCP_CWD = path.join(os.homedir(), '.cache', 'ruvnet-brain', 'ruvector-mcp');
+function buildRuvectorMcpLauncher(cwd) {
+  return (
+    'const fs=require("fs"),os=require("os"),path=require("path"),cp=require("child_process");' +
+    `const d=${JSON.stringify(cwd)};` +
+    'fs.mkdirSync(d,{recursive:true});' +
+    'const r=cp.spawnSync("npx",["-y","ruvector","mcp","start"],{stdio:"inherit",cwd:d});' +
+    'process.exit(r.status==null?1:r.status);'
+  );
+}
+export function buildRuvectorMcpAddCommand(env, cwd = RUVECTOR_MCP_CWD) {
+  const launcher = buildRuvectorMcpLauncher(cwd);
+  return {
+    shell: env.claude ? ['claude', ['mcp', 'add', 'ruvector', '--scope', 'user', '--', 'node', '-e', launcher]] : null,
+    say: `claude mcp add ruvector --scope user -- node -e '${launcher}'`,
+  };
+}
+
+// ── issue #39 mitigation: clean up the empty ruvector.db this bug already left behind in
+// projects that installed before this fix landed. Matches ONLY the exact empty-scaffold
+// signature (dimensions 384, Cosine, storage_path "./ruvector.db" — literally the string the
+// buggy native default writes, verified live byte-for-byte) under a conservative size cap, so
+// a real store that just happens to share the filename is never at risk: a populated store
+// either exceeds the cap or lacks this exact header.
+const RUVECTOR_EMPTY_DB_SIGNATURE =
+  '{"dimensions":384,"distance_metric":"Cosine","storage_path":"./ruvector.db","hnsw_config":null,"quantization":null}';
+const RUVECTOR_EMPTY_DB_MAX_BYTES = 3 * 1024 * 1024; // observed empty scaffold: 1,589,248 bytes; headroom, still far below any real dataset
+export function cleanupStrayRuvectorDb(dir = process.cwd()) {
+  const p = path.join(dir, 'ruvector.db');
+  let st;
+  try {
+    st = fs.statSync(p);
+  } catch {
+    return false; // doesn't exist — nothing to do
+  }
+  if (!st.isFile() || st.size === 0 || st.size > RUVECTOR_EMPTY_DB_MAX_BYTES) return false;
+  let buf;
+  try {
+    buf = fs.readFileSync(p);
+  } catch {
+    return false; // unreadable — never guess, just leave it alone
+  }
+  if (!buf.includes(RUVECTOR_EMPTY_DB_SIGNATURE)) return false;
+  try {
+    fs.unlinkSync(p);
+  } catch {
+    return false;
+  }
+  warn(`removed ${p} — an empty container the ruvector MCP server left in this project before issue #39 was fixed (matched the known empty signature; nothing was stored in it)`);
+  return true;
+}
+
 // ── step: is the rUv toolkit here? the brain ANSWERS alone; it BUILDS best with Ruflo + RuVector ──
 async function offerStack(env) {
   step(
     'Checking your rUv toolkit',
     "the brain answers on its own with zero setup — but it can also BUILD, and that shines when the tools it recommends are here",
   );
+  cleanupStrayRuvectorDb(); // issue #39: sweep a leftover scaffold from before this fix, if one's here
   const mark = (ok) => (ok ? c.green('✓ present') : c.yellow('— not found'));
   info(`platform: ${c.bold(`${env.platform}/${env.arch}`)} · node ${c.bold(env.node)}`);
   info(`Ruflo (claude-flow · swarms / SPARC / orchestration): ${mark(env.ruflo)}`);
@@ -2188,9 +2256,9 @@ async function offerStack(env) {
       what: 'RuVector (vectors / RVF)',
       // --scope user: same reason the plugin itself installs at user scope — the brain is "one
       // toolkit, every project", and the default "local" scope ties the server to whatever
-      // directory happens to be the cwd when this runs.
-      shell: env.claude ? ['claude', ['mcp', 'add', 'ruvector', '--scope', 'user', '--', 'npx', '-y', 'ruvector', 'mcp', 'start']] : null,
-      say: 'claude mcp add ruvector --scope user -- npx -y ruvector mcp start',
+      // directory happens to be the cwd when this runs. The registered command itself also
+      // pins ITS OWN cwd (issue #39) — see buildRuvectorMcpAddCommand above.
+      ...buildRuvectorMcpAddCommand(env),
       plugin: null,
       verify: () => hasUserScopeMcpServer('ruvector'),
     });
