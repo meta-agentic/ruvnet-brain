@@ -30,6 +30,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/console-launch-notice.mjs\" || true",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" ground-ruvnet || true",
             "timeout": 5
           }
