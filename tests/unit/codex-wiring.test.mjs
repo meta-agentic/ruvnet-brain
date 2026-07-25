@@ -60,7 +60,7 @@ describe('mergeCodexConfig — the three outcomes, and only three', () => {
     expect(action).toBe('added');
     expect(text).toContain('[mcp_servers.ruvnet-brain]');
     expect(text).toContain('command = "node"');
-    expect(text).toContain(`args = ["${SERVER}"]`);
+    expect(text).toContain(`args = [${JSON.stringify(SERVER)}]`);
     expect(text.startsWith(START)).toBe(true);
     expect(text.trimEnd().endsWith(END)).toBe(true);
   });
@@ -81,7 +81,7 @@ describe('mergeCodexConfig — the three outcomes, and only three', () => {
     const first = mergeCodexConfig(REAL_CONFIG, '/old/server.mjs').text;
     const { text, action } = mergeCodexConfig(first, SERVER);
     expect(action).toBe('rewritten');
-    expect(text).toContain(`args = ["${SERVER}"]`);
+    expect(text).toContain(`args = [${JSON.stringify(SERVER)}]`);
     expect(text).not.toContain('/old/server.mjs');
     // Exactly one block — a rewrite must not stack a second copy.
     expect(text.split(START).length - 1).toBe(1);
@@ -167,7 +167,7 @@ describe('wireCodexHost — the filesystem round trip', () => {
 
     const written = fs.readFileSync(path.join(codexDir, 'config.toml'), 'utf8');
     expect(written).toContain('[mcp_servers.ruvnet-brain]');
-    expect(written).toContain(`args = ["${r.serverPath}"]`);
+    expect(written).toContain(`args = [${JSON.stringify(r.serverPath)}]`);
     expect(written).toContain('RUFLO_HARNESS_LOOP = "1"'); // theirs, untouched
   });
 
