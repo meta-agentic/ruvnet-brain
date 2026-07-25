@@ -801,6 +801,38 @@ function kickRefresh() {
     child.unref();   // let it outlive this request; it writes the caches and exits on its own
   } catch { /* best-effort: a failed spawn just means the cache ages until the next kick */ }
 }
+
+/**
+ * COMPLETION SIGNAL — "it's live, take a look at your page."
+ *
+ * The cold path prints "first run — scanning… ~15 seconds", then the detached refresh child
+ * (kickRefresh, stdio:'ignore') does the scanning and the parent NEVER learns when it finished — so
+ * the page just quietly filled in and nothing in the terminal ever said "done". The owner asked for
+ * exactly this, verbatim: "a countdown or something that then eventually tells them, okay it's live,
+ * take a look at your page." This supplies it, honestly: "live" is defined as "the state cache the
+ * page paints first now exists, written by THIS launch" — an observed fact, not a guess or a fixed
+ * timer. We watch STATE_CACHE's mtime (the same file the refresh child writes and the page reads
+ * first) and print one line when it lands, or a still-scanning line if it runs long. Never holds the
+ * process open (unref) and never fires on the warm path — a warm re-open paints instantly and needs
+ * no signal.
+ */
+function announceWhenLive(url) {
+  const startedAt = Date.now();
+  const deadline = startedAt + 45000;   // generous: a cold gatherState is ~13s; fleet longer
+  const timer = setInterval(() => {
+    let landed = false;
+    try { landed = fs.existsSync(STATE_CACHE) && fs.statSync(STATE_CACHE).mtimeMs >= startedAt - 1000; } catch { /* not yet */ }
+    const waited = Math.round((Date.now() - startedAt) / 1000);
+    if (landed) {
+      clearInterval(timer);
+      console.log(`      ✓ it's live — open ${url} (or refresh the tab) to see your machine  ·  ${waited}s\n`);
+    } else if (Date.now() >= deadline) {
+      clearInterval(timer);
+      console.log(`      still scanning after ${waited}s — the page fills in as data lands  ·  ${url}\n`);
+    }
+  }, 1000);
+  timer.unref?.();   // the server keeps the loop alive; never hold it open just for this announcer
+}
 // Serve <file>'s cached data instantly; on a cold miss, compute once via <compute>, seed the cache,
 // and serve that. Always kicks a background refresh so the next reader gets fresher data.
 /* HARD CEILING ON CACHED TRUTH.
@@ -2007,6 +2039,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     if (!hadCache) {
       console.log(`      ${'first run — scanning your setup now; about 15 seconds'}`);
       console.log(`      ${"(next time you open this, it's instant)"}\n`);
+      announceWhenLive(url);   // print "it's live — take a look at your page" when the scan lands
     }
     kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
     setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
