@@ -1,16 +1,25 @@
 ---
 id: ADR-042
 title: 4.0 stays X.Y.Z-dev until it is verified — the version number is not a marketing lever
-status: Accepted
+status: Superseded
+superseded_by: ADR-052
 date: 2026-07-23
-updated: 2026-07-23
+updated: 2026-07-25
 authors: [Stuart Kerr, Claude Code]
 tags: [versioning, release, 4.0, honesty]
 supersedes: []
-relates: [ADR-028, ADR-023]
+relates: [ADR-028, ADR-023, ADR-052]
 ---
 
-**Status**: Accepted (2026-07-23)
+**Status**: Superseded by [ADR-052](0052-4.0-is-proactivity-you-control.md) (2026-07-25)
+
+> **Why superseded (2026-07-25):** this ADR's 4.0 gate required field-verified advocacy outcomes
+> (n≥29 real offer-outcomes). Measured 2026-07-25, that gate is **structurally unreachable on a single
+> machine** — `capability-audit` finds no dormant capability on a healthy setup, so the offer path
+> correctly stays silent and the ledger never fills. ADR-052 replaces the *unreachable* field-outcome
+> gate with a *provable* one (proactivity proven correct + user-controlled via a 1–5 dial), moves the
+> n≥29 precision target to a **post-launch** metric, and holds the same honesty rule (a claim must be
+> backed). The reasoning below is preserved as the record of why the gate moved.
 
 ## The decision
 
