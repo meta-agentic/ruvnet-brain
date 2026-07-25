@@ -97,24 +97,42 @@ fi
 # such job, so the file never exists for them and this stays quiet.
 ISSUE_STATUS="$HOME/.cache/ruvnet-brain/open-issues.json"
 if [ -f "$ISSUE_STATUS" ] && command -v node >/dev/null 2>&1; then
+  # 2026-07-24: this used to surface ONLY breaching issues — and "breach" is computed from the same
+  # owner-comment predicate the auto-fixer's bot comments satisfy, so on the night four real issues
+  # were open the banner stayed silent. The banner now ALWAYS shows the open count; breaches keep
+  # the urgent wording. Every channel judging by one predicate is how all of them fail together.
   ISSUE_LINE=$(node -e '
     try {
       const fs=require("fs");
       const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       // stale guard: ignore a snapshot older than 6h (the watcher runs hourly; 6h means it stopped)
       if (!s.at || (Date.now()-new Date(s.at).getTime()) > 6*3600*1000) process.exit(0);
-      const breaches=(s.issues||[]).filter(i=>i.breach);
-      if (!breaches.length) process.exit(0);
-      breaches.sort((a,b)=>b.ageHours-a.ageHours);
-      const top=breaches.slice(0,4).map(i=>`#${i.number} (${i.ageHours}h) ${String(i.title).slice(0,64)}`).join(" · ");
-      console.log(`${breaches.length} open issue(s) past SLA on ${s.repo}: ${top}${breaches.length>4?" · +"+(breaches.length-4)+" more":""}`);
+      const open=(s.issues||[]);
+      if (!open.length) process.exit(0);
+      const breaches=open.filter(i=>i.breach);
+      if (breaches.length) {
+        breaches.sort((a,b)=>b.ageHours-a.ageHours);
+        const top=breaches.slice(0,4).map(i=>`#${i.number} (${i.ageHours}h) ${String(i.title).slice(0,64)}`).join(" · ");
+        console.log(`BREACH\t${breaches.length} open issue(s) past SLA on ${s.repo}: ${top}${breaches.length>4?" · +"+(breaches.length-4)+" more":""}`);
+      } else {
+        open.sort((a,b)=>b.ageHours-a.ageHours);
+        const top=open.slice(0,4).map(i=>`#${i.number} (${i.ageHours}h)`).join(" · ");
+        console.log(`OPEN\t${open.length} open issue(s) on ${s.repo}, none past SLA: ${top}${open.length>4?" · +"+(open.length-4)+" more":""}`);
+      }
     } catch { /* fail-silent */ }
   ' "$ISSUE_STATUS" 2>/dev/null)
-  if [ -n "$ISSUE_LINE" ]; then
-    echo "[RuvNet Brain — OPEN ISSUES need attention (surface this to the maintainer, once, near the top)]"
-    echo "$ISSUE_LINE"
-    echo "These are real user-filed bugs sitting past the response SLA. Mention them plainly so they do not stack unseen; offer to fix them (gh issue list --state open for detail)."
-  fi
+  case "$ISSUE_LINE" in
+    BREACH*)
+      echo "[RuvNet Brain — OPEN ISSUES need attention (surface this to the maintainer, once, near the top)]"
+      echo "${ISSUE_LINE#BREACH	}"
+      echo "These are real user-filed bugs sitting past the response SLA. Mention them plainly so they do not stack unseen; offer to fix them (gh issue list --state open for detail)."
+      ;;
+    OPEN*)
+      echo "[RuvNet Brain — open issues on the maintainer's repo (mention once, calmly, near the top)]"
+      echo "${ISSUE_LINE#OPEN	}"
+      echo "Within SLA, but the maintainer should know they exist. One line is enough; offer to look."
+      ;;
+  esac
 fi
 
 # ── MetaHarness router: the ONE-LINER OFFER (Stuart's exact UX, 2026-07-12): offer yes/no → on
