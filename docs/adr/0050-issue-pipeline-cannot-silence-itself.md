@@ -1,0 +1,169 @@
+---
+id: ADR-050
+title: The issue pipeline may never manufacture its own acknowledgment — awareness, escalation, and a fixer that knows when to stop
+status: Implemented
+date: 2026-07-24
+updated: 2026-07-24
+authors: [Stuart Kerr, Claude Code]
+tags: [issues, automation, alerting, sla, security, circuit-breaker]
+supersedes: []
+relates: [ADR-049]
+governs:
+  - scripts/issue-watch.mjs
+  - scripts/issue-fix.mjs
+  - plugin/scripts/session-start.sh
+---
+
+# ADR-050 — The issue pipeline may never manufacture its own acknowledgment
+
+## Context: the 2026-07-24 incident
+
+Four real, high-quality user issues (#38, #39, #41, #42) sat open for up to 28 hours with
+**zero pages to the maintainer**, who learned of them from a GitHub notification email. In the
+same window, the auto-fixer posted **22 public failure comments on #38 alone** while a tested
+patch from the reporter sat unread in that thread's first comment. Every alerting channel failed
+at once, and the post-mortem found they all failed for ONE reason plus two amplifiers:
+
+1. **The fixer silenced the watcher.** issue-fix.mjs posts comments through the owner's gh auth,
+   so they arrive authored by `stuinfla`. issue-watch.mjs defined "owner responded" as any
+   `stuinfla` comment. The moment the fixer touched an issue, an SLA breach — and therefore a
+   phone page — became structurally impossible. The automation manufactured the exact signal
+   that suppresses its own escalation.
+2. **The anti-spam control destroyed its own state.** The fixer's attempt-start write replaced
+   the issue's state record with a fresh `{attemptedAt, status}` object, erasing
+   `failureCommentAt` — the field its once-per-24h comment dedup depended on. The dedup had
+   never operated. A guard that cannot fail on broken code is not a guard; it had no test
+   spanning two consecutive failed runs.
+3. **Every channel judged by the one poisoned predicate.** The session-start banner (built
+   2026-07-17 after a previous 29h-unseen incident) surfaced only `breach: true` issues —
+   breach being computed by the same owner-comment check the bot satisfied. "Multiple channels"
+   was one predicate wearing three hats.
+
+Independent evaluations by Claude Fable 5 and GPT-5.6 (adversarial duel, verdict below)
+converged on the same mechanisms from the same file:lines, and on the verdict that the loop was
+**wrong by design, not mistuned** — a bigger timeout or model would not have fixed any of it.
+
+## Decision — three invariants, enforced by regression tests that fail on the old code
+
+**I1. Automation can never produce human acknowledgment.** Every comment the automation posts
+begins with the exported `BOT_MARKER` prefix; `judgeIssue()` counts an owner comment only if it
+does NOT carry the marker. Spoof-safety: the marker is only consulted on comments authored by
+the owner login, so a stranger typing the marker changes nothing. (Durable form, recorded as a
+follow-up: run automation under a dedicated GitHub App/bot identity so the separation is
+enforced by GitHub itself rather than by a string convention. Requires an owner-side setup
+action; the marker exclusion is the complete now-fix.)
+
+**I2. Awareness is immediate and unconditional; escalation is the second page, not the first.**
+The watcher pages ONCE the first time it sees any open issue (delivery-derived state, retried
+until the push actually goes out), independent of SLA math. The 4h SLA breach page remains as
+escalation. The session banner always shows the open count; breaches only change its urgency.
+Awareness latency is now bounded by the watcher cadence (≤1h), not by 4h-plus-never.
+
+**I3. A failing fixer stops.** One failure comment per issue EVER (the reporter needs to know
+somebody looked; the twentieth notice reads as parody). State writes spread-merge — they
+preserve fields they don't own. A circuit breaker halts attempts after
+`ISSUE_FIX_MAX_FAILED_ATTEMPTS` (default 1, tightened from 2 by the duel verdict) consecutive
+failures until the issue itself changes, paging urgently once when it trips: NEEDS A HUMAN,
+silence hereafter is by design. Outcome verification counts only provably-bot comments
+(owner login + marker, `botCommentCount()`) — the duel caught that the prior any-comment-count
+check let a reporter replying mid-run register as fixer success; unavailable verification now
+leans failure, never asserted success.
+
+**Accepted follow-up (duel Phase 1 item 4, not yet implemented):** retire the scheduled job's
+public write path entirely — scheduled automation becomes read-only triage (reproduce, classify,
+extract reporter patches, private incident record, page); implementation fixing moves to
+session-supervised parallel agents. Tracked for the next automation change, alongside the
+Phase 2 GitHub App identity (owner action required).
+
+**Security posture (Stuart's sweep mandate, same date):** issue title/body/comments are
+untrusted stranger input feeding an agent that holds git-push and gh-comment powers. The title
+enters the fixer prompt JSON-escaped as declared data; the prompt instructs triage-and-stop on
+any issue text that attempts to direct the agent or weaken a gate, hook, test, or security
+control; reporter patches may be adopted only after the defect is independently verified and the
+patch reduces no enforcement beyond what the fix requires. Additionally, issue bodies are
+scanned with aidefence at review time; scanner hits are human-adjudicated (all four incident
+issues scanned benign — three lexical false positives on `.gitignore` phrasing, regex character
+classes, and TOML `[[args]]` syntax).
+
+## The fixer's future (duel-informed)
+
+The scheduled 15-minute headless sonnet fixer went 0/4 on real issues; the same four issues were
+fixed the same night by session-supervised parallel agents with stable worktrees. Consequence:
+the scheduled path is demoted to **awareness + triage + circuit-broken bounded attempts**; real
+fixing belongs where a human can supervise, steer, and review. The duel verdict below carries
+the full argument.
+
+## Cross-model duel verdict (verbatim)
+
+# Joint FINAL VERDICT
+
+## Agreed root causes
+
+The four issues share one systemic failure: ruvnet-brain verifies artifacts and happy-path structure in the maintainer’s macOS/Claude Code environment, then promotes that evidence into untested consumer-runtime claims across Windows, Codex, and unrelated working repositories. Blocking controls likewise shipped without adversarial semantic corpora. The incident automation repeated the same mistake at the control-loop level: individually sensible mechanisms—bounded runs, disposable worktrees, artifact-derived outcomes, SLA watching—were composed around an owner-comment predicate that automation itself could satisfy, while a state overwrite defeated deduplication. These are verification-boundary and honesty failures, not four unrelated bugs.
+
+## Final score: 40/100
+
+This is the score at the incident/audit cutoff, not a rescore of fixes subsequently merged. A higher score requires the real OS × host × consumer-path matrix to pass.
+
+| Deduction | Points | Basis |
+|---|---:|---|
+| Supported-platform runtime contract and CI honesty | −12 | Windows-sensitive suites self-skip while both the “zero exclusions” audit note and workflow gap summary omit those skips—a double honesty failure. |
+| Host wiring and doctor semantics | −12 | Codex capability was unwired while `--doctor` generalized KB presence into global product health. |
+| Consumer filesystem containment and zero-files claim | −9 | The integrated runtime could create `ruvector.db` in consumer repositories while doctor promised “drops zero files.” |
+| Blocking-gate semantic coverage | −7 | A session-blocking shell matcher shipped without a quote-aware adversarial corpus. |
+| Incident-loop integrity | −13 | Owner-authenticated bot comments suppressed escalation; destructive state replacement defeated deduplication and produced public spam. |
+| Unattended fixer effectiveness | −7 | The scheduled 15-minute fixer went 0/4 and failed to consume a tested reporter patch already present on #38. |
+| **Total deductions** | **−60** | **Final: 40/100** |
+
+This settles both earlier scores. **32 was too low** because it under-credited real strengths: fail-fast release orchestration, version and wiring gates, signed bundles with fail-closed verification, live distribution-channel checks, disposable worktrees, artifact-derived outcomes, and the Windows job’s six root-cause fixes on 2026-07-13. **58 was too high** because it missed two user-facing truth violations and treated the automation damage too lightly. The remaining 40 points represent genuine engineering controls; they simply protect artifact integrity more effectively than installed-product truth.
+
+## Automation redesign
+
+### Phase 1 — NOW: containment without owner setup
+
+Marker exclusion is acceptable as an immediate mitigation, but it must not be described as an identity invariant.
+
+1. Keep excluding owner-authored comments beginning with the automation marker. An external reporter cannot exploit this because the watcher also requires the owner identity.
+2. Page once immediately on first sighting, independently of comment or SLA state. No later poisoned acknowledgment may erase that awareness event.
+3. Set the circuit breaker to **one failed attempt**, not the current default of two. Re-arm only after new issue information or explicit human action.
+4. Retire the scheduled job’s public write path. Scheduled automation becomes read-only triage: reproduce, classify, extract reporter patches, identify required tests, write a private incident record, and page the maintainer. It posts no progress or failure comments.
+5. Surface every open issue in the session banner; breach state only changes urgency.
+6. Preserve prior state fields on every transition and add an end-to-end regression proving one page, zero public spam, and a terminal `NEEDS_HUMAN` state.
+
+The marker alone is not sound authentication. The successful-fixer comment is LLM-authored, and `verifyOutcome()` currently accepts any increase in comment count without validating the marker. An omitted marker therefore becomes indistinguishable from a human owner response. Immediate paging contains the observed harm; removing scheduled public writes closes the remaining NOW-path.
+
+### Phase 2 — DURABLE: separate GitHub App identity
+
+Create a repository-scoped GitHub App and authenticate automation with an **installation access token**, not an owner PAT or user-to-server token.
+
+1. Grant only the permissions required for issues and, if later justified, narrowly scoped branch/PR creation.
+2. Attribute every automated action to the App identity.
+3. Define acknowledgment as an event by a configured human-maintainer allowlist. If a `human-triaged` label is used, validate the actor who applied it—not merely label presence.
+4. Exclude the App identity structurally from acknowledgment calculations.
+5. Add an end-to-end test in which repeated App comments can never suppress the single human page.
+
+GitHub documents that installation-token activity is attributed to the App and is the appropriate mode for automation independent of a user; it also recommends GitHub Apps over personal access tokens for long-lived integrations. [GitHub App authentication modes](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/about-authentication-with-a-github-app), [GitHub App best practices](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app).
+
+## The fixer’s future
+
+Retire the **scheduled headless auto-FIXER**; do not give it a larger budget. Preserve its useful machinery—stable worktrees, scoped branches, artifact verification, and bounded execution—as an **on-demand, session-supervised fixing harness**.
+
+The correct placement is:
+
+- Scheduled, unattended: fast read-only triage, immediate paging, patch extraction, reproduction guidance, and state recording.
+- Session-supervised: parallel Sonnet agents for bounded implementation, Opus/frontier review for architecture or security judgment, one stable worktree per issue, targeted tests, and human-controlled integration.
+- Autonomous public action: only after the GitHub App boundary exists and only for narrowly classified, high-confidence changes.
+
+The four parallel agents working tonight support this distinction. They show that autonomous implementation belongs inside a supervised session with adequate context, parallel worktrees, and visible correction—not inside a recurring 15-minute process operating against public reporters. Their work is evidence for the execution model, but it counts as successful remediation only when branches, tests, and merges are verified.
+
+**Dissent register:** None. Fable’s marker proposal is accepted for immediate containment; GPT’s identity objection governs the durable invariant.
+
+## Consequences
+
+- The watcher/fixer state file gains fields (`firstSeenAt`, `newAlertAt`, `failCount`); old
+  records remain readable (spread-merges tolerate missing fields).
+- Reporters see at most one automation comment per issue, ever.
+- The maintainer's phone learns about every new issue within one watcher cycle; a fixer
+  giving up is a distinct urgent page.
+- tests/unit/issue-automation.test.mjs pins all three incident mechanisms as known-bad
+  regressions (8 of 12 assertions fail on the pre-fix code, proven by stash-mutation).

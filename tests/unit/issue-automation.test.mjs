@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { judgeIssue, BOT_MARKER } from '../../scripts/issue-watch.mjs';
-import { isEligible, attemptStartRecord } from '../../scripts/issue-fix.mjs';
+import { isEligible, attemptStartRecord, botCommentCount } from '../../scripts/issue-fix.mjs';
 
 const H = 3_600_000;
 const NOW = Date.parse('2026-07-24T20:00:00Z');
@@ -76,20 +76,21 @@ describe('issue-fix isEligible — the circuit breaker', () => {
   const attemptedAt = new Date(NOW - 2 * H).toISOString(); // cooldowns comfortably elapsed
   const failedRec = (failCount) => ({ attemptedAt, status: 'failed', outcome: 'timeout-failed', failCount });
 
-  it('KNOWN-BAD pinned: at the failure cap with no issue activity, the fixer STOPS', () => {
+  it('KNOWN-BAD pinned: ONE failed attempt with no issue activity, the fixer STOPS', () => {
     // The old filter had no concept of failCount — this returned true forever (attempt #23…).
+    // Cap default is 1 per the F5×GPT-5.6 duel verdict: one honest failure, then a human.
     const issue = { number: 38, updatedAt: new Date(NOW - 3 * H).toISOString() };
-    expect(isEligible(failedRec(2), issue, NOW)).toBe(false);
+    expect(isEligible(failedRec(1), issue, NOW)).toBe(false);
   });
 
-  it('below the cap, a failed attempt retries within the hour as before', () => {
+  it('a legacy failed record without failCount still retries within the hour (no false lockout)', () => {
     const issue = { number: 38, updatedAt: new Date(NOW - 3 * H).toISOString() };
-    expect(isEligible(failedRec(1), issue, NOW)).toBe(true);
+    expect(isEligible({ attemptedAt, status: 'failed', outcome: 'no-action' }, issue, NOW)).toBe(true);
   });
 
   it('new activity on the issue AFTER the last attempt re-arms one more try', () => {
     const issue = { number: 38, updatedAt: new Date(NOW - 1 * H).toISOString() }; // after attemptedAt
-    expect(isEligible(failedRec(2), issue, NOW)).toBe(true);
+    expect(isEligible(failedRec(1), issue, NOW)).toBe(true);
   });
 
   it('a real success keeps the full 24h cooldown', () => {
@@ -100,5 +101,21 @@ describe('issue-fix isEligible — the circuit breaker', () => {
 
   it('an unseen issue is always eligible', () => {
     expect(isEligible(undefined, { number: 43 }, NOW)).toBe(true);
+  });
+});
+
+describe('issue-fix botCommentCount — only provably-bot comments verify a fixer outcome', () => {
+  it('KNOWN-BAD pinned: a reporter comment mid-run is NOT fixer success', () => {
+    // verifyOutcome used to credit ANY comment-count increase as "triage posted" — a reporter
+    // replying during the 15-min window read as success and muted retry+page (duel finding).
+    expect(botCommentCount([contributorComment])).toBe(0);
+    expect(botCommentCount([humanOwnerComment])).toBe(0); // owner replying personally ≠ bot artifact
+  });
+
+  it('counts only owner-authored, marker-prefixed comments', () => {
+    const spoof = { author: { login: 'mallory' }, body: `${BOT_MARKER} spoofed` };
+    expect(botCommentCount([botComment, spoof, contributorComment, humanOwnerComment])).toBe(1);
+    expect(botCommentCount([])).toBe(0);
+    expect(botCommentCount(undefined)).toBe(0);
   });
 });

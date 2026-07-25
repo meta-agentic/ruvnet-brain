@@ -36,7 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'stuinfla/ruvnet-brain';
-const OWNER_LOGIN = 'stuinfla';
+export const OWNER_LOGIN = 'stuinfla';
 // Every comment the automation posts through the owner's gh auth begins with this exact prefix
 // (scripts/issue-fix.mjs: both the fixer child's hard rule and the failure note). Spoof-safety:
 // only comments AUTHORED BY the owner are checked against it, so a stranger opening their comment
