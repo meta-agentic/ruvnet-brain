@@ -61,21 +61,24 @@ until the push actually goes out), independent of SLA math. The 4h SLA breach pa
 escalation. The session banner always shows the open count; breaches only change its urgency.
 Awareness latency is now bounded by the watcher cadence (≤1h), not by 4h-plus-never.
 
-**I3. A failing fixer stops.** One failure comment per issue EVER (the reporter needs to know
-somebody looked; the twentieth notice reads as parody). State writes spread-merge — they
+**I3. A failing fixer is silent in public and loud in private.** (Amended same day by the
+owner's direct order, which also completed duel Phase 1 item 4 ahead of schedule: *"don't spew
+something out there that says we looked at it, gave it 15 minutes, tough shit — that makes us
+look like we don't care."*) The reporter-facing contract is now: **one warm acknowledgment at
+first sighting** — "received and opened, being worked" — posted by the watcher with the bot
+marker (so I1 still holds), then **nothing until there is substance**: a real fix branch, real
+triage findings, or the maintainer in person. The scheduled fixer posts NO failure-progress
+notes, ever; its failures page privately (ntfy + heartbeat). State writes spread-merge — they
 preserve fields they don't own. A circuit breaker halts attempts after
 `ISSUE_FIX_MAX_FAILED_ATTEMPTS` (default 1, tightened from 2 by the duel verdict) consecutive
-failures until the issue itself changes, paging urgently once when it trips: NEEDS A HUMAN,
-silence hereafter is by design. Outcome verification counts only provably-bot comments
-(owner login + marker, `botCommentCount()`) — the duel caught that the prior any-comment-count
-check let a reporter replying mid-run register as fixer success; unavailable verification now
-leans failure, never asserted success.
+failures until the issue itself changes, paging urgently once when it trips: NEEDS A HUMAN.
+Outcome verification counts only provably-bot comments (owner login + marker,
+`botCommentCount()`) — the duel caught that the prior any-comment-count check let a reporter
+replying mid-run register as fixer success; unavailable verification leans failure, never
+asserted success. The 27 failure notes the old design left on issues #38/#39/#41/#42 were
+deleted 2026-07-24 as part of this amendment.
 
-**Accepted follow-up (duel Phase 1 item 4, not yet implemented):** retire the scheduled job's
-public write path entirely — scheduled automation becomes read-only triage (reproduce, classify,
-extract reporter patches, private incident record, page); implementation fixing moves to
-session-supervised parallel agents. Tracked for the next automation change, alongside the
-Phase 2 GitHub App identity (owner action required).
+**Remaining accepted follow-up:** Phase 2 GitHub App identity (owner action required).
 
 **Security posture (Stuart's sweep mandate, same date):** issue title/body/comments are
 untrusted stranger input feeding an agent that holds git-push and gh-comment powers. The title

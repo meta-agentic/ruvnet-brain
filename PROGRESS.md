@@ -1,8 +1,56 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-13 EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-24 late EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
 
 ---
+
+## 2026-07-24/25 — The night the pipeline's silence broke (issues #38/#39/#41/#42 + automation redesign) — v3.9.72-dev
+
+**Trigger**: Stuart learned of four open issues from a GitHub email — 28h after the first was
+filed — and asked: "Are you set up to automatically fix issues and be aware of them?"
+
+**The answer was the incident**: detection worked (issue-fix every 30m, issue-watch hourly), but
+the fixer's comments post as stuinfla and the watcher counted any stuinfla comment as "owner
+responded" → SLA pages structurally impossible. Its failure-comment dedup was also dead (attempt-
+start state write erased failureCommentAt) → 22 public bot comments on #38 while tkmeownow's
+tested patch sat unread in comment 1. The session banner only surfaced breaches → same poisoned
+predicate → silent. Score of the auto-fixer on the four issues: 0/4.
+
+**Shipped (all same night, v3.9.72-dev)**:
+- #38 Windows: hook-shim-bash.mjs resolver (env override → Git-for-Windows → where.exe minus
+  WSL System32), skip-with-once-only-notice, fileURLToPath PLUGIN_ROOT. Built on @tkmeownow's
+  patch, credited. Residual: lesson-hooks.sh/anticipate.sh bypass the shim.
+- #39 ruvector.db: proven chain — external ruvector mcp-server boots IntelligenceEngine at
+  module load → initVectorDb() passes NO storagePath → native default ./ruvector.db at cwd =
+  user's open project. Fixed with node -e launcher relocating cwd to ~/.cache/ruvnet-brain/
+  ruvector-mcp (no ruvector flag exists — verified). Signature-guarded cleanup for victims.
+  Upstream storagePath plumb-through = OPEN offer to file against ruvector.
+- #41 gate false positives: @sparkling's shellSkeleton in hook-input.mjs (ADR-0021), skeleton
+  verb, both MATCH_RE branches; probe table = permanent regression suite; true positives still
+  block. The live buggy gate blocked our own fix agent's quoted command mid-work.
+- #42 Codex wiring: install-time [mcp_servers.ruvnet-brain] managed block in ~/.codex/
+  config.toml (merge-never-clobber, idempotent), skill.toml manifests (skills not commands),
+  leaked /Users/ path removed + repo-wide guard test, doctor probes Codex wired/not-wired.
+- ADR-050 issue-pipeline invariants: bot comments never satisfy SLA (BOT_MARKER exclusion),
+  first-sighting ntfy page (awareness ≤1h), one failure comment per issue EVER, circuit breaker
+  (2 fails → stop until issue changes + urgent needs-human page), banner always shows open
+  count. 12 regression tests, 8 provably fail on old code (stash-mutation proof).
+- Security sweep mandate (new standing order): aidefence scan on issue bodies (4/4 benign;
+  3 lexical false positives adjudicated), fixer prompt hardened (title as JSON-escaped data,
+  data-not-instructions, refuse gate-weakening patches), security review pre-ship.
+
+**Cross-model eval (Fable 5 × GPT-5.6 duel)**: converged on 3 root causes — single-environment
+development shipped as universal; health surfaces asserting unprobed paths (doctor "works in
+EVERY project"/"drops zero files" while Codex unwired + cwd pollution); gates without
+adversarial corpora. GPT-5.6 uniquely caught: windows CI job claims "zero exclusions" while
+4 suites skipIf(win32) — a false coverage claim. Scores: F5 58 vs GPT 32 → converged verdict in
+ADR-050. Structural prevention set: consumer-contract OS×host matrix, quote-aware gate parser
+corpus, identity-separated triage-first automation.
+
+**Ops notes**: issue-fix launchd job unloaded during redesign, reloaded post-ship with fixed
+code. Other session shipped 3.9.71 (console rebuild) mid-evening; its harness reaped this
+session's first 4 agent worktrees (~10 min lost) — manual scratchpad worktrees were the fix.
+ntfy channel HTTP-200-verified with a labeled test push; phone-side receipt = Stuart to confirm.
 
 ## 2026-07-13 — Every scheduled job must PROVE it ran. And MetaHarness stops being decorative.
 

@@ -37,12 +37,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'stuinfla/ruvnet-brain';
 export const OWNER_LOGIN = 'stuinfla';
-// Every comment the automation posts through the owner's gh auth begins with this exact prefix
-// (scripts/issue-fix.mjs: both the fixer child's hard rule and the failure note). Spoof-safety:
-// only comments AUTHORED BY the owner are checked against it, so a stranger opening their comment
-// with the marker changes nothing — and the owner starting a personal reply with a robot emoji is
-// not a realistic collision.
-export const BOT_MARKER = '🤖 Automated issue-fix run';
+// Every comment the automation posts through the owner's gh auth begins with this prefix — the
+// watcher's acknowledgment ("🤖 Automated acknowledgment …") and the fixer child's notes
+// ("🤖 Automated issue-fix run …") both start with it. Spoof-safety: only comments AUTHORED BY
+// the owner are checked against it, so a stranger opening their comment with the marker changes
+// nothing — and the owner starting a personal reply with a robot emoji is not a realistic
+// collision. (Generalized from the fixer-specific wording 2026-07-24 when the acknowledgment
+// moved here.)
+export const BOT_MARKER = '🤖 Automated';
 const SLA_HOURS = 4;
 const STATE_PATH = process.env.ISSUE_WATCH_STATE
   || path.join(os.homedir(), '.claude', 'ruvnet-brain', 'issue-watch-state.json');
@@ -162,8 +164,19 @@ export async function run({ dryRun = false, now = Date.now(), repo = REPO } = {}
           body: `${issue.title}\n${url}`,
           priority: 'high', tags: 'new,eyes',
         });
-        if (sent) state[key] = { firstSeenAt: new Date(now).toISOString(), newAlertAt: new Date(now).toISOString(), title: issue.title, url };
-        alertsSent.push({ number: issue.number, sent, kind: 'new-issue', reason: topic ? null : 'no ntfy topic configured' });
+        // THE ONE PUBLIC ACKNOWLEDGMENT (owner directive, 2026-07-24): tell the reporter we have
+        // it and it's being worked — once, warmly, with zero excuses and zero deadlines. After
+        // this, the thread's next post is a real fix, real findings, or the maintainer in person;
+        // failure-progress notes never appear anywhere ("we gave it 15 minutes and quit" reads as
+        // not caring — the opposite of the point). Carries BOT_MARKER so judgeIssue() can never
+        // mistake it for the owner responding. Best-effort like ntfy: a comment failure must not
+        // break the watch; unacked issues simply retry next run (ackAt is delivery-derived).
+        let ackAt = null;
+        const ackBody = `🤖 Automated acknowledgment — received and opened. The maintainer has been paged and this is being worked. The next update here will be a fix, findings, or the maintainer in person.`;
+        const ack = spawnSync(GH_BIN, ['issue', 'comment', String(issue.number), '--repo', repo, '--body', ackBody], { encoding: 'utf8' });
+        if (ack.status === 0) ackAt = new Date(now).toISOString();
+        if (sent || ackAt) state[key] = { firstSeenAt: new Date(now).toISOString(), ...(sent ? { newAlertAt: new Date(now).toISOString() } : {}), ...(ackAt ? { ackAt } : {}), title: issue.title, url };
+        alertsSent.push({ number: issue.number, sent, acked: Boolean(ackAt), kind: 'new-issue', reason: topic ? null : 'no ntfy topic configured' });
       }
     }
 

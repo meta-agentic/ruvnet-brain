@@ -48,6 +48,16 @@ describe('issue-watch judgeIssue — a bot comment is not an owner response', ()
     expect(r.breach).toBe(true); // still unanswered by the owner
   });
 
+  it("the watcher's own acknowledgment comment never satisfies the SLA (owner directive 2026-07-24)", () => {
+    // The one public ack ("received and opened…") posts through the owner's auth at first sighting.
+    // If it ever counted as the owner responding, the ack would re-create the exact alarm-silencer
+    // this whole file exists to keep dead.
+    const ack = { author: { login: 'stuinfla' }, body: '🤖 Automated acknowledgment — received and opened. The maintainer has been paged and this is being worked.' };
+    const r = judgeIssue(issueAgedHours(5), [ack], NOW);
+    expect(r.ownerComment).toBe(false);
+    expect(r.breach).toBe(true);
+  });
+
   it('inside the SLA window nothing breaches, bot comment or not', () => {
     expect(judgeIssue(issueAgedHours(3), [botComment], NOW).breach).toBe(false);
     expect(judgeIssue(issueAgedHours(3), [], NOW).breach).toBe(false);

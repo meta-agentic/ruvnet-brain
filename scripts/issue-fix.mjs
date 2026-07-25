@@ -445,25 +445,14 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
     // (2026-07-17: this line used to hardcode 'completed' regardless of outcome — it marked 6 issues
     // done while producing zero branches/comments/logs. That is faking, not fixing. Never again.)
     const succeeded = SUCCESS_OUTCOMES.has(outcome.outcome);
-    // NEVER-SILENT-TO-GITHUB (2026-07-18), amended 2026-07-24: a failed attempt leaves ONE visible
-    // comment on the issue — total, ever, not per-24h. The original per-24h dedup never actually
-    // operated (the attempt-start write erased failureCommentAt each run — see attemptStartRecord),
-    // and issue #38 collected 22 public failure notes. One honest note tells the reporter somebody
-    // looked; the second adds nothing and the twentieth reads as parody. Retries stay loud on the
-    // PRIVATE channels (ntfy + heartbeat), never again on the public thread.
+    // NO PUBLIC FAILURE NOTES — EVER (owner directive, 2026-07-24, superseding the 2026-07-18
+    // NEVER-SILENT-TO-GITHUB rule and this block's earlier one-note compromise): "we tried for 15
+    // minutes and quit" on a public thread reads as not caring — the opposite of the point. The
+    // reporter-facing signal is now: ONE acknowledgment at first sighting (issue-watch.mjs), then
+    // the next post is a real fix branch, real triage findings, or the maintainer in person.
+    // Failures stay loud on the PRIVATE channels only: the ntfy pages below and the heartbeat.
+    // (The 22-note wall on issue #38 is the epitaph of the old design.)
     const prevRec = fixState[String(issue.number)] || {};
-    let failureCommentAt = prevRec.failureCommentAt || null;
-    if (!succeeded && !failureCommentAt) {
-      const why = outcome.outcome === 'timeout-failed'
-        ? `hit its ${Math.round(TIMEOUT_MS / 60000)}-minute wall-clock limit before reaching a verified outcome`
-        : `exited without producing a verifiable artifact (no branch pushed, no comment posted)`;
-      const body = `🤖 Automated issue-fix run (issue-fix.mjs) — a human reviews before anything merges.\n\n`
-        + `Status: an automated fix attempt **${why}**. The maintainer has been paged. To keep this `
-        + `thread readable, automation will not post here again — the next update will be a real fix `
-        + `branch, an honest triage, or the maintainer in person.`;
-      const r = spawnSync(GH_BIN, ['issue', 'comment', String(issue.number), '--repo', repo, '--body', body], { encoding: 'utf8' });
-      if (r.status === 0) failureCommentAt = new Date(now).toISOString();
-    }
     const failCount = succeeded ? 0 : (prevRec.failCount || 0) + 1;
     fixState[String(issue.number)] = {
       ...prevRec,
@@ -471,7 +460,6 @@ export async function run({ dryRun = false, simulate = [], now = Date.now(), rep
       status: succeeded ? 'completed' : 'failed',
       outcome: outcome.outcome,
       branch: succeeded ? (outcome.branch || null) : null,
-      failureCommentAt,
       failCount,
       logPath,
     };
