@@ -5,6 +5,15 @@
 // ntfy alert must reach his phone. "Response" = a comment from the repo owner (stuinfla) — a
 // contributor's comment (see issue #12, commented by @sparkling) does NOT satisfy the SLA.
 //
+// 2026-07-24 incident, two rules born from it:
+//   1. A BOT comment is not an owner response. issue-fix.mjs posts through the owner's gh auth, so
+//      its comments arrive as stuinfla — and four issues (#38/#39/#41/#42) sat 28h with ZERO pages
+//      because those bot comments satisfied the owner-comment check below. The fixer manufactured
+//      the exact signal that silences the watcher. Marked comments (BOT_MARKER) never count.
+//   2. The breach alert is the ESCALATION channel, not the AWARENESS channel. Waiting 4h to say
+//      anything is how the maintainer learned about four issues from a GitHub email instead of a
+//      page. The watcher now pages ONCE, immediately, the first time it sees any open issue.
+//
 // Follows the house positive-confirmation pattern established 2026-07-13 (scripts/job-heartbeat.sh,
 // scripts/nightly-watchdog.mjs, config/scheduled-jobs.json): this script is meant to run WRAPPED by
 // job-heartbeat.sh from a launchd plist, so a crash still leaves a receipt and a failed run still
@@ -28,6 +37,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'stuinfla/ruvnet-brain';
 const OWNER_LOGIN = 'stuinfla';
+// Every comment the automation posts through the owner's gh auth begins with this exact prefix
+// (scripts/issue-fix.mjs: both the fixer child's hard rule and the failure note). Spoof-safety:
+// only comments AUTHORED BY the owner are checked against it, so a stranger opening their comment
+// with the marker changes nothing — and the owner starting a personal reply with a robot emoji is
+// not a realistic collision.
+export const BOT_MARKER = '🤖 Automated issue-fix run';
 const SLA_HOURS = 4;
 const STATE_PATH = process.env.ISSUE_WATCH_STATE
   || path.join(os.homedir(), '.claude', 'ruvnet-brain', 'issue-watch-state.json');
@@ -106,7 +121,10 @@ function fmtAge(hours) {
  * list call) so owner-comment presence is computed off the authoritative per-issue payload. */
 export function judgeIssue(issue, comments, now) {
   const ageHours = (now - new Date(issue.createdAt).getTime()) / 3_600_000;
-  const ownerComment = comments.find((c) => c.author?.login === OWNER_LOGIN);
+  // An owner response is a HUMAN response: bot-marked comments never satisfy the SLA (see header,
+  // 2026-07-24 — the fixer's failure notes muted every page for four real issues).
+  const ownerComment = comments.find((c) => c.author?.login === OWNER_LOGIN
+    && !String(c.body || '').trimStart().startsWith(BOT_MARKER));
   const breach = ageHours > SLA_HOURS && !ownerComment;
   return { ageHours, ownerComment: !!ownerComment, breach };
 }
@@ -126,8 +144,28 @@ export async function run({ dryRun = false, now = Date.now(), repo = REPO } = {}
     const key = String(issue.number);
     const last = state[key]?.lastAlertAt ? Date.parse(state[key].lastAlertAt) : null;
     const dueForAlert = breach && (!last || (now - last) / 3_600_000 >= SLA_HOURS);
+    // First sighting → page once, immediately (rule 2 in the header). Delivery-derived like
+    // lastAlertAt: state is only written when the push actually went out, so a failed push
+    // retries next run instead of burying the sighting.
+    const firstSighting = !state[key];
 
-    results.push({ number: issue.number, title: issue.title, ageHours, ownerComment, breach, dueForAlert, url });
+    results.push({ number: issue.number, title: issue.title, ageHours, ownerComment, breach, dueForAlert, firstSighting, url });
+
+    if (firstSighting) {
+      if (dryRun) {
+        alertsSent.push({ number: issue.number, sent: false, kind: 'new-issue', reason: 'dry-run' });
+      } else {
+        const topic = resolveTopic();
+        let sent = false;
+        if (topic) sent = await pushNtfy(topic, {
+          title: `New issue #${issue.number} (open ${fmtAge(ageHours)})`,
+          body: `${issue.title}\n${url}`,
+          priority: 'high', tags: 'new,eyes',
+        });
+        if (sent) state[key] = { firstSeenAt: new Date(now).toISOString(), newAlertAt: new Date(now).toISOString(), title: issue.title, url };
+        alertsSent.push({ number: issue.number, sent, kind: 'new-issue', reason: topic ? null : 'no ntfy topic configured' });
+      }
+    }
 
     if (dueForAlert) {
       const title = `SLA breach: issue #${issue.number}`;
@@ -143,9 +181,12 @@ export async function run({ dryRun = false, now = Date.now(), repo = REPO } = {}
         // push failed (ntfy down, no topic) was suppressed for the whole 4h cooldown — the alert ledger
         // asserted a delivery it never verified. A failed attempt records itself as failed and the next
         // hourly run retries; the ledger can no longer claim a page that didn't happen.
-        if (sent) state[key] = { lastAlertAt: new Date(now).toISOString(), title: issue.title, url };
+        // Spread-merge, never overwrite: the record may already carry firstSeenAt/newAlertAt from
+        // the first-sighting page above — clobbering them would re-page "new" forever (the exact
+        // state-erasure class that broke issue-fix's comment dedup, 2026-07-24).
+        if (sent) state[key] = { ...(state[key] || {}), lastAlertAt: new Date(now).toISOString(), title: issue.title, url };
         else state[key] = { ...(state[key] || {}), lastAttemptAt: new Date(now).toISOString(), sent: false, title: issue.title, url };
-        alertsSent.push({ number: issue.number, sent, reason: topic ? null : 'no ntfy topic configured' });
+        alertsSent.push({ number: issue.number, sent, kind: 'sla-breach', reason: topic ? null : 'no ntfy topic configured' });
       }
     }
   }
@@ -175,8 +216,12 @@ async function main() {
       const icon = r.breach ? '\u{1F534}' : '✅';
       console.log(`${icon} #${r.number}  ${r.title}`);
       console.log(`   age: ${fmtAge(r.ageHours)} · owner comment: ${r.ownerComment ? 'yes' : 'no'} · breach: ${r.breach ? 'YES' : 'no'}`);
+      if (r.firstSighting) {
+        const na = output.alertsSent.find((a) => a.number === r.number && a.kind === 'new-issue');
+        console.log(`   🆕 first sighting — ${dryRun ? '[DRY-RUN] would push new-issue page' : na?.sent ? 'new-issue page pushed' : `new-issue page NOT sent (${na?.reason})`}`);
+      }
       if (r.dueForAlert) {
-        const alert = output.alertsSent.find((a) => a.number === r.number);
+        const alert = output.alertsSent.find((a) => a.number === r.number && a.kind === 'sla-breach');
         console.log(`   ${dryRun ? '[DRY-RUN] would push ntfy alert' : alert?.sent ? 'ntfy alert pushed' : `ntfy alert NOT sent (${alert?.reason})`}`);
       } else if (r.breach) {
         console.log(`   already alerted within the last ${SLA_HOURS}h — not repeating`);
