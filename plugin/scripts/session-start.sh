@@ -204,6 +204,43 @@ if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   echo "$RUNNING_V" > "$ANNOUNCED_FILE" 2>/dev/null
 fi
 
+# ── MAJOR-LINE milestone: the "what's new in the big release" first-run experience (owner, 2026-07-25:
+# "people will wake up and it's 4.0 — they won't see the web explainer; the brain has to introduce
+# itself and bring up the console"). This fires ONCE per major line, not per patch: the first session a
+# user lands on the 4.0-line console-rebuild (3.9.71+), and again the day the number actually crosses to
+# 4.x. It is deliberately HONEST about the version — per Accepted ADR-042 the number stays 3.9.x-dev
+# until the 4.0 line is field-verified, so on 3.9.x it says "the 4.0-line enhancements have landed", NEVER
+# "you're on 4.0". Non-blocking; the model decides tone; the full story is /whats-new (docs/RELEASE-NOTES-4.0.md).
+if [ -n "$RUNNING_V" ]; then
+  V_NODEV="${RUNNING_V%%-*}"; V_MAJOR="${V_NODEV%%.*}"; V_REST="${V_NODEV#*.}"; V_MINOR="${V_REST%%.*}"; V_PATCH="${V_REST#*.}"
+  case "$V_PATCH" in *.*) V_PATCH="${V_PATCH%%.*}" ;; esac
+  V_MAJOR="${V_MAJOR:-0}"; V_MINOR="${V_MINOR:-0}"; V_PATCH="${V_PATCH:-0}"
+  MILESTONE=""
+  # Single numeric compare (maj*1e6 + min*1e3 + patch) so 3.10+ still counts as the 4.0-line, and a
+  # non-numeric component skips silently rather than crashing this critical hook. 3009071 = 3.9.71.
+  case "$V_MAJOR:$V_MINOR:$V_PATCH" in
+    *[!0-9:]*) : ;;
+    *) V_INT=$(( V_MAJOR * 1000000 + V_MINOR * 1000 + V_PATCH ))
+       if [ "$V_MAJOR" -ge 4 ]; then MILESTONE="4.x"
+       elif [ "$V_INT" -ge 3009071 ]; then MILESTONE="4.0-line"; fi ;;
+  esac
+  MILESTONE_FILE="$STATE_DIR/.last-major-milestone"
+  LAST_MILESTONE=$(cat "$MILESTONE_FILE" 2>/dev/null)
+  if [ -n "$MILESTONE" ] && [ "$MILESTONE" != "$LAST_MILESTONE" ]; then
+    echo "[RuvNet Brain — MAJOR-LINE welcome ($MILESTONE), show ONCE near the top of your first response]"
+    echo "The user upgraded INTO the big release and will NOT have seen the web explainer. Warmly, in a few sentences (adapt, don't recite):"
+    if [ "$MILESTONE" = "4.x" ]; then
+      echo "  1. Tell them they're now on RuvNet-Brain $RUNNING_V — a major version — and what it MEANS: the release where the brain got honest, legible, fast, and self-measuring."
+    else
+      echo "  1. Tell them the 4.0-LINE enhancements have landed (they're on v$RUNNING_V). Be honest: the version stays 3.9.x until the work is field-verified (ADR-042), so say 'the 4.0-line upgrades are here', NOT 'you're on 4.0'."
+    fi
+    echo "  2. Name 2-3 concrete things they can DO now: the Console on /rvbc (their whole stack on one live page); every number measured from their machine, never projected; it now learns across their projects."
+    echo "  3. OFFER to open the Console right now so they can SEE it — if they say yes, follow rvbc.md exactly. Point them at /whats-new for the full honest highlights."
+    echo "Do NOT claim 'proven better' or 'fully proactive' — the self-measurement is new and still filling. Say it once; don't repeat later this session."
+    echo "$MILESTONE" > "$MILESTONE_FILE" 2>/dev/null
+  fi
+fi
+
 # One-time consent question (asked at most once ever, per machine) — security-conscious default:
 # self-update is powerful (it can change the model's own instructions), so it's opt-in via an explicit
 # yes, not silently on. Once answered, never asked again; the answer is a plain yes/no file, not a flag
