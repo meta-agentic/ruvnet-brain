@@ -3,7 +3,7 @@ id: ADR-050
 title: The issue pipeline may never manufacture its own acknowledgment — awareness, escalation, and a fixer that knows when to stop
 status: Implemented
 date: 2026-07-24
-updated: 2026-07-24
+updated: 2026-07-25
 authors: [Stuart Kerr, Claude Code]
 tags: [issues, automation, alerting, sla, security, circuit-breaker]
 supersedes: []
@@ -79,6 +79,18 @@ asserted success. The 27 failure notes the old design left on issues #38/#39/#41
 deleted 2026-07-24 as part of this amendment.
 
 **Remaining accepted follow-up:** Phase 2 GitHub App identity (owner action required).
+
+## The fix layer moves to GitHub compute (added 2026-07-25, owner directive)
+
+The scheduled local fixer is awareness + triage only (above); actual FIXING now runs where the
+compute and the license live: `.github/workflows/issue-attack.yml` triggers a full Claude Code
+run on a hosted runner for every opened/reopened issue (plus `@claude` mentions), producing a
+reviewable PR whose merge closes the issue via "Fixes #N", or one honest triage comment — never
+a status/failure note (the voice policy above binds it verbatim, and its prompt carries the same
+untrusted-input posture). It is inert-by-design until the repo secret `CLAUDE_CODE_OAUTH_TOKEN`
+exists (owner: `claude setup-token` → `gh secret set CLAUDE_CODE_OAUTH_TOKEN`), so it can never
+add CI noise while unarmed. Division of labor: local watcher = page + single acknowledgment;
+GitHub runner = attack; human = merge.
 
 **Security posture (Stuart's sweep mandate, same date):** issue title/body/comments are
 untrusted stranger input feeding an agent that holds git-push and gh-comment powers. The title
