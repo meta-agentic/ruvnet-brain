@@ -34,6 +34,20 @@ afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
 const sqlite = (db, sql) => execFileSync('sqlite3', [db, sql], { encoding: 'utf8', timeout: 60_000 }).trim();
 
+/** Remove idx_ns's schema entry — corruption REINDEX genuinely cannot repair. Distro sqlite3
+ * builds (ubuntu-24.04's 3.45) compile with defensive guards that REFUSE writable_schema DML, so
+ * the plain form threw before ever corrupting and both tests died at the fixture — red on CI since
+ * 2026-07-24 (3.9.71) while green on macOS builds without the guard. `--unsafe-testing` (CLI ≥3.44)
+ * disables exactly those guards; fall back to the plain form for older CLIs that lack the flag. */
+function corruptIndex(db) {
+  const sql = "PRAGMA writable_schema=ON; DELETE FROM sqlite_master WHERE type='index' AND name='idx_ns'; PRAGMA writable_schema=OFF;";
+  try {
+    execFileSync('sqlite3', ['--unsafe-testing', db, sql], { encoding: 'utf8', timeout: 60_000 });
+  } catch {
+    sqlite(db, sql);
+  }
+}
+
 function seedStore({ rows = 3 } = {}) {
   const db = path.join(dir, 'memory.db');
   const values = Array.from({ length: rows }, (_, i) => `('lessons','k${i}','v${i}')`).join(',');
@@ -66,7 +80,7 @@ describe('health-repair --repair-memory', () => {
     const db = seedStore();
     // Orphan-page corruption: remove the index definition itself. REINDEX genuinely cannot repair
     // this, so the tool must say so rather than run REINDEX and declare victory.
-    sqlite(db, "PRAGMA writable_schema=ON; DELETE FROM sqlite_master WHERE type='index' AND name='idx_ns'; PRAGMA writable_schema=OFF;");
+    corruptIndex(db);
 
     const { out, code } = repair(db);
 
@@ -78,7 +92,7 @@ describe('health-repair --repair-memory', () => {
 
   it('never destroys rows — the data survives even a failed repair', () => {
     const db = seedStore({ rows: 5 });
-    sqlite(db, "PRAGMA writable_schema=ON; DELETE FROM sqlite_master WHERE type='index' AND name='idx_ns'; PRAGMA writable_schema=OFF;");
+    corruptIndex(db);
 
     repair(db);
 
