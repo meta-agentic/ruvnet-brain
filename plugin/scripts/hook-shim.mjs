@@ -9,7 +9,9 @@
 // scripts/update-apply.mjs) → the very next hook fire runs the new code. No restart.
 //
 // SHELL CONTRACT (this file is boot-frozen — treat as near-frozen ABI, per DDD-0003):
-//   • Self-contained: node:fs/path/child_process only, no imports from the body.
+//   • Self-contained: node:fs/path/os/child_process/url builtins, plus the sibling
+//     hook-shim-bash.mjs (bash-interpreter resolution, issue #38) — colocated in this same
+//     boot-frozen scripts/ dir, never resolved from the spine. No imports from the hook BODY.
 //   • Typed dispatch table (red-team findings 15/16/30): each hook declares its file, interpreter,
 //     and mode. `blocking` hooks propagate their exact exit code (route-dispatch's deliberate
 //     exit-2 wall survives by CONTRACT); `advisory` hooks can never block a turn — any failure,
@@ -27,12 +29,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { resolveBash, skipNoBash } from './hook-shim-bash.mjs';
 
 const BRAIN_HOME = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
 const ACTIVE = path.join(BRAIN_HOME, 'active.json');
 const DEV = path.join(BRAIN_HOME, 'dev.json');
 const VERSIONS = path.join(BRAIN_HOME, 'versions');
-const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+// fileURLToPath, not URL.pathname: on Windows, pathname yields "/C:/…" which path.resolve mangles
+// into "C:\C:\…" — the fallback silently pointed at a nonexistent tree (issue #38).
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // The dispatch table — hook id → { file (relative to <codeRoot>/plugin/scripts), interpreter, mode }.
 // Adding a hook here is a SHELL change (requiresRestart); changing a hook's BODY never is.
@@ -87,7 +93,16 @@ function resolveCodeRoot() {
 // chosen from the typed table — never from input.
 function runHook(file) {
   if (!fs.existsSync(file)) return 0; // nothing to run — never invent a failure
-  const cmd = entry.interpreter === 'node' ? process.execPath : '/bin/bash';
+  let cmd;
+  if (entry.interpreter === 'node') {
+    cmd = process.execPath;
+  } else {
+    cmd = resolveBash();
+    // No bash on this machine (issue #38, typically win32 without Git for Windows): skip the hook
+    // rather than spawnSync ENOENT on every tool call. Both blocking and advisory modes return 0 —
+    // an unsupported platform must not degrade the session.
+    if (!cmd) return skipNoBash(BRAIN_HOME);
+  }
   // Forward any argv AFTER the hook id to the hook body. Every current hooks.json line calls
   // `hook-shim.mjs <id>` with no trailing args, so slice(3) is empty and their behavior is unchanged.
   // The unprompted-speech chokepoint uses this to receive the CC event name:
