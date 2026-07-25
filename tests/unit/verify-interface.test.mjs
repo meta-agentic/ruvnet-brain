@@ -164,3 +164,70 @@ describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh �
     expect(r.status).toBe(2);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// Issue #41 (residual of #12): the command-position anchor `(^|[;&|(\n])` was matched against the RAW
+// command, so a separator character INSIDE a quoted string (a grep pattern's regex alternation, a
+// commit message, an awk program) was misread as a real shell separator. Fixed by matching against a
+// quote-masked skeleton (shellSkeleton() in hook-input.mjs) instead. This is the reporter's own probe
+// table, ported verbatim (github.com/sparkling, issue #41): 4 false positives now must be ALLOWED, 2
+// controls stay allowed (they always were — they isolate the mechanism), and 2 true positives must
+// STILL BLOCK — the fix must not widen the gate, only stop it firing on quoted content.
+describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh — issue #41: quote-masked command-position matching', () => {
+  describe('FALSE POSITIVES — a separator char inside quotes must no longer trigger the block', () => {
+    it.each([
+      ['regex alternation before tool name', 'grep -E "foo|ruflo init" file.txt'],
+      ['same, inside a longer pattern', 'grep -nE "^CLI=|ruflo init|npx" script.sh'],
+      ['commit message containing a pipe', 'git commit -m "handle a|ruflo init edge case"'],
+      ['awk program with alternation', 'awk "/x|ruflo memory search/ {print}" f'],
+    ])('%s: %s', (_label, cmd) => {
+      const r = run(cmd);
+      expect(r.status, `expected ALLOWED (0), got ${r.status}\nstderr: ${r.stderr}`).toBe(0);
+    });
+  });
+
+  describe('CONTROLS — identical apart from no separator char before the name inside quotes', () => {
+    it.each([
+      ['prose, no separator', 'grep -E "foo ruflo init" file.txt'],
+      ['echo mentioning the tool', 'echo "run ruflo init to start"'],
+    ])('%s: %s', (_label, cmd) => {
+      const r = run(cmd);
+      expect(r.status, `expected ALLOWED (0), got ${r.status}\nstderr: ${r.stderr}`).toBe(0);
+    });
+  });
+
+  describe('TRUE POSITIVES — real, unquoted invocations must STILL block (the fix must not widen the gate)', () => {
+    it.each([
+      ['real invocation', 'ruflo init --force'],
+      ['real invocation after a real pipe', 'echo hi | ruflo memory search'],
+    ])('%s: %s', (_label, cmd) => {
+      const r = run(cmd);
+      expect(r.status, `expected BLOCKED (2), got ${r.status}\nstderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toMatch(/BLOCKED — you have not read the interface/);
+    });
+  });
+
+  it('the help-recording branch does not record a bogus stamp for a tool name that only appears inside quotes', () => {
+    // The help-recording branch (~line 143) shares MATCH_RE with the blocking branch, and its own
+    // exit code is always 0 either way — the observable bug here is a SPURIOUS CACHE STAMP, not a
+    // wrong exit code. `grep -E "foo|ruflo init" file.txt --help` ends in a real `--help` (so it
+    // enters the recording branch) but the `|` before `ruflo init` is inside the quoted pattern, not
+    // a real shell separator. Before the fix this recorded a "ruflo init help was read" stamp for a
+    // command that never actually read ruflo's help — which would then let a REAL `ruflo init`
+    // invocation slip past the gate unread.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vi-'));
+    const stamp = path.join(home, '.cache/ruvnet-brain/help-read/ruflo.init');
+
+    run('grep -E "foo|ruflo init" file.txt --help', { home });
+    expect(fs.existsSync(stamp), 'must NOT record a stamp from a quoted mention').toBe(false);
+
+    // Prove the false-positive fix did not also break real coverage: a genuine invocation with no
+    // help read yet still blocks —
+    expect(run('ruflo init --force', { home }).status).toBe(2);
+    // — and the stamping mechanism itself still works for a REAL help read (this isn't testing a
+    // feature that's simply broken end-to-end):
+    run('ruflo init --help', { home });
+    expect(fs.existsSync(stamp), 'a REAL help read must still be recorded').toBe(true);
+    expect(run('ruflo init --force', { home }).status).toBe(0);
+  });
+});

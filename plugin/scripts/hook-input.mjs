@@ -16,6 +16,8 @@
 //   printf '%s' "$INPUT" | node hook-input.mjs tool_name        -> prints event.tool_name
 //   printf '%s' "$INPUT" | node hook-input.mjs command          -> prints tool_input.command (|| .command)
 //   printf '%s' "$INPUT" | node hook-input.mjs field a.b.c      -> prints an arbitrary dotted path
+//   printf '%s' "$INPUT" | node hook-input.mjs skeleton         -> prints the command with quoted
+//                                                                   CONTENT masked (issue #41)
 //
 // CONTRACT: prints "" and exits 0 on ANY parse failure or missing field. It NEVER throws to the caller
 // and NEVER exits nonzero on bad input — a gate that breaks the shell protects nothing, so fail-open
@@ -62,6 +64,32 @@ export function field(ev, dottedPath) {
   return typeof cur === 'string' ? cur : String(cur);
 }
 
+/**
+ * The command with quoted CONTENT masked to '_', so only shell-level metacharacters remain visible.
+ * Quote characters themselves survive (offsets are preserved); a backslash-escaped char inside a
+ * double-quoted string masks as two bytes (the backslash and the char it escapes). Single quotes take
+ * no escapes, matching real shell semantics. An unterminated quote simply masks to the end of the
+ * string — never throws, never loops.
+ *
+ * WHY (issue #41): a command-position regex matched against the RAW command reads a `|`, `;`, `&`,
+ * `(`, or newline INSIDE a quoted string (e.g. `grep -E "foo|ruflo init"`) as a real shell separator,
+ * so whatever follows is misread as command position. Matching against the skeleton instead removes
+ * separators that are not actually shell separators. Outside quotes the skeleton is byte-identical to
+ * the original, so capture-group offsets for a real match are unaffected.
+ */
+export function shellSkeleton(cmd) {
+  let out = '';
+  let q = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (q === '"' && ch === '\\' && i + 1 < cmd.length) { out += '__'; i++; continue; } // escaped char
+    if (q) { if (ch === q) { q = null; out += ch; } else out += '_'; continue; }
+    if (ch === '"' || ch === "'") { q = ch; out += ch; continue; }
+    out += ch;
+  }
+  return out;
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 function isMain() {
   try {
@@ -82,6 +110,7 @@ if (isMain()) {
     if (which === 'tool_name') out = toolName(ev);
     else if (which === 'command') out = commandOf(ev);
     else if (which === 'field') out = field(ev, process.argv[3] || '');
+    else if (which === 'skeleton') out = shellSkeleton(commandOf(ev));
     process.stdout.write(out);
     // ALWAYS exit 0: a parse miss is an empty string, never a crash the gate has to survive.
     process.exit(0);
