@@ -544,6 +544,121 @@ function wirePlugin() {
   return { wired: false, manualMarketplace, manualInstall };
 }
 
+// ── step: wire the Codex host (issue #42, Henrik Pettersen) ──────────────────────────────────────
+// We shipped a .codex/ directory AND a working MCP server and never wired them together, so on a
+// Codex host the brain was entirely absent — no search_ruvnet at all. Every artifact was present;
+// only the registration was missing. Codex reads its MCP servers from ~/.codex/config.toml, which is
+// the USER's file and already carries their own settings, so this MERGES and never rewrites wholesale.
+//
+// Two rules make that merge safe:
+//   1. Our lines live inside a comment-delimited managed block, so a reinstall rewrites exactly
+//      those bytes and leaves every other section byte-identical.
+//   2. An [mcp_servers.ruvnet-brain] found OUTSIDE our markers is the user's, not ours — we report
+//      it and touch nothing. Their hand-written config outranks our convenience.
+//
+// The registered path must also OUTLIVE the install. The npx checkout is ephemeral (the same reason
+// the spend watchdog and the router tools get copied under ~/.claude), and plugin/mcp/server.mjs is
+// self-contained — node builtins only — so it is copied to a persistent home and THAT absolute path
+// is what gets registered. Registering the npx dir would rot the moment the temp dir vanished.
+const CODEX_BLOCK_START = '# --- ruvnet-brain (managed block, installer-rewritten) ---';
+const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
+const codexHomeDir = () => path.join(os.homedir(), '.codex');
+const codexConfigPath = () => path.join(codexHomeDir(), 'config.toml');
+const codexServerDir = () => path.join(os.homedir(), '.claude', 'ruvnet-brain', 'mcp');
+
+// The exact bytes we own. Kept in one place so the writer and the doctor probe can never disagree.
+function codexManagedBlock(serverPath) {
+  return [
+    CODEX_BLOCK_START,
+    '# Written by `npx ruvnet-brain`. This block is rewritten on every reinstall;',
+    '# everything outside the two markers is yours and is never touched.',
+    '[mcp_servers.ruvnet-brain]',
+    'command = "node"',
+    `args = [${JSON.stringify(serverPath)}]`,
+    CODEX_BLOCK_END,
+  ].join('\n');
+}
+
+// Pure, so the merge contract is testable without going near a real ~/.codex. Returns the new text
+// plus which of the three things happened, and is idempotent: re-running over its own output
+// reproduces it byte for byte.
+export function mergeCodexConfig(existing, serverPath) {
+  const text = typeof existing === 'string' ? existing : '';
+  const block = codexManagedBlock(serverPath);
+  const start = text.indexOf(CODEX_BLOCK_START);
+  const end = text.indexOf(CODEX_BLOCK_END);
+  if (start !== -1 && end > start) {
+    return { text: text.slice(0, start) + block + text.slice(end + CODEX_BLOCK_END.length), action: 'rewritten' };
+  }
+  // Their own declaration, outside our markers. Never clobber a user's hand-written server entry.
+  if (/^[ \t]*\[mcp_servers\.(?:ruvnet-brain|"ruvnet-brain"|'ruvnet-brain')\]/m.test(text)) {
+    return { text, action: 'user-owned' };
+  }
+  const sep = text.length === 0 ? '' : text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
+  return { text: `${text}${sep}${block}\n`, action: 'added' };
+}
+
+// What the doctor asserts from disk — never from the fact that we once ran. "Wired" means our entry
+// is in the config AND the server.mjs it points at is really there, because a registration pointing
+// at a deleted file is worse than no registration: Codex fails at spawn time with nothing to read.
+export function codexStatus({ configPath = codexConfigPath(), codexDir = codexHomeDir() } = {}) {
+  let host = false;
+  try { host = fs.existsSync(codexDir); } catch { /* unreadable — treat as absent */ }
+  if (!host) return { host: false, wired: false, serverPath: null, serverExists: false };
+  let text = '';
+  try { text = fs.readFileSync(configPath, 'utf8'); } catch { /* no config yet */ }
+  const m = /^[ \t]*\[mcp_servers\.(?:ruvnet-brain|"ruvnet-brain"|'ruvnet-brain')\][^[]*?args\s*=\s*\[\s*"([^"]+)"/m.exec(text);
+  const serverPath = m ? m[1] : null;
+  let serverExists = false;
+  try { serverExists = serverPath ? fs.existsSync(serverPath) : false; } catch { /* unreadable */ }
+  return { host: true, wired: Boolean(serverPath) && serverExists, serverPath, serverExists };
+}
+
+export function wireCodexHost({
+  codexDir = codexHomeDir(),
+  configPath = path.join(codexDir, 'config.toml'),
+  serverDir = codexServerDir(),
+  source = path.join(__dirname, '..', 'plugin', 'mcp', 'server.mjs'),
+  announce = true,
+} = {}) {
+  let host = false;
+  try { host = fs.existsSync(codexDir); } catch { /* unreadable — treat as absent */ }
+  // No Codex on this machine is not a warning. Say nothing and change nothing.
+  if (!host) return { host: false, action: 'no-host' };
+
+  if (announce) {
+    step('Wiring the Codex host', 'Codex reads MCP servers from ~/.codex/config.toml — the brain was never registered there');
+  }
+  if (!fs.existsSync(source)) {
+    if (announce) warn('MCP server missing from this bundle — Codex left untouched (non-fatal)');
+    return { host: true, action: 'no-source' };
+  }
+  const serverPath = path.join(serverDir, 'server.mjs');
+  fs.mkdirSync(serverDir, { recursive: true });
+  fs.copyFileSync(source, serverPath);
+
+  let before = '';
+  try { before = fs.readFileSync(configPath, 'utf8'); } catch { /* first run — no config yet */ }
+  const { text, action } = mergeCodexConfig(before, serverPath);
+  if (action === 'user-owned') {
+    if (announce) {
+      ok('Codex already declares ruvnet-brain in your own config — left exactly as you wrote it');
+      info(`  to hand it to us instead, delete that ${c.bold('[mcp_servers.ruvnet-brain]')} block and re-run this installer`);
+    }
+    return { host: true, action, serverPath };
+  }
+  if (text !== before) {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, text);
+  }
+  if (announce) {
+    ok(`search_ruvnet registered for Codex → ${c.bold(configPath)}`);
+    info(`  server: ${serverPath} ${c.dim('(persistent copy — the npx dir vanishes)')}`);
+    info(`  ${c.dim('only our marked block is written; every other section is byte-preserved')}`);
+  }
+  return { host: true, action, serverPath, changed: text !== before };
+}
+
 // ── step: verify the install is REAL (counts — never take "installed" on faith) ──────────────────
 // Shared state-gatherer behind verifyInstall / --doctor / --feedback: what is REALLY on disk.
 // Pure read, never prints — callers decide how to narrate (or, for --feedback, how to report) it.
@@ -913,11 +1028,34 @@ async function doctor() {
     console.log(`  ${c.yellow('! Grounding not verifiable')} on this bundle — it predates the citation verifier.`);
     console.log('    Re-run  npx ruvnet-brain  to refresh, then --doctor will prove it.');
   }
+  // Codex is a SECOND host, and until issue #42 the doctor was silent about it — so a machine where
+  // the brain was completely unavailable in Codex still read "Healthy … Grounding PROVEN". Probed
+  // from disk (our entry present AND the server.mjs it names really there), never asserted from the
+  // fact that an install once ran.
+  const cx = codexStatus();
+  if (!cx.host) {
+    console.log(`  ${c.dim('Codex: no host detected (no ~/.codex) — nothing to wire.')}`);
+  } else if (cx.wired) {
+    console.log(`  ${c.green('✓ Codex: wired.')} search_ruvnet is registered in ~/.codex/config.toml and its server exists.`);
+  } else {
+    console.log(`  ${c.yellow('! Codex: host detected but NOT wired')}${
+      cx.serverPath && !cx.serverExists ? ` — registered server is missing (${cx.serverPath})` : ' — no [mcp_servers.ruvnet-brain] entry'
+    }.`);
+    console.log(`    Codex cannot reach the brain until it is. Fix: re-run  ${c.bold('npx ruvnet-brain')}`);
+  }
   console.log(`  ${c.dim(meterSummaryLine())}`);
   if (allGreen) {
     console.log(`\n  ${c.bold('What this means for you:')}`);
-    console.log(`    • ${c.bold('It works in EVERY project')} — user-level (global). Open Claude Code in any repo or VS Code`);
-    console.log(`      window and it's there. ${c.bold('No reinstall per project. No second download.')} One brain, shared.`);
+    // "EVERY project" is a claim about Claude Code. On a machine with an unwired Codex host it would
+    // be read as "every editor", which is exactly the invisible gap issue #42 reported — so scope the
+    // sentence honestly instead of quietly overclaiming.
+    if (cx.host && !cx.wired) {
+      console.log(`    • ${c.bold('It works in EVERY project in Claude Code')} — user-level (global). Open Claude Code in any`);
+      console.log(`      repo or VS Code window and it's there. ${c.bold('No reinstall per project.')} ${c.yellow('Codex is NOT wired yet')} (above).`);
+    } else {
+      console.log(`    • ${c.bold('It works in EVERY project')} — user-level (global). Open Claude Code in any repo or VS Code`);
+      console.log(`      window and it's there. ${c.bold('No reinstall per project. No second download.')} One brain, shared.`);
+    }
     console.log(`    • ${c.bold('Nothing to git-ignore')} in your projects — it drops zero files into your working repos.`);
     console.log(`    • ${c.bold('To use it:')} just ask Claude about rUv's stack (RuVector, Ruflo, AgentDB, SPARC…) — it`);
     console.log(`      grounds the answer automatically and takes the lead on builds. You don't invoke anything.`);
@@ -2877,6 +3015,9 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
 
   installReader(cacheDir);
   const plugin = wirePlugin();
+  // Codex hosts got nothing before this (issue #42): shipped, never registered. Non-fatal like every
+  // other wiring step — a second host we cannot reach must never break the one we can.
+  try { wireCodexHost(); } catch (e) { warn(`(Codex wiring skipped: ${e && e.message})`); }
   if (!FLAG_NO_VERIFY) {
     verifyInstall(cacheDir);
     await smokeQuery(cacheDir);

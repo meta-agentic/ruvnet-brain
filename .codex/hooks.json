@@ -1,16 +1,4 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/bin/bash \"/Users/stuartkerr/Code/ruvnet-brain/plugin/scripts/version-bump-gate.sh\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
+  "_note": "INSTALLER-POPULATED WHEN HONOURED (issue #42, ADR-051). This file previously shipped one PreToolUse entry whose command hardcoded an absolute path inside the maintainer's own home directory, invoked through an absolute /bin/bash that is not a valid path on native Windows — the same failure class as ruvnet/ruflo#2132 and #2721, where a hardcoded interpreter path in hooks.json made every tool call report 'hook (failed) exit code 1'. Nothing in this repo consumes this file (every hooks.json consumer resolves plugin/hooks/hooks.json) and the script it named is a maintainer-only dev convenience for this repo, documented as such in SECURITY.md — not a user-facing hook. The entry is therefore REMOVED rather than guessed at: shipping no hook is honest, shipping a hook that cannot run is not. Any hook added here later must have its path resolved at install time and must not name an interpreter by absolute path.",
+  "hooks": {}
 }
