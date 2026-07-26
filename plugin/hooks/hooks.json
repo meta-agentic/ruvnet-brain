@@ -40,7 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech UserPromptSubmit"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech UserPromptSubmit",
+            "timeout": 5
           }
         ]
       }
@@ -91,7 +92,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech PreToolUse-write"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech PreToolUse-write",
+            "timeout": 5
           }
         ]
       },
@@ -100,7 +102,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech PreToolUse-bash"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" unprompted-speech PreToolUse-bash",
+            "timeout": 5
           }
         ]
       }

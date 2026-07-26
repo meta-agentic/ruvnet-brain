@@ -278,6 +278,30 @@ describe('registry hygiene', () => {
     }
   });
 
+  it('EVERY hook declares an explicit timeout — a missing one is Claude Code\'s 60s default on a stranger\'s prompt', () => {
+    // Found live by the 2026-07-26 F5×GPT-5.6 duel (both sides, independently): the three
+    // unprompted-speech registrations shipped with NO timeout, so a deadlocked producer would have
+    // stalled every prompt AND every file-write for 60 seconds — 12× the /rvbc hang that already
+    // burned users. The old test above only bounds timeouts that EXIST; this one refuses absence.
+    for (const [event, entries] of Object.entries(reg.hooks)) {
+      for (const m of entries) {
+        for (const h of m.hooks ?? []) {
+          expect(h.timeout, `${event} "${(m.matcher || '*')}" ships WITHOUT a timeout — 60s default on a user's machine`).toBeTypeOf('number');
+        }
+      }
+    }
+  });
+
+  it('prompt-path hooks (UserPromptSubmit / PreToolUse) cap at 5s — a user feels every one of these', () => {
+    for (const event of ['UserPromptSubmit', 'PreToolUse']) {
+      for (const m of reg.hooks[event] ?? []) {
+        for (const h of m.hooks ?? []) {
+          expect(h.timeout, `${event} "${m.matcher}" timeout ${h.timeout}s exceeds the 5s prompt-path budget`).toBeLessThanOrEqual(5);
+        }
+      }
+    }
+  });
+
   /**
    * THE PACKAGING TEST — the one that would have caught a hook that never ran anywhere.
    *

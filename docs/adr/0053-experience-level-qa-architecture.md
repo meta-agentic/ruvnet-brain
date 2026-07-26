@@ -1,7 +1,7 @@
 ---
 id: ADR-053
 title: Experience-level QA — test the journey a user actually has, on every host, OS, and install path
-status: Proposed
+status: Accepted
 date: 2026-07-26
 updated: 2026-07-26
 authors: [Stuart Kerr, Claude Code]
@@ -16,7 +16,7 @@ governs:
 
 # ADR-053: Experience-level QA
 
-**Status**: Proposed
+**Status**: Accepted (adversarially duel-verified 2026-07-26 — record below)
 **Date**: 2026-07-26
 **Related**: ADR-028 (test classes), ADR-050 (issue pipeline), ADR-051 (Codex wiring)
 
@@ -41,82 +41,121 @@ which host, which artifact, which journey.
 
 ## Decision
 
-### 1. The experience matrix is the unit of coverage
+### 1. A checked-in scenario LIST is the unit of coverage — never a Cartesian matrix
 
-Coverage is counted in **scenarios**, not lines. A scenario is one cell of:
+v1 proposed a host × OS × artifact × journey matrix. Both duel reviewers killed it independently:
+the axes are falsely orthogonal (a marketplace clone is a Claude-only artifact; `--update` is a
+transition, not an artifact), so the product manufactures ~100 incoherent cells whose bulk-labeling
+as `manual` makes the report permanently green — the matrix Goodharts itself in one move. Instead:
+`tests/experience/scenarios.json` is an explicit, hand-written list of the ~20 coherent scenarios,
+each one record: {host, os, artifact, stage, user-state, classification, evidence, owner}. The
+report fails on any coherent scenario left unclassified AND on `manual` exceeding 20% of the list.
+`manual` requires a named owner and sits OUTSIDE the coverage denominator; wherever a machine can
+reach the surface, the classification is `scheduled-live-probe`, not `manual`.
 
-| Axis | Values |
-|---|---|
-| **Host** | Claude Code plugin · Codex (`~/.codex/config.toml` + MCP) |
-| **OS** | macOS (dev) · ubuntu (CI) · windows (CI) |
-| **Artifact** | npm registry tarball · `npx github:` checkout · marketplace clone · `--update` release bundle |
-| **Journey** | install → doctor → first grounded answer → configure → update → uninstall-clean |
+Two axes v1 lacked, now required on every scenario:
+- **user-state**: fresh home · POPULATED home (the user's own config.toml with comments/CRLF/their
+  own `mcp_servers`; foreign hooks in settings.json; prior-release on-disk state) · hostile paths
+  (spaces, unicode, read-only cache, near-full disk). Hermetic must never mean sterile — the
+  clobbered-stranger's-config class only exists in populated homes.
+- **recurring use**: "prompt N on day 9" is a stage. The product's highest-frequency touchpoint is
+  a hook firing mid-session, and v1's one-time journey stages structurally could not see it.
 
-Not every cell is reachable in CI (no real Claude Code binary on a runner); every cell must be
-**classified**: `gated` (a real automated test), `probed` (a cheaper structural check, e.g. the
-tarball manifest), or `manual` (documented, with the doctor as the user-side instrument). A cell
-silently in no class is the defect this ADR exists to kill — the report script fails if the matrix
-has an unclassified cell.
+### 2. The hooks-as-shipped battery — tier one, funded by the cuts below
 
-### 2. Artifact-first testing (the #43 rule, generalized)
+The single highest user-pain surface. A required CI job (ubuntu + windows) and a release gate:
 
-Any test that can run against a **built artifact** must not run against the checkout.
-`tests/unit/npm-tarball-codex.test.mjs` is the pattern: `npm pack` → unpack → exercise with
-default resolution. This extends to: the release bundle (unzip → doctor → forge-ask round trip)
-and the marketplace layout (plugin dir → hooks.json paths resolve). The checkout is where bugs
-hide; the artifact is what users receive.
+1. **Invocation fidelity**: every battery case derives from hooks.json ITSELF (an entry with no
+   battery case fails the build), runs the literal registered command with `CLAUDE_PLUGIN_ROOT`
+   substituted to the PACKED marketplace layout — never the module, never the body directly (the
+   adjacent-door defect: today's battery spawns the .sh bodies and skips the shim layer that
+   actually runs on strangers' machines).
+2. **Four stdin regimes** per hook, under an external process-group watchdog: valid event JSON;
+   empty EOF; 1MB garbage; and stdin HELD OPEN past budget — the canonical hang, and the one check
+   that catches the /rvbc class pre-ship. In-process timers don't count: a frozen event loop or
+   synchronous child defeats them.
+3. **Latency budgets far below the timeout**: warm < 500ms, cold < 2s, p95 of 100 repeated firings
+   < 500ms. A budget AT the timeout detects nothing until users already eat it per prompt.
+4. **Broken-world sweep**: no cache dir · active.json → missing generation · truncated
+   active.json · node_modules absent · read-only cache. Advisory hooks: exit 0, silent. Blocking
+   hooks: only their documented exit codes — never a stack trace on a stranger's screen.
+5. **Stream discipline**: stdout ≤ 4KB (it lands in the user's context window), stderr whitelisted.
+6. **Static lint**: every entry carries an explicit timeout (three unprompted-speech entries
+   shipped WITHOUT one — found live by this duel, fixed in the same commit); prompt-path events
+   cap at 5s; the blocking set matches ADR-023's table exactly.
+7. **Process-tree hygiene**: SIGTERM the parent at budget → zero surviving descendants.
+8. **Coexistence**: run inside merged user+project+plugin registries carrying sentinel foreign
+   hooks (slow, failing, garbage-printing, before AND after ours); against a no-plugin baseline,
+   prove every sentinel still fires exactly once, unrelated config stays byte-equivalent, and our
+   contribution stays inside its documented latency/output. Double-install never duplicates.
+9. **Update-while-firing**: flip active.json mid-battery; every invocation still lands in budget —
+   the ADR-023 stable-spine claim becomes a measurement instead of an assertion.
 
-### 3. Journey tests live in `tests/experience/`
+### 3. Artifact-first, extended to PUBLISHED bytes
 
-A new suite, `vitest run tests/experience`, one file per journey stage, each hermetic (builds its
-own fixture home, never reads the developer's machine — the console-honesty lesson, 2026-07-26).
-Stage tests assert **user-visible outcomes** ("`--doctor` prints Codex: wired within 30s", "a
-fresh install answers one grounded question with a citation"), not internals. CI runs it on ubuntu
-AND windows; the pre-push path runs it on macOS — three OSes on every ship.
+`npm pack` on the checkout proved unable to represent registry reality (prepack/publish-env/
+dist-tag/propagation). The ship flow becomes: publish to a **candidate dist-tag** → clean-container
+install of that exact integrity on all three OSes → doctor + Codex wire + MCP round trip + one
+grounded answer → only then promote the SAME integrity to `latest`. A scheduled live probe re-runs
+the install nightly and files an issue on failure, so "walk every channel" has a machine, not a
+memory.
 
-### 4. agentic-qe is the generator and the auditor, with a hard budget
+### 4. Gate C++ v2 — exact SHA, every required workflow
 
-The fleet's role (grounded in `agentic-qe/src/mcp/tools/index.ts`): `qe/tests/generate` for
-scenario drafts against the matrix, `qe/coverage/gaps` (risk-weighted) to rank unclassified
-cells, quality-criteria recommendation (HTSM) once per quarter to challenge the matrix's axes.
-Generated tests are **reviewed and committed as ordinary code** — the fleet proposes, the repo's
-gates dispose. Budget rule (the $1,600 lesson, agentic-qe#557): fleet runs are local/subscription
-only, capped, never an unattended API loop.
+v1's gate read the LATEST completed run of ci.yml only: it verified the parent commit, not the one
+shipping, and was blind to integration-linux — re-opening the 5-day hole one release at a time.
+v2: push the release commit, capture its SHA, WAIT for every required workflow on that exact SHA,
+refuse on missing/skipped/cancelled/stale; authenticated API (rate-limit 403s otherwise train the
+override into muscle memory); `--ci-override` reasons go into the release LOG and a required line
+in the next release's notes — a printed-once diagnostic nobody reads is the ADR-050 failure shape.
 
-### 5. CI is the arbiter, and red CI blocks shipping — mechanically
+### 5. agentic-qe: on-demand generator only — off the critical path
 
-The 5-day red streak shipped six releases past a red required check because release.mjs never
-asked CI. Gate C++ (new): `release.mjs --publish` queries the latest completed `ci` run on
-origin/main and refuses to publish while it is red or missing. A human can still ship a hotfix
-with an explicit `--ci-override "<reason>"` that is printed into the release log.
+Both reviewers, independently: deterministic artifact/hook/update/exact-SHA gates come first, and
+must demonstrate they fail on seeded defects before any fleet output is trusted. aqe drafts
+scenarios on demand under the standing budget cap; the quarterly HTSM ritual is cut (this repo's
+own record: unowned periodic ceremonies do not fire).
 
-## DDD sketch (bounded contexts)
+### 6. Cuts (funding the above)
 
-- **Artifact** context: builds/unpacks the four artifact kinds; owns "what did the user receive".
-  Aggregate: `Artifact` (kind, version, byte manifest). Invariant: assembled only from published
-  or packed bytes, never the checkout.
-- **Journey** context: drives a stage against an Artifact in a fixture Home. Aggregate:
-  `Scenario` (host, os, artifact, stage) with a `classification` (gated/probed/manual). Domain
-  event: `ScenarioVerdict` (pass/fail/skip + evidence line).
-- **Matrix** context: the report script folds `ScenarioVerdict`s into the matrix; invariant: no
-  unclassified cell. This is the surface the owner reads.
-- Anti-corruption: journey tests speak to the product only through its public faces (CLI flags,
-  doctor output, MCP protocol, files a user can see) — never by importing internals.
+DDD aggregates/domain events/anti-corruption ceremony → one sentence survives: journey tests speak
+only through public faces (CLI, doctor output, MCP protocol, user-visible files). The universal
+<90s CI budget → split: fast PR suite (cached) vs uncached release-qualification lane; the
+first-grounded-answer scenario is honestly `scheduled-live-probe` until a cached-bundle CI lane
+exists, and the gate watches whatever lane carries it.
+
+## Rollout (converged ranked order — user-pain-avoided, both lists merged)
+
+1. hooks.json lint: explicit timeout everywhere, 5s prompt-path cap (**shipped with this ADR**).
+2. Hook battery v2, shim-level, four stdin regimes + watchdog (kills the every-prompt-hang class).
+3. Gate C++ v2: exact-SHA, all required workflows.
+4. Candidate-dist-tag publish flow + post-publish live probe.
+5. Codex merge on POPULATED config.toml (foreign servers, comments, CRLF, unicode) — byte-diff.
+6. MCP stdio round trip from the unpacked tarball on all three OSes.
+7. Real-Windows checkout journey (`core.autocrlf=true` — the default CI currently disables).
+8. Upgrade-from-real-prior-release (seed N−2 state, run --update, assert Codex server copy refreshes).
+9. Update-while-firing concurrency probe.
+10. Hostile-home journeys (spaces/unicode/read-only/ENOSPC) — degrade with one clear message, zero hook errors.
 
 ## Consequences
 
-- Ship time grows by the experience suite's runtime (target < 90s on CI; artifact builds cached).
-- Windows and ubuntu become first-class: any journey stage that cannot run on an OS must carry an
-  explicit `probed`/`manual` classification with a reason, visible in the matrix report.
-- The doctor (`--doctor`) doubles as the manual-cell instrument, so "manual" still has a check a
-  real user can run and paste.
-- ADR-028's classes apply within each journey test; nothing about existing suites changes.
+- Ship time: PR suite stays fast; release qualification gets its own uncached lane.
+- Windows/ubuntu first-class; macOS gets a mechanical verdict via the release-qualification lane
+  rather than trusting one developer laptop.
+- Node floor: CI must pin the OLDEST engines-promised runtime (>=18) in at least one lane, or the
+  engines field must be raised honestly.
 
-## Rollout
+## Adversarial duel record (2026-07-26, per the standing order)
 
-- **Phase 1 (now)**: matrix report script + `tests/experience/` with the highest-risk gated
-  cells — npm-artifact × {install, doctor, codex-wire} on all three OSes; release bundle × doctor
-  probe; gate C++ in release.mjs. Adversarial duel (F5 × GPT-5.6) on this ADR before Accepted.
-- **Phase 2**: `npx github:` + marketplace artifact cells; uninstall-clean stage; aqe
-  `qe/coverage/gaps` pass to rank remaining cells.
-- **Phase 3**: quarterly HTSM criteria review via aqe; flaky-detection on the experience suite.
+Fable 5 (fresh context, no authorship bias) and GPT-5.6-Sol (codex exec, read-only) attacked v1
+independently with identical briefs. **Convergent verdicts, reached separately:** (1) the matrix
+cannot see the hook/recurring-use class — the product's worst live failure mode; (2) three shipped
+hooks lacked timeouts at that moment (both found it; fixed same-commit); (3) gate C++ v1 verified
+the wrong commit and the wrong workflow set; (4) locally-packed bytes ≠ published bytes; (5)
+hermetic-turned-sterile — no populated-home/coexistence axis; (6) cut the DDD ceremony, the
+quarterly fleet ritual, `manual`-as-coverage, and the Cartesian matrix. Notable singles: Fable —
+CRLF (CI tests a Windows no user has), npx-cache eviction leaving a frozen Codex server copy,
+GitHub rate-limit on the unauthenticated gate; GPT-5.6 — candidate-dist-tag promotion flow,
+process-group watchdog over in-process timers, p95/p99 latency canary. Where they differed on
+budgets (500ms vs 1s prompt-path), the stricter number won. v1's matrix section is superseded by
+§1 above; everything else in v1 stands.
