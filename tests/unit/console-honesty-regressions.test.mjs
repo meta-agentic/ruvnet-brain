@@ -62,7 +62,9 @@ function tmpHome() {
  */
 function inHome(home, src) {
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', src], {
-    env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 60_000,
+    // os.homedir() reads USERPROFILE on win32 and HOME elsewhere — set both or the child
+    // resolves the REAL runner profile and every probe honestly answers 'absent'.
+    env: { ...process.env, HOME: home, USERPROFILE: home }, encoding: 'utf8', timeout: 60_000,
   });
   return { out: r.stdout || '', err: r.stderr || '', code: r.status };
 }

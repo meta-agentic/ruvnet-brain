@@ -27,7 +27,7 @@ export default defineConfig({
       // Regression floor: CI fails below these. Set to the measured value ROUNDED DOWN (see the
       // commit that changed this line for the measured values). Raise as coverage grows; never
       // lower silently.
-      thresholds: { statements: 13, lines: 14, branches: 11, functions: 15 },
+      thresholds: { statements: 26, lines: 28, branches: 26, functions: 31 },
     },
   },
 });

@@ -55,7 +55,7 @@ afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
  */
 function run(src) {
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', src], {
-    env: { ...process.env, HOME: tmp, RUVNET_SETTINGS_FILE: file },
+    env: { ...process.env, HOME: tmp, USERPROFILE: tmp, RUVNET_SETTINGS_FILE: file }, // win32 homedir = USERPROFILE
     encoding: 'utf8', timeout: 60_000,
   });
   if (r.status !== 0) {
