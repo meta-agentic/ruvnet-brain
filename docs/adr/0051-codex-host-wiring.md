@@ -3,7 +3,7 @@ id: ADR-051
 title: Codex host wiring — register the MCP server at install time, and let the doctor probe it
 status: Implemented
 date: 2026-07-24
-updated: 2026-07-24
+updated: 2026-07-26
 authors: [Stuart Kerr, Claude Code]
 tags: [codex, mcp, install, doctor, honesty, portability]
 supersedes: []
@@ -185,3 +185,29 @@ the development machine.
 - Re-verify against a real Codex host and record the round trip, replacing the "not tested" note above
   with a measurement.
 - Revisit `brain-score` / `brain-build` / `brain-prompt` if a dispatchable entrypoint ever exists.
+
+## Addendum (2026-07-26) — issue #43: the wiring was dead on every npm install
+
+Henrik Pettersen proved the registration this ADR shipped could never fire on its primary path: the
+npm tarball's `files` whitelist excluded `plugin/mcp/server.mjs`, the exact package-relative path
+`wireCodexHost()` resolves, so every `npx ruvnet-brain` from the registry hit the `no-source` branch.
+It worked only from a repo/marketplace checkout — and every test in `codex-wiring.test.mjs` ran
+against the source checkout, the one place the file always exists.
+
+Fixed in 3.9.77-dev, three parts, matching #43's acceptance verbatim:
+
+- `package.json` `files` now ships exactly `plugin/mcp/server.mjs` (plus `!plugin/README.md`, which
+  npm's always-include README rule would otherwise drag in). The rest of `plugin/` stays excluded.
+- Both writes in `wireCodexHost()` are now atomic (write-beside + `rename()` via `atomicReplace`):
+  an interrupted copy can no longer leave a torn `server.mjs` at a path an existing config already
+  names, and a failed config write leaves the previous bytes intact. Because `rename()` swaps
+  inodes, the helper also resolves symlinks (a dotfiles-managed `config.toml` stays a symlink and
+  the bytes land in the dotfiles repo) and re-applies the target's mode (a chmod-600 config never
+  comes back 644) — both found by the independent review of this fix, and both now pinned in
+  `codex-wiring.test.mjs`. Scope is process interruption, the #43 scenario; power-loss fsync
+  durability is deliberately out of scope for a config write.
+- `tests/unit/npm-tarball-codex.test.mjs` runs `npm pack`, unpacks the real tarball, and exercises
+  the installer FROM THE ARTIFACT with default source resolution — plus an MCP
+  `initialize`/`tools/list` round trip against the installed server and two write-failure
+  injections that demonstrably fail on the pre-fix code. The gate can no longer borrow files from
+  the checkout.

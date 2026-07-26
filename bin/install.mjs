@@ -614,6 +614,32 @@ export function codexStatus({ configPath = codexConfigPath(), codexDir = codexHo
   return { host: true, wired: Boolean(serverPath) && serverExists, serverPath, serverExists };
 }
 
+// Atomic file replacement: produce the new bytes BESIDE the target, then rename() over it. Against
+// process interruption (the issue #43 scenario) either the old file or the complete new file
+// exists — never a torn write. (Power-loss durability — fsync of file and directory — is
+// deliberately out of scope for a config write.) On failure the temp is removed and the target is
+// untouched; same-directory rename keeps it on one filesystem.
+//
+// rename() swaps INODES, so two properties of the old write-through path must be carried over
+// explicitly: a symlinked target (a dotfiles-managed ~/.codex/config.toml) is resolved to its real
+// file so the link survives and the bytes land where the user keeps them, and the target's mode is
+// re-applied so a chmod-600 config never comes back world-readable.
+function atomicReplace(targetPath, writeTmp) {
+  let target = targetPath;
+  try { target = fs.realpathSync(targetPath); } catch { /* target doesn't exist yet */ }
+  let mode = null;
+  try { mode = fs.statSync(target).mode & 0o777; } catch { /* first write — default mode is fine */ }
+  const tmp = `${target}.tmp-${process.pid}`;
+  try {
+    writeTmp(tmp);
+    if (mode !== null) fs.chmodSync(tmp, mode);
+    fs.renameSync(tmp, target);
+  } catch (e) {
+    try { fs.rmSync(tmp, { force: true, recursive: true }); } catch { /* best effort */ }
+    throw e;
+  }
+}
+
 export function wireCodexHost({
   codexDir = codexHomeDir(),
   configPath = path.join(codexDir, 'config.toml'),
@@ -635,7 +661,10 @@ export function wireCodexHost({
   }
   const serverPath = path.join(serverDir, 'server.mjs');
   fs.mkdirSync(serverDir, { recursive: true });
-  fs.copyFileSync(source, serverPath);
+  // Write-beside-then-rename, both here and for the config below (issue #43): an interrupted plain
+  // copy leaves a TORN server.mjs at the exact path a prior install's config already points at, so
+  // Codex spawns half a file. rename() over the target is atomic; a failure leaves the old bytes.
+  atomicReplace(serverPath, (tmp) => fs.copyFileSync(source, tmp));
 
   let before = '';
   try { before = fs.readFileSync(configPath, 'utf8'); } catch { /* first run — no config yet */ }
@@ -649,7 +678,7 @@ export function wireCodexHost({
   }
   if (text !== before) {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, text);
+    atomicReplace(configPath, (tmp) => fs.writeFileSync(tmp, text));
   }
   if (announce) {
     ok(`search_ruvnet registered for Codex → ${c.bold(configPath)}`);

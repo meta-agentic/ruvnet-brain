@@ -180,6 +180,45 @@ describe('wireCodexHost — the filesystem round trip', () => {
     expect(fs.readFileSync(path.join(codexDir, 'config.toml'), 'utf8')).toContain('[mcp_servers.ruvnet-brain]');
   });
 
+  it('a symlinked config (dotfiles-managed) keeps its identity — the write goes THROUGH the link', (ctx) => {
+    // chezmoi/stow/yadm users keep ~/.codex/config.toml as a symlink into a dotfiles repo. The
+    // atomic rename swaps inodes, so without realpath resolution it would replace the LINK with a
+    // plain file and the user's dotfiles repo would silently stop receiving the config (found by
+    // the issue #43 review, 2026-07-26).
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    const realConfig = path.join(home, 'dotfiles', 'codex-config.toml');
+    fs.mkdirSync(path.dirname(realConfig), { recursive: true });
+    fs.writeFileSync(realConfig, REAL_CONFIG);
+    const configPath = path.join(codexDir, 'config.toml');
+    try { fs.symlinkSync(realConfig, configPath); }
+    catch { return ctx.skip(); } // Windows without symlink privilege — POSIX runs keep this honest
+
+    wireCodexHost({ codexDir, configPath, serverDir: path.join(home, 'srv'), announce: false });
+
+    expect(fs.lstatSync(configPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(realConfig, 'utf8')).toContain('[mcp_servers.ruvnet-brain]');
+    expect(fs.readFileSync(realConfig, 'utf8')).toContain('RUFLO_HARNESS_LOOP = "1"');
+  });
+
+  it('preserves the config file mode — a chmod-600 config never comes back world-readable', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    const configPath = path.join(codexDir, 'config.toml');
+    fs.writeFileSync(configPath, REAL_CONFIG);
+    fs.chmodSync(configPath, 0o600);
+    // Assert against what THIS platform made of 0o600 (win32 folds it into the read-only bit),
+    // so the test is byte-honest everywhere without a platform fork.
+    const modeBefore = fs.statSync(configPath).mode & 0o777;
+
+    wireCodexHost({ codexDir, configPath, serverDir: path.join(home, 'srv'), announce: false });
+
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('[mcp_servers.ruvnet-brain]');
+    expect(fs.statSync(configPath).mode & 0o777).toBe(modeBefore);
+  });
+
   it('a second install leaves the file byte-identical', () => {
     const home = tmpdir();
     const codexDir = path.join(home, '.codex');

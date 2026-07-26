@@ -11,7 +11,7 @@ supersedes: []
 relates: [ADR-028, ADR-023, ADR-052]
 ---
 
-**Status**: Superseded by [ADR-052](0052-4.0-is-proactivity-you-control.md) (2026-07-25)
+**Status**: Superseded (by ADR-052, 2026-07-25)
 
 > **Why superseded (2026-07-25):** this ADR's 4.0 gate required field-verified advocacy outcomes
 > (n≥29 real offer-outcomes). Measured 2026-07-25, that gate is **structurally unreachable on a single

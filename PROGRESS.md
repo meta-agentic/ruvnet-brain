@@ -1,6 +1,33 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-24 late EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-26 morning EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+
+---
+
+## 2026-07-26 — Issue #43: Codex wiring was dead on every npm install (Henrik Pettersen) — v3.9.77-dev
+
+**The bug**: the npm tarball's `files` whitelist excluded `plugin/mcp/server.mjs` — the exact
+package-relative path `wireCodexHost()` resolves — so every `npx ruvnet-brain` from the registry hit
+`no-source` and Codex never got wired. Worked from a repo/marketplace checkout only; every existing
+codex test ran against the source checkout, the one place the file always exists.
+
+**The fix (all per #43's acceptance, verbatim)**: `files` ships exactly `plugin/mcp/server.mjs`
+(+ `!plugin/README.md` for npm's always-include rule — caught live by the new gate's first run);
+both Codex writes are atomic via `atomicReplace` (write-beside + rename, symlink-identity and
+file-mode preserving, recursive temp cleanup); new `tests/unit/npm-tarball-codex.test.mjs` runs
+`npm pack`, unpacks the real tarball, wires from the ARTIFACT, speaks real MCP
+initialize/tools/list to the installed server, and injects write failures cross-platform
+(directory-squat on the deterministic `.tmp-<pid>` path — no chmod, which is a win32 no-op).
+
+**QA**: mutation-proven both ways (files entry removed → 8/8 red reproducing `no-source` verbatim;
+chmod-preserve removed → mode guard red). Independent opus review found the symlink/mode clobber +
+unguarded cleanup + `RUVNET_BRAIN_KB` test flake — all fixed same session. Full unit suite 1702
+green; plugin battery 60/60 (warmed cache). Also unblocked the ship path itself: ADR-0042's
+supersede line was unparseable by the ADR gate on origin/main (would have blocked ANY release).
+
+**Channels**: npm 3.9.77-dev published + `latest`; origin/main pushed. GitHub Release moves with
+tonight's nightly by design (2026-07-24 decision: self-update.mjs is the only release cutter; its
+issue-#29 script-drift rule fires on `bin/install.mjs`). ADR-051 addendum records all of it.
 
 ---
 
