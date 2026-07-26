@@ -106,6 +106,32 @@ runOrDie('vitest unit', 'npx', ['vitest', 'run', 'tests/unit']);
 // "pushed but didn't finish" split. The pre-push git hook only checks version/manifest (fast, always),
 // so tests must gate the push HERE. A red tree can no longer reach origin ahead of npm.
 if (PUBLISH) {
+  // C++. REMOTE CI IS A SHIP GATE (ADR-053 §5). Between 2026-07-21 and 07-26 the `ci` workflow was
+  // red for ~70 consecutive runs — six releases shipped right past it, because nothing on the ship
+  // path ever ASKED the remote verdict. Local gates prove this machine; only CI proves ubuntu and
+  // windows. So the latest COMPLETED run on origin/main must be green before we add commits on top
+  // and publish. (The current commit's own run starts after the push — this gate is "never build on
+  // a known-broken main", not "wait for my own run".) Escape hatch for a genuine hotfix:
+  // --ci-override "<reason>" — printed into the release log, never silent.
+  step('C++', 'remote CI on origin/main is green (the ubuntu+windows verdict this machine cannot produce)');
+  {
+    const { fetchLatestCiVerdict, assessCiGate } = await import('./ci-verdict.mjs');
+    const OVERRIDE_IX = process.argv.indexOf('--ci-override');
+    const overrideReason = OVERRIDE_IX >= 0 ? (process.argv[OVERRIDE_IX + 1] || '(no reason given)') : null;
+    const { verdict, sha } = await fetchLatestCiVerdict();
+    const gate = assessCiGate(verdict, overrideReason);
+    if (gate === 'ship') {
+      console.log(c.dim(`  latest completed ci run on origin/main: success (${sha})`));
+    } else if (gate === 'override') {
+      console.log(`  ${c.y('! CI gate OVERRIDDEN')} — verdict was ${verdict ?? 'unknown'} (${sha || 'no run found'}); reason: ${overrideReason}`);
+    } else {
+      console.error(`\n${c.r('✗ GATE FAILED: remote CI on origin/main is ' + (verdict ?? 'unknown'))} ${c.dim('(' + (sha || 'no completed run found') + ')')}`);
+      console.error(`${c.r('  A red or unknown main does not get shipped on top of. Fix CI first (gh run list --workflow ci.yml),')}`);
+      console.error(`${c.r('  or for a genuine hotfix: --ci-override "<reason>" (the reason is printed into the release log).')}\n`);
+      process.exit(1);
+    }
+  }
+
   step('C+', 'push to origin/main — safe now that A–C passed');
   const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
   if (dirty) {
