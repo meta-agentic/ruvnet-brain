@@ -1,6 +1,35 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-26 morning EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-26 midday EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+
+---
+
+## 2026-07-26 (afternoon+evening) — CI green after 5 red days; remote CI becomes a ship gate; the ADR-053 duel — v3.9.78→82-dev
+
+**The streak**: `ci` had been red since 07-21 (~70 runs, six releases shipped past it — nothing on
+the ship path ever asked the remote verdict). Fixed in three unmasking rounds, each layer hiding
+the next: (1) 9 win32 root causes across 11 files + 2 machine-bound tests + 5 REAL product
+portability bugs (memory-doctor's WAL-sidecar leak on ubuntu's sqlite 3.45.1 — mode chosen up
+front from sidecar presence now; wired-check OS-dependent path keys; capability-registry
+backslash-doubled Windows commands; distill-project .cmd spawn; MSYS pwd in the ledger);
+(2) HOME-only fixtures (win32 reads USERPROFILE) + coverage honestly re-derived 14→26%;
+(3) the installer smoke that had not RUN in days under the red streak (canonical-ledger shadowing,
+argv-array plist assertion, fake-ruflo shim). Both CI jobs green on a49e2e2 and every commit since.
+
+**Gate C++** (v3.9.81): release.mjs now refuses to publish on a red or UNKNOWN remote CI —
+ci-verdict.mjs pure decision + 9-case contract test where the refusals are the load-bearing rows.
+
+**The ADR-053 duel** (F5 fresh-context × GPT-5.6-Sol via codex, identical adversarial briefs):
+converged independently on six verdicts — full record in the ADR, now Accepted. LIVE FIND by both:
+three unprompted-speech hooks shipped with NO timeout (60s default on every prompt/write, 12× the
+/rvbc hang) — fixed same-commit (v3.9.82) + hook-contract now REFUSES missing timeouts and caps
+prompt-path at 5s. Rollout list 1–10 in the ADR; item 1 shipped, hook battery v2 is next.
+
+**Also**: #43 closed with published-bytes proof (morning); local main reconciled, 4.0 dial WIP
+restored conflict-free; gh token gained workflow scope; 5 machine-wide lessons promoted to global
+memory; feat/issue-attack preserved on origin awaiting owner review. OPEN: John Losko's newbug.md
+("one line missing somewhere in kb") — file not yet received; kb scripts parse + E2E query green
+locally, so not a universal breakage.
 
 ---
 
