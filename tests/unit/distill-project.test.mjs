@@ -34,8 +34,17 @@ function run(args, { rufloBody = null, env = {} } = {}) {
   const dir = tmp || sandbox();
   let ruflo = '/nonexistent/ruflo';
   if (rufloBody) {
-    ruflo = path.join(dir, 'fake-ruflo');
-    fs.writeFileSync(ruflo, rufloBody, { mode: 0o755 });
+    if (process.platform === 'win32') {
+      // No shebang execution on Windows: keep the POSIX body as-is and shim it through the
+      // Git Bash the windows CI job already relies on (product spawns via shell:true there).
+      const sh = path.join(dir, 'fake-ruflo.sh');
+      fs.writeFileSync(sh, rufloBody);
+      ruflo = path.join(dir, 'fake-ruflo.cmd');
+      fs.writeFileSync(ruflo, `@bash "${sh}" %*\r\n`);
+    } else {
+      ruflo = path.join(dir, 'fake-ruflo');
+      fs.writeFileSync(ruflo, rufloBody, { mode: 0o755 });
+    }
   }
   return spawnSync(process.execPath, [SCRIPT, '--project', dir, ...args], {
     encoding: 'utf8', timeout: 30_000,

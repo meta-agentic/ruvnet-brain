@@ -138,12 +138,17 @@ test('`--doctor` reports the real token-meter summary line, computed from a real
     ];
     fs.writeFileSync(ledger, lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') + '\n');
 
+    // The canonical machine-wide ledger (XDG_CACHE_HOME/ruvnet-brain, issue #36) shadows the
+    // legacy per-cwd fixture whenever any hook has ever fired on this machine — pin the canonical
+    // location to a fresh temp dir so this test reads exactly the world it built.
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-meter-cache-'));
     const r = spawnSync(process.execPath, [INSTALLER, '--doctor'], {
       cwd: projectDir,
       encoding: 'utf8',
       timeout: 60000,
-      env: { ...process.env, RUVNET_BRAIN_KB: brainDir },
+      env: { ...process.env, RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir },
     });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
     assertClean(r, '--doctor (meter)');
     const out = r.stdout || '';
     assert.match(out, /meter: 2 injections measured here yesterday\+today — 3000 bytes/, `doctor must report the real ledger totals; got:\n${out}`);
@@ -158,12 +163,14 @@ test('`--doctor`\'s meter line degrades honestly when no ledger exists yet in cw
   const brainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-meter-empty-kb-'));
   try {
     fs.writeFileSync(path.join(brainDir, 'forge-mcp-all.mjs'), '// stub for install-smoke — never executed\n');
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-meter-empty-cache-'));
     const r = spawnSync(process.execPath, [INSTALLER, '--doctor'], {
       cwd: projectDir,
       encoding: 'utf8',
       timeout: 60000,
-      env: { ...process.env, RUVNET_BRAIN_KB: brainDir },
+      env: { ...process.env, RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir },
     });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
     assertClean(r, '--doctor (no ledger)');
     assert.match(r.stdout || '', /meter: no data yet/, 'must say plainly that nothing has been measured, not error or stay silent');
   } finally {
@@ -200,7 +207,9 @@ test(
       assert.match(xml, /<key>Hour<\/key>\s*<integer>3<\/integer>/, 'must schedule hour 3');
       assert.match(xml, /<key>Minute<\/key>\s*<integer>47<\/integer>/, 'must schedule minute 47 (03:47)');
       assert.match(xml, /<key>RunAtLoad<\/key>\s*<false\/>/, 'must not run at load');
-      assert.match(xml, /forge-update\.mjs --apply/, 'must run the bundled self-updater with --apply');
+      // ProgramArguments is a proper argv ARRAY (one <string> per arg — the correct launchd form),
+      // so the two tokens are adjacent elements, never one space-joined line.
+      assert.match(xml, /<string>forge-update\.mjs<\/string>\s*<string>--apply<\/string>/, 'must run the bundled self-updater with --apply');
       // plutil is macOS's own plist validator — structural proof launchd could load this file.
       const lint = spawnSync('plutil', ['-lint', plist], { encoding: 'utf8', timeout: 15000 });
       assert.equal(lint.status, 0, `plutil -lint rejected the plist:\n${lint.stdout || ''}${lint.stderr || ''}`);
