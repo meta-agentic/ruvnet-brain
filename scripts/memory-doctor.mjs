@@ -73,12 +73,12 @@ const NOISE_NS = new Set([
 // unreadable, and the console reported memory distillation as permanently UNKNOWN on a healthy store.
 // Three retries two seconds apart cannot fix a structural refusal; they just make it slow.
 //
-// The fallback is `immutable=1`, and it is GATED, because immutable=1 promises SQLite the file will
-// not change underneath it — a promise nobody can keep about a database with a live writer, and
-// breaking it returns torn or stale rows rather than an error. So it is used ONLY when both sidecars
-// are absent, which is the observable signature of "no process has this open in WAL mode", and the
-// absence is re-checked AFTER the read so a writer that arrived mid-flight invalidates the result
-// instead of being reported as fact. A locked store still yields an honest unreadable.
+// `immutable=1` is GATED, because it promises SQLite the file will not change underneath it — a
+// promise nobody can keep about a database with a live writer, and breaking it returns torn or
+// stale rows rather than an error. So it is used ONLY when both sidecars are absent, which is the
+// observable signature of "no process has this open in WAL mode", and the absence is re-checked
+// AFTER the read so a writer that arrived mid-flight invalidates the result instead of being
+// reported as fact. A locked store still yields an honest unreadable.
 const walSidecarsPresent = (db) => fs.existsSync(`${db}-wal`) || fs.existsSync(`${db}-shm`);
 
 const q = (db, sql) => {
@@ -86,27 +86,44 @@ const q = (db, sql) => {
   // and sqlite3 rejects the URI outright (error 14) rather than falling back to a plain path.
   const base = `file:${encodeURI(db)}?mode=ro`; // read-only: this process will never be a second writer
   const run = (uri) => execFileSync('sqlite3', [uri, sql], { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+
+  // MODE IS CHOSEN BEFORE THE OPEN, FROM A FACT ON DISK — NOT AFTER CATCHING WHICHEVER ERROR A
+  // GIVEN SQLITE BUILD HAPPENS TO THROW. This used to try plain `mode=ro` first and only add
+  // `immutable=1` after catching "unable to open database file (14)". CONFIRMED LIVE 2026-07-26
+  // (Docker ubuntu:24.04, apt sqlite3 3.45.1 — the exact version this repo's "check" CI job
+  // installs): on a resting WAL db with no sidecars, plain `mode=ro` does NOT throw there the way
+  // macOS's bundled 3.51.0 does — it succeeds AND silently vivifies `-shm`/`-wal` as a side effect
+  // of establishing WAL-index shared memory for the reader. No exception meant the catch block's
+  // sidecar check — the only place this was ever guarded — never ran, so a "read-only" diagnosis
+  // left litter in the caller's directory on every ubuntu CI run.
+  //
+  // The fix does not depend on which behavior a given SQLite build has. It decides the mode from a
+  // fact available before either would be attempted: do the sidecars already exist?
+  //   - present -> a live/resting WAL with real frames; open plain `mode=ro` and let a genuine
+  //     pending WAL be read normally (immutable=1 here would be a promise we cannot make).
+  //   - absent  -> nothing to replay; open `mode=ro&immutable=1` STRAIGHT AWAY — the one mode both
+  //     measured SQLite builds leave clean. Plain mode=ro never gets the chance to vivify a -shm
+  //     file nobody asked for.
+  const restingWal = fs.existsSync(db) && !walSidecarsPresent(db);
+  const uri = restingWal ? `${base}&immutable=1` : base;
+
   try {
-    return { ok: true, value: run(base) };
+    const value = run(uri);
+    // Belt and suspenders for a third SQLite build we have not measured: a read that started with
+    // no sidecars must end with no sidecars. If one appeared anyway — a fresh concurrent writer, or
+    // another version-specific quirk — the bytes just read cannot be trusted, and this read's own
+    // litter is removed rather than left in the caller's directory.
+    if (restingWal && walSidecarsPresent(db)) {
+      for (const suffix of ['-wal', '-shm']) {
+        try { fs.unlinkSync(`${db}${suffix}`); } catch { /* best-effort cleanup only */ }
+      }
+      return { ok: false, err: 'a writer opened the store mid-read' };
+    }
+    return { ok: true, value, viaImmutable: restingWal || undefined };
   } catch (e) {
     const err = String(e.stderr || e.message || '');
     // "no such table/column" is SCHEMA VARIANCE (an older store) — a real, reportable fact.
     if (/no such (table|column)/.test(err)) return { ok: true, value: null, missing: true };
-
-    // The resting-WAL case, and ONLY that case: a genuine open failure with no sidecars in sight.
-    if (/unable to open database file/i.test(err) && fs.existsSync(db) && !walSidecarsPresent(db)) {
-      try {
-        const value = run(`${base}&immutable=1`);
-        // A writer appearing between the check and the read means the immutability promise was false
-        // and the bytes we just read cannot be trusted. Report unreadable rather than publish them.
-        if (walSidecarsPresent(db)) return { ok: false, err: 'a writer opened the store mid-read' };
-        return { ok: true, value, viaImmutable: true };
-      } catch (e2) {
-        const err2 = String(e2.stderr || e2.message || '');
-        if (/no such (table|column)/.test(err2)) return { ok: true, value: null, missing: true };
-        return { ok: false, err: err2.split('\n')[0].slice(0, 60) };
-      }
-    }
     // Anything else means we could not read the database, and we must say so, not guess zero.
     return { ok: false, err: err.split('\n')[0].slice(0, 60) };
   }

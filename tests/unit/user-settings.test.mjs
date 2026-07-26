@@ -345,7 +345,7 @@ describe('high — the write path is reversible', () => {
     expect(loadSettings(file).exists).toBe(false);
   });
 
-  it('refuses to write when the backup cannot be taken', () => {
+  it.skipIf(process.platform === 'win32')('refuses to write when the backup cannot be taken', () => { // chmod write-blocking is a no-op on win32 (documented gap, ci.yml)
     // A save that cannot be undone is an overwrite. If we cannot secure the old value, the correct
     // answer is to keep it and say so — never to proceed and hope.
     saveSettings({ advocacy: 'off' }, { file });

@@ -17,9 +17,31 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+// GitHub's Windows runners don't ship the sqlite3 CLI (confirmed live: `Error: spawnSync sqlite3
+// ENOENT`, windows-unit job of run 30202790095) — and scripts/memory-doctor.mjs's read path shells
+// out to it exclusively. Gate on the CLI itself so the sqlite-backed tests run wherever sqlite3
+// genuinely exists and honestly self-skip where the capability under test cannot function at all.
+const hasSqlite3 = spawnSync('sqlite3', ['--version'], { encoding: 'utf8' }).status === 0;
+
+/** Build a minimal, real memory.db fixture the memory-distillation probe (memory-doctor.mjs) reads
+ *  as a healthy, learning store: one embedded memory_entries row (BLOB embedding, non-zero length)
+ *  and one promoted reasoning_patterns row. Other tables the probe queries (episodes, skills, ...)
+ *  are deliberately absent — memory-doctor.mjs treats "no such table" as real schema variance, not
+ *  an error, so a minimal two-table fixture is sufficient and honest. */
+function makeMemoryStore(projectDir) {
+  const db = path.join(projectDir, '.swarm/memory.db');
+  fs.mkdirSync(path.dirname(db), { recursive: true });
+  execFileSync('sqlite3', [db,
+    "CREATE TABLE memory_entries(id INTEGER PRIMARY KEY, namespace TEXT, value TEXT, embedding BLOB); "
+    + "CREATE TABLE reasoning_patterns(id INTEGER PRIMARY KEY, pattern TEXT, promoted INTEGER DEFAULT 0); "
+    + "INSERT INTO memory_entries(namespace,value,embedding) VALUES ('lesson','fixture memory',X'0102030405060708'); "
+    + "INSERT INTO reasoning_patterns(pattern,promoted) VALUES ('fixture pattern',1);"]);
+  return db;
+}
 
 /** Make a throwaway HOME. These probes read ~/.claude-flow and ~/.claude, so the only honest way to
  *  test what they say about "a machine" is to give them a machine we built. */
@@ -46,7 +68,7 @@ function inHome(home, src) {
 }
 
 const detect = (key) => `
-  const m = await import(${JSON.stringify(path.join(REPO, 'scripts/capability-registry.mjs'))});
+  const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/capability-registry.mjs')).href)});
   const r = m.CAPABILITIES.find((c) => c.key === ${JSON.stringify(key)}).detect();
   process.stdout.write(JSON.stringify(r));
 `;
@@ -69,12 +91,14 @@ describe('a read-only status check must leave the machine exactly as it found it
     try {
       const before = new Set(fs.readdirSync(home));
       inHome(home, `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/capability-registry.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/capability-registry.mjs')).href)});
         m.auditAll();
       `);
       // The daemon was spawned detached and took a moment to write its pid file; a synchronous
       // check immediately after exit would have passed even while the bug was live.
-      execFileSync('sleep', ['3']);
+      // Portable synchronous sleep: sleep.exe lives in Git's usr/bin, which is NOT on the
+      // windows runner PATH (bash.exe is). Atomics.wait blocks this thread on every OS.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
 
       const written = [];
       const walk = (d, rel = '') => {
@@ -235,7 +259,7 @@ describe('a hand-edited settings.json must never crash the thing asked whether l
       try {
         fs.writeFileSync(path.join(home, '.claude/settings.json'), body);
         const r = inHome(home, `
-          const m = await import(${JSON.stringify(path.join(REPO, 'scripts/learning-enable.mjs'))});
+          const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/learning-enable.mjs')).href)});
           const s = m.gatherState({ home: ${JSON.stringify(home)} });
           process.stdout.write(JSON.stringify({ hooks: s.settings.learningHooks, code: s.verdict.code }));
         `);
@@ -256,7 +280,7 @@ describe('a broken instrument is never reported as a clean bill of health', () =
     // this machine. That is a real answer, not a shrug." Total instrument failure, rendered as a
     // confident all-clear, with copy that explicitly forecloses the doubt.
     const r = inHome(os.homedir(), `
-      const m = await import(${JSON.stringify(path.join(REPO, 'scripts/capability-audit.mjs'))});
+      const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/capability-audit.mjs')).href)});
       m.DETECTORS.length = 0;
       m.DETECTORS.push(function detectA() { throw new Error('EACCES: permission denied'); });
       m.DETECTORS.push(function detectB() { throw new Error('Unexpected token in JSON'); });
@@ -307,7 +331,7 @@ describe('the settings write path cannot lose a choice the user made', () => {
       }, null, 2);
       fs.writeFileSync(file, original);
       const r = inHome(os.homedir(), `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/user-settings.mjs')).href)});
         process.stdout.write(JSON.stringify(m.saveSettings({ advocacy: 'off' }, { file: ${JSON.stringify(file)} })));
       `);
       const res = JSON.parse(r.out);
@@ -328,7 +352,7 @@ describe('the settings write path cannot lose a choice the user made', () => {
     try {
       fs.writeFileSync(file, 'not json at all');
       const r = inHome(os.homedir(), `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/user-settings.mjs')).href)});
         const res = m.saveSettings({ autoApply: true }, { file: ${JSON.stringify(file)} });
         process.stdout.write(JSON.stringify({ ok: res.ok, backup: res.backup, healthy: m.loadSettings(${JSON.stringify(file)}).healthy }));
       `);
@@ -363,7 +387,7 @@ describe('the settings write path cannot lose a choice the user made', () => {
       const file = path.join(dir, 'settings.json');
       const startAt = Date.now() + 500;   // a shared release instant, now reachable by all four
       const kids = KEYS.map(([k, v]) => spawn(process.execPath, ['--input-type=module', '-e', `
-        const m = await import(${JSON.stringify(module)});
+        const m = await import(${JSON.stringify(pathToFileURL(module).href)});
         // SLEEP to the shared instant — never a busy spin. The first version spun hot for the whole
         // lead time, pinning four processes at 100% CPU and starving the ONNX worker-pool tests
         // running in parallel: forge-rerank-workers failed ~1 run in 3 while passing alone. A test
@@ -452,7 +476,7 @@ describe('a counter is a counter only when it is actually a number', () => {
     fs.writeFileSync(path.join(home, '.claude-flow/neural/stats.json'), JSON.stringify(stats));
   };
   const verdictIn = (home) => JSON.parse(inHome(home, `
-    const m = await import(${JSON.stringify(path.join(REPO, 'scripts/learning-enable.mjs'))});
+    const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/learning-enable.mjs')).href)});
     const s = m.readLearnerState({ home: process.env.HOME });
     process.stdout.write(JSON.stringify({ v: m.verdict(s), s }));
   `).out);
@@ -534,14 +558,31 @@ describe('a project-scoped answer must be about the user\'s project', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }, 60_000);
 
-  it('sees a memory store that IS there when pointed at the right project', () => {
+  it.skipIf(!hasSqlite3)('sees a memory store that IS there when pointed at the right project', () => {
     // The other direction, which is the one that offers to fix a non-problem: a healthy store
     // reported ABSENT because the registry was looking at its own directory instead.
-    const rows = JSON.parse(execFileSync(process.execPath, [
-      path.join(REPO, 'scripts/capability-registry.mjs'), '--json', '--project', REPO,
-    ], { encoding: 'utf8', cwd: os.tmpdir() }));
-    const mem = rows.find((r) => r.key === 'memory-distillation');
-    expect(mem.state, 'this repo has a 16MB store; ABSENT would be a lie').not.toBe('absent');
+    //
+    // REDESIGNED 2026-07-26 (was CI-red on every checkout since 2026-07-25, run 30202790095): this
+    // used to point --project at REPO itself and rely on the ruvnet-brain checkout's OWN local
+    // `.swarm/memory.db` — 16MB of real project memory that exists only on the author's Mac.
+    // `.swarm/` is gitignored machine state; a fresh CI checkout genuinely has no store there, so
+    // the row was honestly 'absent' and the assertion failed for real — the test was never
+    // exercising the registry's project-routing, only a fact about one developer's laptop. It now
+    // builds its own fixture store in a temp project, so the claim holds on any machine, and it
+    // asserts against the fixture's OWN project path so a regression to reading REPO/cwd instead of
+    // --project (the original bug this guards) still fails it even where REPO has a real store.
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'has-memory-'));
+    try {
+      makeMemoryStore(target);
+      const rows = JSON.parse(execFileSync(process.execPath, [
+        path.join(REPO, 'scripts/capability-registry.mjs'), '--json', '--project', target,
+      ], { encoding: 'utf8', cwd: os.tmpdir() }));
+      const mem = rows.find((r) => r.key === 'memory-distillation');
+      expect(mem.state, 'a fixture store with an embedded memory and a promoted pattern; ABSENT would be a lie').not.toBe('absent');
+      // Never REPO's own install directory or cwd — reading the wrong directory reports a real
+      // user's store as absent while presenting the tool's own numbers as though they were theirs.
+      expect(fs.realpathSync(mem.project), 'a project row must name the project it actually read').toBe(fs.realpathSync(target));
+    } finally { fs.rmSync(target, { recursive: true, force: true }); }
   }, 60_000);
 
   it('offers turnOn commands that are runnable from anywhere', () => {
@@ -559,12 +600,20 @@ describe('a project-scoped answer must be about the user\'s project', () => {
 });
 
 describe('a resting database is not an unreadable one', () => {
-  it('reads a WAL store whose sidecars are not present', () => {
+  it.skipIf(!hasSqlite3)('reads a WAL store whose sidecars are not present', () => {
     // mode=ro cannot open a WAL database without an existing -shm, and a read-only connection may not
     // create one, so SQLite returns CANTOPEN(14) — the normal state of every store nobody is using.
     // This was live on the owner's own machine: the repo's sidecars had been renamed .CORRUPT-*, so
     // every read of its healthy 16MB store returned unreadable and the console reported UNKNOWN
     // forever, while advising the user to "re-check in a moment".
+    //
+    // AND CONFIRMED LIVE 2026-07-26 on ubuntu 24.04 / apt sqlite3 3.45.1 (the exact build the
+    // "check" CI job installs): unlike macOS's bundled 3.51.0, that build does NOT throw CANTOPEN
+    // on a plain mode=ro open of a resting WAL db — it succeeds AND vivifies -shm/-wal as a side
+    // effect, which is how this test caught a real product bug in memory-doctor.mjs's q() (its only
+    // sidecar guard lived in a catch block a non-throwing build never reached; now the mode is
+    // chosen up front from sidecar presence). Body unchanged — it is what caught the regression;
+    // only the sqlite3-CLI gate is new, matching the windows-unit `spawnSync sqlite3 ENOENT`.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wal-'));
     const db = path.join(dir, 'memory.db');
     try {
@@ -573,7 +622,7 @@ describe('a resting database is not an unreadable one', () => {
       fs.rmSync(`${db}-shm`, { force: true });
 
       const d = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/memory-doctor.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/memory-doctor.mjs')).href)});
         process.stdout.write(JSON.stringify(m.diagnose(${JSON.stringify(db)})));
       `], { encoding: 'utf8' }));
 
@@ -595,7 +644,7 @@ describe('a resting database is not an unreadable one', () => {
       fs.mkdirSync(path.dirname(db), { recursive: true });
       fs.writeFileSync(db, 'this is definitively not a sqlite database');
       const r = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/capability-registry.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/capability-registry.mjs')).href)});
         const c = m.CAPABILITIES.find((c) => c.key === 'memory-distillation');
         process.stdout.write(JSON.stringify(c.detect({ project: ${JSON.stringify(dir)} })));
       `], { encoding: 'utf8' }));
@@ -670,7 +719,7 @@ describe('an undo must really have happened', () => {
       fs.writeFileSync(`${file}.lock`, `${process.pid} ${new Date().toISOString()}\n`);
 
       const r = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `
-        const m = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+        const m = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/user-settings.mjs')).href)});
         process.stdout.write(JSON.stringify(m.revertSettings({ file: ${JSON.stringify(file)} })));
       `], { encoding: 'utf8', timeout: 60_000 }));
 

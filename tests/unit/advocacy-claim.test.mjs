@@ -8,10 +8,11 @@
 // processes contending for the same claim — a single-process loop would be serialised by the event
 // loop and would pass against a completely broken implementation.
 import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { claimOffer, releaseClaim } from '../../scripts/advocacy-outcomes.mjs';
 
 const MODULE = path.resolve(import.meta.dirname, '../../scripts/advocacy-outcomes.mjs');
@@ -39,26 +40,30 @@ describe('claimOffer — exactly one speaker', () => {
     expect(claimOffer('b', { dir: d })).toBe(true);
   });
 
-  it('REAL PROCESS CONTENTION: 12 concurrent OS processes, exactly one wins', () => {
+  it('REAL PROCESS CONTENTION: 12 concurrent OS processes, exactly one wins', async () => {
     // The load-bearing test. Twelve separate node processes race for one claim. In-process
     // sequencing cannot mask a broken implementation here, because these genuinely run at once.
+    // Pure-Node fan-out (spawn + Promise.all, the raceOnce idiom the other suites already use) —
+    // the previous /bin/sh `&`-loop was this suite's ONE POSIX-bound child and broke the
+    // windows-unit job's documented "every child process spawned is node itself" invariant.
     const d = sandbox();
     const script = `
-      import { claimOffer } from ${JSON.stringify(MODULE)};
+      import { claimOffer } from ${JSON.stringify(pathToFileURL(MODULE).href)};
       process.stdout.write(claimOffer('contended', { dir: ${JSON.stringify(d)} }) ? 'WON' : 'lost');
     `;
     const f = path.join(d, 'racer.mjs');
     fs.writeFileSync(f, script);
 
-    // Launch all twelve, then collect — `&` backgrounds them so they overlap in real time.
-    const out = execFileSync('/bin/sh', ['-c',
-      `for i in $(seq 1 12); do node ${JSON.stringify(f)} >> ${JSON.stringify(path.join(d, 'out.txt'))} & done; wait`,
-    ], { encoding: 'utf8', timeout: 60_000 });
-    void out;
+    const kids = Array.from({ length: 12 }, () => spawn(process.execPath, [f]));
+    const outputs = await Promise.all(kids.map((c) => new Promise((resolve, reject) => {
+      let out = '';
+      c.stdout.on('data', (chunk) => { out += chunk; });
+      c.on('error', reject);
+      c.on('close', () => resolve(out));
+    })));
 
-    const results = fs.readFileSync(path.join(d, 'out.txt'), 'utf8');
-    const wins = (results.match(/WON/g) || []).length;
-    expect(wins, `exactly one of twelve concurrent processes may speak (got ${wins}) — raw: ${results}`).toBe(1);
+    const wins = outputs.filter((o) => o.includes('WON')).length;
+    expect(wins, `exactly one of twelve concurrent processes may speak (got ${wins}) — raw: ${outputs.join(',')}`).toBe(1);
   });
 
   it('a STALE claim is taken over — a crashed session must never silence a capability forever', () => {

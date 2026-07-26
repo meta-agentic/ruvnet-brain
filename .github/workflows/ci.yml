@@ -94,6 +94,10 @@ jobs:
     # os.homedir(), no sqlite3 CLI on the runner, chmod-read-only being a no-op on win32).
     # History: non-blocking 2026-07-12→13 because it had never been green (25/25 failures) and a
     # permanently red required job trains everyone to ignore CI. That era is over — keep it a gate.
+    # 2026-07-26: three MORE clusters fixed at root cause after 5 red days (last green 18373d3):
+    # (7) dynamic import() of a raw absolute path in spawned children — always pathToFileURL();
+    # (8) drive-root paths ARE writable on this runner, so "unwritable" fixtures must block with a
+    # file, not a privileged dir; (9) sleep.exe/sh are not on PATH (bash.exe is) — spawn node only.
     steps:
       - name: Keep checkout byte-exact (tests read repo files and compare contents; CRLF would lie)
         run: git config --global core.autocrlf false

@@ -123,7 +123,7 @@ describe('the inventory — invisible is worse than unwired', () => {
     w('bin/install.mjs', 'export const i = 1;\n');
     const res = audit({ repo, standalone: [], held: {} });
     expect(stateOf(res, 'scripts/proxy/thing.sh')).toBe('unwired');
-    expect(stateOf(res, path.join('bin', 'install.mjs'))).toBe('unwired');
+    expect(stateOf(res, 'bin/install.mjs')).toBe('unwired');
   });
 
   it('counts every module in exactly one state (DDD-0010 WiringAudit invariant)', () => {

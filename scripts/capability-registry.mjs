@@ -85,7 +85,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DAY = 86_400_000;
 
 /** A turnOn command that runs a script from THIS package must name it absolutely. See REPO above. */
-const selfScript = (rel, args) => `node ${JSON.stringify(path.join(REPO, rel))}${args ? ` ${args}` : ''}`;
+const selfScript = (rel, args) => `node "${path.join(REPO, rel)}"${args ? ` ${args}` : ''}`; // plain quotes, not JSON.stringify: JSON doubles every backslash on Windows and users copy-paste this
 
 /** The four states. 'absent' means "not installed here", which is NOT the same as "installed and off". */
 /**

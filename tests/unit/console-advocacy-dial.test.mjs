@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CONSOLE_MJS = path.join(REPO, 'scripts/onboarding-console.mjs');
@@ -67,7 +67,7 @@ function run(src) {
 /** Same as run(), but the snippet is expected to print exactly one JSON value on stdout. */
 function runJSON(src) { return JSON.parse(run(src)); }
 
-const IMPORT = `const m = await import(${JSON.stringify(CONSOLE_MJS)});`;
+const IMPORT = `const m = await import(${JSON.stringify(pathToFileURL(CONSOLE_MJS).href)});`;
 
 describe('the console serves the advocacy dial — real schema, not invented copy', () => {
   it('gatherAdvocacy() reports the real options + default straight from user-settings.mjs', () => {

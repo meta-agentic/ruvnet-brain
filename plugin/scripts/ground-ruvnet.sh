@@ -378,7 +378,7 @@ if [ -n "$METER_TMP" ]; then
   METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
   mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
     printf '{"ts":"%s","source":"hook","class":"%s","bytes":%d,"cwd":"%s"}\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_CLASS" "$METER_BYTES" "$(pwd 2>/dev/null | sed 's/"/\\"/g')" \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_CLASS" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
       >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
 fi
 

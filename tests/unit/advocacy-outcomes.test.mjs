@@ -20,7 +20,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   ACTIONS, DISMISSAL_BUDGET, IGNORE_WEIGHT, HARD_DISMISSAL_CAP,
   PRECISION_TARGET, MIN_PRECISION_SAMPLES,
@@ -222,7 +222,7 @@ describe('high — the L5 claim: an outcome in project A changes behaviour in pr
     const id = 'learning:enable-fleet';
     record({ id, action: ACTIONS.DISMISSED, severity: 'SUGGESTED', project: 'project-a' }, { file });
     const out = await runNode(`
-      const m = await import(${JSON.stringify(MODULE)});
+      const m = await import(${JSON.stringify(pathToFileURL(MODULE).href)});
       process.stdout.write(JSON.stringify({
         offer: m.shouldStillOffer(${JSON.stringify(id)}, { file: ${JSON.stringify(file)}, severity: 'SUGGESTED' }),
         rows: m.loadOutcomes(${JSON.stringify(file)}).length,
@@ -400,7 +400,7 @@ describe('medium — a broken ledger degrades to "no outcomes yet", and fails to
     expect(precision({ file })).toMatchObject({ offered: 1, applied: 1 });
   });
 
-  it('an unwritable ledger returns a receipt instead of taking down the caller', () => {
+  it.skipIf(process.platform === 'win32')('an unwritable ledger returns a receipt instead of taking down the caller', () => { // chmod write-blocking is a no-op on win32 (documented gap, ci.yml)
     // Callers are surfaces. But the receipt must be checkable, because a dismissal that fails to
     // persist means the user's "stop showing me this" does not stick and the off switch is theatre.
     const blocked = path.join(tmp, 'blocked');
@@ -495,7 +495,7 @@ describe('high — concurrent writers lose nothing', () => {
   it('eight processes recording different outcomes at one instant all land', async () => {
     const N = 8;
     const codes = await race(N, (i) => `
-      const m = await import(${JSON.stringify(MODULE)});
+      const m = await import(${JSON.stringify(pathToFileURL(MODULE).href)});
       const r = m.record({ id: 'learning:flush', action: 'dismissed', project: 'p${i}' }, { file: ${JSON.stringify(file)} });
       if (!r.ok) { process.stderr.write(JSON.stringify(r)); process.exit(3); }
     `);

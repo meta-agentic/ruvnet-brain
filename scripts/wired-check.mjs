@@ -302,7 +302,7 @@ export function shippableModules(repo = REPO) {
       const ext = path.extname(full);
       if (!root.exts.includes(ext)) continue;
       if (isTestFile(full)) continue;
-      const rel = path.relative(repo, full);
+      const rel = path.relative(repo, full).split(path.sep).join('/'); // POSIX-style always: repo-relative keys must not vary by OS
       out.push({ base: path.basename(full, ext), file: path.basename(full), rel });
     }
   }
@@ -370,7 +370,7 @@ export function callersOf(mod, files, repo = REPO) {
   const re = callerPattern(mod.file);
   const hits = [];
   for (const f of files) {
-    const rel = path.relative(repo, f);
+    const rel = path.relative(repo, f).split(path.sep).join('/');
     if (rel === mod.rel) continue;              // self
     if (isTestFile(rel)) continue;              // a test is not a caller
     let src = '';

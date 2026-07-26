@@ -53,8 +53,16 @@ describe('recordObservation — only transitions, because sampling rate must not
   });
 
   it('an unwritable log degrades to no history instead of throwing — the console must never break for a metric', () => {
-    const w = recordObservation([{ key: 'a', state: 'off' }], { file: '/nonexistent-root-dir/x/y.jsonl' });
-    expect(w).toEqual([]);
+    // A path under the drive root is WRITABLE on the GitHub windows runner, so '/nonexistent-root-dir'
+    // silently succeeded there. Block with a FILE where a directory must be created — mkdir cannot
+    // pass through a file component on any OS, regardless of privileges.
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'latency-unwritable-'));
+    const blocker = path.join(d, 'not-a-directory');
+    fs.writeFileSync(blocker, 'x');
+    try {
+      const w = recordObservation([{ key: 'a', state: 'off' }], { file: path.join(blocker, 'sub', 'y.jsonl') });
+      expect(w).toEqual([]);
+    } finally { fs.rmSync(d, { recursive: true, force: true }); }
   });
 
   it('a corrupt log line is skipped, and the rest of the history survives', () => {

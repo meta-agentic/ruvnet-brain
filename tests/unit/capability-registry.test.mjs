@@ -115,7 +115,7 @@ describe('turnOn is null-or-verified', () => {
       // checked by the test below instead. The pattern must match the ABSOLUTE form now emitted by
       // selfScript(): the old `^node\s+scripts/` only matched a relative path, which was itself the
       // bug (a command that only runs from inside a ruvnet-brain checkout).
-      if (/^node\s+"?\//.test(cmd)) continue;
+      if (/^node\s+"?(?:\/|[A-Za-z]:[\\/])/.test(cmd)) continue;
       expect(VERIFIED.has(cmd), `${c.key} ships an unverified command: ${cmd}`).toBe(true);
     }
   });

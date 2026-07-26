@@ -56,7 +56,7 @@ const die = (s, code = 1) => { process.stderr.write(s + '\n'); process.exit(code
 
 /** Run a ruflo subcommand, returning {ok, out, err}. Never throws — callers decide what a failure means. */
 function ruflo(args, { timeout = 600_000 } = {}) {
-  const r = spawnSync(RUFLO, args, { encoding: 'utf8', timeout });
+  const r = spawnSync(RUFLO, args, { encoding: 'utf8', timeout, shell: process.platform === 'win32' }); // a global npm ruflo is ruflo.cmd on Windows; Node refuses .cmd without a shell (CVE-2024-27980)
   return { ok: !r.error && r.status === 0, out: r.stdout || '', err: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
 }
 

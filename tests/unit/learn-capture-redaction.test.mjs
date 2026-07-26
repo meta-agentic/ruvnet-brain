@@ -77,7 +77,7 @@ describe('learn-capture.sh records intent, never data', () => {
     expect(action.split(/\s+/).length).toBeLessThanOrEqual(2);
   });
 
-  it('writes the queue owner-only (0600) inside an owner-only directory (0700)', () => {
+  it.skipIf(process.platform === 'win32')('writes the queue owner-only (0600) inside an owner-only directory (0700)', () => { // POSIX permission bits do not exist on win32
     capture('git status');
     const fileMode = fs.statSync(queuePath()).mode & 0o777;
     const dirMode = fs.statSync(path.dirname(queuePath())).mode & 0o777;

@@ -284,6 +284,9 @@ describe('issue #36 — no writer may create .ruvnet-brain/ in a project tree', 
     expect(fs.existsSync(ledgerPath())).toBe(true);
     // The cwd is preserved as a field, so per-project reporting survives the move.
     const last = JSON.parse(readLedgerLines().pop());
-    expect(last.cwd).toBe(fs.realpathSync(deep));
+    // Git Bash's `pwd -W` prints C:/forward/slash while realpathSync prints C:\backslash —
+    // compare separator- and case-insensitively; on POSIX normalize() changes nothing real.
+    const normalize = (p) => p.replace(/\\/g, '/').toLowerCase();
+    expect(normalize(last.cwd)).toBe(normalize(fs.realpathSync(deep)));
   });
 });
