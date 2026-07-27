@@ -115,10 +115,44 @@ async function ensureChild() {
   return c;
 }
 
-function childRequest(c, method, params, timeoutMs = 120_000) {
+// A TIMEOUT IS AN OUTAGE, and it must both STOP and be RECORDED. Measured 2026-07-27: the timeout
+// below deleted its pending entry and rejected, and did nothing else — so
+//   (a) the child kept computing an answer nobody would ever read, at ~95% CPU, and on the
+//       all-repos path (605 cross-encoder pairs, a fan-out that alone exceeds this deadline) that
+//       is minutes of burn per abandoned query, which then slows the RETRY, which times out too; and
+//   (b) nothing wrote health.json, so a total retrieval failure read as healthy. The live file
+//       said "status":"ok" dated four days earlier while every query was timing out.
+// (b) is the worse half: the product reporting green while it is down is the one thing it may
+// never do. The child's own alarm cannot cover this — it only rings when a search RETURNS failure,
+// and a timeout is precisely the case where it never returns at all. Only the parent can see it.
+async function onChildTimeout(method, timeoutMs) {
+  killChild(`timed out after ${timeoutMs / 1000}s on ${method}`); // stop the burn; ensureChild() respawns
+  try {
+    const alarm = await import(new URL('../../kb/brain-alarm.mjs', import.meta.url).href);
+    await alarm.reportBrainDown({
+      error: `brain worker timed out after ${timeoutMs / 1000}s on ${method} (no answer returned)`,
+      source: 'mcp-parent-timeout',
+    });
+  } catch (e) {
+    // REPORTED, never swallowed: brain-alarm.mjs lives in the KB, which can legitimately be absent
+    // or half-installed — but a health reporter that fails silently is the same lie one layer down.
+    console.error(`[ruvnet-brain] timeout on ${method} could not be recorded to health.json: ${e.message}`);
+  }
+}
+
+// Overridable so the outage path above can actually be TESTED — a 120s default is untestable, and
+// an untestable failure path is how this one went four days reporting "ok" while it was down. Also
+// genuinely useful in the field: a slow machine can raise it, and a CI runner can lower it.
+const CALL_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_CALL_TIMEOUT_MS) || 120_000;
+
+function childRequest(c, method, params, timeoutMs = CALL_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const id = c.nextId++;
-    const timer = setTimeout(() => { c.pending.delete(id); reject(new Error(`brain worker timeout on ${method}`)); }, timeoutMs);
+    const timer = setTimeout(() => {
+      c.pending.delete(id);
+      reject(new Error(`brain worker timeout on ${method}`));
+      void onChildTimeout(method, timeoutMs); // after the reject — the caller must not wait on the alarm
+    }, timeoutMs);
     c.pending.set(id, { resolve: (m) => { clearTimeout(timer); resolve(m); }, reject: (e) => { clearTimeout(timer); reject(e); } });
     try { c.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); }
     catch (e) { clearTimeout(timer); c.pending.delete(id); reject(e); }
