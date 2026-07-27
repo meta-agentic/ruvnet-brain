@@ -12,6 +12,7 @@ governs:
   - plugin/hooks/hooks.json
   - plugin/scripts/
   - kb/forge-mcp-all.mjs
+  - kb/forge-evidence.mjs
   - tests/mesh/
   - tests/experience/
   - ~/.claude/settings.json (this machine's layer — census appendix A)
@@ -215,6 +216,43 @@ receipt <id>. Selected: X. Your action introduces Y. Use Z. Evidence: <paths>."
     of `SUBSTANCE-BOUND | SEARCH-ONLY | OFF` (GPT-5.6). Measured status at ADR time:
     **SEARCH-ONLY** — the incident write passes the live gate.
 
+### 3.8 Build status — §3 as shipped (2026-07-27, issue #46, v3.9.88-dev)
+
+**Implemented** (build items 4 and 5 of the ranked order): the retrieval-side receipt
+(`kb/forge-evidence.mjs`, called from `forge-mcp-all.mjs`'s success path only, also returned as
+`structuredContent.grounding`), the substance stage in `ground-before-write.sh` after its recency
+wall, detectors D1/D2/D3 plus the D4 policy cases in `plugin/scripts/grounding-substance.mjs`, the
+user-owned `.ruvnet/implementation-policy.json`, and the in-band reasoned override with its own
+receipt ledger. `grounding-stamp.sh` now derives the §3.7.10 mode from the evidence ledger's own
+mtime rather than asserting it.
+
+**Measured**: the incident replay exits 0 on `origin/main` (independently re-run: zero bytes on
+both streams, no receipt, with genuinely fresh real stamps) and exits 2 on this branch carrying the
+source path, the install command and the source's own words. 20 real historical writes from this
+repo's git log, the compliant local install, a source-carried CDN origin, a comment discussing
+esm.sh, an unretrieved API shape, and every empty/absent/torn/stale ledger shape all exit 0.
+Each detector is proven load-bearing by disabling it and watching its own bad write pass.
+
+**Deviations from §3 as written, each deliberate:**
+1. **Persistence lives in the producer, not a PostToolUse bridge.** §3.1 assigns extraction to the
+   producer (adopted) and persistence to a thin bridge. The producer already holds both the
+   documents and the filesystem, so a bridge would add a second process, a second parse of the same
+   escaped prose, and a failure mode where an uninstalled hook silently means no receipts ever. The
+   typed receipt is still emitted in `structuredContent`, so the bridge remains buildable and any
+   other host can consume it without re-mining prose — which was §3.1's actual purpose.
+2. **Binding is at the PreToolUse mutation plane only.** §3.4's execution-plane, PostToolUse-audit,
+   Stop-debt and CI-diff bindings are build item 6 and are not in this change.
+3. **D5 (receipt integrity) is not implemented.** Its blocking form needs the outcome ledger and
+   adjudication of build item 7; a D5 blocking on "the ledger looks odd" would be malfunction
+   manufacturing a refusal, which §1.2 forbids. Absent or unreadable evidence is treated as no
+   evidence, i.e. permitted.
+4. **The stage is invoked from `ground-before-write.sh` rather than `implementation-guard.mjs`.**
+   The §2 plane dispatchers are build item 3 and must land after battery v2 (item 2); wiring a new
+   registration ahead of them is the out-of-order change the ranked build order exists to prevent.
+   The recency wall's pure-bash contract is preserved and still asserted — the substance stage is
+   the only part allowed a dependency, and it fails open on a missing node or checker (both proven
+   by breaking them, not by comment).
+
 ## §4 Learning that changes behavior — buildable vs ceremony, honestly split
 
 **Real today (measured):** 27 Tier-1 lessons load every session (global-memory sqlite, read
@@ -370,8 +408,12 @@ census/lint suite is born red** (appendix B) — which is the proof it works.
 
 ## Consequences
 
-- The grounding claim becomes honest: console states `SUBSTANCE-BOUND | SEARCH-ONLY | OFF`;
-  today it must say SEARCH-ONLY.
+- The grounding claim becomes honest: console states `SUBSTANCE-BOUND | SEARCH-ONLY | OFF`.
+  At ADR time it had to say SEARCH-ONLY. Since §3.8 (v3.9.88-dev) a machine whose bundle carries
+  the substance writer reports SUBSTANCE-BOUND, and one whose bundle predates it still reports
+  SEARCH-ONLY — derived from the evidence ledger's mtime, never asserted. The ADR itself stays
+  Accepted rather than Implemented until the packed live path refuses the original incident
+  (ranked build order item 10).
 - ADR-012 is narrowed (its stamp = recency layer only), not superseded; ADR-023's spine charter
   is finally total (Stop included); ADR-054's off-contract becomes machine-readable for every
   registration, not just the shim's eleven.

@@ -77,4 +77,26 @@ for t in agentdb metaharness ruvector aidefence agentic-flow agentic-qe ruv-swar
   [[ $QUERY == *"$t"* ]] && { : > "$DIR/$t" 2>/dev/null || true; }
 done
 
+# ── 4. THE SUBSTANCE PROBE (ADR-055 §3.7.10, issue #46). ────────────────────────────────────────
+#
+# ADR-055 refuses, by name, the claim of "rUv over your shoulder" while the fourth wall is inert,
+# and requires the product to report one of SUBSTANCE-BOUND | SEARCH-ONLY | OFF. This writes that
+# state as a DERIVED fact rather than an asserted one — the house rule is that status must come
+# from a verifiable artifact, and the artifact here is the evidence ledger's own mtime.
+#
+# The substance writer (kb/forge-evidence.mjs) appends a line DURING the tool call this hook is the
+# PostToolUse of, so on a substance-bound machine the ledger was touched seconds ago. An installed
+# bundle that predates the writer answers normally and never touches the ledger — the machine is
+# then SEARCH-ONLY, and the only dishonest thing it could do is not say so.
+#
+# Everything here is best-effort and swallowed; PostToolUse must always exit 0.
+EVID="${RUVNET_EVIDENCE_FILE:-$HOME/.cache/ruvnet-brain/evidence.jsonl}"
+MODE="search-only"
+if [ -f "$EVID" ]; then
+  NOW=$(date +%s 2>/dev/null) || NOW=""
+  THEN=$(date -r "$EVID" +%s 2>/dev/null) || THEN=$(stat -f %m "$EVID" 2>/dev/null) || THEN=""
+  if [ -n "$NOW" ] && [ -n "$THEN" ] && [ $((NOW - THEN)) -lt 120 ]; then MODE="substance-bound"; fi
+fi
+printf '%s\n' "$MODE" > "$DIR/../grounding-mode" 2>/dev/null || true
+
 exit 0
