@@ -74,7 +74,9 @@ describe('low — schema completeness', () => {
     const scope = SETTINGS_SCHEMA.find((s) => s.key === 'learningScope');
     expect(scope.options).toEqual(['off', 'project', 'user']);
     const advocacy = SETTINGS_SCHEMA.find((s) => s.key === 'advocacy');
-    expect(advocacy.options).toEqual(['off', 'important-only', 'all']);
+    // ADR-052: advocacy became a 1-5 dial (from a 3-value enum). Options are ordered
+    // least-active → most-active, same invariant as before, just numeric now.
+    expect(advocacy.options).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('keys are unique — a duplicate would make one entry unreachable through BY_KEY', () => {
@@ -85,19 +87,21 @@ describe('low — schema completeness', () => {
 
 describe('low — validation refuses rather than guesses', () => {
   it('accepts a fully-specified valid object unchanged', () => {
-    // FULLY specified means every key in SETTINGS_SCHEMA — `brainEnabled` joined it with ADR-054.
-    // The assertion below is a deep equality against the complete values object, so a new key must
-    // be added here rather than the assertion loosened: the point of this test is that validate()
-    // returns exactly what it was given when everything given is valid.
-    const input = { brainEnabled: false, learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
+    // FULLY specified means every key in SETTINGS_SCHEMA — `brainEnabled` joined it with ADR-054,
+    // and advocacy is the 1-5 dial (ADR-052 WIP). Deep equality against the complete values object,
+    // so a new key must be added here rather than the assertion loosened.
+    const input = { brainEnabled: false, learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
     const r = validate(input);
     expect(r.ok).toBe(true);
     expect(r.values).toEqual(input);
   });
 
   it('fills every unspecified key from defaults, so callers always get a complete object', () => {
+    // The legacy string is deliberately kept here rather than swapped for a bare number: it exercises
+    // BOTH halves of validate() in one pass — the ADR-052 legacy migration (off → level 1) AND the
+    // defaults-fill for every key the caller did not mention, which is the actual point of this test.
     const r = validate({ advocacy: 'off' });
-    expect(r.values).toEqual({ ...defaults(), advocacy: 'off' });
+    expect(r.values).toEqual({ ...defaults(), advocacy: 1 });
     expect(r.ok).toBe(true);
   });
 
@@ -188,7 +192,7 @@ describe('medium — round trip through a real file', () => {
     // MIRROR key survives a real save/load, which is the only thing settings.json is responsible for
     // under ADR-054. (Writing the mirror never touches the sentinel — the switch is flipped only by
     // brain-state.mjs, via the console. See brain-off.test.mjs for that half.)
-    const chosen = { brainEnabled: false, learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
+    const chosen = { brainEnabled: false, learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
     const saved = saveSettings(chosen, { file });
     expect(saved.ok).toBe(true);
 
@@ -207,11 +211,11 @@ describe('medium — round trip through a real file', () => {
   });
 
   it('a partial save leaves the other answers standing', () => {
-    saveSettings({ learningScope: 'user', advocacy: 'all' }, { file });
+    saveSettings({ learningScope: 'user', advocacy: 4 }, { file });
     saveSettings({ autoApply: true }, { file });          // says nothing about the first two
     const back = loadSettings(file);
     expect(back.values.learningScope).toBe('user');
-    expect(back.values.advocacy).toBe('all');
+    expect(back.values.advocacy).toBe(4);
     expect(back.values.autoApply).toBe(true);
   });
 
@@ -285,23 +289,23 @@ describe('high — the write path is reversible', () => {
   });
 
   it('every subsequent save backs up the PREVIOUS contents first', () => {
-    saveSettings({ advocacy: 'off' }, { file });
-    const r = saveSettings({ advocacy: 'all' }, { file });
+    saveSettings({ advocacy: 1 }, { file });
+    const r = saveSettings({ advocacy: 5 }, { file });
 
     expect(r.backup).toBeTruthy();
     expect(fs.existsSync(r.backup)).toBe(true);
     // The backup must hold the OLD value — a backup taken after the write protects nothing.
-    expect(JSON.parse(fs.readFileSync(r.backup, 'utf8')).settings.advocacy).toBe('off');
-    expect(loadSettings(file).values.advocacy).toBe('all');
+    expect(JSON.parse(fs.readFileSync(r.backup, 'utf8')).settings.advocacy).toBe(1);
+    expect(loadSettings(file).values.advocacy).toBe(5);
   });
 
   it('backups accumulate and list newest last', () => {
-    saveSettings({ advocacy: 'off' }, { file });
-    saveSettings({ advocacy: 'important-only' }, { file });
-    saveSettings({ advocacy: 'all' }, { file });
+    saveSettings({ advocacy: 1 }, { file });
+    saveSettings({ advocacy: 3 }, { file });
+    saveSettings({ advocacy: 5 }, { file });
     const baks = listBackups(file);
     expect(baks.length).toBe(2);
-    expect(JSON.parse(fs.readFileSync(baks[baks.length - 1], 'utf8')).settings.advocacy).toBe('important-only');
+    expect(JSON.parse(fs.readFileSync(baks[baks.length - 1], 'utf8')).settings.advocacy).toBe(3);
   });
 
   it('rapid consecutive saves each keep their own backup — no undo step is lost', () => {
@@ -319,10 +323,10 @@ describe('high — the write path is reversible', () => {
   it('same-millisecond backups still sort newest-last, so an unnamed revert picks the right one', () => {
     // The padding guard: unpadded suffixes would order "-10" before "-2" and revert would restore a
     // backup from the middle of the history rather than the most recent one.
-    for (let i = 0; i < 12; i++) saveSettings({ advocacy: 'off' }, { file });
-    saveSettings({ advocacy: 'all' }, { file });            // newest backup holds 'off'
+    for (let i = 0; i < 12; i++) saveSettings({ advocacy: 1 }, { file });
+    saveSettings({ advocacy: 5 }, { file });            // newest backup holds level 1
     expect(revertSettings({ file }).ok).toBe(true);
-    expect(loadSettings(file).values.advocacy).toBe('off');
+    expect(loadSettings(file).values.advocacy).toBe(1);
   });
 
   it('revert restores the previous answers', () => {
@@ -336,10 +340,10 @@ describe('high — the write path is reversible', () => {
   });
 
   it('revert with no named backup restores the most recent one', () => {
-    saveSettings({ advocacy: 'off' }, { file });
-    saveSettings({ advocacy: 'all' }, { file });
+    saveSettings({ advocacy: 1 }, { file });
+    saveSettings({ advocacy: 5 }, { file });
     expect(revertSettings({ file }).ok).toBe(true);
-    expect(loadSettings(file).values.advocacy).toBe('off');
+    expect(loadSettings(file).values.advocacy).toBe(1);
   });
 
   it('reverting a FIRST save removes the file — back to genuinely having no settings', () => {
@@ -356,30 +360,31 @@ describe('high — the write path is reversible', () => {
   it.skipIf(process.platform === 'win32')('refuses to write when the backup cannot be taken', () => { // chmod write-blocking is a no-op on win32 (documented gap, ci.yml)
     // A save that cannot be undone is an overwrite. If we cannot secure the old value, the correct
     // answer is to keep it and say so — never to proceed and hope.
-    saveSettings({ advocacy: 'off' }, { file });
+    saveSettings({ advocacy: 1 }, { file });
     const roDir = path.join(tmp, 'ro');
     fs.mkdirSync(roDir);
     const roFile = path.join(roDir, 'settings.json');
     fs.copyFileSync(file, roFile);
     fs.chmodSync(roDir, 0o500);            // no new entries may be created in here
     try {
-      const r = saveSettings({ advocacy: 'all' }, { file: roFile });
+      const r = saveSettings({ advocacy: 5 }, { file: roFile });
       expect(r.ok).toBe(false);
       expect(r.log).toMatch(/backup failed/);
       // The original is untouched.
-      expect(loadSettings(roFile).values.advocacy).toBe('off');
+      expect(loadSettings(roFile).values.advocacy).toBe(1);
     } finally {
       fs.chmodSync(roDir, 0o700);          // always restore, or afterEach cannot clean up
     }
   });
 
   it('an invalid value in a save falls back to the STORED answer, not the shipped default', () => {
-    // A bad click must not reset a setting the user deliberately changed earlier.
-    saveSettings({ advocacy: 'all' }, { file });
+    // A bad click must not reset a setting the user deliberately changed earlier. 4 ≠ the shipped
+    // default (3), so this still distinguishes "kept the stored answer" from "fell back to default".
+    saveSettings({ advocacy: 4 }, { file });
     const r = saveSettings({ advocacy: 'nonsense' }, { file });
     expect(r.ok).toBe(true);              // written, with the offending key reported
     expect(r.errors.some((e) => e.key === 'advocacy')).toBe(true);
-    expect(loadSettings(file).values.advocacy).toBe('all');
+    expect(loadSettings(file).values.advocacy).toBe(4);
   });
 
   it('a save that follows a corrupt file still produces a readable file', () => {
@@ -398,9 +403,15 @@ describe('qualitative — every setting explains its own downside', () => {
   // here; what IS enforced is that no setting can ship without someone having written down what
   // turning it up costs. A settings page listing only benefits makes the safe choice look timid.
   it('help is one plain sentence — a short label, not a paragraph', () => {
+    // ADR-052: advocacy's help now has to name the 1-5 dial AND both channels it governs (advocacy +
+    // lesson-promotion), which is legitimately a little longer than the other three entries' single
+    // clause. It gets its own, still-finite ceiling rather than an unbounded pass — a REAL cap, not a
+    // vacuous one: it still fails if the copy balloons further, and every other entry is still held
+    // to the original 220-char bound.
     for (const s of SETTINGS_SCHEMA) {
+      const ceiling = s.key === 'advocacy' ? 260 : 220;
       expect(s.help.length, `${s.key}.help too short`).toBeGreaterThan(30);
-      expect(s.help.length, `${s.key}.help is a paragraph, not a sentence`).toBeLessThan(220);
+      expect(s.help.length, `${s.key}.help is a paragraph, not a sentence`).toBeLessThan(ceiling);
     }
   });
 
@@ -417,31 +428,44 @@ describe('qualitative — every setting explains its own downside', () => {
     }
   });
 
-  // "The product can never lie" (F: fabricated/undelivered behavior on a user-facing surface). The
-  // advocacy field's copy once claimed 'all' shows routine observations 'important-only' filters out
-  // — but plugin/scripts/anticipate.sh, the only dial-governed emitter, never reads 'important-only'
-  // or 'all' as distinct values; it only branches on off vs. on. This test fails the moment either
-  // side of that drifts out of sync again: if the emitter starts differentiating the two levels for
-  // real, this test breaks and says so, which is the signal to restore the richer copy honestly.
-  it('advocacy copy does not claim a routine/important split the emitter does not implement', () => {
+  // "The product can never lie" (F: fabricated/undelivered behavior on a user-facing surface). This
+  // test used to guard the OPPOSITE claim: the 3-value enum's copy had to admit 'all' and
+  // 'important-only' behaved identically, because plugin/scripts/anticipate.sh — at the time the only
+  // dial-governed emitter — only ever branched on off-vs-on. ADR-052 replaced the enum with a 1-5
+  // dial enforced centrally by plugin/scripts/unprompted-runtime.mjs's LEVEL_POLICY, which DOES
+  // differentiate the levels for real (proven by tests/integration/advocacy-dial-levels.test.mjs:
+  // promotion is delivered at level 4 but dropped at level 3 — the "TEETH" test there fails outright
+  // if that ever collapses back to cosmetic). Leaving the old "these behave identically" admission in
+  // the copy would now itself be the lie this house rule exists to catch, so the assertion flips:
+  // the copy must NOT claim the levels are unwired/identical, and must name a real, checkable
+  // difference between the quiet end (1) and the loud end (4-5).
+  it('advocacy copy describes real per-level differences, not a cosmetic dial (ADR-052)', () => {
     const anticipatePath = path.join(
       path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'plugin', 'scripts', 'anticipate.sh',
     );
     const src = fs.readFileSync(anticipatePath, 'utf8');
 
-    // Ground truth: the emitter's only advocacy-level branch is the off-quit. If a future change adds
-    // a real 'all'-specific or 'important-only'-specific branch, this assertion — not just the copy —
-    // is what should be revisited.
+    // Ground truth for THIS ONE EMITTER (anticipate.sh itself was not touched by ADR-052): it still
+    // only branches on off vs. on, with no notion of the 1-5 dial at all. That has not changed, and
+    // is a separate fact from whether the LEVELS are load-bearing overall (they are — see above).
     expect(src).toMatch(/ADVOCACY\s*===\s*'off'/);
     expect(src).not.toMatch(/ADVOCACY\s*===\s*'all'/);
     expect(src).not.toMatch(/ADVOCACY\s*===\s*'important-only'/);
 
     const advocacy = SETTINGS_SCHEMA.find((s) => s.key === 'advocacy');
-    // The copy must say the two "on" levels behave the same today, not imply 'all' is noisier than
-    // 'important-only' in practice — that filtering does not exist yet.
-    expect(advocacy.downside.toLowerCase()).toMatch(/identical|behave the same|not (yet )?wired/);
-    // And it must not undersell 'off', which genuinely does silence everything.
-    expect(advocacy.downside.toLowerCase()).toMatch(/off.{0,40}(nothing|invisible|silent)/s);
+    const copy = advocacy.downside.toLowerCase();
+
+    // The copy must NOT admit the levels are cosmetic — that admission would now be false.
+    expect(copy, 'downside must not claim the levels are identical/unwired — they are now').not.toMatch(/identical|behave the same|not (yet )?wired/);
+    // It must name the concrete differentiator the runtime enforces: promotion nudges only exist at
+    // the higher levels (4-5), never at 1-3. Merely printing "1" through "5" would not prove this —
+    // matching "promot" is what ties the copy to an actual behavioral difference.
+    expect(copy, 'downside must describe the promotion-nudge difference at the higher levels').toMatch(/promot/);
+    // And it must tie the QUIET end of the dial to real silence, not just mention the number 1.
+    expect(copy, 'downside must tie level 1 to genuine silence').toMatch(/\b1\b[^.]{0,60}\b(never|nothing|only when)\b/);
+    // ...and tie level 4 specifically to the promotion nudges — the two ends must read as DISTINCT,
+    // which is exactly what "identical" used to (honestly) claim they were not, and now must not.
+    expect(copy, 'downside must tie level 4 to the promotion nudges').toMatch(/\b4[^.]{0,80}promot/);
   });
 
   it('no setting is sold — none of the copy tells the user what to pick', () => {

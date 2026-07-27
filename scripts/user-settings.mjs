@@ -130,32 +130,39 @@ export const SETTINGS_SCHEMA = Object.freeze([
 
   Object.freeze({
     key: 'advocacy',
-    label: 'How much it volunteers',
+    label: 'How much it jumps in',
     type: 'enum',
-    options: Object.freeze(['off', 'important-only', 'all']),
-    default: 'important-only',
+    options: Object.freeze([1, 2, 3, 4, 5]),
+    default: 3,
     escalates: Object.freeze([]),   // speech only — no value of this setting writes anything anywhere
-    help: 'How often it promotes capabilities you did not ask about. This dial governs that one channel; lessons and the Markdown stamp are separate channels, each with its own control.',
-    // DEFAULT = 'important-only', deliberately not 'off'. This setting mutates NOTHING itself (hence
-    // `escalates: []`), so the conservative-defaults rule — which is about machine changes — does not
-    // bind here; the risk it manages is attention, not damage.
+    // 1–5 DIAL (ADR-052, owner 2026-07-25: "a setting from 1 to 5 on how aggressive you want it to be
+    // to support you"). The runtime — plugin/scripts/unprompted-runtime.mjs, the SINGLE enforcement
+    // chokepoint (DDD-0004) — maps a level to {advocacy channel on/off, promotion channel on/off,
+    // severity floor}. No producer decides. DEFAULT = 3 (Balanced): advocacy on for relevant findings,
+    // promotion off — byte-identical to the old 'important-only' default, so nobody's behaviour changes
+    // on upgrade.
     //
-    // WHAT THIS DIAL ACTUALLY GOVERNS, corrected after the wiring report caught the copy overselling
-    // it: it is the volume knob on ONE channel — unsolicited advocacy/promotion of capabilities,
-    // emitted by plugin/scripts/anticipate.sh. It is NOT the master mute it was once sold as. Two
-    // other unsolicited channels ignore this dial entirely and carry their OWN controls:
-    //   • NAME lessons — gated by ratification + blocking-optin.json + RUVNET_LESSON_MAX_SHOWS, never
-    //     by this value.
-    //   • the Markdown grounding stamp (md-stamp) — a FILE MUTATION gated by RUVNET_MD_STAMP.
-    // And genuine failure alarms bypass the dial by design. So the old "off = nothing speaks at all"
-    // line was simply false, and is fixed below.
-    whyItMatters: 'This dial governs one thing: unsolicited advocacy for capabilities you did not ask about. It is not a master mute for everything the brain can say. Named lessons are a separate channel, surfaced under their own controls (ratification, blocking-optin.json, and RUVNET_LESSON_MAX_SHOWS), and the Markdown grounding stamp is a separate file mutation under RUVNET_MD_STAMP. Turning this dial down quiets capability advocacy and nothing else, and a genuine failure alarm reaches you no matter where it is set.',
-    // HONEST ABOUT THE WIRING: anticipate.sh, the only emitter this dial governs, branches on exactly
-    // one condition — `if (ADVOCACY === 'off') quit();` — and nothing else reads the value. So
-    // "important-only" and "all" produce IDENTICAL output today; the routine/important split does not
-    // exist in the emitter yet. Say that plainly, and scope "off" to the advocacy channel it actually
-    // silences rather than claiming it silences the lessons and md-stamp channels it does not touch.
-    downside: 'Today "important-only" and "all" behave identically — the only thing this dial currently changes is off vs. on, so every evidence-gated capability nudge speaks the same way at both levels; the finer routine-vs-important split is designed into the setting but not wired into the emitter yet. On "off", the advocacy channel is silent — but that is all it silences: named lessons still surface under their own controls, the md-stamp still writes under RUVNET_MD_STAMP, and a genuine failure alarm still reaches you.',
+    // LEGACY MIGRATION: pre-dial string values map to their nearest level rather than being rejected
+    // and silently reset to default (which would lose a real choice). off→1, important-only→3, all→4.
+    legacy: Object.freeze({ 'off': 1, 'important-only': 3, 'all': 4 }),
+    // Each level, named + what it ACTUALLY changes (kept honest against the runtime's LEVEL_POLICY; if
+    // that map changes, this copy changes with it). Levels 4–5 additionally enable the promotion
+    // channel — offers to promote lessons learned across your projects — which is also what lets the
+    // outcome ledger fill from users who opted into more help (ADR-052).
+    levels: Object.freeze({
+      1: { name: 'Only when I ask', what: 'Nothing unprompted — the brain speaks only when you open the console or run a command. Genuine failure alarms still reach you.' },
+      2: { name: 'Critical only', what: 'Unprompted only for high-severity findings (a corrupt store, a failing job). No routine suggestions, no lesson-promotion nudges.' },
+      3: { name: 'Balanced', what: 'High-confidence suggestions relevant to what you are doing, plus anything critical. No lesson-promotion nudges. The recommended default.' },
+      4: { name: 'Proactive', what: 'Everything in Balanced, plus offers to promote lessons it has learned across your projects to your global brain.' },
+      5: { name: 'Maximum help', what: 'The most forward: it also surfaces more loosely-relevant capabilities and optimizations. Best when you want it to teach you the stack.' },
+    }),
+    help: 'How much the brain jumps in unprompted, on a 1–5 dial (3 = Balanced, the default). It governs unsolicited capability advocacy and lesson-promotion nudges; genuine failure alarms are never gated by it, and named lessons carry their own controls.',
+    // This dial governs the advocacy + promotion channels, enforced centrally in the runtime. It is NOT
+    // a master mute: named lessons (ratification + blocking-optin.json + RUVNET_LESSON_MAX_SHOWS) and
+    // the Markdown grounding stamp (RUVNET_MD_STAMP) are separate channels with their own controls, and
+    // a genuine failure alarm bypasses the dial at every level by design.
+    whyItMatters: '1–5, from "only when I ask" to "maximum help". You set how forward the brain is; it records whether you act on what it offers, so it can prove it is helping rather than nagging. Higher levels offer more (and generate more of that feedback); lower levels stay quiet. Failure alarms reach you at every level, and named lessons are a separate channel with its own controls.',
+    downside: 'At 1 the brain never volunteers anything (alarms aside) — help only when you ask. At 2 it offers only high-severity findings; at 3 (default) also the clearly-relevant ones; at 4–5 it additionally nudges you to promote learned lessons and surfaces more optional capabilities. If a level feels too forward, dial it down — the change takes effect immediately, machine-wide. There is no level at which it hides a genuine failure, and this dial never touches named lessons or the md-stamp, which have their own controls.',
   }),
 
   Object.freeze({
@@ -242,8 +249,13 @@ export function validate(input) {
       if (typeof raw !== 'boolean') { errors.push({ key, reason: `expected true or false, got ${JSON.stringify(raw)} — using the default (${entry.default})` }); continue; }
       values[key] = raw;
     } else if (entry.type === 'enum') {
-      if (!entry.options.includes(raw)) { errors.push({ key, reason: `expected one of ${entry.options.join(' | ')}, got ${JSON.stringify(raw)} — using the default (${entry.default})` }); continue; }
-      values[key] = raw;
+      // Legacy-value migration: a pre-rename stored value maps to its current equivalent (entry.legacy)
+      // rather than being rejected and silently reset to the default — which would lose the user's real
+      // choice. Only defined for settings that were renamed (advocacy: off→1, important-only→3, all→4).
+      let v = raw;
+      if (entry.legacy && Object.prototype.hasOwnProperty.call(entry.legacy, raw)) v = entry.legacy[raw];
+      if (!entry.options.includes(v)) { errors.push({ key, reason: `expected one of ${entry.options.join(' | ')}, got ${JSON.stringify(raw)} — using the default (${entry.default})` }); continue; }
+      values[key] = v;
     }
   }
   return { ok: errors.length === 0, values, errors, warnings };
