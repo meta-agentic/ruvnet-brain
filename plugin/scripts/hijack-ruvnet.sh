@@ -12,7 +12,22 @@
 set +e
 DECISION="defer"   # "defer" = forceful advisory (recommended). "deny" = hard block. "ask" = prompt user.
 
-INPUT=$(cat 2>/dev/null)
+# BOUNDED READ (2026-07-27, ADR-055 F20) — same split as ground-ruvnet.sh: bash (what hook-shim.mjs
+# always dispatches) gets a read that cannot hang on a stdin that is never closed; a strict POSIX
+# shell keeps the size bound alone, because POSIX `read` has no timeout and faking one costs a fork
+# on every prompt. Either way the input can no longer be unbounded, which is what turned a 1MB
+# payload into a multi-second regex scan inside a 5s budget.
+INPUT=""
+if [ -n "$BASH_VERSION" ]; then
+  while IFS= read -r -t 2 _l; do
+    INPUT="$INPUT$_l"
+    [ ${#INPUT} -ge 32768 ] && break
+  done
+  [ -n "$_l" ] && INPUT="$INPUT$_l"
+  INPUT="${INPUT:0:32768}"
+else
+  INPUT=$(head -c 32768 2>/dev/null)
+fi
 command -v jq >/dev/null 2>&1 || { exit 0; }   # need jq for safe JSON; stay silent if absent.
 
 # Combine every field that can carry code/commands across Write / Edit / Bash (+ doc variants).

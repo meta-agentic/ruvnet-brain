@@ -38,7 +38,18 @@ set -uo pipefail
 # everything. Second hole found the same way as the first (the grep|sed parse). The rule this file
 # now obeys absolutely: A HOOK THAT CAN BLOCK MUST DEPEND ON NOTHING IT CANNOT GUARANTEE.
 INPUT=""
-while IFS= read -r _line || [ -n "$_line" ]; do INPUT+="$_line"; done
+# BOUNDED READ (2026-07-27, ADR-055 F20): an unqualified `read` never returns on a stdin that is
+# opened and never closed — measured across the mesh, 18 of 37 registered commands sat until the
+# harness killed them. Real Claude Code writes and closes, so this costs no normal turn; that is
+# exactly why a hook that CAN hang forever survives unnoticed. -t bounds the wait, and the string
+# is truncated AFTER the loop because a hook payload is one line with no newline, so `read` hands
+# the whole thing back at once and a per-iteration cap never fires.
+while IFS= read -r -t 2 _line; do
+  INPUT+="$_line"
+  [ ${#INPUT} -ge 65536 ] && break
+done
+[ -n "$_line" ] && INPUT+="$_line"
+INPUT="${INPUT:0:65536}"
 [ -n "$INPUT" ] || exit 0                      # nothing to inspect → never block
 
 # ── OPT-IN GATE. No profile = this user never asked for cost routing = we do not touch their tools. ──

@@ -9,8 +9,21 @@
 
 set -uo pipefail
 
+# BOUNDED READ. An unqualified `read` waits forever on a stdin that is opened and never closed, and
+# an unbounded accumulator turns a large payload into an unbounded regex scan. Claude Code always
+# writes the payload and closes, so neither costs a normal turn — which is exactly why a hook that
+# CAN hang survives: the only thing ending it is a timeout owned by someone else. -t 2 is ~40x a real
+# payload's delivery time; the size cap is ~30x the largest real payload. The trailing `[ -n "$_l" ]`
+# keeps the final unterminated line, which is what the original `||` clause was for.
 INPUT=""
-while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
+while IFS= read -r -t 2 _l; do
+  INPUT+="$_l"
+  [ ${#INPUT} -ge 65536 ] && break
+done
+# Truncate the ASSEMBLED string, not just each iteration: a hook payload is one line with no trailing
+# newline, so `read` hands back the whole thing at once in $_l and the in-loop cap never fires.
+[ -n "$_l" ] && INPUT+="$_l"
+INPUT="${INPUT:0:65536}"
 [ -n "$INPUT" ] || exit 0
 
 TOOL=""
@@ -33,7 +46,23 @@ case "$TOOL" in
     # Now: keep at most the first two tokens, and stop at the first token that carries DATA rather
     # than INTENT (contains = / @ : , is a flag, or is improbably long). "export FOO=secret" records
     # "export"; "cd /Users/me/ClientProject" records "cd". The learner only ever needed the verb.
-    re_c='"command"[[:space:]]*:[[:space:]]*"([^"]*)"'
+    # THE CAPTURE WAS MANGLED, and the mangling was invisible (fixed 2026-07-27).
+    #
+    # `"command"…"([^"]*)"` cannot cross a JSON-escaped quote — the exact bug hook-input.mjs exists to
+    # end — so `cd "/tmp/some dir"` captured the two bytes `cd \`, and that trailing backslash then
+    # broke the JSON line it was printed into. Measured on the owner's live queue:
+    #
+    #     {"tool":"Bash","action":"cd \"}      ← JSON.parse: Unterminated string at position 31
+    #
+    # learn-flush drops every unparseable line with a bare `continue`, so the capture reported success,
+    # the queue grew, and the learner received nothing. A pipe severed in the middle while both ends
+    # report health is this project's signature failure mode.
+    #
+    # The fix is to stop at the first quote OR backslash and take a PREFIX — no closing-quote anchor,
+    # because the first two tokens are all this hook ever wanted. A command that opens with a quoted
+    # path yields an empty prefix and is simply not captured, which is strictly better than writing a
+    # line that cannot be read back.
+    re_c='"command"[[:space:]]*:[[:space:]]*"([^"\]*)'
     if [[ $INPUT =~ $re_c ]]; then
       set -f                      # no globbing while we word-split untrusted text
       _n=0
@@ -56,7 +85,25 @@ case "$TOOL" in
 esac
 [ -n "$ACTION" ] || exit 0
 
-SID="${CLAUDE_SESSION_ID:-default}"
+# THE SESSION ID IS IN THE PAYLOAD WE ALREADY READ — and it was being thrown away.
+#
+# This read `${CLAUDE_SESSION_ID:-default}`, an env var Claude Code does not set, so EVERY session on
+# a machine appended to one shared `session-default.jsonl`. Measured on the owner's machine
+# 2026-07-27: one file, 147 lines deep, written concurrently by several live sessions — the same
+# many-writers-one-path shape as ADR-050, and it makes "this session's trajectory" a fiction, because
+# the queue is a blend of every session that happened to be open.
+#
+# `session_id` is a field on the very payload this hook already parsed. Prefer it; fall back to the
+# env var; then to 'default'. SANITISED before it becomes a filename component: the payload is
+# untrusted input, and `session_id` reaching an unfiltered path join is a traversal waiting to happen.
+SID=""
+re_s='"session_id"[[:space:]]*:[[:space:]]*"([^"\]*)"'
+[[ $INPUT =~ $re_s ]] && SID="${BASH_REMATCH[1]}"
+[ -n "$SID" ] || SID="${CLAUDE_SESSION_ID:-}"
+# Dots are dropped along with everything else outside this set: real session ids are uuids, and
+# keeping `.` would let a crafted id survive as `..`-shaped debris in a filename for no benefit.
+SID="${SID//[^A-Za-z0-9_-]/}"           # a filename COMPONENT, never a path
+[ -n "$SID" ] || SID="default"
 DIR="$HOME/.cache/ruvnet-brain/learn"
 # Owner-only (0700 dir / 0600 file). This queue was 0644 inside a 0755 dir: on macOS every local
 # account is normally in `staff`, so any other user on a shared or corporate machine could read it.
