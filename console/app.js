@@ -480,15 +480,20 @@ function jumpToRec(recId) {
   setTimeout(() => rec.querySelector('.btn-apply')?.focus(), 650);
 }
 
-/* Re-mirror the machine — used by the header ↻ button and auto-run after every apply/undo,
-   so the page always shows the AFTER state instead of a stale before. */
-async function recheckMachine() {
-  setChips('chips-stack', [chip('re-checking your machine…', 'wait')]);
-  announce('Re-checking your machine — every card will update to the current state.');
-  setChips('chips-capabilities', [chip('re-checking…', 'wait')]);
-  await Promise.allSettled([loadStack({ skipCache: true }), loadState(), loadCapabilities()]);
-  announce('Re-check complete.');
-}
+/* Re-mirror the machine — the header ↻ button, and auto-run after every apply/undo so the page shows
+   the AFTER state instead of a stale before.
+ *
+ * IT USED TO BE A PLACEBO (retired 2026-07-26, RVBC-INSTANT-SPEC #8). The old body re-fetched three
+ * endpoints and announced "Re-check complete." Every one of those endpoints is cache-first: it
+ * re-read the SAME cache it had just read, painted the same bytes, and declared the machine
+ * re-checked. Nothing was measured. Worse, it said so right after an apply — the one moment the user
+ * most needs to know whether the change actually took.
+ *
+ * There is now ONE refresh: expire the caches server-side, force a real measurement in the detached
+ * child, and report "done" only when a strictly newer measurement has actually landed. Both entry
+ * points (this button and the freshness pill) are the same function, because two controls that
+ * disagree about what "refreshed" means is how the placebo got written in the first place. */
+const recheckMachine = doManualRefresh;
 
 /* Jump-and-flash for a Settings row (provider chips land here) — same pattern as jumpToRec. */
 function jumpToSetting(key) {
@@ -1309,11 +1314,21 @@ function capsMissingEndpoint() {
     el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => { capsSkeleton(); loadCapabilities(); } }, 'Try again')));
 }
 
-async function loadCapabilities() {
+async function loadCapabilities(attempt = 0) {
   try {
     const r = await fetchCapabilities();
     if (r.status === 404) { capsMissingEndpoint(); return; }
     if (!r.ok) throw new Error(`/api/capabilities answered HTTP ${r.status}`);
+    if (r.data && r.data.warming) {
+      // "Not measured yet" is NOT "off" — this card's entire reason for existing. Rendering a
+      // warming answer would produce an empty row list, which on this surface says "you own
+      // nothing", the single most damaging thing this page could get wrong.
+      capsSkeleton();
+      setChips('chips-capabilities', [chip('checking each capability…', 'wait')]);
+      if (attempt < WARM_RETRY_MAX) setTimeout(() => { void loadCapabilities(attempt + 1); }, WARM_RETRY_MS);
+      else setChips('chips-capabilities', [chip('check is taking unusually long', 'warn')]);
+      return;
+    }
     renderCapabilities(r.data);
   } catch (err) {
     // A real failure (server down, unparseable JSON) gets the page's real failure treatment —
@@ -2666,7 +2681,9 @@ function buildSettingsForm(cfg, { endpoint }) {
  */
 function renderSettings(cfg, us, bp) {
   const body = $('#body-settings');
-  const groups = [bp, cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
+  // `bp` is NOT counted here any more: its field is rendered by #card-brain at the top of the page,
+  // and counting a control this card does not show would make the "N options" chip a lie by one.
+  const groups = [cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
   if (!groups.length) {
     setChips('chips-settings', [chip('no schema', 'grey')]);
     body.replaceChildren(el('p', { class: 'muted' }, 'No editable settings were received.'));
@@ -2684,27 +2701,207 @@ function renderSettings(cfg, us, bp) {
     groups.some((c) => c.exists === false) ? chip('not created yet', 'wait') : null].filter(Boolean));
 
   const main = [];
-  // THE MASTER SWITCH GOES FIRST (ADR-054). It is the setting every other setting on this page is
-  // conditional on — a volume knob below a power switch reads as more important than the power
-  // switch only if you put it above it. Its own endpoint, because a save writes the sentinel AND
-  // the mirror; the shared widget, because a bespoke control is one more thing to keep honest.
-  if (bp && Array.isArray(bp.schema) && bp.schema.length) {
-    main.push(buildSettingsForm(bp, { endpoint: '/api/save-brain-power' }));
-    // The disclosure, rendered from what the SERVER says keeps running — never re-typed here, so it
-    // cannot drift from the behaviour session-start.sh actually implements.
-    if (bp.off && bp.since) {
-      main.push(el('p', { class: 'fineprint' },
-        `Off since ${String(bp.since).slice(0, 10)}${bp.reason ? ` — ${bp.reason}` : ''}.`));
-    }
-    for (const note of (bp.notes || [])) main.push(el('p', { class: 'fineprint' }, note));
-    if (bp.disagreement) {
-      main.push(el('p', { class: 'fineprint warn' }, bp.disagreement.note));
-    }
+  // THE MASTER SWITCH MOVED OUT OF HERE (owner, 2026-07-27). It used to be rendered first in this
+  // card, on the reasoning that "a volume knob below a power switch reads as more important than the
+  // power switch". The reasoning was right and the placement was still wrong: this whole card sits
+  // several sections down the page, behind a chevron, so the owner opened the console looking for
+  // "a big on/off switch" and could not find it at all.
+  //
+  // It is now its own always-open card at the TOP of the page (#card-brain, renderBrainPower). This
+  // card keeps ONE line — a pointer — because the second-worst outcome after "can't find it" is
+  // "found two of them and they disagree".
+  if (bp && typeof bp.off === 'boolean') {
+    main.push(el('p', { class: 'fineprint' },
+      'The brain’s on/off switch is at the top of this page — it is ',
+      el('b', {}, bp.off ? 'off' : 'on'), ' right now. ',
+      el('button', {
+        class: 'btn btn-ghost btn-sm', type: 'button',
+        onclick: () => { document.getElementById('card-brain')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+      }, 'Take me to it')));
   }
   if (cfg && Array.isArray(cfg.schema) && cfg.schema.length) main.push(buildSettingsForm(cfg, { endpoint: '/api/save-config' }));
   if (us && Array.isArray(us.schema) && us.schema.length) main.push(buildSettingsForm(us, { endpoint: '/api/save-advocacy' }));
 
   body.replaceChildren(withIllo('settings', ...main));
+}
+
+/* ═══════════════════════════════════════════════════════════ BRAIN POWER — the master switch
+   Owner, 2026-07-27, after opening the console to look for it: "if it didn't show up in the console,
+   how can it be implemented?" ADR-054's switch was real, saved correctly, and rendered — as one
+   checkbox inside the Settings card, several sections below the things it governs, behind a chevron.
+   From where the user stands that is indistinguishable from not existing.
+
+   FOUR RULES THIS RENDERER KEEPS:
+     1. ONE SWITCH ON THE PAGE. Settings no longer renders the field; it points here. Two controls for
+        one machine state is how they end up disagreeing.
+     2. THE STATE IS READ, NEVER ASSUMED. Every paint comes from the server's resolved answer (the
+        SENTINEL, not the settings mirror). A click does not flip the visual — it posts, waits, and
+        re-reads. A switch that moves before the machine does is a lie with an animation on it.
+     3. THE COPY COMES FROM THE SCHEMA. whyItMatters/downside are rendered from the served field, never
+        re-typed here, so this card cannot drift from what user-settings.mjs actually says.
+     4. CONSENT FOR THE DESTRUCTIVE DIRECTION ONLY. Turning it OFF opens a confirm step carrying the
+        real consequences; turning it back ON is immediate, because there is nothing to warn about. */
+
+let bpBusy = false;
+
+function bpField(bp) {
+  return (bp && Array.isArray(bp.schema) && bp.schema[0]) || null;
+}
+
+function renderBrainPower(bp) {
+  const body = $('#body-brain');
+  if (!body) return;
+  if (!bp || typeof bp.off !== 'boolean') {
+    // NOT "on". An unreadable switch is reported as unreadable — the same rule the capabilities card
+    // lives by, applied to the one control that governs it.
+    setChips('chips-brain', [chip('can’t read the switch', 'nt')]);
+    body.replaceChildren(el('p', { class: 'muted' },
+      'The console could not read the on/off state from this machine, so it is not showing one. ',
+      'Nothing has changed; the switch file is the authority and it is untouched.'));
+    return;
+  }
+  const on = !bp.off;
+  const f = bpField(bp);
+  setChips('chips-brain', [chip(on ? 'ON' : 'OFF', on ? 'green' : 'amber')]);
+
+  const knob = el('span', { class: 'bp-track' }, el('span', { class: 'bp-knob' }));
+  const switchBtn = el('button', {
+    class: 'bp-switch', type: 'button', role: 'switch',
+    'aria-checked': on ? 'true' : 'false',
+    'aria-labelledby': 'card-brain-h',
+    disabled: bpBusy || null,
+    onclick: () => { if (on) bpAskToTurnOff(bp); else void bpFlip(true); },
+  }, knob, el('span', { class: 'bp-switch-label' }, on ? 'Turn it off' : 'Turn it back on'));
+
+  // The description is the SCHEMA's own `help` line (rule 3), so this card cannot say something
+  // different from what the settings store says about the same key.
+  const state = el('div', { class: 'bp-state' },
+    el('div', { class: 'bp-word' }, el('span', { class: 'bp-dot' }), on ? 'Your brain is ON' : 'Your brain is OFF'),
+    el('p', { class: 'bp-sub' }, f && f.help ? f.help : 'Whether the brain is working at all.'),
+    bp.off && bp.since
+      ? el('p', { class: 'bp-sub' }, `Off since ${String(bp.since).slice(0, 10)}${bp.reason ? ` — ${bp.reason}` : ''}.`)
+      : null);
+
+  const main = [
+    el('div', { class: `bp-row ${on ? 'bp-on' : 'bp-off'}`, id: 'bp-row' }, state, switchBtn),
+    el('div', { id: 'bp-confirm-slot' }),
+    el('div', { id: 'bp-result-slot' }),
+  ];
+
+  // What keeps running and what stops — from the SERVER's own list, so it can never drift from what
+  // session-start.sh actually does.
+  if (Array.isArray(bp.notes) && bp.notes.length) {
+    main.push(el('ul', { class: 'bp-notes' }, bp.notes.map((n) => el('li', {}, n))));
+  }
+  if (bp.disagreement) main.push(el('p', { class: 'fineprint bp-warn' }, bp.disagreement.note));
+  if (bp.switchPath) {
+    // .fn-path, not <code>: an absolute path is reference detail, and a full-width monospace block
+    // two lines tall out-shouts the switch it is a footnote to.
+    main.push(el('p', { class: 'fineprint' },
+      'The switch is a file — ', el('span', { class: 'fn-path' }, bp.switchPath),
+      ' — so it survives updates, and every part of the product reads the same one.'));
+  }
+  main.push(bpParts(bp));
+  body.replaceChildren(...main);
+}
+
+/* The consent step, shown only for OFF. The downside text is the schema's own. */
+function bpAskToTurnOff(bp) {
+  const slot = $('#bp-confirm-slot');
+  if (!slot) return;
+  const f = bpField(bp);
+  slot.replaceChildren(el('div', { class: 'bp-confirm', role: 'group', 'aria-label': 'Confirm turning the brain off' },
+    el('p', {}, f && f.downside
+      ? f.downside
+      : 'Turning it off stops retrieval, the grounding gate, everything it volunteers, and learning.'),
+    el('div', { class: 'bp-actions' },
+      el('button', { class: 'btn btn-apply', type: 'button', onclick: () => { void bpFlip(false); } }, 'Turn the brain off'),
+      el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => slot.replaceChildren() }, 'Keep it on'))));
+  slot.querySelector('button')?.focus();
+}
+
+/* POST, then RE-READ. The new state is whatever the server says after the write — never what we just
+   asked for. loadState() repaints this card from the same measured payload every other card uses. */
+async function bpFlip(next) {
+  if (bpBusy) return;
+  bpBusy = true;
+  const slot = $('#bp-result-slot');
+  $('#bp-confirm-slot')?.replaceChildren();
+  setChips('chips-brain', [chip(next ? 'switching on…' : 'switching off…', 'wait')]);
+  announce(next ? 'Switching the brain on.' : 'Switching the brain off.');
+  try {
+    const r = await postJSON('/api/save-brain-power', { values: { brainEnabled: next } });
+    const data = (r && r.data) || {};
+    if (!r.ok || !data.ok) {
+      slot?.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+        r.status === 403 ? TOKEN_MSG : `The switch did not move — ${data.log || `the console returned ${r.status}`}.`));
+    } else {
+      slot?.replaceChildren(el('div', { class: 'form-note n-ok', role: 'status' },
+        el('div', { class: 'fn-body' }, el('b', {}, data.off ? 'The brain is off.' : 'The brain is on.'), ' ', data.log)));
+      announce(data.log || 'Done.');
+    }
+  } catch (err) {
+    slot?.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+      `Couldn’t reach the console server: ${err.message || err}. Nothing was changed.`));
+  } finally {
+    bpBusy = false;
+    // Re-read rather than trusting the write's own echo: the sentinel on disk is the authority.
+    await loadState();
+  }
+}
+
+/* ── "Parts of the brain" — the honest state of per-piece control ───────────────────────────────────
+   The owner's second question, and the one a row of fake checkboxes would answer wrongly: where are
+   the sub-piece switches? The answer today is "one is real, one lives in Settings, one is still being
+   measured", and this block says exactly that. Every entry states its OWN control surface, so nobody
+   has to wonder again whether a piece is missing or merely elsewhere.
+
+   THE RULE THAT KEEPS IT HONEST is user-settings.mjs's own: a switch is not shipped until something
+   reads it. The remaining schema keys (learningScope, autoApply, newProjectDefaults) exist in the
+   settings store and are deliberately NOT rendered as controls, because nothing enforces them yet —
+   a row of checkboxes that govern nothing is the single fastest way to make every other switch on
+   this page untrustworthy. */
+function bpParts(bp) {
+  const off = !!bp.off;
+  const part = (title, chipText, tone, ...text) => el('div', { class: 'bp-part' },
+    el('div', { class: 'bp-part-h' }, el('b', {}, title), chip(chipText, tone)),
+    el('div', { class: 'bp-part-t' }, ...text));
+
+  // COLLAPSED, BUT NAMED. The owner's complaint was that he could not find the sub-piece controls —
+  // which a visible heading fixes. Leaving the whole block expanded would push the page's actual
+  // content a full screen down on every visit, so the answer to "where are they?" is on screen and
+  // the detail behind it is one click. It is NOT the switch itself: nothing about the power switch is
+  // ever behind a click.
+  return el('details', { class: 'bp-parts' },
+    el('summary', {}, el('h3', {}, 'Parts of the brain'), el('span', { class: 'bp-parts-hint' }, 'what is separately controllable, and what is not yet')),
+    el('p', { class: 'bp-parts-lead' },
+      'The switch above is all-or-nothing today. These are the pieces underneath it, and where each ',
+      'one is actually controlled — including the ones that are not controllable yet, and why.'),
+
+    part('Retrieval, grounding, learning', off ? 'off with the brain' : 'on with the brain', off ? 'grey' : 'green',
+      'The three things the switch above governs together. They are not separately switchable yet ',
+      'because each is enforced from the same sentinel file the switch writes.'),
+
+    part('Maintenance while it is off', 'in Settings', 'cyan',
+      'Version updates and the health alarm keep running even when the brain is off — an off machine ',
+      'has to be able to receive the fix for an off-state bug. The nightly refresh is the part of that ',
+      'you can pause: it is the ',
+      el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => jumpToSetting('nightly') }, 'Nightly brain refresh'),
+      ' switch in Settings.'),
+
+    part('Per-repo scoping', 'measured — shipping as smart-scope', 'amber',
+      'Whether the brain should answer only from the repo you are in. Measured 2026-07-26 over 16 ',
+      'questions, scoped against full: hard scoping helped questions that live entirely inside one ',
+      'repo, and made cross-repo answers confidently WRONG in 4 of the 4 cross-repo cases — a filter ',
+      'cannot know what it just hid. So it ships as smart-scope: the repo you are in biases the ',
+      'ranking, and anything from outside it arrives labelled as such, rather than being deleted from ',
+      'the answer. When that lands, its controls live in this block.'),
+
+    el('p', { class: 'fineprint' },
+      'There are three more switches in the settings file — what it learns from, whether it may act ',
+      'on its own, and whether new projects inherit these choices. They are deliberately not shown ',
+      'as controls here: nothing enforces them yet, and a switch that governs nothing would make ',
+      'every real switch on this page worth less.'));
 }
 
 /* -------------------------------------------------- section 7: trust & provenance
@@ -2905,30 +3102,36 @@ async function loadTrust() {
   }
 }
 
-/* ---------------------------------------------------------- freshness (owner directive 2026-07-26)
-   The server is cache-first: warm loads paint instantly from the LAST measurement while a detached
-   child re-measures — but until now the page never said how old the picture was, and the fresh
-   measurement only appeared on the NEXT open. This pill closes both gaps: it stamps the age in the
-   header, polls while a re-measure is running, repaints the sections the moment fresh data lands,
-   and gives the user a Refresh button so "is this current?" is never a feeling — it's a label. */
+/* ═════════════════════════════════════════════════ freshness (owner directive 2026-07-26/27)
+   THE PAGE CARRIES THE WAIT. The server never blocks: a cold or wrong-project read is answered
+   instantly with `{warming:true}` while a detached child measures. That moves the whole burden of
+   the wait here, to the only place that can carry it honestly — the visible page. So this block owns
+   three promises, and each exists because its opposite was shipped and hurt someone:
 
-let FRESH_BASE = null;      // measuredAt of what is currently painted
+     1. WARMING IS NARRATED, NEVER RENDERED AS EMPTY. A warming answer has no sections. Painting it
+        would tell a first-time user "you have no hooks, no memory, nothing configured" about a
+        machine nobody has looked at yet. Skeletons stay; the pill says what is happening.
+     2. THE AGE IS ALWAYS ON SCREEN. "Is this current?" must be a label, not a feeling.
+     3. ONE REFRESH STORY. One control (the header ↻ and this pill share one handler), one server
+        job, one definition of done. The previous ↻ re-fetched three cache-first endpoints and
+        announced "Re-check complete" — a placebo that measured nothing and said it had. */
+
+let FRESH_BASE = null;      // measuredAt of what is currently painted; null until something lands
 let freshPollTimer = null;
 let freshPollsLeft = 0;
 
 function freshnessPill() {
-  let wrap = document.getElementById('freshness-wrap');
-  if (!wrap) {
-    wrap = el('span', { id: 'freshness-wrap' },
-      el('span', { id: 'freshness-pill', class: 'chip tone-grey' }, '…'),
-      el('button', {
-        id: 'freshness-refresh', class: 'chip tone-cyan', type: 'button',
-        title: 'Re-measure this machine now',
-        onclick: () => { void doManualRefresh(); },
-      }, '\u21bb refresh'),
-    );
-    const a = $('#brain-ver') || $('#host-chip');
-    if (a && a.parentNode) a.parentNode.insertBefore(wrap, a.nextSibling);
+  let pill = document.getElementById('freshness-pill');
+  if (!pill) {
+    // A BUTTON, not a label: the age and the way to change it are the same affordance, so there is
+    // no second refresh control to disagree with the first.
+    pill = el('button', {
+      id: 'freshness-pill', class: 'chip tone-grey', type: 'button',
+      title: 'How old this picture of your machine is — click to measure it again now',
+      onclick: () => { void doManualRefresh(); },
+    }, '…');
+    const anchor = $('#recheck-btn');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(pill, anchor);
   }
   return document.getElementById('freshness-pill');
 }
@@ -2942,63 +3145,126 @@ function fmtAge(iso) {
   return `${Math.round(m / 60)}h ago`;
 }
 
-function renderFreshness(state, { polling = false } = {}) {
+/* A DELIBERATELY EXPIRED STAMP IS NOT AN AGE (found by looking at the rendered page, 2026-07-27).
+   The server withdraws a claim by BACK-DATING it to the epoch — expire, never delete — and every
+   write-path invalidation does it: /api/refresh on all four caches, setLesson on capabilities,
+   publishBrainPowerToCache on the state cache. Flipping the brain switch and looking at the header
+   produced, verbatim: "as of 495868h ago". That is a fabricated number on a user-facing surface,
+   about the freshness of the very thing this pill exists to be honest about. An epoch stamp means
+   "this reading was withdrawn on purpose"; a stamp we cannot parse means we do not know. Neither is
+   a duration, and neither may be printed as one. Pure so the test can run the shipped rule. */
+function stampWithdrawn(at) {
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return true;
+  const age = Date.now() - t;
+  // A couple of minutes of negative age is clock skew between the stamp and this tab, and fmtAge
+  // renders it as "just now". A year old, or genuinely from the future, is not an age at all.
+  return !(age >= -120_000 && age < 365 * 24 * 60 * 60 * 1000);
+}
+
+/* One pill, five honest states: warming (nothing measured yet), withdrawn (a reading was expired on
+   purpose), re-measuring (one is on its way), just-landed, and plain age. `warming` never sets
+   FRESH_BASE — there is no measurement to base anything on, and pretending otherwise would make the
+   next real one look like a repeat. */
+function renderFreshness(state, { polling = false, justLanded = false } = {}) {
   const pill = freshnessPill();
   if (!pill) return;
-  const at = state.measuredAt || state.cachedAt || state.generatedAt;
-  if (!state.fromCache) {
-    FRESH_BASE = at || FRESH_BASE;
+  if (state && state.warming) {
+    pill.className = 'chip tone-wait';
+    pill.textContent = 'measuring your machine… ~20s';
+    return;
+  }
+  const at = state && (state.measuredAt || state.cachedAt || state.generatedAt);
+  if (at) FRESH_BASE = at;
+  if (justLanded) {
     pill.className = 'chip tone-green';
     pill.textContent = 'measured just now';
     return;
   }
-  FRESH_BASE = at || FRESH_BASE;
-  pill.className = polling ? 'chip tone-cyan' : (state.stale ? 'chip tone-warn' : 'chip tone-grey');
-  pill.textContent = `as of ${at ? fmtAge(at) : 'a previous run'}${polling ? ' \u00b7 refreshing\u2026' : ''}`;
+  if (!at || stampWithdrawn(at)) {
+    pill.className = polling ? 'chip tone-cyan' : 'chip tone-warn';
+    pill.textContent = polling ? 're-measuring your machine…' : 'this reading was cleared — click to measure again';
+    return;
+  }
+  pill.className = polling ? 'chip tone-cyan' : (state && state.stale ? 'chip tone-warn' : 'chip tone-grey');
+  pill.textContent = `as of ${fmtAge(at)}${polling ? ' · re-measuring…' : ''}`;
 }
 
-function paintStateSections(state) {
-  renderHost(state.host, state.generatedAt);
-  const c = state.sections || {};
-  renderWiring(c.wiring);
-  lastMemory = c.memory;
-  renderMemory(c.memory);
-  renderSavings(c.savings);
-  renderSettings(c.config, c.userSettings, c.brainPower);
-  renderGates(c.gates);
+/* THE POLLER'S ONE RULE — pure, and named so it can be tested without a browser (see
+   tests/unit/console-freshness-poller.test.mjs, which lifts this exact source and runs it).
+
+   Repaint only on a STRICTLY NEWER, SETTLED measurement. Every clause is a bug that shipped:
+     • `!st.sections` — a warming answer has none; painting it empties the page.
+     • `st.stale !== false` — /api/refresh back-dates the stamp to the epoch ON PURPOSE (expire, do
+       not delete). The first poller compared `at !== FRESH_BASE`, so it read that withdrawal as an
+       arrival: it would have painted the deliberately-withdrawn claim and then gone green.
+     • strictly newer — a stamp that merely CHANGED can be older. Time only moves one way here. */
+function freshLanded(st, base) {
+  if (!st || st.warming || st.stale !== false || !st.sections) return false;
+  const at = st.measuredAt || st.cachedAt || st.generatedAt;
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return false;
+  if (!base) return true;              // nothing painted yet — the first settled answer IS the news
+  const b = Date.parse(base);
+  return !Number.isFinite(b) || t > b;
 }
 
 function startFreshnessPolling() {
   if (freshPollTimer) return;         // one poller, ever
-  freshPollsLeft = 40;                // 40 x 3s = 2 minutes, then give up quietly
+  freshPollsLeft = 60;                // 60 x 3s = 3 minutes, then give up ALOUD (never silently)
+  renderFreshness({ warming: !FRESH_BASE, measuredAt: FRESH_BASE, stale: true }, { polling: !!FRESH_BASE });
   freshPollTimer = setInterval(async () => {
-    if (--freshPollsLeft <= 0) { clearInterval(freshPollTimer); freshPollTimer = null; return; }
+    if (--freshPollsLeft <= 0) {
+      clearInterval(freshPollTimer); freshPollTimer = null;
+      // A poller that quits in silence leaves a "measuring…" pill sitting there forever, which reads
+      // as "still working" — the exact dead air this whole change exists to end.
+      const p = freshnessPill();
+      if (p) { p.className = 'chip tone-warn'; p.textContent = 'still measuring — click to try again'; }
+      announce('The background measurement has not landed yet. Click the freshness chip to try again.');
+      return;
+    }
     try {
       const st = await getJSON('/api/state?fast=1');
-      const at = st.measuredAt || st.cachedAt || st.generatedAt;
-      if (at && at !== FRESH_BASE && st.sections) {
+      if (freshLanded(st, FRESH_BASE)) {
         clearInterval(freshPollTimer); freshPollTimer = null;
-        paintStateSections(st);
-        FRESH_BASE = at;
-        const pill = freshnessPill();
-        if (pill) { pill.className = 'chip tone-green'; pill.textContent = 'measured just now'; }
-        announce('Machine state refreshed.');
+        FRESH_BASE = st.measuredAt || st.cachedAt || st.generatedAt;
+        // ONE painter — the same loadState() the first paint uses, so a polled repaint can never
+        // drift from an initial one. It also refreshes preStateHash and the recommendations, which a
+        // sections-only repaint silently left pointing at the pre-measurement machine.
+        await loadState({ landed: true });
+        // The other cards measure on their own clocks (stack, capabilities, fleet). Re-ask them here
+        // rather than letting the page claim page-wide freshness on the strength of state alone.
+        void loadStack();
+        void loadCapabilities();
+        announce('Your machine has been re-measured — the cards now show the new reading.');
       } else {
         renderFreshness(st, { polling: true });
       }
-    } catch { /* transient — next tick tries again */ }
+    } catch { /* transient — the next tick tries again */ }
   }, 3000);
-  const pill = freshnessPill();
-  if (pill) pill.textContent += ' \u00b7 refreshing\u2026';
 }
 
+/* THE refresh. Expires all four caches server-side (scope-preservingly), force-kicks the measuring
+   child past its debounce, then watches for the result. `started:false` is reported as such — a
+   refresh that did not start must never render as one that did. */
 async function doManualRefresh() {
   const pill = freshnessPill();
-  if (pill) { pill.className = 'chip tone-cyan'; pill.textContent = 're-measuring\u2026'; }
+  if (pill) { pill.className = 'chip tone-cyan'; pill.textContent = 're-measuring…'; }
+  setChips('chips-stack', [chip('re-measuring…', 'wait')]);
+  setChips('chips-capabilities', [chip('re-measuring…', 'wait')]);
+  announce('Re-measuring your machine. Each card updates as its own measurement lands.');
   const r = await postJSON('/api/refresh', {});
-  if (!r.ok) {
-    if (pill) { pill.className = 'chip tone-warn'; pill.textContent = 'refresh failed \u2014 try again'; }
+  const body = (r && r.data) || {};
+  if (!r || !r.ok || !body.ok) {
+    if (pill) { pill.className = 'chip tone-warn'; pill.textContent = 'refresh failed — click to try again'; }
+    announce('The refresh could not be started.');
     return;
+  }
+  if (body.started === false && pill) {
+    // Honest, and not an error: a measurement was already running, so this click joined it instead
+    // of starting a second full scan of the same machine.
+    pill.className = 'chip tone-cyan';
+    pill.textContent = 'a measurement is already running…';
   }
   if (freshPollTimer) { clearInterval(freshPollTimer); freshPollTimer = null; }
   startFreshnessPolling();
@@ -3006,32 +3272,32 @@ async function doManualRefresh() {
 
 /* ------------------------------------------------------------------ loaders */
 
-async function loadState() {
+/* ONE fetch, ONE painter (2026-07-26). This used to request /api/state TWICE — once with `?fast=1`
+   for an instant cache paint, then again for "the live gather". The server strips the query string
+   before routing, so both calls hit the identical cache-first handler: the second was a duplicate
+   that painted the same bytes twice and cost a round-trip on every open. There is now one call, and
+   the "live" reading arrives the only way it can without freezing the server — from the detached
+   child, via the freshness poller. */
+async function loadState({ landed = false } = {}) {
   try {
-    // Instant first paint from the last good gather, honestly stamped by renderHost's generatedAt —
-    // then the live gather replaces it. The fleet-wide memory scan makes the live call slow, so
-    // without this the page sits blank long enough to read as broken. Recommendations come from the
-    // live call only (same rule as loadStack) so nothing is added twice.
-    try {
-      const fast = await getJSON('/api/state?fast=1');
-      if (fast && fast.fromCache && fast.sections) {
-        const c = fast.sections;
-        renderHost(fast.host, fast.generatedAt);
-        renderWiring(c.wiring);
-        lastMemory = c.memory;
-        renderMemory(c.memory);
-        renderSavings(c.savings);
-        renderSettings(c.config, c.userSettings, c.brainPower);
-        renderGates(c.gates);
-        dismissStandby();
-        renderFreshness(fast);
-      }
-    } catch { /* no cache yet — the skeleton narration carries the wait */ }
     const state = await getJSON('/api/state');
-    preStateHash = state.preStateHash ?? state.generatedAt ?? null;
     $('#global-error').hidden = true;
+
+    // WARMING: NOTHING HAS BEEN MEASURED FOR THIS PROJECT YET. Paint NOTHING. Every render* below
+    // would turn a missing section into a positive claim — renderWiring(undefined) prints "No wiring
+    // data received", renderGates(undefined) prints "No gate data received" — which is a page-wide
+    // "your machine is empty" shown to someone whose machine simply has not been looked at yet. The
+    // skeletons already on the page are the honest picture; the pill narrates the wait.
+    if (state.warming) {
+      renderFreshness(state);
+      startFreshnessPolling();
+      return;
+    }
+
+    preStateHash = state.preStateHash ?? state.generatedAt ?? null;
     renderHost(state.host, state.generatedAt);
     const s = state.sections || {};
+    renderBrainPower(s.brainPower);
     renderWiring(s.wiring);
     lastMemory = s.memory;
     renderMemory(s.memory);
@@ -3041,11 +3307,11 @@ async function loadState() {
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);
     dismissStandby(); // first cards are hydrated — the standby line has done its job
-    renderFreshness(state);
-    // Warm serve = the picture is the LAST measurement and a background re-measure is already
-    // running (serveCached kicks it) — track it to completion so fresh data lands on THIS page
-    // open, not the next one.
-    if (state.fromCache) startFreshnessPolling();
+    renderFreshness(state, { justLanded: landed });
+    // Chase the next measurement only when this one is actually OLD. Chasing a fresh reading would
+    // never terminate: every warm serve kicks a background refresh, whose result is strictly newer,
+    // which would repaint and kick again, forever.
+    if (state.stale && !landed) startFreshnessPolling();
     void loadMemoryFleet(); // 100+ stores at ~90ms each — lands after the page is already usable
   } catch (err) {
     dismissStandby(); // don't say "stand by" over an error banner
@@ -3150,9 +3416,23 @@ function renderGates(g) {
   body.replaceChildren(...main);
 }
 
-async function loadMemoryFleet() {
+/* Re-ask an endpoint that answered `warming`, on the same 3s cadence as the freshness poller and
+   with the same 3-minute ceiling. Shared by the two cards that load independently of /api/state, so
+   there is one retry cadence on this page rather than three that drift. */
+const WARM_RETRY_MS = 3000;
+const WARM_RETRY_MAX = 60;
+
+async function loadMemoryFleet(attempt = 0) {
   try {
     const m = await getJSON('/api/memory');
+    if (m && m.warming) {
+      // The fleet scan is the slowest thing the console does. Until it lands, the memory card keeps
+      // whatever /api/state already gave it and simply does not claim a fleet — it must never render
+      // "0 projects", which on this card would read as "nothing on your machine learns anything".
+      if (attempt < WARM_RETRY_MAX) setTimeout(() => { void loadMemoryFleet(attempt + 1); }, WARM_RETRY_MS);
+      else recsSettled('health', false);   // gave up: say so, never let silence read as an all-clear
+      return;
+    }
     if (m && Array.isArray(m.fleet) && lastMemory) {
       lastMemory = { ...lastMemory, fleet: m.fleet };
       renderMemory(lastMemory);
@@ -3169,22 +3449,19 @@ async function loadMemoryFleet() {
   }
 }
 
-async function loadStack({ skipCache = false } = {}) {
+/* ONE fetch, same reason as loadState: `?fast=1` and the bare URL route to the identical cache-first
+   handler (the server strips the query string), so the old two-call sequence painted the same bytes
+   twice. The stack audit is the endpoint that answered COLD in 23.6 SECONDS on the request path
+   before the instant-open fix; it is now measured only in the detached child. */
+async function loadStack(attempt = 0) {
   try {
-    // Instant first paint from the last good audit, honestly labeled — then the live re-check
-    // replaces it. skipCache=true (used right after an apply/undo) goes straight to the live
-    // audit so the page shows the AFTER state, never the stale before.
-    if (!skipCache) {
-      try {
-        const fast = await getJSON('/api/stack?fast=1');
-        if (fast && fast.fromCache && Array.isArray(fast.packages)) {
-          renderStack(fast);
-          const when = fast.cachedAt ? new Date(fast.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'earlier';
-          setChips('chips-stack', [chip(`as of ${when}`, 'cyan'), chip('re-checking…', 'wait')]);
-        }
-      } catch { /* no cache yet — the skeleton narration carries the wait */ }
-    }
     const stack = await getJSON('/api/stack');
+    if (stack && stack.warming) {
+      setChips('chips-stack', [chip('auditing your stack…', 'wait')]);
+      if (attempt < WARM_RETRY_MAX) setTimeout(() => { void loadStack(attempt + 1); }, WARM_RETRY_MS);
+      else { setChips('chips-stack', [chip('audit is taking unusually long', 'warn')]); recsSettled('stack', false); }
+      return;   // skeleton stays: an empty package list would read as "nothing is installed"
+    }
     renderStack(stack);
     addRecommendations(stack.recommendations, 'stack');
     recsSettled('stack', true);
@@ -3345,14 +3622,44 @@ const MOCK_CAPABILITIES = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* MOCK PARITY WITH THE FRESHNESS CONTRACT (RVBC-INSTANT-SPEC #7).
+ *
+ * The mock existed so the page could be styled without a server — and it silently stopped matching
+ * the server the day cache-first serving landed: it answered `/api/state` with no `fromCache`, no
+ * `measuredAt`, no `stale`, and it had no answer at all for `?fast=1` (the poller's URL) or for the
+ * warming state. So the three states the freshness work exists to make visible — warming, stale,
+ * just-landed — were the exact three a designer could not see. A fixture that cannot show the new
+ * states is a fixture that guarantees they will be styled by guesswork.
+ *
+ * `?mock=1&state=warming|stale|fresh` picks the variant; the default is a stale warm serve, which is
+ * what a real re-open looks like. The stamps are computed at call time so ages read believably. */
+const MOCK_VARIANT = new URLSearchParams(location.search).get('state') || 'stale';
+
+function mockState() {
+  if (MOCK_VARIANT === 'warming') {
+    return { warming: true, scope: '/Users/you/Code/your-project', kicked: true, fromCache: false, measuredAt: null, ageMs: null, stale: true };
+  }
+  const ageMs = MOCK_VARIANT === 'fresh' ? 4_000 : 46 * 60_000;   // fresh: seconds; stale: past the 15m ceiling
+  const at = new Date(Date.now() - ageMs).toISOString();
+  return { ...structuredClone(MOCK_STATE), generatedAt: at, fromCache: true, cachedAt: at, measuredAt: at, ageMs, stale: ageMs > 15 * 60_000 };
+}
+
 async function mockGet(url) {
-  if (url === '/api/state') { await sleep(250); return structuredClone(MOCK_STATE); }
-  if (url === '/api/stack') { await sleep(2400); return structuredClone(MOCK_STACK); }
+  // The server routes on the path alone (it strips the query string), so the mock must too —
+  // otherwise `?fast=1` throws "no mock" and the poller looks broken only in mock.
+  const p = url.split('?')[0];
+  if (p === '/api/state') { await sleep(250); return mockState(); }
+  if (p === '/api/stack') { await sleep(2400); return structuredClone(MOCK_STACK); }
+  if (p === '/api/memory') { await sleep(1200); return { fleet: MOCK_STATE.sections.memory.fleet, recommendations: [] }; }
   throw new Error(`no mock for ${url}`);
 }
 
 async function mockPost(url, body) {
   await sleep(850);
+  if (url === '/api/refresh') return { status: 200, ok: true, data: { ok: true, refreshing: true, started: true } };
+  if (url === '/api/save-brain-power') {
+    return { status: 200, ok: true, data: { ok: true, off: !!(body.values || {}).off, log: 'mock: the switch moved and was read back from disk' } };
+  }
   if (url === '/api/apply') {
     return { status: 200, ok: true, data: { results: (body.ids || []).map((id) => ({
       id, ok: true, undoToken: `undo-${id}`,

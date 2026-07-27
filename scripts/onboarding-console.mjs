@@ -727,14 +727,14 @@ function setLesson(body) {
 }
 
 // ── Brain activity read-model (ADR-0018) — read-only, file reads + sqlite3 CLI only ──────────────
-// Fleet scan is cached for 10 min: ~50 stores × a CLI spawn each is fine once, not per poll.
-// 2026-07-17 (Stuart: "work faster" — measured 49s cold vs 1.8s warm): the cache now PERSISTS to
-// disk and hydrates at boot, so a fresh server paints real data instantly with its honest
-// "scanned at HH:MM" stamp; an expired cache is served stale while the re-scan runs BEHIND the
-// response (setImmediate), never on the request that triggered it. First-ever run (no disk cache
-// at all) still scans inline — there is nothing older to serve, and no number beats a fake one.
+// Fleet scan is cached: ~50-100 stores × a CLI spawn each is fine once, not per poll.
+// 2026-07-17 (Stuart: "work faster" — measured 49s cold vs 1.8s warm): the cache PERSISTS to disk and
+// hydrates at boot, so a fresh server paints real data instantly with its honest "scanned at HH:MM"
+// stamp. 2026-07-26 (RVBC-INSTANT-SPEC #5): the SCAN ITSELF now runs only in the detached
+// --refresh-cache child. A request never scans — not inline on a first-ever run, and not via
+// setImmediate either (deferring synchronous work still blocks the loop when it runs). A machine with
+// no fleet scan yet is reported `warming`, never as a fabricated zero.
 let ACTIVITY_MACHINE_CACHE = null;
-let FLEET_REFRESHING = false;
 const CONSOLE_CACHE_PATH = path.join(HOME, '.cache/ruvnet-brain/console-cache.json');
 
 // ── Warm-cache serving (2026-07-17, the demo-hang fix) ─────────────────────────────────────────────
@@ -834,13 +834,21 @@ function computeCapabilities() {
   return { at: new Date().toISOString(), data: { rows, advocacy: { precision: prec, reconciled, reconciledIgnored } } };
 }
 
-function expireCachesEmbedding(files) {
+export function expireCachesEmbedding(files) {
   for (const f of files) {
     try {
       const j = readJSON(f);
       if (!j || !j.data) continue;
       j.at = new Date(0).toISOString();      // epoch ⇒ unambiguously past any ceiling
-      writeCache(f, j.at, j.data);
+      // SCOPE SURVIVES THE EXPIRY (fixed 2026-07-26, RVBC-INSTANT-SPEC #3). This was
+      // `writeCache(f, j.at, j.data)` — three arguments — and writeCache's fourth parameter defaults
+      // to null, so every expiry silently erased WHICH PROJECT the measurement belonged to. Against a
+      // project-scoped read that null is a scope MISMATCH, and a mismatch is treated as cold. So the
+      // helper written to avoid the freeze ("EXPIRE, DO NOT DELETE — with no cache file the next
+      // request takes the COLD path") reintroduced the cold path by another door: not by deleting the
+      // file, by deleting its identity. Cold no longer computes inline, but a de-scoped cache still
+      // throws away a perfectly good measurement and blanks the page until the child lands.
+      writeCache(f, j.at, j.data, j.scope ?? null);
     } catch { /* a cache we cannot rewrite is one the next reader will recompute anyway */ }
   }
 }
@@ -907,9 +915,29 @@ function writeCache(file, at, data, scope = null) {
   try { atomicWriteJSON(file, { at, data, scope }); }
   catch { /* a cache write must never break a response */ }
 }
-function kickRefresh() {
+/**
+ * Spawn the detached `--refresh-cache` child that does ALL the measuring.
+ *
+ * @param {{force?: boolean}} opts  `force` bypasses the 15s time debounce. It exists for the two
+ *   callers where a debounced no-op would be a LIE to the user: a COLD/scope-mismatched read (there
+ *   is nothing to serve, so "we'll get to it within 15 seconds" means a blank page for 15 seconds)
+ *   and the explicit Refresh button (it must answer "yes, I started one", not silently drop the
+ *   click and still return ok — RVBC-INSTANT-SPEC #3).
+ * @returns {boolean} whether a child was actually started. Reported to the page rather than
+ *   swallowed: a refresh that did not start must not render as one that did.
+ *
+ * ONE SCAN AT A TIME, force or not. The page opens four heavy endpoints at once and then polls, so a
+ * force that ignored an in-flight child would fan out into six concurrent full-machine scans — the
+ * cure becoming the disease. The in-flight guard has its own expiry (a child that has not exited in
+ * five minutes is presumed wedged, not working) so one bad scan can never disable refreshing for the
+ * life of the server.
+ */
+let REFRESH_CHILD = null;
+const REFRESH_WEDGED_MS = 5 * 60 * 1000;
+function kickRefresh({ force = false } = {}) {
   const now = Date.now();
-  if (now - LAST_REFRESH_KICK < 15000) return;   // debounce: at most one background refresh / 15s
+  if (REFRESH_CHILD && now - LAST_REFRESH_KICK < REFRESH_WEDGED_MS) return false;  // one at a time
+  if (!force && now - LAST_REFRESH_KICK < 15000) return false;   // debounce: at most one background refresh / 15s
   LAST_REFRESH_KICK = now;
   try {
     // cwd = the SERVED project, NOT REPO. This was `cwd: REPO` and it was a real console-honesty bug
@@ -923,8 +951,13 @@ function kickRefresh() {
     // for them; it only fixes the project-scoped ones. NOT a change to the withhold-vs-recompute
     // contract (the 2026-07-17 outage) — only to which project the background compute is about.
     const child = spawn(process.execPath, [SELF, '--refresh-cache'], { detached: true, stdio: 'ignore', cwd: process.cwd() });
+    REFRESH_CHILD = child;
+    // unref() only releases the event-loop hold; these listeners still fire while the server lives.
+    child.on('exit', () => { REFRESH_CHILD = null; });
+    child.on('error', () => { REFRESH_CHILD = null; });
     child.unref();   // let it outlive this request; it writes the caches and exits on its own
-  } catch { /* best-effort: a failed spawn just means the cache ages until the next kick */ }
+    return true;
+  } catch { REFRESH_CHILD = null; return false; /* a failed spawn just means the cache ages until the next kick */ }
 }
 
 /**
@@ -1037,27 +1070,53 @@ function freshnessOf(measuredAt) {
   };
 }
 
-function serveCached(res, file, compute, decorate = (d) => d, scopeKey = null) {
+/**
+ * THE WARMING ANSWER — one shape, every endpoint, always instant.
+ *
+ * `warming: true` is a first-class response, not an error and not an empty payload: "no measurement
+ * exists for this project yet; one is being taken; ask again in a moment." The page reads it and
+ * KEEPS its skeletons — it must never render a warming answer as empty sections, which would say
+ * "you have nothing configured" to someone whose machine simply has not been looked at yet.
+ *
+ * `stale: true` is deliberate and not a contradiction: there is no current measurement here, so
+ * every consumer of the shared freshness contract must treat this as "do not present as fact."
+ */
+function warmingAnswer(scopeKey, kicked) {
+  return { warming: true, scope: scopeKey ?? null, kicked, fromCache: false, measuredAt: null, ageMs: null, stale: true };
+}
+
+function serveCached(res, file, decorate = (d) => d, scopeKey = null) {
   const c = readJSON(file);
 
   // WRONG PROJECT IS AS GOOD AS NO DATA. When a caller passes a scopeKey (the served project, for the
   // project-specific caches), a cached record computed for a DIFFERENT project must never be served —
   // that is the cross-project "looks on but isn't" bug (found 2026-07-24: two consoles, or one opened
-  // in project B after A, sharing a user-level cache file). Treating a scope mismatch as cold makes
-  // the next line recompute for THIS project and re-stamp the scope. It is the same one-time cold
-  // cost as a first-ever load — NOT the warm-over-ceiling recompute the 2026-07-17 outage was about.
+  // in project B after A, sharing a user-level cache file).
   const scopeMismatch = scopeKey != null && (!c || c.scope !== scopeKey);
 
-  // COLD ONLY. No prior measurement (or a measurement for the wrong project) means there is nothing
-  // to serve, so this one request eats the compute to seed the cache — the 2026-07-17 bargain.
+  // ── COLD, OR THE WRONG PROJECT: ANSWER IN MICROSECONDS, MEASURE IN A CHILD ──────────────────────
+  //
+  // THE THREE MINUTES OF DEAD AIR (owner, 2026-07-26/27) ENDED ON THIS BRANCH. It used to read
+  // "this one request eats the compute to seed the cache — the 2026-07-17 bargain", and the bargain
+  // was mispriced on two counts:
+  //
+  //   1. COLD IS NOT RARE, IT IS THE SECOND PROJECT. The caches are single user-level files keyed by
+  //      one `scope`. Open the console in project B after project A and B is a scope mismatch —
+  //      i.e. cold — every time. "Cold once, then warm forever" was only ever true of a machine with
+  //      exactly one project on it.
+  //   2. IT WAS NEVER ONE REQUEST. Node is single-threaded: an inline gather freezes the WHOLE
+  //      server — the static page, every other endpoint, the token check, all of it — and the page
+  //      opens four heavy endpoints at once, so the freezes queued end to end. Measured on this
+  //      file's own fixture at the moment of the fix: /api/stack alone answered cold in 23,640 ms.
+  //
+  // The child already computes every one of these caches (see `--refresh-cache` at the bottom of
+  // this file) and writes each one the moment it is ready. So there is nothing for a request handler
+  // to do here except say so and get out of the way. There is no longer a `compute` parameter to
+  // pass: the guarantee is now structural rather than a rule someone has to remember, and the
+  // duplicate compute closures the handlers used to carry (which had ALREADY drifted from the
+  // child's copies once — see the MEMORY_CACHE note in --refresh-cache) are gone with it.
   if (!c || !c.data || scopeMismatch) {
-    try {
-      const { at, data } = compute();
-      writeCache(file, at, data, scopeKey);
-      return sendJSON(res, 200, { ...decorate(data), fromCache: false, ...freshnessOf(at) });
-    } catch (e) {
-      return sendJSON(res, 200, decorate({ warming: true, error: String(e && e.message || e) }));
-    }
+    return sendJSON(res, 200, warmingAnswer(scopeKey, kickRefresh({ force: true })));
   }
 
   // WARM — including over-ceiling. Never compute inline here; hand back what we measured, say when,
@@ -1088,8 +1147,36 @@ function loadConsoleCache() {
 function saveConsoleCache() {
   // Same torn-write risk as every other cache in this file (Task 4) — routed through the same atomic
   // helper rather than its own bare writeFileSync.
-  try { atomicWriteJSON(CONSOLE_CACHE_PATH, { activity: ACTIVITY_MACHINE_CACHE, trust: TRUST_CACHE }); }
-  catch { /* cache persistence must never break a read */ }
+  //
+  // MERGE, DON'T CLOBBER (2026-07-26). This file holds TWO independent measurements and, since the
+  // fleet scan moved off the request path, TWO independent writers: the server (which has a TRUST_CACHE
+  // and, after adoptFleetFromDisk, a fleet) and the detached --refresh-cache child (which scans the
+  // fleet and has no trust at all). Writing the in-memory pair wholesale meant the child's fleet write
+  // would have blanked the trust card's cache to null every single refresh — the same "a cache writer
+  // that knew about half the payload" defect this file has already paid for once, in --refresh-cache's
+  // MEMORY_CACHE. Each half now falls back to what is already on disk.
+  try {
+    const prev = readJSON(CONSOLE_CACHE_PATH) || {};
+    atomicWriteJSON(CONSOLE_CACHE_PATH, {
+      activity: ACTIVITY_MACHINE_CACHE ?? prev.activity ?? null,
+      trust: TRUST_CACHE ?? prev.trust ?? null,
+    });
+  } catch { /* cache persistence must never break a read */ }
+}
+
+/**
+ * Pick up a fleet scan performed by ANOTHER process (the detached --refresh-cache child).
+ *
+ * STRICTLY NEWER ONLY. Adopting an equal-or-older record would let a slow child's write walk a live
+ * server backwards to a scan it has already superseded. Cheap: one small JSON read, no scan.
+ */
+function adoptFleetFromDisk() {
+  try {
+    const j = readJSON(CONSOLE_CACHE_PATH);
+    if (j && j.activity && j.activity.at && (!ACTIVITY_MACHINE_CACHE || j.activity.at > ACTIVITY_MACHINE_CACHE.at)) {
+      ACTIVITY_MACHINE_CACHE = j.activity;
+    }
+  } catch { /* no cache yet — the caller kicks a child and reports `warming` */ }
 }
 function refreshFleetCache() {
   const projects = [];
@@ -1162,20 +1249,32 @@ function gatherActivity(cwd) {
   // dated the whole response before a single row of it had been read.
   const measuredAt = new Date().toISOString();
 
-  // MACHINE-WIDE FLEET SCAN — brought under the ONE ceiling every other cache in this file already
-  // obeys (CACHE_MAX_AGE_MS), replacing the bespoke 600000 this used to hardcode privately. A restored
-  // ACTIVITY_MACHINE_CACHE (loadConsoleCache(), at server boot) carries whatever age it truly has —
-  // this is where that age is finally checked against the same rule as everything else, rather than
-  // served as current no matter how old.
+  // MACHINE-WIDE FLEET SCAN — NEVER ON THIS THREAD (RVBC-INSTANT-SPEC #5).
+  //
+  // This walk opens 100+ SQLite stores across every scan root: 40s+ on a real machine. It used to run
+  // here two ways, both of them on the server's only thread:
+  //   • `refreshFleetCache()` outright, whenever no fleet had ever been scanned — i.e. on the very
+  //     first open, the one moment a new user is watching a blank tab;
+  //   • `setImmediate(refreshFleetCache)` when the fleet was over the ceiling. setImmediate is not
+  //     backgrounding — deferring synchronous work still blocks the loop when it finally runs, one
+  //     tick later, which is a distinction this file learned the hard way in 2026-07-17 and then
+  //     re-introduced here.
+  // Both are now the detached child's job. A request only ever READS.
+  //
+  // adoptFleetFromDisk() is what closes the loop: the child is a separate process, so it cannot
+  // hand this one an in-memory result — it writes console-cache.json and this picks it up, strictly
+  // newer only, on the next read. Without it the server would sit on `warming` forever.
+  adoptFleetFromDisk();
   if (!ACTIVITY_MACHINE_CACHE) {
-    refreshFleetCache(); // first-ever run: nothing older to serve honestly, nothing to withhold
-  } else if (Date.now() - ACTIVITY_MACHINE_CACHE.at > CACHE_MAX_AGE_MS && !FLEET_REFRESHING) {
-    // WITHHOLD, NEVER BLOCK: this response gets the stale-but-stamped scan below; the re-scan runs
-    // behind it. (Single-threaded server: the background scan can still delay a CONCURRENT request —
-    // same as before this fix, but never again the request that asked.)
-    FLEET_REFRESHING = true;
-    setImmediate(() => { try { refreshFleetCache(); } finally { FLEET_REFRESHING = false; } });
+    // NOTHING TO WITHHOLD AND NOTHING TO FAKE: say it is being measured, and say nothing else.
+    // `totalMemories: null` (not 0) on purpose — a zero here would read as "no memories anywhere on
+    // your machine", which is the product's cardinal lie, told about the one number this card exists
+    // for. The frontend renders `warming` as a skeleton, never as an empty fleet.
+    kickRefresh();
+    out.machine = { warming: true, projects: [], totalMemories: null, scannedAt: null, measuredAt: null, ageMs: null, stale: true };
+    return { generatedAt: measuredAt, ...out, ...freshnessOf(measuredAt) };
   }
+  if (Date.now() - ACTIVITY_MACHINE_CACHE.at > CACHE_MAX_AGE_MS) kickRefresh();
   const machineMeasuredAt = new Date(ACTIVITY_MACHINE_CACHE.at).toISOString();
   out.machine = {
     projects: ACTIVITY_MACHINE_CACHE.projects,
@@ -2043,14 +2142,24 @@ function readBody(req) { return new Promise((resolve) => { let b = ''; req.on('d
  * So on macOS we also `activate` the browser. Raising a window the user asked for is not a
  * surprise; leaving them looking at the wrong app while claiming success is.
  */
+/* ASYNCHRONOUS, ALWAYS (RVBC-INSTANT-SPEC #5). This runs inside the `server.listen()` callback, so
+   every synchronous millisecond here is a millisecond the freshly-opened tab spends waiting for its
+   own first byte. `spawnSync(open)` costs a launch-services round-trip and `spawnSync(osascript)`
+   was capped at EIGHT SECONDS — which is to say the browser could have the tab while the server that
+   is supposed to answer it was blocked, by the very act of opening it. Detached + unref'd spawns
+   start the same processes without ever holding the loop. */
 function openBrowser(url) {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  try { spawnSync(opener, [url], { stdio: 'ignore' }); } catch { /* headless is fine */ }
+  const bg = (cmd, args, opts = {}) => {
+    try { const c = spawn(cmd, args, { stdio: 'ignore', detached: true, ...opts }); c.on('error', () => {}); c.unref(); }
+    catch { /* headless is fine */ }
+  };
+  bg(opener, [url]);
   if (process.platform !== 'darwin') return;
   // Bring whichever browser now holds the tab to the front. Best-effort and silent: a failure here
   // must never break serving the page.
-  try {
-    spawnSync('osascript', ['-e', `
+  {
+    bg('osascript', ['-e', `
       tell application "System Events"
         set brs to name of every application process whose bundle identifier is in ¬
           {"com.google.Chrome","com.apple.Safari","company.thebrowser.Browser","org.mozilla.firefox","com.brave.Browser"}
@@ -2061,8 +2170,8 @@ function openBrowser(url) {
           exit repeat
         end try
       end repeat
-    `], { stdio: 'ignore', timeout: 8000 });
-  } catch { /* no browser scriptable — the tab still exists */ }
+    `], { timeout: 8000 });   // spawn's own timeout kills a wedged osascript; it never blocks us
+  }
 }
 function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = false, cwd = process.cwd() } = {}) {
   const server = http.createServer(async (req, res) => {
@@ -2079,10 +2188,9 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       // serveCached above and the --refresh-cache CLI mode. TOKEN is injected at serve time so it
       // never has to live in the on-disk cache.
       if (req.method === 'GET' && url === '/api/state') {
-        return serveCached(res, STATE_CACHE,
-          () => { const st = gatherState(cwd, { fleet: false }); const { token, ...safe } = st; return { at: st.generatedAt, data: safe }; },
-          (d) => ({ ...d, token: TOKEN }),
-          cwd);   // project-scoped: never serve another project's cached state
+        // project-scoped: never serve another project's cached state. The measuring lives in the
+        // --refresh-cache child; this handler only ever reads a file and stamps the token on it.
+        return serveCached(res, STATE_CACHE, (d) => ({ ...d, token: TOKEN }), cwd);
       }
       // ── /api/capabilities — "what do I own, and is it on?" ──────────────────────────────────────
       //
@@ -2100,7 +2208,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
       // each state, which is far too slow for a first paint but is exactly why the answers are
       // trustworthy: every row is DERIVED on this machine, never asserted.
       if (req.method === 'GET' && url === '/api/capabilities') {
-        return serveCached(res, CAPABILITY_CACHE, computeCapabilities, (d) => d, cwd);
+        return serveCached(res, CAPABILITY_CACHE, (d) => d, cwd);
       }
       if (req.method === 'GET' && url === '/api/memory') {
         // THE THESIS, FINALLY CONNECTED (ADR-027, 2026-07-22).
@@ -2113,27 +2221,16 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         //
         // It rides /api/memory rather than /api/state because it needs the fleet scan (100+ SQLite
         // stores at ~90ms each) and a `ruflo hooks intelligence --status` round-trip. That is far too
-        // slow for first paint, and this endpoint already hydrates late for exactly that reason. The
-        // fleet computed here is handed straight to the recommendation builder instead of being
-        // re-read from cache, so the advice is derived from the same scan the user is looking at.
-        return serveCached(res, MEMORY_CACHE, () => {
-          const fleet = scanFleet();
-          let recommendations = [];
-          try {
-            const health = scoreMemoryHealth({ project: path.basename(cwd), probes: probeMemory(cwd) });
-            recommendations = buildHealthRecommendations({ memory: health, learning: { ...observeLearning(), fleet } });
-          } catch { /* advocacy is advisory — it may never break the page that shows your machine */ }
-          return { at: new Date().toISOString(), data: { fleet, recommendations } };
-        }, (d) => d, cwd);   // project-scoped: memory health + recs are about THIS project
+        // slow for first paint — so it is measured ONLY in the --refresh-cache child, which builds
+        // the fleet and hands it straight to the recommendation builder so the advice is derived
+        // from the same scan the user is looking at.
+        return serveCached(res, MEMORY_CACHE, (d) => d, cwd);   // project-scoped: health + recs are about THIS project
       }
       if (req.method === 'GET' && url === '/api/stack') {
-        // TASK 3: `data: gatherStack()` must not be evaluated as a property inside the SAME object
-        // literal as `at: new Date().toISOString()` — JS evaluates object-literal properties in the
-        // order written, so the previous `{ at: ..., data: gatherStack() }` stamped `at` BEFORE
-        // gatherStack()'s ~22s scan ran, not after it (see the "demo-hang fix" comment above
-        // serveCached for where that figure comes from). Computing gatherStack() as its own statement
-        // first makes the timestamp reflect when the scan actually finished.
-        return serveCached(res, STACK_CACHE, () => { const data = gatherStack(); return { at: new Date().toISOString(), data }; });
+        // Machine-level (no scopeKey): the installed stack is the same whichever project you opened
+        // from. Measured only in the child — this is the endpoint that answered cold in 23,640 ms on
+        // the request path before the instant-open fix.
+        return serveCached(res, STACK_CACHE);
       }
       if (req.method === 'GET' && url === '/api/activity') return sendJSON(res, 200, gatherActivity(cwd));
       if (req.method === 'GET' && url === '/api/lessons') return sendJSON(res, 200, gatherLessons());
@@ -2149,14 +2246,25 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         // mirror), never routed through save-advocacy/save-config.
         if (url === '/api/save-brain-power') return sendJSON(res, 200, saveBrainPower(body.values || {}));
         if (url === '/api/refresh') {
-          // User-initiated re-measure (owner directive 2026-07-26: the page opens instantly on the
-          // last measurement, SAYS how old it is, and offers a refresh — never a silent stale page).
-          // Expire-not-delete per the cache doctrine above, then kick the detached child; the page
-          // polls /api/state?fast=1 until measuredAt advances. Deleting instead would put the next
-          // request on the COLD inline path — the 13-49s server freeze this file already fixed once.
-          expireCachesEmbedding([STATE_CACHE]);
-          kickRefresh();
-          return sendJSON(res, 200, { ok: true, refreshing: true });
+          // THE ONE REFRESH STORY (owner directive 2026-07-26; RVBC-INSTANT-SPEC #8). The page opens
+          // instantly on the last measurement, SAYS how old it is, and this is the button that takes
+          // a new one. Three things it must get right, each of which was wrong in the first draft:
+          //
+          //   • ALL FOUR caches, not just state. The header pill speaks for the whole page; going
+          //     green after state alone — while stack, capabilities and the fleet were still a
+          //     minute behind — is a page-wide "measured just now" that is false for three of its
+          //     four cards. (Live cache stamps from the incident: state 03:36:58, stack 03:37:23,
+          //     memory/capabilities 03:38:02.)
+          //   • EXPIRE, NEVER DELETE, AND NEVER DE-SCOPE — see expireCachesEmbedding: the data
+          //     survives, marked withdrawn, so the page keeps showing the last honest picture with
+          //     an honest age while the new one is taken.
+          //   • FORCE the kick. kickRefresh's 15s debounce would silently swallow a click made
+          //     within 15s of any background kick — and the old code still answered `ok: true`. A
+          //     refresh that did not start must not report that it did, so `started` is the child's
+          //     real answer, not a constant.
+          expireCachesEmbedding([STATE_CACHE, STACK_CACHE, MEMORY_CACHE, CAPABILITY_CACHE]);
+          const started = kickRefresh({ force: true });
+          return sendJSON(res, 200, { ok: true, refreshing: true, started });
         }
         if (url === '/api/undo') return sendJSON(res, 200, undo(body.undoToken));
         if (url === '/api/set-lesson') return sendJSON(res, 200, setLesson(body));
@@ -2190,13 +2298,22 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // and loads → message does not print. This is the same definition serveCached() uses.
     const hadCache = loadConsoleCache();
     if (!hadCache) {
-      console.log(`      ${'first run — scanning your setup now; about 15 seconds'}`);
-      console.log(`      ${"(next time you open this, it's instant)"}\n`);
+      console.log(`      ${'first run — the page opens now and narrates its own scan'}`);
+      console.log(`      ${"(next time you open this, it's already measured)"}\n`);
       announceWhenLive(url);   // print "it's live — take a look at your page" when the scan lands
     }
-    kickRefresh();   // warm state/stack/memory caches in a detached child, off the request path
-    setTimeout(() => { try { gatherActivity(cwd); } catch { /* warm is best-effort */ } }, 50);
+    // ORDER MATTERS AND IS THE WHOLE POINT (RVBC-INSTANT-SPEC #5). Browser FIRST — the tab is what
+    // the user is waiting for and openBrowser is now fully asynchronous — then the scan, in a
+    // detached child, off this thread entirely.
+    //
+    // WHAT WAS HERE BEFORE, AND WHY IT COST THE OWNER HIS THREE MINUTES: `setTimeout(gatherActivity,
+    // 50)`. Fifty milliseconds after the URL printed — which is to say exactly as the browser was
+    // opening — the server ran the machine-wide fleet scan ON ITS OWN EVENT LOOP: 100+ SQLite stores,
+    // 40s+, during which the brand-new tab could not be answered at all. A blank white page, at the
+    // precise moment a first-time user is deciding whether this thing works. The child does that
+    // scan now (see --refresh-cache), and gatherActivity reports `warming` until it lands.
     if (open) openBrowser(url);
+    kickRefresh({ force: true });   // measure everything in a detached child, off the request path
   });
   return server;
 }
@@ -2255,6 +2372,14 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
       writeCache(CAPABILITY_CACHE, at, data, process.cwd());
     } catch { /* keep prior — a failed audit must never blank the card */ }
 
+    // THE MACHINE-WIDE FLEET SCAN LIVES HERE NOW (RVBC-INSTANT-SPEC #5), and this is the last thing
+    // the child does because it is the longest (100+ SQLite stores, 40s+) and everything above it is
+    // what the page paints first. It used to run on the SERVER's thread — inline on a first-ever
+    // /api/activity, and via a setTimeout 50ms after boot, which is to say while the browser was
+    // opening. loadConsoleCache() first so this process holds the previous trust measurement and
+    // saveConsoleCache's merge has something to preserve.
+    try { loadConsoleCache(); refreshFleetCache(); } catch { /* keep prior — a failed walk must never blank the fleet */ }
+
     process.exit(0);
   }
   else if (args.includes('--serve') || args.length === 0) {
@@ -2283,4 +2408,4 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
 export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy, gatherBrainPower, saveBrainPower };
 // Exported for the cross-project cache-isolation test (console-cache-scope.test.mjs). serveCached's
 // scopeKey is the guard that stops one project's cached state being served for another.
-export { serveCached, writeCache };
+export { serveCached, writeCache, kickRefresh };

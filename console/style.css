@@ -2016,3 +2016,103 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
   border-color: var(--hair);
   background: transparent;
 }
+
+/* ============================== 23 · BRAIN POWER — the master switch, made unmissable ==============
+   Owner, 2026-07-27, having opened the console looking for the on/off switch: "if it didn't show up
+   in the console, how can it be implemented?" ADR-054's switch WAS rendered — as one checkbox in the
+   Settings card, below the things it governs, behind a chevron. This is the styling for its own
+   always-open card at the top of the page. The whole design brief is one sentence: a first-time
+   viewer must find it, and read its state, without scrolling and without clicking anything.
+
+   The state is carried by THREE redundant channels — the word (ON / OFF), the color, and the
+   position of the knob — because color alone fails for a colorblind reader and position alone is
+   ambiguous on an unfamiliar control. */
+.brain-card { margin: 0 0 14px; }
+#card-brain { animation-delay: 0.03s; }
+.st-act { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+
+.bp-row {
+  display: flex; align-items: center; gap: clamp(14px, 3vw, 26px);
+  flex-wrap: wrap; margin: 18px 0 4px;
+}
+.bp-state { flex: 1 1 260px; min-width: 0; }
+.bp-word {
+  font-size: clamp(24px, 4.4vw, 34px); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 12px;
+}
+.bp-word .bp-dot { flex: none; width: 13px; height: 13px; border-radius: 50%; background: currentColor; }
+.bp-on  .bp-word { color: var(--green-text); }
+.bp-off .bp-word { color: var(--amber-text); }
+.bp-sub { color: var(--muted); font-size: var(--fs-0); margin: 6px 0 0; max-width: 62ch; }
+
+/* The switch itself: a real <button role="switch">, sized so it reads as a switch across the room.
+   Keyboard and screen readers get it for free from the element + aria-checked. */
+.bp-switch {
+  flex: none; display: inline-flex; align-items: center; gap: 14px;
+  background: none; border: 0; padding: 6px; cursor: pointer; color: inherit;
+  font: inherit; border-radius: 999px;
+}
+.bp-switch:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.bp-track {
+  width: 88px; height: 46px; border-radius: 999px; position: relative;
+  border: 1px solid var(--hair-strong); background: var(--fill);
+  transition: background 0.22s var(--ease), border-color 0.22s var(--ease);
+}
+.bp-knob {
+  position: absolute; top: 4px; left: 4px; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--ink); opacity: 0.86;
+  transition: transform 0.22s var(--ease), background 0.22s var(--ease);
+}
+.bp-on .bp-track { background: color-mix(in srgb, var(--green) 22%, transparent); border-color: color-mix(in srgb, var(--green) 46%, transparent); }
+.bp-on .bp-knob  { transform: translateX(42px); background: var(--green); opacity: 1; }
+.bp-off .bp-track { background: color-mix(in srgb, var(--amber) 14%, transparent); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+.bp-off .bp-knob  { background: var(--amber); opacity: 0.9; }
+.bp-switch-label { font-weight: 600; font-size: var(--fs-0); white-space: nowrap; }
+.bp-switch[disabled] { opacity: 0.6; cursor: progress; }
+@media (prefers-reduced-motion: reduce) { .bp-knob, .bp-track { transition: none; } }
+
+/* Consent step for the destructive direction only (turning the brain OFF). Turning it back ON needs
+   no warning — there is nothing to warn about. */
+.bp-confirm {
+  margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--fill);
+}
+.bp-confirm p { margin: 0 0 10px; max-width: 74ch; }
+.bp-confirm .bp-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.bp-notes { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.bp-notes li { color: var(--muted); font-size: 13.5px; padding-left: 18px; position: relative; max-width: 84ch; }
+.bp-notes li::before { content: "·"; position: absolute; left: 6px; color: var(--faint); font-weight: 700; }
+.bp-warn { color: var(--amber-text); }
+
+/* "Parts of the brain" — the sub-piece control surface, stated honestly while most of it is still
+   one switch. It is INSIDE this card on purpose: the answer to "where are the per-piece controls?"
+   has to be in the same place as the question. */
+.bp-parts { margin: 20px 0 0; padding: 4px 16px; border: 1px dashed var(--hair-strong); border-radius: 12px; }
+.bp-parts > summary {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  cursor: pointer; padding: 12px 0; list-style: none;
+}
+.bp-parts > summary::-webkit-details-marker { display: none; }
+.bp-parts > summary::after { content: "›"; margin-left: auto; color: var(--faint); transition: transform 0.2s var(--ease); }
+.bp-parts[open] > summary::after { transform: rotate(90deg); }
+.bp-parts > summary:hover { color: var(--amber-text); }
+.bp-parts[open] > summary { border-bottom: 1px solid var(--hair); }
+.bp-parts-hint { color: var(--muted); font-size: 13px; }
+.bp-parts h3 { margin: 0; font-size: var(--fs-1); display: inline; }
+.bp-parts[open] .bp-parts-lead { margin-top: 12px; }
+.bp-parts .bp-parts-lead { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 84ch; }
+.bp-part { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid var(--hair); }
+.bp-part:first-of-type { border-top: 0; }
+.bp-part-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bp-part-h b { font-size: 14.5px; }
+.bp-part-t { color: var(--muted); font-size: 13.5px; max-width: 84ch; }
+
+/* The card's footnotes need air and a quieter voice: with no top margin the "the switch is a file"
+   line butted straight into the last bullet and read as a third bullet in body ink. `.fn-path` is
+   scoped to `.form-note` where it was born, so the path needs its own rule here rather than
+   inheriting one it never had. */
+#body-brain .fineprint { margin-top: 14px; color: var(--muted); }
+#body-brain .fn-path {
+  font-family: var(--mono); font-size: 0.86em; color: var(--faint); overflow-wrap: anywhere;
+}

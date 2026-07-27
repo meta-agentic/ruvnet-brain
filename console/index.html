@@ -75,6 +75,38 @@
 
 <main id="main" class="wrap">
 
+  <!-- ===========================================================================================
+       THE MASTER SWITCH, WHERE A MASTER SWITCH GOES (owner, 2026-07-27).
+
+       ADR-054 shipped the brain's on/off switch and the console rendered it — as one field inside the
+       Settings card, several sections down, behind a chevron. The owner opened the page, looked for
+       "a big on/off switch", could not find it, and asked the only question that matters about it:
+       "if it didn't show up in the console, how can it be implemented?" He is right. A control that
+       governs every other thing on the page cannot live below the things it governs, and a switch
+       nobody can find is, from where the user stands, a switch that does not exist.
+
+       So it is its own card, first on the page, always open (a plain <section>, never <details> —
+       nothing about the power switch may be one click away), and there is exactly ONE of it: the
+       duplicate rendering inside Settings is gone, replaced by a line pointing here. Same endpoint,
+       same single writer (/api/save-brain-power → saveBrainPower), same read-back-from-disk
+       discipline; only the prominence changed. -->
+  <section class="card brain-card rail-act" id="card-brain" aria-labelledby="card-brain-h">
+    <div class="qgroup-head">
+      <span class="card-ic ic-act" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3.5v7.2"/><path d="M7.6 6.4a7 7 0 1 0 8.8 0"/></svg>
+      </span>
+      <span class="card-head">
+        <span class="stage st-act">Act</span>
+        <h2 id="card-brain-h">Brain power</h2>
+        <span class="q">The one switch. Everything else on this page is what the brain does — this is whether it does it at all.</span>
+      </span>
+      <span class="chips" id="chips-brain"><span class="chip tone-wait">checking…</span></span>
+    </div>
+    <div class="body" id="body-brain">
+      <div class="skeleton" aria-hidden="true"><div class="sk-bar w40"></div><div class="sk-bar w75"></div></div>
+    </div>
+  </section>
+
   <!-- ======================================================= HERO -->
   <section class="intro">
     <div class="intro-grid">
@@ -210,6 +242,7 @@
     <span class="lg"><span class="lg-dot d-green"></span>green proves it live</span>
     <span class="lg"><span class="lg-dot d-amber"></span>amber acts — only with your consent</span>
   </p>
+
 
   <!-- ===========================================================================================
        FOUR SECTIONS, ONE PER QUESTION A PERSON ACTUALLY ASKS (design-grade -5, 2026-07-24 owner spec).

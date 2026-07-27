@@ -5,24 +5,25 @@ description: "RvBC — RuvNet Brain Console. Opens the live console page: your w
 Launch the **RuvNet Brain Console** for the user. Same console as `/ruvnet-brain:configure`,
 `/rvcb`, and `/brain-console` — every spelling lands here, so never tell the user they typed it wrong.
 
-## 1. SPEAK FIRST — before you run anything
+## The contract you are keeping
 
-The console scans their machine before the page can render. That takes **~20 seconds normally, and
-up to a minute the first time** while it does one-time work. Twenty seconds of a blank screen with
-no explanation feels broken, and the user has no way to know whether to wait or interrupt.
+The page **opens immediately and scans itself while they watch.** The server never blocks: a cold or
+new-project read is answered in milliseconds with "measuring…", the page keeps its skeletons and
+narrates the wait, and each card fills in as its own measurement lands. A chip in the header says how
+old the picture is and re-measures when clicked.
 
-So your FIRST output — before any tool call — is one short, warm heads-up in your own words. Cover:
+So there is nothing to wait for and nothing to warn them about. **Your entire job is: say one
+sentence, start the server in the background, hand over the URL, and get out of the way.**
 
-- you're going to look over their setup (what's installed, what the AI has learned)
-- then it opens in their **browser** as a visual page they can work with
-- **about 20 seconds**, and **up to a minute on a first run** while it does one-time setup
-- ask them to hang tight
+## 1. SPEAK FIRST — one short sentence, before any tool call
 
-Say it like a person, not a status bar. Something in the spirit of:
+Your FIRST output — before any tool call, any file read, any search — is one warm line saying you are
+opening it now and it will scan itself live in their browser. Something in the spirit of:
 
-> "Let me take a look at your setup — I'll scan what's installed and what your brain has learned,
-> then open it as a page in your browser so you can see it all at once. Takes about 20 seconds;
-> the very first run can take up to a minute while it does some one-time work. Hang tight."
+> "Opening your console now — it'll come up right away and scan your setup live while you watch."
+
+Say it like a person, not a status bar. **Do not** promise 20 seconds, a minute, or any duration: the
+page carries its own timing now, and a number invented here is a number the page will contradict.
 
 ## 2. Find the repo
 
@@ -35,19 +36,25 @@ directory. Use whichever path actually contains `scripts/onboarding-console.mjs`
 node <repo>/scripts/onboarding-console.mjs --serve --open
 ```
 
-Run with `run_in_background: true` — it is a long-running server, so this keeps the turn alive.
-It binds `127.0.0.1` only and prints a line like `http://127.0.0.1:7411/`.
+**`run_in_background: true`, ALWAYS — never in the foreground.** This is a server: it does not exit,
+so a foreground run hangs the tool call until the 120-second timeout and turns an instant page into
+two minutes of dead air. It binds `127.0.0.1` only and prints `http://127.0.0.1:7411/` within about a
+third of a second.
 
-**If it reports it is already running**, that is a success, not an error — the page is still served
-at that URL. Open it yourself with `open "http://127.0.0.1:<port>/"` rather than reporting a problem.
+**Then post the URL immediately.** Do not poll the log, do not wait for a scan, do not check whether
+the data has landed — the page reports its own progress and none of it is visible from here.
 
-## 4. Confirm it actually opened
+**If it reports it is already running**, that is a success, not an error: open the URL yourself with
+`open "http://127.0.0.1:<port>/"`. One honest caveat, worth half a sentence if it comes up — a
+console that is already running is serving the project it was *launched* from, so if they want this
+project's view they can stop that one (`^C` in its terminal) and run this again.
+
+## 4. Hand it over and stop
 
 Give them the URL as a clickable line, and one warm sentence: the page is **read-only until you
 click**, every machine change is **explained first and reversible**, and Settings save at the user
-level only.
-
-If the browser did not open (they'll tell you), run `open "http://127.0.0.1:<port>/"` directly.
+level only. Worth naming once: the brain's on/off switch is the first card on the page, and the
+header chip says how fresh the reading is and re-measures if they click it.
 
 ## 5. If it errors
 
@@ -56,5 +63,15 @@ a dead tab wondering whether it is still loading.
 
 ---
 
-Do **not** narrate the machine yourself afterwards; the page is the mirror. Your job is to set
-expectations, get it open, and get out of the way.
+## Things NOT to do before the page is open
+
+Each of these has cost a real user real minutes of silence, and not one of them is needed to open a
+local web page:
+
+- **No knowledge search, no memory recall, no source grounding, no repo exploration.** A cold
+  embedding-model load alone is allowed up to 180 seconds.
+- **No model selection or routing work.**
+- **No reading this repo to "check" anything first.** Find the script, run it.
+
+Do **not** narrate the machine yourself afterwards; the page is the mirror. Your job is to open it,
+say one sentence, and get out of the way.
