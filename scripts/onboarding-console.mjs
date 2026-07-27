@@ -2148,6 +2148,16 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         // ADR-054 — a distinct endpoint because it writes a distinct thing (the sentinel + the
         // mirror), never routed through save-advocacy/save-config.
         if (url === '/api/save-brain-power') return sendJSON(res, 200, saveBrainPower(body.values || {}));
+        if (url === '/api/refresh') {
+          // User-initiated re-measure (owner directive 2026-07-26: the page opens instantly on the
+          // last measurement, SAYS how old it is, and offers a refresh — never a silent stale page).
+          // Expire-not-delete per the cache doctrine above, then kick the detached child; the page
+          // polls /api/state?fast=1 until measuredAt advances. Deleting instead would put the next
+          // request on the COLD inline path — the 13-49s server freeze this file already fixed once.
+          expireCachesEmbedding([STATE_CACHE]);
+          kickRefresh();
+          return sendJSON(res, 200, { ok: true, refreshing: true });
+        }
         if (url === '/api/undo') return sendJSON(res, 200, undo(body.undoToken));
         if (url === '/api/set-lesson') return sendJSON(res, 200, setLesson(body));
         return sendJSON(res, 404, { error: 'unknown endpoint' });

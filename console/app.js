@@ -2905,6 +2905,105 @@ async function loadTrust() {
   }
 }
 
+/* ---------------------------------------------------------- freshness (owner directive 2026-07-26)
+   The server is cache-first: warm loads paint instantly from the LAST measurement while a detached
+   child re-measures — but until now the page never said how old the picture was, and the fresh
+   measurement only appeared on the NEXT open. This pill closes both gaps: it stamps the age in the
+   header, polls while a re-measure is running, repaints the sections the moment fresh data lands,
+   and gives the user a Refresh button so "is this current?" is never a feeling — it's a label. */
+
+let FRESH_BASE = null;      // measuredAt of what is currently painted
+let freshPollTimer = null;
+let freshPollsLeft = 0;
+
+function freshnessPill() {
+  let wrap = document.getElementById('freshness-wrap');
+  if (!wrap) {
+    wrap = el('span', { id: 'freshness-wrap' },
+      el('span', { id: 'freshness-pill', class: 'chip tone-grey' }, '…'),
+      el('button', {
+        id: 'freshness-refresh', class: 'chip tone-cyan', type: 'button',
+        title: 'Re-measure this machine now',
+        onclick: () => { void doManualRefresh(); },
+      }, '\u21bb refresh'),
+    );
+    const a = $('#brain-ver') || $('#host-chip');
+    if (a && a.parentNode) a.parentNode.insertBefore(wrap, a.nextSibling);
+  }
+  return document.getElementById('freshness-pill');
+}
+
+function fmtAge(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const m = Math.round(ms / 60000);
+  if (ms < 45000) return 'seconds ago';
+  if (m < 60) return `${Math.max(1, m)}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+function renderFreshness(state, { polling = false } = {}) {
+  const pill = freshnessPill();
+  if (!pill) return;
+  const at = state.measuredAt || state.cachedAt || state.generatedAt;
+  if (!state.fromCache) {
+    FRESH_BASE = at || FRESH_BASE;
+    pill.className = 'chip tone-green';
+    pill.textContent = 'measured just now';
+    return;
+  }
+  FRESH_BASE = at || FRESH_BASE;
+  pill.className = polling ? 'chip tone-cyan' : (state.stale ? 'chip tone-warn' : 'chip tone-grey');
+  pill.textContent = `as of ${at ? fmtAge(at) : 'a previous run'}${polling ? ' \u00b7 refreshing\u2026' : ''}`;
+}
+
+function paintStateSections(state) {
+  renderHost(state.host, state.generatedAt);
+  const c = state.sections || {};
+  renderWiring(c.wiring);
+  lastMemory = c.memory;
+  renderMemory(c.memory);
+  renderSavings(c.savings);
+  renderSettings(c.config, c.userSettings, c.brainPower);
+  renderGates(c.gates);
+}
+
+function startFreshnessPolling() {
+  if (freshPollTimer) return;         // one poller, ever
+  freshPollsLeft = 40;                // 40 x 3s = 2 minutes, then give up quietly
+  freshPollTimer = setInterval(async () => {
+    if (--freshPollsLeft <= 0) { clearInterval(freshPollTimer); freshPollTimer = null; return; }
+    try {
+      const st = await getJSON('/api/state?fast=1');
+      const at = st.measuredAt || st.cachedAt || st.generatedAt;
+      if (at && at !== FRESH_BASE && st.sections) {
+        clearInterval(freshPollTimer); freshPollTimer = null;
+        paintStateSections(st);
+        FRESH_BASE = at;
+        const pill = freshnessPill();
+        if (pill) { pill.className = 'chip tone-green'; pill.textContent = 'measured just now'; }
+        announce('Machine state refreshed.');
+      } else {
+        renderFreshness(st, { polling: true });
+      }
+    } catch { /* transient — next tick tries again */ }
+  }, 3000);
+  const pill = freshnessPill();
+  if (pill) pill.textContent += ' \u00b7 refreshing\u2026';
+}
+
+async function doManualRefresh() {
+  const pill = freshnessPill();
+  if (pill) { pill.className = 'chip tone-cyan'; pill.textContent = 're-measuring\u2026'; }
+  const r = await postJSON('/api/refresh', {});
+  if (!r.ok) {
+    if (pill) { pill.className = 'chip tone-warn'; pill.textContent = 'refresh failed \u2014 try again'; }
+    return;
+  }
+  if (freshPollTimer) { clearInterval(freshPollTimer); freshPollTimer = null; }
+  startFreshnessPolling();
+}
+
 /* ------------------------------------------------------------------ loaders */
 
 async function loadState() {
@@ -2925,6 +3024,7 @@ async function loadState() {
         renderSettings(c.config, c.userSettings, c.brainPower);
         renderGates(c.gates);
         dismissStandby();
+        renderFreshness(fast);
       }
     } catch { /* no cache yet — the skeleton narration carries the wait */ }
     const state = await getJSON('/api/state');
@@ -2941,6 +3041,11 @@ async function loadState() {
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);
     dismissStandby(); // first cards are hydrated — the standby line has done its job
+    renderFreshness(state);
+    // Warm serve = the picture is the LAST measurement and a background re-measure is already
+    // running (serveCached kicks it) — track it to completion so fresh data lands on THIS page
+    // open, not the next one.
+    if (state.fromCache) startFreshnessPolling();
     void loadMemoryFleet(); // 100+ stores at ~90ms each — lands after the page is already usable
   } catch (err) {
     dismissStandby(); // don't say "stand by" over an error banner
