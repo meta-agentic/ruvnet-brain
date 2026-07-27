@@ -71,7 +71,7 @@ const argv = process.argv.slice(2);
 const STANDALONE = [
   ['lesson-seed', 'one-shot seeding, run deliberately by a human'],
   ['lesson-ratify', 'the human control surface — a CLI is its entire purpose'],
-  ['stamp-sweep', 'ADR-055 §2 — the ONE-TIME backfill half of the stamp rule. A human runs it once '
+  ['stamp-sweep', 'ADR-056 §2 — the ONE-TIME backfill half of the stamp rule. A human runs it once '
     + '(--apply) to reach the files nobody is editing; the ongoing half is the md-stamp PostToolUse '
     + 'hook, which IS wired. Deliberately not in a gate: it WRITES to documents, and a writer that '
     + 'fires unattended on every push is how a repo gets a churn diff it did not ask for. It shares '
@@ -322,7 +322,7 @@ function callerFiles(repo = REPO) {
     const abs = path.join(repo, r);
     let st; try { st = fs.statSync(abs); } catch { continue; }
     if (st.isFile()) { out.push(abs); continue; }
-    // ADR-055, 2026-07-27: git hooks are EXTENSIONLESS by git's own contract — the file must be named
+    // ADR-056, 2026-07-27: git hooks are EXTENSIONLESS by git's own contract — the file must be named
     // exactly `pre-push` / `pre-commit` or git ignores it. So the extension filter excluded
     // `scripts/git-hooks/pre-push` — THIS REPO'S PRIMARY SHIP GATE — from the caller set entirely, and
     // anything reachable only from there read as unwired. Found the moment the currency check was
@@ -378,7 +378,7 @@ export function stripComments(src, ext) {
   // and JSDoc `*` bodies are NOT matched (a `*gen()` line is real code). Every false caller the regrade
   // found — `// … scripts/…measure.mjs` usage examples — is a whole-line `//`, so this closes exactly it.
   const marker = jsLike ? '//' : '#';
-  // ADR-055, 2026-07-27: ALSO blank JSDoc continuation lines. The comment documenting the
+  // ADR-056, 2026-07-27: ALSO blank JSDoc continuation lines. The comment documenting the
   // package.json fix, two screens below, spelled both an invocation-shaped path and an
   // `npm run <script>` line as illustrations — and forged TWO false callers with them, flipping the
   // very module it audits back to `wired` twice in a row. The note above says block comments are
@@ -400,7 +400,7 @@ export function stripComments(src, ext) {
 }
 
 /**
- * ── THE THIRD STATE (ADR-055, 2026-07-27) ────────────────────────────────────────────────────────
+ * ── THE THIRD STATE (ADR-056, 2026-07-27) ────────────────────────────────────────────────────────
  * DEFINING an npm script is not INVOKING it. `package.json` line 35 defines `doc:currency` as a
  * command that runs the currency script, and callerPattern's quoted-string branch matches that
  * VALUE — so the line that DEFINES the script counted as a caller of it. The currency script was
@@ -504,7 +504,7 @@ export function audit({ repo = REPO, standalone = STANDALONE, held = HELD } = {}
     const callers = callersOf(m, files, repo);
     let state = callers.length ? 'wired' : 'unwired';
     let why;
-    // ADR-055: callers that are ONLY the package.json line defining the script are not automation.
+    // ADR-056: callers that are ONLY the package.json line defining the script are not automation.
     if (callers.length && callers.every((c) => c === 'package.json')) {
       let pkgSrc = '';
       try { pkgSrc = fs.readFileSync(path.join(repo, 'package.json'), 'utf8'); } catch { /* none */ }
@@ -792,7 +792,7 @@ if (invokedDirectly) {
     // day inside the gate built to stop exactly that.
     if (by('manual').length) {
       console.log(`  ${by('manual').length} MANUAL — an npm script exists, but no automation runs it `
-        + `(ADR-055; this is how the currency gate hid while reporting "wired"):\n`);
+        + `(ADR-056; this is how the currency gate hid while reporting "wired"):\n`);
       for (const m of by('manual')) console.log(`    ▲ ${m.rel}\n       ${m.why}\n`);
     }
     console.log(`  ${by('exempt').length} exempt — no caller required, and why:\n`);

@@ -42,7 +42,7 @@ describe('the predicate — a mention is not a caller', () => {
     expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
   });
 
-  // ADR-055, 2026-07-27. This assertion used to expect 'wired', and that belief is exactly how
+  // ADR-056, 2026-07-27. This assertion used to expect 'wired', and that belief is exactly how
   // scripts/doc-currency.mjs sat in the repo reported as wired while NOTHING ran it — it is absent
   // from pre-push, gate.sh, gates.mjs and every workflow, and its only "caller" was the package.json
   // line DEFINING it. Defining a script is not invoking it. The npm-script case is still a real way
@@ -72,7 +72,7 @@ describe('the predicate — a mention is not a caller', () => {
     expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
   });
 
-  // Both of these were introduced BY THE ADR-055 FIX ITSELF, in the JSDoc documenting it, and each
+  // Both of these were introduced BY THE ADR-056 FIX ITSELF, in the JSDoc documenting it, and each
   // silently flipped the audited module back to 'wired'. Caught only by re-reading the row after the
   // change instead of trusting it. They are the block-comment form of the defect the whole file
   // already fixed twice (prose in v1; whole-line `//` usage examples in the 2026-07-23 regrade).

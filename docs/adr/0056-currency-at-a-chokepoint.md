@@ -1,5 +1,5 @@
 ---
-id: ADR-055
+id: ADR-056
 title: Pay the debt, then wire the gate — document currency without a ratchet
 status: Proposed
 date: 2026-07-27
@@ -16,7 +16,7 @@ supersedes: []
 relates: [ADR-034, ADR-024, ADR-037, ADR-009, ADR-020]
 ---
 
-# ADR-055: Pay the debt, then wire the gate
+# ADR-056: Pay the debt, then wire the gate
 
 **Status**: Proposed
 **Date**: 2026-07-27 · **Last updated**: 2026-07-27 · **Why**: v2 after adversarial duel — v1's design was

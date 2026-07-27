@@ -99,7 +99,7 @@ function refreshFrontmatterStamp(content, today) {
   return patchedBlock + content.slice(block[0].length);
 }
 
-// ── ENSURE (ADR-055 §2/§3, 2026-07-27) ───────────────────────────────────────────────────────────
+// ── ENSURE (ADR-056 §2/§3, 2026-07-27) ───────────────────────────────────────────────────────────
 // Everything above only ever REFRESHES a stamp someone already wrote. That is deliberately half the
 // job, and the duel proved it is the WRONG half: a hook that fires on edit "never reaches a stale
 // file, by definition of stale" — the 166 unstamped files are unstamped precisely because nobody is

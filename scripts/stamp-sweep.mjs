@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/stamp-sweep.mjs — ADR-055 §2. The ONE-TIME half of the owner's first rule.
+// scripts/stamp-sweep.mjs — ADR-056 §2. The ONE-TIME half of the owner's first rule.
 //
 //   node scripts/stamp-sweep.mjs             report: every authored .md, its stamp state, its verdict
 //   node scripts/stamp-sweep.mjs --apply     write the stamps git can prove
@@ -7,7 +7,7 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // WHY THIS EXISTS SEPARATELY FROM THE HOOK. `plugin/scripts/md-stamp.mjs` maintains stamps when a
-// file is edited. That is necessary and it is not sufficient, and the adversarial duel on ADR-055
+// file is edited. That is necessary and it is not sufficient, and the adversarial duel on ADR-056
 // said why in one sentence:
 //
 //     "Insert-on-touch fires only when a file IS edited — so it reaches actively-edited files, the

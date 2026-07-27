@@ -224,7 +224,7 @@ describe('md-stamp — the date is honest across timezones (ships to other machi
   });
 });
 
-// ── ENSURE (ADR-055 §2/§3) ───────────────────────────────────────────────────────────────────────
+// ── ENSURE (ADR-056 §2/§3) ───────────────────────────────────────────────────────────────────────
 // The hook above only REFRESHES. These cover the second entry point — insertion — which exists
 // because the duel proved insert-on-touch "never reaches a stale file, by definition of stale."
 // Placement is by SHAPE, and the refusals matter more than the insertions: a wrong insert corrupts

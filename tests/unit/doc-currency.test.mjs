@@ -273,7 +273,7 @@ describe('THE false-positive that would kill the gate: old ≠ stale', () => {
     expect(blockingFindings([d], { warnDrift: true }).map((f) => f.code)).not.toContain('presumed-stale');
   });
 
-  // ADR-055, 2026-07-27. ADR-046 and ADR-047 are both Rejected and both sat in the blocking set,
+  // ADR-056, 2026-07-27. ADR-046 and ADR-047 are both Rejected and both sat in the blocking set,
   // with nothing an author could ever do to clear them short of deleting the record of a rejected
   // idea. A decision not in force cannot drift from code it never governed — and this file's own
   // header calls false positives the DESIGNED failure mode.
@@ -796,7 +796,7 @@ describe('against the REAL repository', () => {
   });
 
   // WAS: `expect(codes(d)).toContain('stamp-lags-doc')` — it asserted ADR-0013 IS broken, and went
-  // red on 2026-07-27 for the best possible reason: the lag was REPAIRED (ADR-055 §1 paid the debt
+  // red on 2026-07-27 for the best possible reason: the lag was REPAIRED (ADR-056 §1 paid the debt
   // down, 32 blocking findings -> 2). A test that pins a defect in a specific real file has a
   // lifetime bounded by the fix, and inverts on the day the work succeeds. The BEHAVIOUR it meant
   // to protect — that a real stamp lag in this repo is detected — is covered by the synthetic

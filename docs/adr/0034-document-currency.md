@@ -24,13 +24,13 @@ relates: [ADR-009, ADR-020, ADR-024, ADR-030]
      boundary, DDD-0008). -->
 
 **Decision date**: 2026-07-22 · **Last updated**: 2026-07-27 · **Why**: this document had drifted from
-its own implementation — see the currency log; corrected under ADR-055
+its own implementation — see the currency log; corrected under ADR-056
 **Implementation**: built (derived) · **Verified in sync**: never
 
 This document proposes a schema and then wears it. Its own `impl:` is derived, not asserted, and on
 2026-07-27 that derivation caught this file lying about itself.
 
-> **DRIFT, FOUND AND CORRECTED 2026-07-27 (ADR-055).** For five days this section read *"`impl:
+> **DRIFT, FOUND AND CORRECTED 2026-07-27 (ADR-056).** For five days this section read *"`impl:
 > unbuilt` is derived, not modest: `scripts/doc-currency.mjs` does not exist"* — while that file sat
 > beside it at 780 lines with 43KB of tests, committed the same day this ADR was written. **The ADR
 > about documents drifting was the drifted document.** Two causes, both now fixed: (a) the frontmatter
@@ -41,7 +41,7 @@ This document proposes a schema and then wears it. Its own `impl:` is derived, n
 > forbids; replacing them with globs was worse still — the set expanded to all 67 documents and went
 > permanently `presumed-stale`. The real error was semantic: **this ADR governs the tooling; the
 > documents are its subjects, not its implementation.** `governs:` is now the two files that
-> implement it. The gate itself lands in `scripts/git-hooks/pre-push` per ADR-055 §5, not in the
+> implement it. The gate itself lands in `scripts/git-hooks/pre-push` per ADR-056 §5, not in the
 > separate `doc-currency-gate.sh` this document originally imagined.
 
 ## The critique this exists to answer
@@ -380,7 +380,7 @@ profile check, and it holds here for the same reason.
 
 | Date | What changed | Why |
 |---|---|---|
-| 2026-07-27 | **Corrected this document's drift from its own implementation**, under ADR-055. `impl:` claim `unbuilt` → derived `built`; removed `plugin/scripts/doc-currency-gate.sh` from `governs:` (never built — one unresolvable path dragged the whole weakest-member-wins derivation to `unbuilt`, so the honest mechanism reported the dishonest answer for an honest reason); replaced the `docs/adr/` + `docs/ddd/` **directories** — which this document's own §6 forbids — not with globs (the set expanded to all 67 docs and went permanently `presumed-stale`) but with the two files that actually implement it. The gate now lives in `scripts/git-hooks/pre-push` per ADR-055 §5 | The body asserted *"`scripts/doc-currency.mjs` does not exist"* for five days while that file sat beside it at 780 lines with 43KB of tests, committed the same day. Found 2026-07-27 by the owner's third rule; `wired-check` had also been reporting the script `wired` because `package.json:35` DEFINED an npm alias for it — now `wired` for real, caller `scripts/git-hooks/pre-push` |
+| 2026-07-27 | **Corrected this document's drift from its own implementation**, under ADR-056. `impl:` claim `unbuilt` → derived `built`; removed `plugin/scripts/doc-currency-gate.sh` from `governs:` (never built — one unresolvable path dragged the whole weakest-member-wins derivation to `unbuilt`, so the honest mechanism reported the dishonest answer for an honest reason); replaced the `docs/adr/` + `docs/ddd/` **directories** — which this document's own §6 forbids — not with globs (the set expanded to all 67 docs and went permanently `presumed-stale`) but with the two files that actually implement it. The gate now lives in `scripts/git-hooks/pre-push` per ADR-056 §5 | The body asserted *"`scripts/doc-currency.mjs` does not exist"* for five days while that file sat beside it at 780 lines with 43KB of tests, committed the same day. Found 2026-07-27 by the owner's third rule; `wired-check` had also been reporting the script `wired` because `package.json:35` DEFINED an npm alias for it — now `wired` for real, caller `scripts/git-hooks/pre-push` |
 | 2026-07-22 | Created | Owner, 2026-07-22: *"Is it VERIFIED TO BE IN SYNC with the resulting output?"* — measured the same day: 12 of 32 ADRs in `docs/adr/` carry no status or date, and 4 of the 20 stamped ones already carry an `updated:` older than their own last commit |
 
 ## Verification (what must be true before this is Accepted)

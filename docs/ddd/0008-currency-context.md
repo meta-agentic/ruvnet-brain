@@ -3,10 +3,10 @@
 Updated: 2026-07-27 | Version 1.1.0
 Created: 2026-07-22
 
-Governs **ADR-034** (document currency and the status lifecycle) and **ADR-055** (currency at a
+Governs **ADR-034** (document currency and the status lifecycle) and **ADR-056** (currency at a
 chokepoint — the scope widening to Authored Documents and Diagrams).
 
-**Status**: Proposed (2026-07-22) · scope extended 2026-07-27 (ADR-055)
+**Status**: Proposed (2026-07-22) · scope extended 2026-07-27 (ADR-056)
 
 ---
 
@@ -142,7 +142,7 @@ project's settled answer elsewhere: the `project-state-current` checkpoint was r
 append-only on 2026-07-12, the same day the overwrite version silently destroyed a concurrent
 session's entire checkpoint with zero error.*
 
-### Aggregate: **Authored Document** (added 2026-07-27, ADR-055)
+### Aggregate: **Authored Document** (added 2026-07-27, ADR-056)
 
 A hand-written `.md` file that is **not** a Governed Document. It carries one obligation and no
 others: a stamp on the first screen, so a human can judge staleness without running anything.
@@ -190,7 +190,7 @@ claims only modification, which is the one thing a partial mirror can still almo
 directions at once: it either burdens a README with a digest it cannot have, or it dilutes `verified`
 until it means "has a date on it."
 
-### Aggregate: **Diagram** — PROPOSED AND CUT the same day (2026-07-27, ADR-055 §8)
+### Aggregate: **Diagram** — PROPOSED AND CUT the same day (2026-07-27, ADR-056 §8)
 
 An ASCII block and its rendered SVG *is* the same correspondence problem this context models — an
 authored source, a derived artifact, a claim they still agree. The modelling was right; the aggregate
@@ -281,7 +281,7 @@ acquires the false positives that kill it.*
   different clock, different artifact.
 - **Prose quality, style, or header shape** → nobody yet, deliberately (see ACL 3).
 - **README, PROGRESS, skills, primer** → ~~out of scope this round~~ **in scope as of 2026-07-27
-  (ADR-055), but only as Authored Documents.** The original reasoning stands and is exactly why the
+  (ADR-056), but only as Authored Documents.** The original reasoning stands and is exactly why the
   tier is thin: none has a writable `governs:` set, and inventing one would assert the very field
   this context admits it cannot derive. So they get a stamp and nothing more — never a Digest, never
   a Verification, never a `verified` label. *The 2026-07-22 parking was right about the machinery and

@@ -547,7 +547,7 @@ export function evaluateDoc(root, rel, opts = {}) {
   // ── drift ─────────────────────────────────────────────────────────────────────────────────────
   const drift = deriveDrift(root, rel, governed);
   doc.drift = drift;
-  // A DECISION THAT IS NOT IN FORCE CANNOT DRIFT (ADR-055, 2026-07-27). Rejected / Superseded /
+  // A DECISION THAT IS NOT IN FORCE CANNOT DRIFT (ADR-056, 2026-07-27). Rejected / Superseded /
   // Deprecated documents describe a path NOT taken, or one another document has since taken over.
   // Their `governs:` set names code that was never meant to implement them, so "the governed code
   // moved and nobody re-checked" is not a defect — there is nothing to re-check against. Blocking a
