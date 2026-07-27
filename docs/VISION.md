@@ -1,5 +1,8 @@
 # RuvNet Brain → RuvNet Engineer — VISION & FULL CONVERSATION CONTEXT
 
+Updated: 2026-07-07
+Created: 2026-06-29
+
 `Captured 2026-06-28 to guarantee ZERO context loss across a project-directory switch. This is the
 narrative of the entire conversation that conceived this solution. Read this + PROGRESS.md + docs/adr/
 0001–0008 and you have everything.`

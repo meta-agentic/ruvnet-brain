@@ -1,5 +1,8 @@
 # DDD-0010 — The Wiring bounded context
 
+Updated: 2026-07-27
+Created: 2026-07-22
+
 Governs **ADR-037** (the wiring gate cannot fail).
 
 **Status**: Proposed (2026-07-22)

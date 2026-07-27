@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [learning, agentdb, sona, reasoningbank, cross-project, configurator, explainer]
 supersedes: []
 relates: [ADR-013, ADR-016]
-updated: 2026-07-23
+updated: 2026-07-27
 updated_source: derived-from-git
 ---
 

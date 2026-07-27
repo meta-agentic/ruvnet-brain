@@ -2,7 +2,7 @@
 id: ADR-004
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-23
+updated: 2026-07-27
 updated_source: derived-from-git
 ---
 # ADR-0004: Effectiveness first — size is a later optimization

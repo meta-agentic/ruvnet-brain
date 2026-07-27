@@ -1,5 +1,7 @@
 # Duel record — ADR-045 (state-based advocacy)
 
+Updated: 2026-07-24
+
 Date: 2026-07-24 · Governs: `docs/adr/0045-state-based-advocacy-the-explained-offer.md`
 Duelists: **Fable 5** (stance: this will annoy users and destroy trust) · **GPT-5.6-Sol** (stance: empirical,
 told to RUN the code). Both reviewed independently.

@@ -1,5 +1,7 @@
 # RuvNet Brain — response to Dragan's QE pass (2026-07-06)
 
+Updated: 2026-07-06
+
 Dragan — thank you. This was one of the most useful reviews we've had: every item had a `file:line` and
 a concrete fix, ranked by leverage, and it lined up almost exactly with the self-audit in ADR-0009. We
 verified every finding against the real code before touching anything (nothing dismissed, nothing

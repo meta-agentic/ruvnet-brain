@@ -1,5 +1,7 @@
 ## Fixed — and thank you
 
+Updated: 2026-07-10
+
 First: thank you for this report. It was precise, fully evidenced, and correct on every point — you quoted the exact claims, traced the exact files, and demonstrated the exact staleness on a clean install. Reports of this quality are rare and genuinely valuable; this one drove a same-day overhaul of the whole freshness pipeline. (Your PR #5 is under real review as well — separately, so it gets the attention it deserves.)
 
 ### What you reported, and what we changed

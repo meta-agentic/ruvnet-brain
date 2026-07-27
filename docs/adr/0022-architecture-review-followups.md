@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [architecture, tech-debt, host-model, console, proactivity, honesty]
 supersedes: []
 relates: [ADR-020, ADR-021, ADR-013, ADR-014]
-updated: 2026-07-23
+updated: 2026-07-27
 updated_source: derived-from-git
 ---
 

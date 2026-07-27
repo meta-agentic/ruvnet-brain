@@ -90,6 +90,22 @@ failure mode: *"a gate that cries wolf gets bypassed and a bypassed gate protect
 
 **Clear the backlog and the scaffolding has nothing left to hold up.**
 
+> **`--fix` IS SELF-INVALIDATING, and this bites every time. Found 2026-07-27 by doing it.**
+> `--fix` sets `updated:` to each file's **last commit date**. Committing that fix then creates a
+> *new* commit touching those same files — so every stamp it just repaired now lags its own file, and
+> the count went straight back from 4 blocking findings to 28. The invariant (DDD-0008 #3) is
+> *"`updated` MUST equal the commit date of the change carrying it"*, and the change carrying it is
+> **the commit you are about to make**, not the one before.
+>
+> **The convergent workflow:** run `--fix` to recover dates git can prove for files you are *not*
+> otherwise touching, then set `updated:` to **today** on every file the commit actually changes —
+> which is precisely what `computeStampedContent` (the `md-stamp` hook's pure function) already does,
+> so reuse it rather than writing a second stamper.
+>
+> **Never blanket-restamp.** Applying it to every governed document bumps files that did not change
+> and manufactures the false freshness §4 exists to prevent. Scope it to the files in *this* change
+> (`git show --name-only <sha>` / `git diff --cached --name-only`) and nothing else.
+
 ### 2. Serve rule 1 with a sweep, then maintain with the hook — both halves
 
 The sharpest finding of the duel, and it inverts v1:

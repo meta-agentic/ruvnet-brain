@@ -1,5 +1,8 @@
 # Contributing to RuvNet Brain
 
+Updated: 2026-07-22
+Created: 2026-07-07
+
 Thanks for helping improve the brain. This guide is the practical map of how the repo is built,
 tested, versioned, and published. Everything here is accurate to the scripts in `scripts/` and
 `kb/` — when in doubt, read the script (each one has a header comment explaining exactly what it does).

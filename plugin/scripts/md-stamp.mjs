@@ -99,6 +99,78 @@ function refreshFrontmatterStamp(content, today) {
   return patchedBlock + content.slice(block[0].length);
 }
 
+// ── ENSURE (ADR-055 §2/§3, 2026-07-27) ───────────────────────────────────────────────────────────
+// Everything above only ever REFRESHES a stamp someone already wrote. That is deliberately half the
+// job, and the duel proved it is the WRONG half: a hook that fires on edit "never reaches a stale
+// file, by definition of stale" — the 166 unstamped files are unstamped precisely because nobody is
+// editing them. So there is a second entry point, used by the one-time sweep
+// (scripts/stamp-sweep.mjs) and available to the hook behind an explicit opt-in.
+//
+// PLACEMENT IS BY SHAPE, NEVER A LITERAL LINE 1. Five plugin/skills/*/SKILL.md files require YAML
+// frontmatter at line 1 for Claude Code's skill loader; a blind line-1 insert stops them loading. And
+// this ships to strangers, whose line 1 is load-bearing in ways this repo cannot enumerate.
+//
+// THE REFUSAL IS THE FEATURE. On any prologue we do not positively recognise, this returns the
+// content UNCHANGED. Silence is the correct output for a shape we do not understand — an insertion
+// that corrupts someone's document is far worse than a document without a date.
+
+const H1_RE = /^(#[^\n]*\r?\n)/;
+// A leading HTML comment, an MDX import/export, a Jekyll/Astro directive, a license banner: all
+// prologue shapes whose first line is load-bearing. We recognise them only well enough to REFUSE.
+const UNKNOWN_PROLOGUE_RE = /^\s*(<!--|<|import\s|export\s|\{\/\*|%%|\/\*|#!)/;
+
+/** Is this document safe to insert into, and where? Returns null when the answer is "do not touch". */
+export function stampInsertionPoint(content) {
+  if (FRONTMATTER_BLOCK_RE.test(content)) return { kind: 'frontmatter' };
+  if (UNKNOWN_PROLOGUE_RE.test(content)) return null;      // refuse — shape not understood
+  const h1 = content.match(H1_RE);
+  // After a leading `# Title` is where every stamped document in this repo actually puts it
+  // (DDD-0008, SPEC.md, the primer). Matching the house shape beats a pedantic line 1.
+  if (h1) return { kind: 'after-h1', index: h1[0].length };
+  return { kind: 'top', index: 0 };
+}
+
+// A THIRD stamp shape, found 2026-07-27: README carries its date inside a shields.io badge
+// ("version 3.9.85-dev — updated 2026-07-27 06:02 EDT"), maintained by self-update.mjs. Without
+// this, README reported "prologue shape not recognised" — a refusal that was RIGHT IN OUTCOME and
+// WRONG IN ITS REASON, which is precisely the class of accidental correctness this ADR exists to
+// end. Recognising it makes the report say the true thing: already stamped, leave it alone.
+// Deliberately narrow: the word `updated` adjacent to a date, inside a link/image, in the head.
+const BADGE_UPDATED_RE = /!?\[[^\]]*updated[_\s-]+\d{4}-{1,2}\d{2}-{1,2}\d{2}/i;
+
+/** Does this document already carry a stamp anywhere we would look? */
+export function hasStamp(content) {
+  const fm = content.match(FRONTMATTER_BLOCK_RE);
+  if (fm && fm.index === 0 && FRONTMATTER_UPDATED_RE.test(fm[0])) return true;
+  const head = headSlice(content, PLAIN_STAMP_MAX_LINES);
+  return PLAIN_UPDATED_RE.test(head) || BADGE_UPDATED_RE.test(head);
+}
+
+/**
+ * Pure. Insert a stamp when — and only when — the document has none and its shape is understood.
+ * `updated` is REQUIRED and must be derived by the caller (git), never defaulted to today: stamping
+ * an untouched file with today's date is the "false freshness" failure DDD-0008 invariant 4 names.
+ */
+export function ensureStamp(content, { updated, created } = {}) {
+  if (!updated || !/^\d{4}-\d{2}-\d{2}$/.test(updated)) return content;  // no derived date ⇒ no stamp
+  if (hasStamp(content)) return content;                                  // already stamped ⇒ never touch
+  const at = stampInsertionPoint(content);
+  if (!at) return content;                                                // shape refused
+
+  if (at.kind === 'frontmatter') {
+    // Frontmatter with no `updated:` key — add it INSIDE the block, never above it.
+    const block = content.match(FRONTMATTER_BLOCK_RE)[0];
+    const closing = block.lastIndexOf('---');
+    const line = `updated: ${updated}\n`;
+    return block.slice(0, closing) + line + block.slice(closing) + content.slice(block.length);
+  }
+
+  const stamp = created && /^\d{4}-\d{2}-\d{2}$/.test(created) && created !== updated
+    ? `\nUpdated: ${updated}\nCreated: ${created}\n`
+    : `\nUpdated: ${updated}\n`;
+  return content.slice(0, at.index) + stamp + content.slice(at.index);
+}
+
 /** Pure: given a .md file's current bytes, return the bytes it should have. Identical in ⇒ identical out. */
 export function computeStampedContent(content, today = todayNY()) {
   return refreshPlainStamp(refreshFrontmatterStamp(content, today), today);

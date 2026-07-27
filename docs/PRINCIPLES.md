@@ -1,5 +1,7 @@
 # PRINCIPLES — the ideals every design must carry
 
+Updated: 2026-07-22
+
 **Created**: 2026-07-22 · **Last updated**: 2026-07-22 · **Why**: the ideals were being retyped
 ad-hoc into each agent prompt, so they arrived differently every time and some arrived not at all.
 

@@ -1,5 +1,8 @@
 # DDD — The Onboarding Console
 
+Updated: 2026-07-27
+Created: 2026-07-14
+
 > **Status: Implemented (2026-07-14).** Contexts 1 (Stack Inventory), 2 (Wiring Survey), 4
 > (Recommendation — pure, schema-enforced), 5 (Change Plan — the only writer, re-reads before write),
 > 6 (Memory Health — `notTested[]` excluded from the score) and 8 (Presentation) ship in

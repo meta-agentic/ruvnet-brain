@@ -1,5 +1,7 @@
 # RuvNet-Brain deltas — always-running MetaHarness coding service
 
+Updated: 2026-07-17
+
 **Status:** research only; no service, harness, cloud resource, or deployment has been created.
 **Written:** 2026-07-17
 **Companion to:**

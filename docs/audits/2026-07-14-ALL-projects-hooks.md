@@ -1,5 +1,7 @@
 # Every project committed in 2026 — every hook, read verbatim (2026-07-14)
 
+Updated: 2026-07-14
+
 128 directories with a Claude config — ANY age, git or not. Read-only.
 
 ## Real projects (83)

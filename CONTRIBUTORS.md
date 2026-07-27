@@ -1,5 +1,8 @@
 # Contributors
 
+Updated: 2026-07-19
+Created: 2026-07-10
+
 Thank you to everyone who has helped make RuvNet Brain better!
 
 ## Project Creator

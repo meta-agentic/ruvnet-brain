@@ -1,5 +1,8 @@
 # ruvnet-brain — a RuvNet brain transplant for Claude Code
 
+Updated: 2026-07-06
+Created: 2026-06-29
+
 One install gives Claude Code a **source-grounded brain over Reuven Cohen's (rUv's) RuvNet ecosystem**
 (Ruflo, RuVector/RVF, AgentDB, RuLake, RuView, agentic-flow, SPARC, QuDAG, ruv-fann, SAFLA, FACT,
 SynthLang, DAA, agent-harness-generator, agenticow, cve-bench, and more) **plus always-on grounding**

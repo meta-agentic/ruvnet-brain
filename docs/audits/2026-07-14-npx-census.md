@@ -1,5 +1,7 @@
 # npx census — complete map (2026-07-14)
 
+Updated: 2026-07-14
+
 Read-only. Nothing was modified. Every surface that can execute a command string was enumerated;
 unparseable files are listed, not skipped.
 

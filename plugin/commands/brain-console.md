@@ -1,5 +1,6 @@
 ---
 description: "Brain Console — RuvNet Brain Console (same console as /rvbc, /brain-console, and /ruvnet-brain:configure — every spelling works). Opens the live console page: your whole RuvNet stack on one page. Read-only until you click."
+updated: 2026-07-20
 ---
 
 Alias of `/rvbc`. **Follow the instructions in `rvbc.md` in this same directory exactly** — one short

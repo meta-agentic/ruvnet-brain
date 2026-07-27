@@ -1,5 +1,7 @@
 # RuvNet Brain — a friendly QE pass
 
+Updated: 2026-07-06
+
 Hi Stuart,
 
 I ran a full QE review of `ruvnet-brain` (deep read + a small swarm of specialized agents doing security, code, tests, dependencies, and docs/UX). First: this is genuinely good work — a real, proven grounding brain on the RVF stack, a sophisticated enforcement layer, real PROVE-IT discipline, above-average accessibility, and I loved finding ADR-0009 already calling out several of these before I did. Everything below is meant to help you ship, and every item has a file:line and a concrete fix. Ranked by leverage.

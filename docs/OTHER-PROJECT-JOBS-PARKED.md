@@ -1,5 +1,7 @@
 # Scheduled jobs in OTHER projects — audited 2026-07-13, PARKED at Stuart's direction
 
+Updated: 2026-07-12
+
 Stuart: "I don't give a shit about the cognitive traitor right now or the New York Times crossword.
 None of that shit matters. I asked you about RuvNet-Brain." — so these are RECORDED, not acted on.
 Audited by two Sonnet subagents against live plists, scripts, logs, and git history.

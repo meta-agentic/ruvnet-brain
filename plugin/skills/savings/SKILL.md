@@ -1,6 +1,7 @@
 ---
 name: savings
 description: Show the MetaHarness routing ledger inline — which model each task was routed to, what it displaced, and the percentage + dollars saved — plus the learned router's training state. Use when the user says "savings", "show my savings", "metaharness report", "metaharness/report", "routing report", "routing receipts", "who is the router choosing", "how much has routing saved me", "is the meta harness working", or "show me the routing". All numbers come from the real receipts log; never fake or extrapolate a number.
+updated: 2026-07-13
 ---
 
 # Savings — the MetaHarness routing ledger, inline

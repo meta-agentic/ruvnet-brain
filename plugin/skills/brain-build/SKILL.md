@@ -1,6 +1,7 @@
 ---
 name: brain-build
 description: The autonomous build contract, out of the box — "/brain-build <what you want>" activates the disciplined hands-off build power users used to hand-write a standing prompt for. Use when the user says "/brain-build", "brain build", "build this autonomously", "build this hands-off", "loop until it's done", "don't ask me, just build it", or asks for an unattended/self-grading build. Phase-gated per rUv's SPARC, self-verified and self-graded /100 against a per-phase rubric (below 95 → fix and regrade, max 5 iterations), cost-tier routed with printed receipts, crash-resumable via checkpoints, questions batched into one list — the user writes the goal, not the contract.
+updated: 2026-07-10
 ---
 
 <!-- Credit: this contract productizes a community field pattern — the 7-rule standing prompt

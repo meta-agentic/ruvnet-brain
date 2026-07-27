@@ -4,7 +4,7 @@ title: 4.0 stays X.Y.Z-dev until it is verified — the version number is not a 
 status: Superseded
 superseded_by: ADR-052
 date: 2026-07-23
-updated: 2026-07-26
+updated: 2026-07-27
 updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [versioning, release, 4.0, honesty]

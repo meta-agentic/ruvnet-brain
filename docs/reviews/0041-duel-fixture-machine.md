@@ -1,5 +1,7 @@
 # Adversarial duel — ADR-041, the ground-truth fixture machine
 
+Updated: 2026-07-23
+
 **Date:** 2026-07-23 · **Duelists:** Fable 5 (assigned "synthetic-fixture + mutation test") vs
 GPT-5.6/codex (assigned "only real machine-state is falsifiable") · **Governs:** ADR-041, ADR-028's
 Recall (≥0.80) and False-alarm (=0) acceptance metrics.

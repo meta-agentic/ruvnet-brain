@@ -1,5 +1,8 @@
 # Duel record — ADR-043 (the continuation gate re-engages)
 
+Updated: 2026-07-24
+Created: 2026-07-23
+
 Date: 2026-07-23 · Governs: `docs/adr/0043-continuation-gate-must-force-not-whisper.md`
 
 ## Honesty note — this was Fable-5-only, and my "codex was degraded" claim was WRONG (corrected 2026-07-23)

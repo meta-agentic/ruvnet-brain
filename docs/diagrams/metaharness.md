@@ -1,5 +1,7 @@
 # MetaHarness
 
+Updated: 2026-07-17
+
 > Source of truth for the MetaHarness explainer diagram used by the console card and the tips page.
 > Every element below is grounded in rUv's accepted ADRs — nothing here is inferred:
 >

@@ -1,5 +1,6 @@
 ---
 description: "What's new in RuvNet Brain — the big things in the current MAJOR release (4.0), in plain English. Not the point-release churn — the headline changes since 3.x. Ends by offering to open the Console so you can see it live."
+updated: 2026-07-25
 ---
 
 # RuvNet-Brain: what's new
