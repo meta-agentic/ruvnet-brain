@@ -4,7 +4,7 @@ title: Pay the debt, then wire the gate — document currency without a ratchet
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-27
-impl: unbuilt
+impl: wired
 governs:
   - scripts/wired-check.mjs
   - scripts/doc-currency.mjs
@@ -21,7 +21,8 @@ relates: [ADR-034, ADR-024, ADR-037, ADR-009, ADR-020]
 **Status**: Proposed
 **Date**: 2026-07-27 · **Last updated**: 2026-07-27 · **Why**: v2 after adversarial duel — v1's design was
 scored 33/100 and 52/100 by two independent models and largely rewritten; record in §Duel
-**Implementation**: unbuilt (except §7, which is built, wired and tested) · **Verified in sync**: never
+**Implementation**: wired (DERIVED, not claimed — §§1, 2, 5, 7 are built, wired and tested; §8's
+session-start notice and §3's opt-in hook widening are NOT) · **Verified in sync**: never
 
 ## Context
 
