@@ -26,7 +26,7 @@
 // and NEVER exits nonzero on bad input — a gate that breaks the shell protects nothing, so fail-open
 // (empty string, exit 0) is the invariant. The gate decides policy from the (possibly empty) value.
 
-import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /** Parse the raw stdin payload into the hook event object, or null if it isn't valid JSON. */
@@ -406,9 +406,26 @@ export function invocationLines(cmd, tools) {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
+// REALPATH BOTH SIDES, or every gate built on this parser FAILS OPEN.
+//
+// The old comparison was `path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)`. Those two
+// are not the same kind of path: argv[1] is whatever the caller typed, symlinks and all, while node
+// resolves a module URL THROUGH symlinks before it ever reaches import.meta.url. So a symlinked
+// invocation — a link to the file, or the file reached through a symlinked directory, which is the
+// shape a versioned spine generation actually has — compared a link path against a real path, decided
+// it was not the entry point, and ran nothing. Measured live 2026-07-27:
+//
+//     $ printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git push --force"}}' | node link.mjs command
+//     (empty)   exit 0
+//
+// Empty output, exit 0. Every gate in this repo reads that as "no command to inspect" and permits —
+// so the whole PreToolUse wall could be walked past with a symlink. Resolving both sides through
+// realpath is the entire fix; the import path is unaffected because a non-entry-point run still has
+// argv[1] pointing at some other file.
 function isMain() {
   try {
-    return process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+    if (!process.argv[1]) return false;
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
   } catch {
     return false;
   }

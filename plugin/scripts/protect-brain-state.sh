@@ -35,7 +35,18 @@
 set -uo pipefail
 
 INPUT=""
-while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
+# BOUNDED READ (2026-07-27, ADR-055 F20): an unqualified `read` never returns on a stdin that is
+# opened and never closed — measured across the mesh, 18 of 37 registered commands sat until the
+# harness killed them. Real Claude Code writes and closes, so this costs no normal turn; that is
+# exactly why a hook that CAN hang forever survives unnoticed. -t bounds the wait, and the string
+# is truncated AFTER the loop because a hook payload is one line with no newline, so `read` hands
+# the whole thing back at once and a per-iteration cap never fires.
+while IFS= read -r -t 2 _l; do
+  INPUT+="$_l"
+  [ ${#INPUT} -ge 65536 ] && break
+done
+[ -n "$_l" ] && INPUT+="$_l"
+INPUT="${INPUT:0:65536}"
 [ -n "$INPUT" ] || exit 0
 
 field() { local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""; [[ $INPUT =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"; }

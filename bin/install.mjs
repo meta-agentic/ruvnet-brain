@@ -941,7 +941,13 @@ async function runDemo() {
         console.log(`  ${line}`);
       }
     }
-  } catch { /* informational only — never break an install */ }
+  } catch (e) {
+    // REPORT, never swallow. A bare `catch {}` here is how this block stayed dead: install-scope.mjs
+    // was missing from package.json `files[]`, so on every real npm install the import threw
+    // MODULE_NOT_FOUND and the empty catch made that indistinguishable from "nothing to say". Both
+    // halves are fixed — it ships now, and if it ever stops shipping, this line says so out loud.
+    warn(`scope explainer could not run (${e && e.message}) — the setup summary was skipped`);
+  }
 
   try {
     const { shouldNotify, noticeFor } = await import(new URL('../scripts/upgrade-notice.mjs', import.meta.url).href);
@@ -1132,13 +1138,20 @@ async function doctor() {
 
 // ── the post-install self-check, wired for both --doctor --hooks and the installer's last step ────
 //
-// Loaded dynamically and failing SOFT on a load error: scripts/selfcheck.mjs is shipped in
-// package.json `files`, but bin/install.mjs is the one file that runs before anything is installed,
-// so it must survive a partial/odd delivery rather than crash. A load failure is REPORTED, never
-// silently swallowed — a self-check that quietly does not run is exactly the 40/100 finding again.
-// (Contrast the pre-existing `install-scope.mjs` import further down, which is wrapped in a bare
-// `catch {}` AND is not in `files[]` — so on a real npm install it silently never runs. Noted here
-// because it is the same failure shape; fixing that block is out of scope for this change.)
+// Loaded dynamically and failing SOFT on a load error: bin/install.mjs is the one file that runs
+// before anything is installed, so it must survive a partial/odd delivery rather than crash. A load
+// failure is REPORTED, never silently swallowed — a self-check that quietly does not run is exactly
+// the 40/100 finding again.
+//
+// THE COMMENT THAT USED TO BE HERE SAID "scripts/selfcheck.mjs is shipped in package.json `files`".
+// It was not. Checked with `npm pack --dry-run` on 2026-07-27, one day after this block merged under
+// the headline "the installer can finally FAIL": the tarball carried 21 entries and selfcheck.mjs was
+// not among them, so on every real npm install this import threw and the installer could NOT fail.
+// The same comment correctly identified install-scope.mjs as having that exact defect and deferred
+// fixing it — while asserting from intent, not from `npm pack`, that its own dependency was fine.
+// All three of install.mjs's dynamic imports are in `files[]` now, and
+// tests/integration/pack-completeness.test.mjs derives the list from this file instead of trusting a
+// sentence about it.
 async function runSelfCheck({ installState = null, quiet = false } = {}) {
   let mod;
   try {
@@ -3191,7 +3204,10 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       console.log(`\n${c.dim('  ── how this is set up on your machine ──')}`);
       for (const line of String(explainChoice({ current: current.scope })).split('\n').slice(0, 12)) console.log(`  ${line}`);
     }
-  } catch { /* informational only */ }
+  } catch (e) {
+    // Same reasoning as the sibling block above — a silent import failure is what hid this for good.
+    warn(`scope explainer could not run (${e && e.message}) — the setup summary was skipped`);
+  }
 
   try {
     const { shouldNotify, noticeFor, recordNotified } = await import(new URL('../scripts/upgrade-notice.mjs', import.meta.url).href);

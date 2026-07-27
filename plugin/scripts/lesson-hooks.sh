@@ -65,7 +65,18 @@ command -v node >/dev/null 2>&1 || exit 0
 # handles: the harness always pipes a payload, and a caller with no stdin (a manual test) gets EOF
 # immediately, not a hang — an empty result just means no command text was found.
 INPUT=""
-while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"$'\n'; done
+# BOUNDED READ (2026-07-27, ADR-055 F20): an unqualified `read` never returns on a stdin that is
+# opened and never closed — measured across the mesh, 18 of 37 registered commands sat until the
+# harness killed them. Real Claude Code writes and closes, so this costs no normal turn; that is
+# exactly why a hook that CAN hang forever survives unnoticed. -t bounds the wait, and the string
+# is truncated AFTER the loop because a hook payload is one line with no newline, so `read` hands
+# the whole thing back at once and a per-iteration cap never fires.
+while IFS= read -r -t 2 _l; do
+  INPUT+="$_l"$'\n'
+  [ ${#INPUT} -ge 65536 ] && break
+done
+[ -n "$_l" ] && INPUT+="$_l"$'\n'
+INPUT="${INPUT:0:65536}"
 HOOK_INPUT_JS="$HERE/hook-input.mjs"
 
 # Map a real Claude Code event onto the store's decision points, and onto the event name the harness

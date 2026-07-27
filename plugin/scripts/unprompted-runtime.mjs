@@ -153,6 +153,31 @@ if (!process.stdin.isTTY) {
   try { payload = fs.readFileSync(0); } catch { payload = Buffer.alloc(0); }
 }
 
+// AN UNPROMPTED UTTERANCE MUST BE OCCASIONED BY A REAL EVENT (fixed 2026-07-27).
+//
+// Measured on origin/main, the same runtime, three inputs:
+//
+//     empty stdin  -> 2453 bytes, exit 0
+//     garbage      -> 2453 bytes
+//     real payload -> 0 bytes
+//
+// Read those together: it was silent when a real event arrived and spoke when none did. The producers
+// downstream match triggers that are true unconditionally (report-status, claim-done), so with no
+// payload to constrain them they emit on every fire — payload-independent speech, which is noise with
+// a JSON envelope around it, injected into the user's context.
+//
+// The header already commits to the shape of this: "never speak on a guess" is why an unknown event
+// stays silent. A payload that is absent, truncated, or not a JSON object is the same class of
+// not-knowing, and resolves the same way — toward silence, per the FAIL-SAFE rule above. Claude Code
+// always writes a JSON object and closes, so no real fire is affected; the test seam's fixtures all
+// pass a real payload for the same reason.
+let event = null;
+try {
+  const parsed = JSON.parse(payload.toString('utf8'));
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) event = parsed;
+} catch { /* not JSON → no occasion → silence, below */ }
+if (!event) silent();
+
 const producers = resolveProducers(EVENT);
 if (!producers.length) silent();   // unknown event, or nothing wired for it — never speak on a guess
 

@@ -13,7 +13,38 @@
 # (1-3) stay silent when nothing matches. ALWAYS exit 0 so it can never block or error a turn, even on
 # empty/malformed input.
 set +e
-INPUT=$(cat 2>/dev/null)
+
+# ── BOUNDED READ (fixed 2026-07-27). ────────────────────────────────────────────────────────────
+# This was `INPUT=$(cat 2>/dev/null)`: no size bound and no time bound, on a hook with a 5s declared
+# timeout that fires on EVERY prompt. Measured on origin/main with 1MB of base64 on stdin:
+#
+#     elapsed: 38284 ms   |  stdout bytes: 2605   ← and it injected the grounding banner
+#
+# 38 seconds inside a 5s budget, because the ten `grep -qiE` gates below each re-scan the WHOLE
+# input. A prompt cannot legitimately be a megabyte; 32KB is already far past any real one, and
+# nothing downstream reads past the first sentence's worth of intent anyway.
+#
+# The time bound is bash's `read -t`, so the two `#!/bin/sh` dialects split here rather than in the
+# shebang: bash (what hook-shim.mjs always dispatches, and what every test invokes) gets a read that
+# cannot hang on a stdin that is opened and never closed; a strict POSIX shell keeps the size bound
+# alone, because POSIX `read` has no timeout and inventing one costs a fork on every prompt. The
+# file stays POSIX-runnable, which scripts/behavioral-l1-l4.mjs relies on.
+INPUT=""
+if [ -n "$BASH_VERSION" ]; then
+  while IFS= read -r -t 2 _l; do
+    INPUT="$INPUT$_l"
+    [ ${#INPUT} -ge 32768 ] && break
+  done
+  # The in-loop check is not enough on its own, and this is worth stating because the first version of
+  # this fix was WRONG in a way that measured WORSE than the bug: a hook payload is ONE line with no
+  # trailing newline, so `read` returns via timeout/EOF with the entire megabyte already sitting in
+  # $_l, and the per-iteration cap never runs. Measured at 59s — five seconds slower than the 38s it
+  # was meant to fix. Truncate the assembled string, not just the loop.
+  [ -n "$_l" ] && INPUT="$INPUT$_l"
+  INPUT="${INPUT:0:32768}"
+else
+  INPUT=$(head -c 32768 2>/dev/null)
+fi
 
 # Extract the prompt text (Claude Code passes JSON on stdin); fall back to raw stdin.
 TEXT=$(printf '%s' "$INPUT" | jq -r '.prompt // .user_prompt // .input // empty' 2>/dev/null)
@@ -219,8 +250,14 @@ if [ -s "$VCACHE" ]; then
 fi
 
 # ── Gate 1: does the task touch the rUv ecosystem? ──────────────────────────────────────────────
+#
+# WORD-BOUNDED, every alternative (fixed 2026-07-27). Half of these were bare substrings, so any
+# token merely CONTAINING "ruvnet" or "dspy" — a variable name, a URL fragment, a base64 blob — fired
+# the full grounding directive. Reproduced with 1MB of random base64 on stdin: the banner fired on
+# noise. `\brvf\b` and `\bsparc\b` were already anchored; they were anchored for exactly this reason
+# and the rest were never brought along.
 RUVNET=0
-if printf '%s' "$TEXT" | grep -qiE 'ruvnet|ruflo|ruvector|\brvf\b|agentdb|agenticow|rulake|ruview|rupixel|ruv-fann|agentic-flow|synthlang|dspy|qudag|safla|metaharness|cve-bench|\bsparc\b|\bswarm(s)?\b|claude-flow|\brUv\b'; then
+if printf '%s' "$TEXT" | grep -qiE '\bruvnet\b|\bruflo\b|\bruvector\b|\brvf\b|\bagentdb\b|\bagenticow\b|\brulake\b|\bruview\b|\brupixel\b|\bruv-fann\b|\bagentic-flow\b|\bsynthlang\b|\bdspy\b|\bqudag\b|\bsafla\b|\bmetaharness\b|\bcve-bench\b|\bsparc\b|\bswarms?\b|\bclaude-flow\b|\brUv\b'; then
   RUVNET=1
 fi
 
