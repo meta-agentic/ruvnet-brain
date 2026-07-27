@@ -105,6 +105,19 @@ failure mode: *"a gate that cries wolf gets bypassed and a bypassed gate protect
 > **Never blanket-restamp.** Applying it to every governed document bumps files that did not change
 > and manufactures the false freshness §4 exists to prevent. Scope it to the files in *this* change
 > (`git show --name-only <sha>` / `git diff --cached --name-only`) and nothing else.
+>
+> **THE SAME TRAP HAS A SECOND MOUTH — via governed CODE, not the document.** Committing a change to
+> code an ADR governs, without touching that ADR, makes it `presumed-stale` at the next check: the
+> governed set moved and nobody re-read the document against it. That is the mechanism working, not a
+> bug — but it means **an ADR governing actively-developed code goes stale on the very next commit to
+> that code.** This document did it to itself twice in one session: two commits touching
+> `wired-check.mjs` and `doc-currency.mjs` re-staled the ADR that governs them, minutes after it
+> reached zero findings.
+>
+> **The rule that closes both mouths: an ADR is stamped in the SAME commit as the governed code it
+> describes.** If the change conforms to the ADR, restamp it and say so in the currency log; if it
+> does not, the ADR needed editing anyway and the gate just told you so at the only moment the answer
+> is cheap. Splitting the two across commits is what creates the treadmill.
 
 ### 2. Serve rule 1 with a sweep, then maintain with the hook — both halves
 
@@ -288,4 +301,5 @@ fix** — which is the one section that was already built.
 | Date | What changed | Why (with referents) |
 |---|---|---|
 | 2026-07-27 | Initial draft (v1) | Owner's three rules. Audit found all three pre-existing and unfired: `md-stamp.mjs:11`, missing `~/.claude/hooks/ascii-svg-auto-sync.sh`, `package.json:35` defined-but-uncalled. ADR-034's `impl: unbuilt` refuted by `scripts/doc-currency.mjs` |
+| 2026-07-27 | **Re-read after its own governed code moved.** Commits `00dd34a` (Rejected/Superseded exempted from drift) and `936c6b4` (stamp-sweep classified STANDALONE) both changed `scripts/wired-check.mjs` / `scripts/doc-currency.mjs` without touching this document, which re-staled it minutes after it reached zero findings. Both changes were made UNDER this ADR and conform to it: §7's third state and §1's debt-paydown. Restamped, and §1 now carries the general rule — an ADR is stamped in the SAME commit as the governed code it describes | The mechanism catching its own author is the strongest evidence it works; recorded rather than quietly restamped |
 | 2026-07-27 | **v2 — rewritten after adversarial duel.** Cut the ratchet, the `governs:` backfill, the Diagram aggregate, and pre-push conversion. Added the sweep, frontmatter-aware insertion, the honest stamp semantics, and the narrowed thesis | GPT 33/100 and Fable 52/100, converging on the same #1 cut. §7 recorded as built (5 modules reclassified; `stripComments` hole closed after the fix twice reproduced the bug it was fixing) |
