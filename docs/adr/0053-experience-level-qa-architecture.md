@@ -11,7 +11,7 @@ relates: [ADR-028, ADR-050, ADR-051]
 governs:
   - tests/experience/
   - .github/workflows/ci.yml
-  - scripts/qe/
+  - scripts/qe/*.mjs
 ---
 
 # ADR-053: Experience-level QA

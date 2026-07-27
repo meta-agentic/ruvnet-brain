@@ -2,7 +2,7 @@
 id: ADR-006
 status: Accepted
 date: 2026-06-27
-updated: 2026-07-22
+updated: 2026-07-23
 updated_source: derived-from-git
 ---
 # ADR-0006: Segment-per-repo indexing + cross-segment normalization

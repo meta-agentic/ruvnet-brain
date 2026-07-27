@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [rulake, ruvector, rvf, recall, architecture, decision]
 supersedes: []
 relates: []
-updated: 2026-07-22
+updated: 2026-07-23
 updated_source: derived-from-git
 ---
 

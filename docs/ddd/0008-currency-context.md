@@ -1,11 +1,12 @@
 # DDD-0008 — The Currency bounded context
 
-Updated: 2026-07-22 | Version 1.0.0
+Updated: 2026-07-27 | Version 1.1.0
 Created: 2026-07-22
 
-Governs **ADR-034** (document currency and the status lifecycle).
+Governs **ADR-034** (document currency and the status lifecycle) and **ADR-055** (currency at a
+chokepoint — the scope widening to Authored Documents and Diagrams).
 
-**Status**: Proposed (2026-07-22)
+**Status**: Proposed (2026-07-22) · scope extended 2026-07-27 (ADR-055)
 
 ---
 
@@ -141,6 +142,79 @@ project's settled answer elsewhere: the `project-state-current` checkpoint was r
 append-only on 2026-07-12, the same day the overwrite version silently destroyed a concurrent
 session's entire checkpoint with zero error.*
 
+### Aggregate: **Authored Document** (added 2026-07-27, ADR-055)
+
+A hand-written `.md` file that is **not** a Governed Document. It carries one obligation and no
+others: a stamp on the first screen, so a human can judge staleness without running anything.
+
+*This tier exists because the original scoping — "any markdown file … out of scope this round" —
+was measured on 2026-07-27 as **166 of 239 repo `.md` files carrying no stamp at all**. The owner's
+rule is explicitly about his own reading: "so I know if they're stale or current actually in there so
+that I can read it, not just you." A tier that only serves the machine does not answer that.*
+
+**Invariants:**
+
+1. **An Authored Document MUST carry a first-screen stamp**, placed by SHAPE, never at a literal
+   line 1. Frontmatter present → the `updated:` key inside the block; plain document → top of body;
+   **unrecognised prologue → nothing at all.**
+   *Five `plugin/skills/*/SKILL.md` files require YAML frontmatter at line 1 for Claude Code's skill
+   loader. A literal line-1 insertion stops them loading. Silence is the correct output for a shape
+   we do not understand — and this ships to strangers, whose line 1 is load-bearing in ways this repo
+   cannot enumerate.*
+2. **Generated markdown is NOT an Authored Document and MUST NOT be stamped.**
+   *`kb/`, `dist/`, `.agentic-qe/logs/`, `node_modules/`, `clones/` account for 96 of the 166. A
+   stamp on machine output is noise wearing the costume of signal, and it would bury the 70 files
+   where the stamp actually carries information.*
+3. **An Authored Document has no `governs:`, no Digest, and no Verification.**
+   *It cannot drift against code, because it asserts nothing about code. Giving it the heavy
+   machinery would manufacture exactly the false positives that kill gates — and would require
+   asserting a governed set, the one field this context admits it cannot derive.*
+4. **Its stamp means LAST MODIFIED. It never means reviewed, current, or verified.**
+   *Mechanising the stamp silently changes what it says. A typo fix stamps today's date, moving the
+   field from "the author attests this was current as of D" to "some tool touched this file on D" —
+   handing the reader **false freshness**, the mirror image of the staleness it exists to expose.
+   Stated here rather than discovered later. `verified` remains available only to Governed Documents.*
+5. **The tier is decided by DOCUMENT KIND, never by the presence of `governs:`.**
+   *Otherwise deleting a key downgrades enforcement — a two-keystroke escape. An ADR with no
+   `governs:` is still a Governed Document that cannot derive its impl; it is not demoted to the
+   thin tier by omission.*
+
+**Acknowledged tension, recorded rather than designed around: a hook-maintained stamp is a cached
+file date, and ACL 2 below prohibits mirroring git.** The mirror is partial by construction — it
+updates only on Claude Code's edit paths, so a vim edit, a GitHub web edit or a merge drifts it. This
+is a real violation of this context's own boundary, accepted knowingly because the alternative (no
+stamp at all) fails the reader the rule exists to serve. It is bounded by invariant 4: the field
+claims only modification, which is the one thing a partial mirror can still almost say.
+
+**The tiers are deliberately unequal.** Conflating them was the alternative, and it fails in both
+directions at once: it either burdens a README with a digest it cannot have, or it dilutes `verified`
+until it means "has a date on it."
+
+### Aggregate: **Diagram** — PROPOSED AND CUT the same day (2026-07-27, ADR-055 §8)
+
+An ASCII block and its rendered SVG *is* the same correspondence problem this context models — an
+authored source, a derived artifact, a claim they still agree. The modelling was right; the aggregate
+was still wrong, and the record of why is kept here so it is not re-proposed:
+
+1. **The population does not support an aggregate.** Excluding generated `kb/` primers, the authored
+   box-drawing corpus is **three files** — `SPEC.md` (which this document already names as
+   must-stay-ASCII) and two DDD context maps. Roughly **two** legitimate candidates. An aggregate,
+   two domain events and manifest-drift machinery for two files is the bureaucracy the owner
+   explicitly asked not to be handed.
+2. **The proposed chokepoint could not do the work.** Detection is arithmetic and fits anywhere;
+   conversion needs a model. The draft put conversion at pre-push — *a shell process with no model,
+   no session, no tokens*, i.e. the identical constraint that meant the `ascii-to-svg` skill's
+   advertised auto-sync hook could never have existed. The design reproduced, one chokepoint over,
+   the exact impossibility it had just diagnosed.
+3. **Unconverted candidates do not fit the manifest it claimed to reuse.** `change-tracking.md`
+   requires `svgFile`, `svgHash` and `lastConverted` per entry. A permanent candidate has none of
+   them, so recording one either forks the skill's schema or cannot be recorded — and a candidate
+   list with no `dismissed` state becomes a warning cemetery people learn to ignore.
+
+**What replaced it:** stale-diagram candidates are surfaced at **session start**, the one chokepoint
+where a model is actually present to act, and conversion stays a judged act invoked through the skill
+that owns the format. No new aggregate, no forked manifest, no gate.
+
 ---
 
 ## Domain events
@@ -155,6 +229,8 @@ session's entire checkpoint with zero error.*
 | `VerificationExpired` | recomputed Digest ≠ stamped Digest | **derived** status downgrade; loud warning |
 | `StampContradicted` | a diff refutes a stamp it carries | the gate — **blocks** |
 | `LegacyDocumentDetected` | a Document has no stamps at all | the report — **never** the gate |
+| `AuthoredDocumentUnstamped` | an Authored Document is written or edited with no first-screen stamp | the `md-stamp` hook — **inserts**, never blocks |
+| `DiagramDrifted` | a fenced ASCII block's normalized hash ≠ its manifest `asciiHash` | the **session-start notice** — never the gate, never a pre-push batch (see the cut aggregate above) |
 
 `VerificationExpired` is the event this repo most needs and has never had. It is what makes
 `verified` safe to say: the label decays on its own, so nobody has to remember to remove it. Every
@@ -204,9 +280,15 @@ acquires the false positives that kill it.*
 - **Product versioning and release stamps** → the version-bump gate and `sync-version.mjs`. Adjacent,
   different clock, different artifact.
 - **Prose quality, style, or header shape** → nobody yet, deliberately (see ACL 3).
-- **README, PROGRESS, skills, primer** → out of scope this round. They drift too; none has a
-  writable `governs:` set, and inventing one for them would be asserting the very field this context
-  already admits it cannot derive.
+- **README, PROGRESS, skills, primer** → ~~out of scope this round~~ **in scope as of 2026-07-27
+  (ADR-055), but only as Authored Documents.** The original reasoning stands and is exactly why the
+  tier is thin: none has a writable `governs:` set, and inventing one would assert the very field
+  this context admits it cannot derive. So they get a stamp and nothing more — never a Digest, never
+  a Verification, never a `verified` label. *The 2026-07-22 parking was right about the machinery and
+  wrong about the reader: a human judging staleness needs a date on the page, not a governed set.*
+- **Prose quality of an Authored Document, and whether ASCII *should* be a diagram** → its author.
+  Currency checks that a stamp exists and that a rendering still matches its source. It never judges
+  whether the sentence is good or whether the picture was worth drawing.
 
 ---
 
@@ -239,3 +321,4 @@ freshness can be proven.
 | Date | What changed | Why |
 |---|---|---|
 | 2026-07-22 | Created | Defines the bounded context for ADR-034 (`docs/adr/0034-document-currency.md`). Owner, 2026-07-22: *"Is it VERIFIED TO BE IN SYNC with the resulting output?"* — no such state existed in any of the 32 ADRs in `docs/adr/` |
+| 2026-07-27 | Added the **Authored Document** and **Diagram** aggregates; un-parked README/PROGRESS/skills/primer into the thin tier; added `AuthoredDocumentUnstamped` + `DiagramDrifted` events | Governs `docs/adr/0055-currency-at-a-chokepoint.md`. Owner's three rules, 2026-07-27. Measured that day: **166 of 239** `.md` files unstamped (96 of them generated output, hence the exclusion invariant); `~/.claude/hooks/ascii-svg-auto-sync.sh` advertised by `ascii-to-svg/change-tracking.md` **does not exist**, manifest last written 2026-06-29; `package.json:35` defines `doc:currency` and nothing calls it. The Diagram aggregate lands here rather than in a new context because ASCII→SVG is the same authored-source/derived-artifact correspondence this context already models |

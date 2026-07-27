@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [console, brain-activity, agentdb, visualization, personalization, ux, legibility]
 supersedes: []
 relates: [ADR-013, ADR-015, ADR-017]
-updated: 2026-07-22
+updated: 2026-07-23
 updated_source: derived-from-git
 ---
 

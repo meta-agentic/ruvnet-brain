@@ -3,7 +3,7 @@ id: ADR-051
 title: Codex host wiring — register the MCP server at install time, and let the doctor probe it
 status: Implemented
 date: 2026-07-24
-updated: 2026-07-26
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [codex, mcp, install, doctor, honesty, portability]
 supersedes: []
@@ -12,7 +12,7 @@ governs:
   - bin/install.mjs
   - .codex/config.toml
   - .codex/hooks.json
-  - .codex/skills/
+  - .codex/skills/*
 ---
 
 # ADR-051: Codex host wiring

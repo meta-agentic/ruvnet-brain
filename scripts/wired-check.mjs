@@ -316,7 +316,17 @@ function callerFiles(repo = REPO) {
     const abs = path.join(repo, r);
     let st; try { st = fs.statSync(abs); } catch { continue; }
     if (st.isFile()) { out.push(abs); continue; }
-    for (const f of walk(abs, true)) if (CALLER_EXTS.has(path.extname(f))) out.push(f);
+    // ADR-055, 2026-07-27: git hooks are EXTENSIONLESS by git's own contract — the file must be named
+    // exactly `pre-push` / `pre-commit` or git ignores it. So the extension filter excluded
+    // `scripts/git-hooks/pre-push` — THIS REPO'S PRIMARY SHIP GATE — from the caller set entirely, and
+    // anything reachable only from there read as unwired. Found the moment the currency check was
+    // wired into pre-push and `wired-check` went on reporting it `manual`. This file's own note names
+    // the remedy: "an invoker outside the roots proves the ROOTS are incomplete — the fix is to add
+    // the root, never to" special-case the module. Same rule, applied to the extension filter.
+    for (const f of walk(abs, true)) {
+      if (CALLER_EXTS.has(path.extname(f))) { out.push(f); continue; }
+      if (path.extname(f) === '' && path.basename(path.dirname(f)) === 'git-hooks') out.push(f);
+    }
   }
   return out;
 }
@@ -362,7 +372,99 @@ export function stripComments(src, ext) {
   // and JSDoc `*` bodies are NOT matched (a `*gen()` line is real code). Every false caller the regrade
   // found — `// … scripts/…measure.mjs` usage examples — is a whole-line `//`, so this closes exactly it.
   const marker = jsLike ? '//' : '#';
-  return src.split('\n').map((l) => (l.trim().startsWith(marker) ? '' : l)).join('\n');
+  // ADR-055, 2026-07-27: ALSO blank JSDoc continuation lines. The comment documenting the
+  // package.json fix, two screens below, spelled both an invocation-shaped path and an
+  // `npm run <script>` line as illustrations — and forged TWO false callers with them, flipping the
+  // very module it audits back to `wired` twice in a row. The note above says block comments are
+  // "left untouched (a caller-shaped mention there is rare…)"; it turned out to be rare right up
+  // until someone documented a caller-shaped bug.
+  // SAFE BY CONSTRUCTION, and the space matters: a trimmed line starting `*` FOLLOWED BY WHITESPACE
+  // (or nothing) is a JSDoc body line. A generator method is `*gen()` — star then a letter — so it is
+  // untouched, which is exactly the case the original note refused to risk. Like every other rule
+  // here this can only ever DROP a candidate line, never invent one.
+  const jsdocBody = /^\*(\s|$)/;
+  return src.split('\n')
+    .map((l) => {
+      const t = l.trim();
+      if (t.startsWith(marker)) return '';
+      if (jsLike && jsdocBody.test(t)) return '';
+      return l;
+    })
+    .join('\n');
+}
+
+/**
+ * ── THE THIRD STATE (ADR-055, 2026-07-27) ────────────────────────────────────────────────────────
+ * DEFINING an npm script is not INVOKING it. `package.json` line 35 defines `doc:currency` as a
+ * command that runs the currency script, and callerPattern's quoted-string branch matches that
+ * VALUE — so the line that DEFINES the script counted as a caller of it. The currency script was
+ * therefore reported `wired` while nothing in the repo ran it: absent from pre-push, gate.sh,
+ * gates.mjs and every workflow. Measured 2026-07-27: `npm run doc:currency` (a REAL invocation)
+ * does not match callerPattern at all, while the definition does. The auditor was blind in BOTH
+ * directions on the largest instance of exactly the built-but-unwired failure it exists to catch.
+ *
+ * This is the THIRD time this defect class has landed here, and the shape never changes: **a string
+ * that NAMES a module is not a CALL to it.** v1 substring-matched prose; the 2026-07-23 regrade
+ * found invocation-shaped usage examples inside `//` comments; this is the package.json form.
+ *
+ * ⚠ AND THE FIX REPRODUCED IT ONCE MORE, IN ITSELF. The first draft of this very comment spelled the
+ * currency script's full filename after the word `node`, as an illustration. `stripComments` blanks
+ * only WHOLE-LINE `//` comments — block comments are left untouched, deliberately ("a caller-shaped
+ * mention there is rare and not worth the span risk"). So this JSDoc forged a caller and made
+ * wired-check itself a "caller" of the module it was auditing, flipping it back to `wired`. Caught
+ * 2026-07-27 by checking the row after the fix instead of trusting it. The hole is REAL and still
+ * open for block comments; it is recorded here rather than papered over, because the safe rule costs
+ * nothing: **never write an invocation-shaped path in a comment in this file.** Name the script, not
+ * the command line.
+ *
+ * NOT fixed by flagging npm scripts `unwired` — `tests/unit/wired-check.test.mjs:45` deliberately
+ * accepts them, and rightly: a script a human runs IS a way in. The honest distinction is that an
+ * npm script is a HUMAN entry point, not an AUTOMATED one, and collapsing those two is what let
+ * doc-currency hide in plain sight for five days. So a module reachable ONLY through an npm script
+ * that nothing automated invokes is reported `manual` — true, legible, and impossible to mistake for
+ * "this runs in the ship path." Inventing a fourth lie-shaped status was the alternative; DDD-0008
+ * says not to, and a status that overclaims is the thing this whole context exists to end.
+ */
+export const NPM_AUTO_LIFECYCLE = new Set([
+  'prepare', 'prepublish', 'prepublishOnly', 'prepack', 'postpack',
+  'preinstall', 'install', 'postinstall',
+  'prestart', 'poststart', 'pretest', 'posttest',
+  'preversion', 'version', 'postversion',
+]);
+
+/** Which package.json script bodies NAME this module? (definitions, not invocations) */
+export function npmScriptsNaming(pkgSrc, modFile) {
+  let pkg;
+  try { pkg = JSON.parse(pkgSrc); } catch { return []; }
+  const scripts = pkg && pkg.scripts;
+  if (!scripts || typeof scripts !== 'object') return [];
+  const re = callerPattern(modFile);
+  return Object.entries(scripts)
+    .filter(([, body]) => typeof body === 'string' && (re.test(body) || re.test(`"${body}"`)))
+    .map(([name]) => name);
+}
+
+/**
+ * Is any of these npm script names reachable by AUTOMATION rather than by a human typing it?
+ * Automated means: npm itself runs it (a lifecycle name), or some file — a workflow, a shell hook,
+ * or another composite npm script — invokes it by name.
+ */
+export function npmScriptAutomated(names, files, repo = REPO) {
+  for (const n of names) {
+    if (NPM_AUTO_LIFECYCLE.has(n)) return { automated: true, via: `npm lifecycle (\`${n}\` is run by npm itself)` };
+  }
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const n of names) {
+    const re = new RegExp(`(?:npm|pnpm|yarn|npm-run-all|run-s|run-p)\\s+(?:run\\s+)?${esc(n)}(?![\\w:-])`);
+    for (const f of files) {
+      const rel = path.relative(repo, f).split(path.sep).join('/');
+      let src = '';
+      try { src = fs.readFileSync(f, 'utf8'); } catch { continue; }
+      // A composite script in package.json ("test:all": "npm run test:unit && …") IS automation.
+      if (re.test(stripComments(src, path.extname(f)))) return { automated: true, via: `${rel} runs \`${n}\`` };
+    }
+  }
+  return { automated: false, via: null };
 }
 
 /** Count REAL callers. Tests excluded deliberately: all seven failures had passing tests. */
@@ -394,7 +496,24 @@ export function audit({ repo = REPO, standalone = STANDALONE, held = HELD } = {}
     if (seen.has(m.base)) { rows.push({ ...m, state: 'exempt', why: seen.get(m.base) }); continue; }
     if (held[m.base]) { rows.push({ ...m, state: 'held', why: held[m.base] }); continue; }
     const callers = callersOf(m, files, repo);
-    rows.push({ ...m, state: callers.length ? 'wired' : 'unwired', callers });
+    let state = callers.length ? 'wired' : 'unwired';
+    let why;
+    // ADR-055: callers that are ONLY the package.json line defining the script are not automation.
+    if (callers.length && callers.every((c) => c === 'package.json')) {
+      let pkgSrc = '';
+      try { pkgSrc = fs.readFileSync(path.join(repo, 'package.json'), 'utf8'); } catch { /* none */ }
+      const names = npmScriptsNaming(pkgSrc, m.file);
+      if (names.length) {
+        const auto = npmScriptAutomated(names, files, repo);
+        if (!auto.automated) {
+          state = 'manual';
+          const list = names.map((n) => `\`${n}\``).join(', ');
+          why = `defined as npm script ${list} and invoked by NOTHING automated — reachable only by a `
+            + `human typing \`npm run ${names[0]}\`. Built and correct; not in any ship path.`;
+        }
+      }
+    }
+    rows.push({ ...m, state, callers, ...(why ? { why } : {}) });
   }
   return { rows, dupes, inventory: all.length };
 }
@@ -654,7 +773,7 @@ if (invokedDirectly) {
 
   if (!argv.includes('--quiet')) {
     console.log(`\n  ${inventory} first-party module(s) in the inventory`);
-    console.log(`    ${by('wired').length} wired · ${by('exempt').length} exempt · `
+    console.log(`    ${by('wired').length} wired · ${by('manual').length} manual · ${by('exempt').length} exempt · `
       + `${by('held').length} held · ${unwired.length} UNWIRED\n`);
 
     for (const u of unwired) console.log(`    ✗ ${u.rel}  — built, and invoked by nothing`);
@@ -665,6 +784,11 @@ if (invokedDirectly) {
 
     // Every exemption, every run. v1 never printed these, so 3 false reasons rotted unseen for a
     // day inside the gate built to stop exactly that.
+    if (by('manual').length) {
+      console.log(`  ${by('manual').length} MANUAL — an npm script exists, but no automation runs it `
+        + `(ADR-055; this is how the currency gate hid while reporting "wired"):\n`);
+      for (const m of by('manual')) console.log(`    ▲ ${m.rel}\n       ${m.why}\n`);
+    }
     console.log(`  ${by('exempt').length} exempt — no caller required, and why:\n`);
     for (const e of by('exempt')) console.log(`    ○ ${e.rel}\n       ${e.why}`);
 

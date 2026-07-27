@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [gates, hooks, parsing, correctness, dry, trust]
 supersedes: []
 relates: [ADR-020]
-updated: 2026-07-22
+updated: 2026-07-23
 updated_source: derived-from-git
 ---
 
