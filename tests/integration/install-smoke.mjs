@@ -51,10 +51,49 @@ function runInstaller(args, extraEnv = {}) {
   });
 }
 
-function assertClean(r, label) {
+// ── "did not crash" and "reported success" are DIFFERENT contracts ────────────────────────────────
+// Conflating them is what broke this suite. The D8 post-install check made doctor() return a real
+// verdict (bin/install.mjs: `process.exitCode = await doctor()`), so a deliberately-broken fixture
+// install now correctly exits 1 — which is the entire point of that change: the installer can
+// finally FAIL. Three tests below build broken fixtures ON PURPOSE (an empty brain dir; a dir
+// holding nothing but a forge-mcp-all.mjs stub) and then asserted exit 0, so they were pinning the
+// OLD bug and would have gone red the moment the installer started telling the truth. They did.
+//
+//   assertNoCrash — the installer reached a DELIBERATE verdict: no spawn error, no signal (timeout),
+//                   no leaked stack trace, and an exit code it chose (0 or 1) rather than a crash.
+//   assertClean   — assertNoCrash PLUS "and it reported success". For modes where exit 0 is the
+//                   contract (--help).
+//   assertVerdict — pins the exact verdict in BOTH directions, so neither a doctor() reverted to
+//                   always-0 nor one hardwired to always-1 can pass this file.
+const DELIBERATE_EXITS = new Set([0, 1]);
+
+function assertNoCrash(r, label) {
   assert.equal(r.error, undefined, `${label}: spawn failed — ${r.error && r.error.message}`);
   assert.equal(r.signal, null, `${label}: process was killed by signal ${r.signal} (timeout?)`);
+  assert.ok(
+    DELIBERATE_EXITS.has(r.status),
+    `${label}: expected a deliberate verdict (0 or 1), got ${r.status} — that is a crash, not a report\nstderr:\n${r.stderr || ''}`,
+  );
+  // A verdict is allowed to be 1. An unhandled throw is never allowed, in either direction.
+  assert.doesNotMatch(
+    r.stderr || '',
+    /\n\s+at\s+\S+.*:\d+:\d+/,
+    `${label}: leaked an unhandled-exception stack — a verdict must be reported, not thrown`,
+  );
+}
+
+function assertClean(r, label) {
+  assertNoCrash(r, label);
   assert.equal(r.status, 0, `${label}: expected exit 0, got ${r.status}\nstderr:\n${r.stderr || ''}`);
+}
+
+function assertVerdict(r, expected, label) {
+  assertNoCrash(r, label);
+  assert.equal(
+    r.status,
+    expected,
+    `${label}: expected doctor verdict ${expected}, got ${r.status}\nstderr:\n${r.stderr || ''}`,
+  );
 }
 
 test('the installer file exists at bin/install.mjs', () => {
@@ -76,16 +115,44 @@ test('`--doctor` runs a read-only health check, prints a diagnostic, and never c
   const brainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-doctor-'));
   try {
     const r = runInstaller(['--doctor'], { RUVNET_BRAIN_KB: brainDir });
-    assertClean(r, '--doctor');
+    // An EMPTY brain dir is a broken install, and since D8 doctor says so with exit 1. It must
+    // still reach that verdict cleanly — report, never throw.
+    assertVerdict(r, 1, '--doctor (empty brain dir = not installed)');
     const out = r.stdout || '';
     assert.match(out, /RuvNet Brain/, 'doctor must print the banner identifying the tool');
     assert.match(out, /brain dir:/, 'doctor must print a diagnostic check line (the brain dir it inspected)');
     // A read-only diagnostic must not write anything into the brain dir it was pointed at.
     assert.deepEqual(fs.readdirSync(brainDir), [], 'doctor must be non-mutating (pinned brain dir stayed empty)');
-    // No unhandled throw: exit 0 already proves this, but also reject a leaked JS stack trace.
-    assert.doesNotMatch(r.stderr || '', /\n\s+at\s+\S+.*:\d+:\d+/, 'doctor must not emit an unhandled-exception stack');
   } finally {
     fs.rmSync(brainDir, { recursive: true, force: true });
+  }
+});
+
+// THE OTHER DIRECTION — without this, the file only ever pins "doctor exits 1", and a doctor()
+// hardwired to `return 1` would pass every assertion above. gatherInstallState() reads four things
+// off disk (a *.rvf store, @xenova/transformers, @ruvector, forge-mcp-all.mjs), so a HEALTHY brain
+// dir is buildable from files alone. Deliberately no forge-ask-all.mjs: its absence is what keeps
+// smokeQuery() from warming a real local model, so this stays a fast, offline, hermetic test.
+test('`--doctor` on a COMPLETE brain dir returns the healthy verdict (exit 0) — the verdict is real, not hardwired', () => {
+  const brainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-doctor-healthy-'));
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-doctor-healthy-cache-'));
+  try {
+    fs.writeFileSync(path.join(brainDir, 'forge-mcp-all.mjs'), '// stub for install-smoke — never executed\n');
+    fs.writeFileSync(path.join(brainDir, 'ruvector.rvf'), 'not a real store — presence is what gatherInstallState counts\n');
+    const xen = path.join(brainDir, 'node_modules', '@xenova', 'transformers');
+    fs.mkdirSync(xen, { recursive: true });
+    fs.writeFileSync(path.join(xen, 'package.json'), '{"name":"@xenova/transformers","version":"0.0.0-fixture"}\n');
+    fs.mkdirSync(path.join(brainDir, 'node_modules', '@ruvector'), { recursive: true });
+
+    const r = runInstaller(['--doctor'], { RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir });
+    assertVerdict(r, 0, '--doctor (complete brain dir = healthy)');
+    const out = r.stdout || '';
+    assert.match(out, /1 RuvNet repos? indexed/, `doctor must report the store it found; got:\n${out}`);
+    assert.match(out, /local reader installed/, 'doctor must confirm the reader deps it verified');
+    assert.doesNotMatch(out, /✗ FAILING/, 'a complete install must not print the FAILING verdict line');
+  } finally {
+    fs.rmSync(brainDir, { recursive: true, force: true });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
   }
 });
 
@@ -149,7 +216,10 @@ test('`--doctor` reports the real token-meter summary line, computed from a real
       env: { ...process.env, RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir },
     });
     fs.rmSync(cacheDir, { recursive: true, force: true });
-    assertClean(r, '--doctor (meter)');
+    // The fixture is a stub-only brain dir (no .rvf stores, no reader deps) — a genuinely
+    // incomplete install, so the verdict is 1. The meter line is still expected to print: this
+    // test is about the meter's arithmetic, not the install's health.
+    assertVerdict(r, 1, '--doctor (meter; stub-only brain dir = incomplete install)');
     const out = r.stdout || '';
     assert.match(out, /meter: 2 injections measured here yesterday\+today — 3000 bytes/, `doctor must report the real ledger totals; got:\n${out}`);
   } finally {
@@ -171,7 +241,7 @@ test('`--doctor`\'s meter line degrades honestly when no ledger exists yet in cw
       env: { ...process.env, RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir },
     });
     fs.rmSync(cacheDir, { recursive: true, force: true });
-    assertClean(r, '--doctor (no ledger)');
+    assertVerdict(r, 1, '--doctor (no ledger; stub-only brain dir = incomplete install)');
     assert.match(r.stdout || '', /meter: no data yet/, 'must say plainly that nothing has been measured, not error or stay silent');
   } finally {
     fs.rmSync(projectDir, { recursive: true, force: true });
