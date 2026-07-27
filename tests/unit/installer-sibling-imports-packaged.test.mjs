@@ -45,7 +45,11 @@ function siblingImportsOf(file) {
 // and npm's own always-include/always-exclude rules — without writing a tarball. That last part
 // matters: files[] alone is not the answer, because npm overrides it in both directions.
 function packedFiles() {
-  const out = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+  // `npm.cmd` on Windows: npm ships as a .cmd shim there, and execFileSync does NOT do PATHEXT
+  // resolution, so plain 'npm' is `spawnSync npm ENOENT` on every windows runner. Naming the shim
+  // directly is preferable to `shell: true`, which would drag a shell in for no benefit.
+  const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const out = execFileSync(NPM, ['pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
