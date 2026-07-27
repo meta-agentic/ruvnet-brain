@@ -45,15 +45,21 @@ function siblingImportsOf(file) {
 // and npm's own always-include/always-exclude rules — without writing a tarball. That last part
 // matters: files[] alone is not the answer, because npm overrides it in both directions.
 function packedFiles() {
-  // `npm.cmd` on Windows: npm ships as a .cmd shim there, and execFileSync does NOT do PATHEXT
-  // resolution, so plain 'npm' is `spawnSync npm ENOENT` on every windows runner. Naming the shim
-  // directly is preferable to `shell: true`, which would drag a shell in for no benefit.
-  const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const out = execFileSync(NPM, ['pack', '--dry-run', '--json'], {
+  // Spawning npm on Windows took three tries, so the reasoning is recorded rather than the answer:
+  //   'npm'      -> spawnSync npm ENOENT     (execFileSync does no PATHEXT resolution; npm is a shim)
+  //   'npm.cmd'  -> spawnSync npm.cmd EINVAL (node refuses to spawn .cmd/.bat without a shell — the
+  //                                           CVE-2024-27980 argument-injection mitigation)
+  //   'npm.cmd' + shell:true -> works
+  // shell:true is safe HERE specifically because every argument is a fixed literal — nothing from
+  // the repo, the environment, or a test fixture reaches this command line. Do not add a dynamic
+  // argument to this call without removing the shell.
+  const isWin = process.platform === 'win32';
+  const out = execFileSync(isWin ? 'npm.cmd' : 'npm', ['pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
     timeout: 120000,
+    shell: isWin,
   });
   const report = JSON.parse(out);
   // Normalize separators: on Windows npm reports `scripts\selfcheck.mjs` while the import
