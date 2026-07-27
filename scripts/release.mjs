@@ -159,6 +159,55 @@ if (PUBLISH) {
   step('D', 'npm publish — SKIPPED (check-only; pass --publish to publish)');
 }
 
+// D+. THE DEPLOY-SURFACE SWEEP (owner standing order, 2026-07-27): "ALWAYS check GitHub CLI and
+// Vercel CLI for gotchas with anything you're pushing. This needs to be part of the protocol you use
+// whenever you deploy. I don't want to have to tell you this again."
+//
+// Gate C++ already asks whether CI passed. That is one surface. This asks the two CLIs what the
+// PLATFORMS think — failing workflows other than our own ci, security advisories, and whether the
+// production deployment that serves the explainer is actually Ready. Each is a question a human
+// would otherwise have to remember to ask, which is the definition of a check that eventually
+// doesn't happen.
+//
+// ADVISORY BY DESIGN, LOUD BY CONTRACT: this prints findings and does not exit non-zero, because a
+// GitHub-side hiccup must not wedge a correct release — EXCEPT where it overlaps a hard gate that
+// already exists (C++ for ci, E for the live explainer). Anything it finds is printed in full so it
+// cannot be a diagnostic nobody reads.
+step('D+', 'deploy-surface sweep — what GitHub and Vercel think about what we are pushing');
+{
+  const sh = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore','pipe','ignore'], timeout: 45000 }); } catch { return null; } };
+
+  // 1. Failing workflow runs that are NOT our ci (ci is gate C++'s job). issue-watch exits 1 BY
+  //    DESIGN on an SLA breach, so it is reported as an SLA signal, never as a broken pipeline —
+  //    conflating the two is how a permanently-red workflow trains everyone to ignore red.
+  const runs = sh('gh', ['run','list','--repo','stuinfla/ruvnet-brain','--limit','15','--json','name,conclusion,headBranch']);
+  if (runs) {
+    let bad = [];
+    try { bad = JSON.parse(runs).filter((r) => r.conclusion && r.conclusion !== 'success' && r.name !== 'ci'); } catch { /* unparseable — reported below */ }
+    const sla = bad.filter((r) => r.name === 'issue-watch');
+    const real = bad.filter((r) => r.name !== 'issue-watch');
+    if (sla.length) console.log(`  ${c.y('! issue-watch red x' + sla.length)} ${c.dim('— by design: an open issue is past its 4h SLA. Answer the issue, do not fix the workflow.')}`);
+    if (real.length) console.log(`  ${c.y('! non-ci workflows failing:')} ${real.map((r) => r.name).join(', ')}`);
+    if (!sla.length && !real.length) console.log(c.dim('  no failing workflows outside ci'));
+  } else console.log(c.dim('  gh unavailable — workflow sweep SKIPPED (not a pass)'));
+
+  // 2. Security advisories against what we ship.
+  const dep = sh('gh', ['api','repos/stuinfla/ruvnet-brain/dependabot/alerts','--jq','[.[]|select(.state=="open")]|length']);
+  if (dep !== null) {
+    const n = parseInt(dep.trim(), 10);
+    console.log(n > 0 ? `  ${c.r('! ' + n + ' open dependabot alert(s)')}` : c.dim('  0 open dependabot alerts'));
+  } else console.log(c.dim('  dependabot query unavailable — SKIPPED (not a pass)'));
+
+  // 3. Vercel: the explainer is a shipped surface; a Ready production deployment is the precondition
+  //    for gate E's live check meaning anything.
+  const vc = sh('vercel', ['ls','--yes']);
+  if (vc) {
+    const prod = vc.split('\n').find((l) => l.includes('Production'));
+    const ready = prod && /●\s*Ready/.test(prod);
+    console.log(ready ? c.dim('  vercel: latest production deployment Ready') : `  ${c.y('! vercel: latest production deployment is NOT Ready')} ${c.dim((prod||'').trim().slice(0,90))}`);
+  } else console.log(c.dim('  vercel CLI unavailable/not logged in — SKIPPED (not a pass)'));
+}
+
 // E. the live channel walk — THE gate that would have caught the stale-2.9.1 + 404
 step('E', 'verify-channels — the live walk of every user path');
 runOrDie('verify-channels', process.execPath, ['scripts/verify-channels.mjs']);
