@@ -272,6 +272,35 @@ describe('THE false-positive that would kill the gate: old ≠ stale', () => {
     // ...and --warn-drift downgrades it, for anyone who wants the ADR-034 §5 reading.
     expect(blockingFindings([d], { warnDrift: true }).map((f) => f.code)).not.toContain('presumed-stale');
   });
+
+  // ADR-055, 2026-07-27. ADR-046 and ADR-047 are both Rejected and both sat in the blocking set,
+  // with nothing an author could ever do to clear them short of deleting the record of a rejected
+  // idea. A decision not in force cannot drift from code it never governed — and this file's own
+  // header calls false positives the DESIGNED failure mode.
+  it('a decision NOT IN FORCE cannot drift — Rejected/Superseded/Deprecated warn, never block', () => {
+    for (const status of ['Rejected', 'Superseded', 'Deprecated']) {
+      const r = newRepo();
+      write(r, 'scripts/thing.mjs', 'export const a = 1;\n');
+      write(r, 'docs/adr/0001-x.md', adr({ governs: ['scripts/thing.mjs'], status }));
+      commit(r, 'doc + code', '2026-07-01T12:00:00');
+      for (let i = 0; i < 4; i++) { write(r, 'scripts/thing.mjs', `export const a = ${i + 2};\n`); commit(r, `rework ${i}`, '2026-07-15T12:00:00'); }
+      const d = evaluateDoc(r, 'docs/adr/0001-x.md');
+      expect(d.drift.state).toBe('presumed-stale');           // the drift is still DERIVED and true
+      expect(levelOf(d, 'presumed-stale')).toBe('warn');      // ...it just does not block
+      expect(blockingFindings([d]).map((f) => f.code)).not.toContain('presumed-stale');
+    }
+  });
+
+  it('...but an IN-FORCE decision with identical drift still BLOCKS (the exemption is narrow)', () => {
+    for (const status of ['Accepted', 'Proposed']) {
+      const r = newRepo();
+      write(r, 'scripts/thing.mjs', 'export const a = 1;\n');
+      write(r, 'docs/adr/0001-x.md', adr({ governs: ['scripts/thing.mjs'], status }));
+      commit(r, 'doc + code', '2026-07-01T12:00:00');
+      for (let i = 0; i < 4; i++) { write(r, 'scripts/thing.mjs', `export const a = ${i + 2};\n`); commit(r, `rework ${i}`, '2026-07-15T12:00:00'); }
+      expect(levelOf(evaluateDoc(r, 'docs/adr/0001-x.md'), 'presumed-stale')).toBe('block');
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -766,9 +795,16 @@ describe('against the REAL repository', () => {
     expect(codes(d)).not.toContain('presumed-stale');
   });
 
-  it('reproduces the true stamp-lag on ADR-0013 — the finding the repo did not know it had', () => {
+  // WAS: `expect(codes(d)).toContain('stamp-lags-doc')` — it asserted ADR-0013 IS broken, and went
+  // red on 2026-07-27 for the best possible reason: the lag was REPAIRED (ADR-055 §1 paid the debt
+  // down, 32 blocking findings -> 2). A test that pins a defect in a specific real file has a
+  // lifetime bounded by the fix, and inverts on the day the work succeeds. The BEHAVIOUR it meant
+  // to protect — that a real stamp lag in this repo is detected — is covered by the synthetic
+  // fixtures above, which cannot expire. What is worth asserting against the real repo is the
+  // opposite and durable claim: the debt is paid and must stay paid.
+  it('ADR-0013 no longer lags — the repaired state holds (was: asserted the lag existed)', () => {
     const d = evaluateDoc(REPO_ROOT, 'docs/adr/0013-onboarding-console.md', { checkWiring: false });
-    if (d.dirty) return;   // another agent is mid-edit; the check is correctly suspended
-    expect(codes(d)).toContain('stamp-lags-doc');
+    if (d.dirty) return;   // mid-edit; the check is correctly suspended
+    expect(codes(d)).not.toContain('stamp-lags-doc');
   });
 });

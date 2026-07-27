@@ -3,7 +3,7 @@ id: ADR-049
 title: The console rebuild — explain every section, scope every suggestion, and make the safe ones checkable
 status: Accepted
 date: 2026-07-24
-updated: 2026-07-24
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [onboarding, ux, console, advocacy, capability, cache, honesty]
 supersedes: []
@@ -97,5 +97,16 @@ project the data is about. A cross-project isolation test proves it, mutation-ch
   grouped-sections recommendation layout is likewise deferred pending his call on group structure.
 - **Verification:** all four shipped pieces are on `feat/console-rebuild`, each render-verified live;
   the checkbox is proven end to end (renders, click scrolls the consent-gated proposal into view with
-  its Apply button). Suites green (1756 vitest, 51/51 npm). Not yet merged to main — the branch is
-  staged for the owner's review, per "nothing ships without my OK."
+  its Apply button). Suites green (1756 vitest, 51/51 npm). ~~Not yet merged to main — the branch is
+  staged for the owner's review, per "nothing ships without my OK."~~
+  **MERGED 2026-07-25 — corrected 2026-07-27 (ADR-055 re-read).** The owner approved and it landed:
+  `b13cab1` (*Merge branch 'feat/console-rebuild'*) and `3e766f6` (*the console rebuild lands on main —
+  explainers, scope, checkboxes, terminal install*), both ancestors of `origin/main`. The sentence
+  above described the world for one day and then quietly described a world that no longer existed —
+  precisely the failure ADR-055 was written to end, found by the drift check rather than by a reader.
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-27 | **Re-read against the governed code; one stale claim corrected.** Verification said *"Not yet merged to main — staged for the owner's review"*; it merged (`b13cab1`, `3e766f6`, both ancestors of `origin/main`). The rest of the document still describes the code | Flagged `presumed-stale` by `doc-currency`: `console/app.js` (+25) and `scripts/onboarding-console.mjs` (+180) moved 3 commits / 2 days after this document's last commit (`9665c12`, 2026-07-24). Those additions are ADR-054's master switch — **additive and conforming**: the new section renders through the shared `buildSettingsForm` widget this ADR specifies rather than a bespoke control, and is placed first *because* it is the switch every other setting is conditional on. No claim here is contradicted by them |

@@ -547,9 +547,21 @@ export function evaluateDoc(root, rel, opts = {}) {
   // ── drift ─────────────────────────────────────────────────────────────────────────────────────
   const drift = deriveDrift(root, rel, governed);
   doc.drift = drift;
+  // A DECISION THAT IS NOT IN FORCE CANNOT DRIFT (ADR-055, 2026-07-27). Rejected / Superseded /
+  // Deprecated documents describe a path NOT taken, or one another document has since taken over.
+  // Their `governs:` set names code that was never meant to implement them, so "the governed code
+  // moved and nobody re-checked" is not a defect — there is nothing to re-check against. Blocking a
+  // push over it is a textbook false positive, and this file's own header names false positives as
+  // the DESIGNED failure mode: "a gate that cries wolf gets bypassed and a bypassed gate protects
+  // nothing." Found by ADR-046 and ADR-047 — both Rejected — sitting in the blocking set with
+  // nothing an author could ever do to clear them short of deleting the record of a rejected idea.
+  // Still REPORTED, never silent: a superseded document whose code moves is worth seeing, and the
+  // day someone un-rejects it the finding returns to BLOCK on its own.
+  const notInForce = /^(rejected|superseded|deprecated)$/i.test(statusWord || '');
   if (drift.state === 'presumed-stale') {
-    add(BLOCK, 'presumed-stale',
-      `governed code moved ${drift.commits} commit(s) (${drift.days}d) after the document's own last commit (${drift.docDate}) — nobody has checked since it moved. Paths: ${drift.paths.join(', ')}`);
+    add(notInForce ? WARN : BLOCK, 'presumed-stale',
+      `governed code moved ${drift.commits} commit(s) (${drift.days}d) after the document's own last commit (${drift.docDate}) — nobody has checked since it moved. Paths: ${drift.paths.join(', ')}`
+      + (notInForce ? ` — reported, NOT blocked: status "${statusWord}" means this decision is not in force, so it cannot drift from code it never governed` : ''));
   } else if (drift.state === 'lagging') {
     add(WARN, 'lagging', `governed code moved ${drift.commits} commit(s) after the document — normal within a session; reported, not blocked`);
   }
