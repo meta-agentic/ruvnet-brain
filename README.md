@@ -311,7 +311,7 @@ But **Claude was trained on _classical_ software development.** Point it at rUv'
 
 > **RuvNet Brain is the missing instruction manual.** It reads rUv's real source, hands Claude the _answer key_, and removes Claude's permission to make things up about the stack. Install it once, aim it at any repo, and a newcomer can build ~9 months ahead — without being rUv.
 
-The novelty is **structural grounding, not plain retrieval.** Plain RAG only decides what to _add_ to context. This ships a `UserPromptSubmit` hook that injects a grounding directive on **every** RuvNet-relevant turn — the harness consumes that stdout structurally, so the directive is _always present_, not a decline-able suggestion. It's a **strong, always-on nudge** — Claude is pointed at the real source and told to ground before asserting on every relevant turn — not a hard block on the model's output. **RAG decides what to add; this makes grounding the default the model has to actively argue its way out of.**
+The novelty is **structural grounding, not plain retrieval.** Plain RAG only decides what to _add_ to context. This ships a `UserPromptSubmit` hook that injects a grounding directive on **every** RuvNet-relevant turn — the harness consumes that stdout structurally, so the directive is _always present_, not a decline-able suggestion. It's a **strong, always-on nudge** — Claude is pointed at the real source and told to ground before asserting on every relevant turn — not a hard block on the model's output. (That describes the *grounding* hook. Separately, a few `PreToolUse` gates **can** block a call — all opt-in or repo-scoped, all fail-open; [SECURITY.md](SECURITY.md#what-runs-automatically-and-when) lists every hook and whether it can block you.) **RAG decides what to add; this makes grounding the default the model has to actively argue its way out of.**
 
 ---
 
@@ -526,6 +526,7 @@ This project versions in the open (see the live badge up top for the exact plugi
 - ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
 - ✅ **Published on npm** — `npx ruvnet-brain` (short form); `npx github:stuinfla/ruvnet-brain` always tracks the latest commit if you want it even fresher.
+- ✅ **Every automatic hook is documented** — [SECURITY.md](SECURITY.md#what-runs-automatically-and-when) lists each one, what it reads, and whether it can block a turn. Most are advisory; the gates that *can* block are opt-in (model-router profile) or scoped to this repo, and all fail open.
 - ⏳ **The fully-autonomous engineering loop** ([ADR-0008](docs/adr/)) — the behavioral hook injects the loop CONTRACT (assess → SPARC → ADR/DDD → QA → score); the fully-autonomous loop is ADR-0008's open work.
 
 ---
