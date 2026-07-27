@@ -41,7 +41,21 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
       [ -z "$CURRENCY_BASE" ] && CURRENCY_BASE="$(git merge-base HEAD origin/main 2>/dev/null || true)" ;;
     *)
       RANGE_DIFF="$RANGE_DIFF$(git diff --no-color -U0 "$remote_sha" "$local_sha" 2>/dev/null)"
-      [ -z "$CURRENCY_BASE" ] && CURRENCY_BASE="$remote_sha" ;;
+      # ADR-056: the remote tip is only a valid "what did I change" base when it is an ANCESTOR of
+      # what we are pushing. After a rebase or squash it is NOT — the range then spans the entire
+      # rewrite and drags in every document the upstream branch already carried, red ones included.
+      # Measured 2026-07-27: a force-push after rebasing onto main was refused for ADR-054 and
+      # ADR-055 — two documents on main that this branch never touched. GPT-5.6 predicted exactly
+      # this in the ADR-056 duel ("rebase or squash changes the touched-file set without changing
+      # whether a violation is genuinely new"). So: ancestor => use it; otherwise fall back to the
+      # merge-base with main, which is the honest answer to "what is mine".
+      if [ -z "$CURRENCY_BASE" ]; then
+        if git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+          CURRENCY_BASE="$remote_sha"
+        else
+          CURRENCY_BASE="$(git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+        fi
+      fi ;;
   esac
 done
 # Fall back to the staged index too, so a pre-commit-style invocation still gets covered.
