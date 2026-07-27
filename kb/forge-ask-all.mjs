@@ -416,7 +416,18 @@ async function main() {
   });
 }
 
+// REALPATH BOTH SIDES, not path.resolve(). REPRODUCED LIVE 2026-07-27: path.resolve() normalizes
+// a path but does NOT follow symlinks, while `import.meta.url` IS symlink-resolved by Node. So
+// invoking this file through ANY symlink — an npm bin shim, a wrapper script, a symlinked KB dir —
+// made the two sides disagree, main() never ran, and the process printed NOTHING and exited 0.
+// Silent success is the worst failure this repo has: the brain looks like it answered and returned
+// no answer, and every caller downstream treats exit 0 as "searched, found nothing". Found by
+// accident while building a benchmark harness out of symlinks; the same defect class was
+// independently found in plugin/scripts/hook-input.mjs's isMain by the D9 hook audit the same day,
+// where it fails every write-gate OPEN. realpath can throw (broken link, permissions), so each side
+// falls back to its unresolved form rather than crashing the entry point.
 const __filename = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
+const realOrSelf = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && realOrSelf(process.argv[1]) === realOrSelf(__filename)) {
   main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
 }

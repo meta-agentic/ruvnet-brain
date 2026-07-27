@@ -969,7 +969,11 @@ async function main() {
   });
 }
 
+// REALPATH BOTH SIDES — see the identical guard in forge-ask-all.mjs for the full story. Short
+// version, reproduced live 2026-07-27: path.resolve() does not follow symlinks but import.meta.url
+// is already symlink-resolved, so a symlinked invocation ran nothing and exited 0 in silence.
 const __filename = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
+const realOrSelf = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && realOrSelf(process.argv[1]) === realOrSelf(__filename)) {
   main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
 }
