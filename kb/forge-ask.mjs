@@ -90,9 +90,25 @@ function resolveConf(dir, name, variant) {
 // ---------- embedder (lazy, per-model, offline-first with remote fallback) ----------
 // Cached PER MODEL NAME so one process can serve both the small (MiniLM) and big (bge) builds
 // without reloading. Remote download is allowed only when THAT model isn't already cached.
-const _feCache = new Map();
-async function getEmbedder(model) {
-  if (_feCache.has(model)) return _feCache.get(model);
+// Cache the PROMISE, not the resolved pipeline. MEASURED 2026-07-27 (cross-model duel, both sides
+// independently): the old code tested `_feCache.has(model)` and only `_feCache.set(...)` AFTER a
+// multi-second await, so every caller that arrived during the load missed the cache and started its
+// own. A real all-repos query fans out to 68 repos concurrently and was measured LOADING THE
+// EMBEDDER FIVE TIMES — seconds of duplicated work and 5x the resident memory, for a value that is
+// byte-identical every time. Storing the in-flight promise makes the other callers await the first
+// load instead of racing it. A REJECTED load is evicted so the issue-#29 self-heal retry still works
+// on the next call (caching a rejection would turn one bad load into a permanent outage).
+const _feCache = new Map(); // model -> Promise<featureExtractor>
+function getEmbedder(model) {
+  let p = _feCache.get(model);
+  if (!p) {
+    p = loadEmbedderUncached(model);
+    _feCache.set(model, p);
+    p.catch(() => _feCache.delete(model));
+  }
+  return p;
+}
+async function loadEmbedderUncached(model) {
   const { T, modelCache, via } = await loadTransformers();
   T.env.localModelPath = modelCache;
   // Local-first network guard: a remote fetch is permitted ONLY when THIS model is not already
@@ -161,13 +177,53 @@ async function getEmbedder(model) {
       fe = await attemptLoad();
     } else throw e;
   }
-  _feCache.set(model, fe);
-  return fe;
+  return fe; // cached by getEmbedder() as an in-flight promise, before this ever resolves
 }
 // Embed a QUERY with the build's embedder config. bge-style builds carry a queryPrefix (asymmetric
 // retrieval — passages embedded with NO prefix at build time, queries get the instruction prefix
 // here); MiniLM uses no prefix + mean pooling.
-async function embed(text, cfg = MINILM_CFG) {
+// ONE INFERENCE PER DISTINCT QUERY, not one per repo. MEASURED 2026-07-27, both duel models
+// independently: a production all-repos query re-embedded the IDENTICAL query string 69 times —
+// once inside each repo's searchKb() — at ~0.70-1.44s per inference. The vector is a pure function
+// of (model, prefix, pooling, normalize, text), so 68 of those 69 were provably redundant work.
+//
+// Keyed on the full embedder config, never on text alone: an asymmetric bge build prefixes queries
+// with an instruction string while MiniLM does not, so the same text under two configs is two
+// different vectors and must never collide. Caches the PROMISE so callers already in flight dedupe
+// too (the fan-out is concurrent — caching only the resolved value would still let 68 inferences
+// start). Rejections are evicted so a transient failure cannot become permanent.
+//
+// Bounded and FIFO-evicted: the MCP server is long-lived and an unbounded map keyed by user query
+// text is a slow memory leak. 32 entries is far more than the fan-out ever needs within one query.
+const _qvCache = new Map(); // cfg+text -> Promise<Float32Array>
+const QV_CACHE_MAX = 32;
+function embed(text, cfg = MINILM_CFG) {
+  const key = [
+    cfg.model || MINILM_CFG.model,
+    cfg.queryPrefix || '',
+    cfg.pooling || 'mean',
+    cfg.normalize !== false,
+    text,
+  ].join(' ');
+  let p = _qvCache.get(key);
+  if (!p) {
+    p = embedUncached(text, cfg);
+    _qvCache.set(key, p);
+    p.catch(() => _qvCache.delete(key));
+    if (_qvCache.size > QV_CACHE_MAX) _qvCache.delete(_qvCache.keys().next().value);
+  }
+  // Hand every caller its OWN Float32Array. A shared buffer would let one consumer's in-place
+  // normalize/scale silently corrupt every other repo's query vector — a ~3KB copy is nothing
+  // against a ~700ms inference, and it removes the whole aliasing failure class.
+  return p.then((v) => Float32Array.from(v));
+}
+// TEST SEAM — additive, never referenced by any production path in this file or its callers.
+// The two caches above ARE the fix, so a test that cannot observe them cannot prove the fix; and
+// loading a real ~90MB embedder inside a unit test would make it slow, network-shaped and flaky.
+// Pre-seeding `fe` with a counting stub lets the memoization be proven in milliseconds, offline.
+export const __embedInternals = { feCache: _feCache, qvCache: _qvCache, embed };
+
+async function embedUncached(text, cfg = MINILM_CFG) {
   const fe = await getEmbedder(cfg.model || MINILM_CFG.model);
   const out = await fe([(cfg.queryPrefix || '') + text], {
     pooling: cfg.pooling || 'mean',
@@ -913,7 +969,11 @@ async function main() {
   });
 }
 
+// REALPATH BOTH SIDES — see the identical guard in forge-ask-all.mjs for the full story. Short
+// version, reproduced live 2026-07-27: path.resolve() does not follow symlinks but import.meta.url
+// is already symlink-resolved, so a symlinked invocation ran nothing and exited 0 in silence.
 const __filename = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
+const realOrSelf = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && realOrSelf(process.argv[1]) === realOrSelf(__filename)) {
   main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
 }
