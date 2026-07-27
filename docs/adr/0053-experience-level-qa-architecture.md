@@ -3,7 +3,7 @@ id: ADR-053
 title: Experience-level QA — test the journey a user actually has, on every host, OS, and install path
 status: Accepted
 date: 2026-07-26
-updated: 2026-07-26
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [qa, testing, experience, cross-platform, codex, agentic-qe, ci]
 supersedes: []
@@ -62,6 +62,43 @@ Two axes v1 lacked, now required on every scenario:
   a hook firing mid-session, and v1's one-time journey stages structurally could not see it.
 
 ### 2. The hooks-as-shipped battery — tier one, funded by the cuts below
+
+> **STATUS 2026-07-27 — items 1, 2, 5, 7, 8 SHIPPED as a POST-INSTALL SELF-CHECK, and born red.**
+> `scripts/selfcheck.mjs` + `tests/unit/selfcheck-battery.test.mjs` (32 tests), reachable as
+> `npx ruvnet-brain --doctor --hooks` and run as the installer's final step. This closes the gap an
+> independent grader scored 40/100: *"is there any mechanical check that runs after install on a
+> stranger's machine and can fail?"* — previously **no**, for a reason that was pure consumption and
+> not detection. `verifyInstall()` and `smokeQuery()` both RETURN verdicts and `bin/install.mjs`
+> called both as bare statements, discarding both; `doctor()` printed *"! Needs attention."* and
+> returned `undefined`. Measured on origin/main before the fix, against an install with zero stores
+> and no reader deps:
+>
+> ```
+> $ node bin/install.mjs --doctor        →  "! Needs attention."
+> $ node bin/install.mjs --doctor; echo $?  →  0
+> ```
+>
+> Both are now consumed and `--doctor` exits 1 on that same install.
+>
+> **It is BORN RED against the shipped product, which is the proof it works.** Run against this
+> machine's installed 3.9.84-dev plugin it reports — and each was then reproduced with plain
+> `timeout` + pipes, with zero involvement from the checker, because a harness that invents a defect
+> is worse than no harness:
+>
+> | finding | independent reproduction |
+> |---|---|
+> | `ground-ruvnet` hangs on held-open stdin AND on 1MB garbage (declared timeout 5s) | `( printf '{}'; sleep 12 ) \| timeout 8 node …/hook-shim.mjs ground-ruvnet` → **exit 124** |
+> | `session-start` writes 8923 bytes of stdout (cap 4096) | `echo '{}' \| node …/hook-shim.mjs session-start \| wc -c` → **8923** |
+> | `learn-flush`, `route-dispatch`, `design-wall`, `verify-interface`, `protect-brain-state`, `hijack-ruvnet`, `learn-capture`, `unprompted-runtime` all hang on at least one regime | same shape |
+> | `route-dispatch.sh` double-registered from two code roots (spine + marketplace-clone) | ADR-055 F3, already known |
+>
+> These are F20/F3 exactly as ADR-055 predicted. Per ADR-055's build order — item 2 (battery)
+> **before** item 3 (changing any registration) — they are recorded here as findings, not fixed out
+> of order. Item 3 is what closes them.
+>
+> Not yet built from the list below: **3** (p95 over 100 firings), **4** (broken-world sweep), **6**
+> (static lint — partly covered by `scripts/hook-registry.mjs --lint`, which is clean on all 16
+> repo-owned registrations), **9** (update-while-firing).
 
 The single highest user-pain surface. A required CI job (ubuntu + windows) and a release gate:
 

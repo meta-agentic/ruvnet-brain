@@ -301,6 +301,18 @@ concurrent writers and no coordinator.
 
 ## §8 The mesh test suite — specified so it can fail
 
+> **STATUS 2026-07-27.** The registry census + contract lint (build item 1) and battery v2 (build
+> item 2) are shipped; `node scripts/hook-registry.mjs --lint --machine=0` is **clean on all 16
+> repo-owned registrations** while the full machine-wide run stays honestly red on 52 machine-local
+> findings (user layer + third-party), which is the intended split — we lint what we own and merely
+> report what we do not. **Mutation proof is real, not claimed**: each of the seven battery
+> assertions (hang, exit-code, stdout cap, orphan, latency margin, stderr trace, missing timeout) is
+> individually disabled by rewriting `scripts/selfcheck.mjs`'s SOURCE into a temporary module, and
+> its fixture is proven to go GREEN under the mutant before the mutant is deleted — an assertion
+> that cannot be shown to be load-bearing is dead code, and the suite fails if any mutant survives.
+> Still specified-but-unbuilt here: 20× concurrent load, broken-world sweep, OFF matrix,
+> update-while-firing, fourth-wall replay, and the packed-artifact CI lane.
+
 Registry census over all six registries; contract lint (M1–M9); battery v2 per ADR-053 §2 —
 every literal registration with `CLAUDE_PLUGIN_ROOT` substituted to the packed layout, four
 stdin regimes including **held-open** under an external process-group watchdog; broken-world
@@ -319,6 +331,21 @@ census/lint suite is born red** (appendix B) — which is the proof it works.
    (the user-layer timeout fixes of 03:00 become regression fixtures, not findings).
 2. **Hook battery v2** before changing any registration. Red first: held-open stdin exceeds
    budget today (F20); packed-literal cases expose the adjacent-door gap (F16).
+   **SHIPPED 2026-07-27 (`scripts/selfcheck.mjs`, `tests/unit/selfcheck-battery.test.mjs`, 32
+   tests, `npx ruvnet-brain --doctor --hooks`).** It reads the **INSTALLED** hooks.json — the packed
+   cache copy Claude Code actually booted, never the checkout preimage — which is F16 closed at
+   cause rather than tested around. F20 is **confirmed red and measured**: `ground-ruvnet`,
+   `learn-flush`, `route-dispatch`, `design-wall`, `verify-interface`, `protect-brain-state`,
+   `hijack-ruvnet`, `learn-capture` and `unprompted-runtime` each hang on at least one of the four
+   regimes, and `session-start` emits 8923 bytes against a 4096 cap. Every finding was reproduced
+   with plain `timeout` + pipes independently of the checker (details in ADR-053 §2). F3 also
+   reproduces here as a `double-registration` violation, from `lintM1` — reused, not reimplemented.
+   Per this ordering the findings are **recorded, not fixed**; item 3 closes them.
+   Two deliberate scope refusals in that implementation, both from §6: the user's own hooks and
+   third-party plugins are **enumerated and reported but never executed** and never counted as
+   violations — inventing a verdict for someone else's hook is the fiction §6 refuses by name.
+   Contracts are **parsed** from the shim dispatch TABLE + `hook-contracts.json` (via
+   `scripts/hook-registry.mjs`), never hand-copied, so a drifted list cannot turn a regression green.
 3. **Four plane dispatchers**: Stop through the shim with a decided offBehavior; stale project
    Stop override deleted; duplicate Task/Stop blockers removed; one parse per event; learn-flush
    budget rebalanced (F11) and flush path spine-resolved (F7).

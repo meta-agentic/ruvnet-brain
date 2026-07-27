@@ -62,7 +62,14 @@ const FLAG_LOCAL = argv.includes('--local');
 const FLAG_FORCE = argv.includes('--force');
 const FLAG_HELP = argv.includes('--help') || argv.includes('-h');
 const FLAG_DOCTOR = argv.includes('--doctor');
+// `--doctor --hooks`: the post-install hook battery (ADR-053 §2 / ADR-055 build item 2). Fires every
+// registration in the INSTALLED hooks.json through the real shim under four stdin regimes with an
+// external process-group watchdog. Separate flag because it spawns real hooks — the plain --doctor
+// stays a pure read.
+const FLAG_HOOKS = argv.includes('--hooks');
 const FLAG_NO_VERIFY = argv.includes('--no-verify');
+// Escape hatch for the installer's closing self-check ONLY (it never disables --doctor's verdict).
+const FLAG_NO_SELFCHECK = argv.includes('--no-selfcheck');
 const FLAG_PIN = argv.includes('--pin'); // skip the latest-check, use the bundled default
 const FLAG_DEMO = argv.includes('--demo'); // guided, real (non-fabricated) walkthrough of the brain in action
 const FLAG_FEEDBACK = argv.includes('--feedback'); // prefill a GitHub Discussion (version + health, nothing private) and open it
@@ -988,6 +995,16 @@ function meterSummaryLine() {
 }
 
 // ── `--doctor`: a standalone health check the user can run any time ───────────────────────────────
+//
+// EXIT CODES ARE THE POINT (the 40/100 finding). Before this, doctor() printed "! Needs attention."
+// on an install with zero stores and no reader, then returned `undefined` — so:
+//
+//     $ npx ruvnet-brain --doctor >/dev/null 2>&1; echo $?
+//     0
+//
+// Honest prose that no machine can read is not a check. It could not gate a CI job, a nightly probe,
+// or a `&&` in someone's shell. It now RETURNS a verdict and main() exits with it, so "needs
+// attention" and "success" can never again be the same thing to a script.
 async function doctor() {
   printBanner('doctor');
   console.log(c.dim('Checking every part of the install and reporting green/red.\n'));
@@ -996,7 +1013,7 @@ async function doctor() {
   const present = fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs'));
   if (!present) {
     warn('brain not found here — run the installer first:  npx ruvnet-brain');
-    return;
+    return 1; // "not installed" is a FAILING doctor, not a neutral one
   }
   have('node') ? ok('node present') : warn('node missing');
   have('npm') ? ok('npm present') : warn('npm missing');
@@ -1094,6 +1111,45 @@ async function doctor() {
   console.log(
     c.dim('\n  Heads-up: a window that was ALREADY open when you installed needs a restart to pick it up;\n  newly-opened windows are fine.\n'),
   );
+
+  // ── THE MECHANICAL VERDICT ────────────────────────────────────────────────────────────────────
+  // `--hooks` additionally fires every registration in the INSTALLED hooks.json through the real
+  // shim under the four stdin regimes. Opt-in because it spawns real hooks; plain --doctor stays a
+  // pure read that anyone can run without side effects.
+  let hookResult = null;
+  if (FLAG_HOOKS) {
+    console.log(`  ${c.dim('── hook battery (installed hooks.json, four stdin regimes, external watchdog) ──')}`);
+    hookResult = await runSelfCheck({ installState: { repos: v.repos, reader: v.reader, mcp: v.mcp } });
+  }
+  // Without --hooks the verdict is the install-state check the old code already computed and threw
+  // away. `allGreen` was RIGHT here all along; nothing ever read it.
+  const failed = hookResult ? hookResult.exitCode !== 0 : !allGreen;
+  if (failed && !hookResult) {
+    console.log(`  ${c.red('✗ FAILING')} — the warnings above are real. Re-run  ${c.bold('npx ruvnet-brain')}  to repair.`);
+  }
+  return failed ? 1 : 0;
+}
+
+// ── the post-install self-check, wired for both --doctor --hooks and the installer's last step ────
+//
+// Loaded dynamically and failing SOFT on a load error: scripts/selfcheck.mjs is shipped in
+// package.json `files`, but bin/install.mjs is the one file that runs before anything is installed,
+// so it must survive a partial/odd delivery rather than crash. A load failure is REPORTED, never
+// silently swallowed — a self-check that quietly does not run is exactly the 40/100 finding again.
+// (Contrast the pre-existing `install-scope.mjs` import further down, which is wrapped in a bare
+// `catch {}` AND is not in `files[]` — so on a real npm install it silently never runs. Noted here
+// because it is the same failure shape; fixing that block is out of scope for this change.)
+async function runSelfCheck({ installState = null, quiet = false } = {}) {
+  let mod;
+  try {
+    mod = await import(new URL('../scripts/selfcheck.mjs', import.meta.url).href);
+  } catch (e) {
+    warn(`self-check could not run (${e && e.message}) — this install has NOT been verified end to end`);
+    return { exitCode: 0, violations: [], lines: [], unavailable: true };
+  }
+  const result = await mod.selfCheck({ installState, security: true });
+  if (!quiet || result.violations.length) console.log(mod.formatVerdict(result, { color: c }));
+  return result;
 }
 
 // ── `--feedback`: the easiest possible way to tell us how it went ────────────────────────────────
@@ -2853,7 +2909,16 @@ and falls back to a known-good version if GitHub can't be reached.
 Usage:
   npx ruvnet-brain                         Install the brain + Claude Code plugin (recommended, npm)
   npx github:stuinfla/ruvnet-brain         Same, but from the bleeding-edge GitHub commit
-  npx ruvnet-brain --doctor   Health-check an existing install (green/red per part)
+  npx ruvnet-brain --doctor   Health-check an existing install (green/red per part).
+                              EXITS NON-ZERO when the install is genuinely broken, so it can gate a
+                              script:  npx ruvnet-brain --doctor && ./deploy.sh
+  npx ruvnet-brain --doctor --hooks
+                              …and additionally fire every hook this plugin registered on THIS
+                              machine through the real shim under four stdin regimes (valid event
+                              JSON, empty EOF, 1MB garbage, and stdin held open past budget), with an
+                              external process-group watchdog. Asserts each hook's declared exit
+                              codes, a 4KB stdout cap, its declared timeout with margin, and zero
+                              surviving descendants. Your own hooks are listed, never executed.
   npx ruvnet-brain --demo     Guided walkthrough — 2 real questions, real cited answers
   npx ruvnet-brain --feedback Tell us how it went — prefills a GitHub Discussion with your brain
                               version, platform, and a 3-line health summary (you see exactly
@@ -2903,7 +2968,10 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
 (async () => {
   if (IMPORT_ONLY) return; // imported for its exports (tests) — never run the installer as a side effect
   if (FLAG_HELP) return showHelp();
-  if (FLAG_DOCTOR) return await doctor();
+  // `process.exitCode`, not `return` — doctor()'s verdict is the whole point of running it in a
+  // script. A bare `return await doctor()` discarded the number, which is how "! Needs attention"
+  // and `echo $?` → 0 coexisted for so long.
+  if (FLAG_DOCTOR) { process.exitCode = await doctor(); return; }
   if (FLAG_DEMO) return runDemo();
   if (FLAG_FEEDBACK) return runFeedback();
   if (FLAG_UPDATE) return runUpdate();
@@ -3061,9 +3129,20 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // Codex hosts got nothing before this (issue #42): shipped, never registered. Non-fatal like every
   // other wiring step — a second host we cannot reach must never break the one we can.
   try { wireCodexHost(); } catch (e) { warn(`(Codex wiring skipped: ${e && e.message})`); }
+  // THE CONSUMPTION FIX (the 40/100 finding, half two). These two lines used to be exactly this:
+  //
+  //     verifyInstall(cacheDir);
+  //     await smokeQuery(cacheDir);
+  //
+  // Both functions RETURN a verdict. Both were called as statements. So an install with zero vector
+  // stores, missing reader deps, or no MCP server printed three yellow warnings and then exited 0 —
+  // and every downstream consumer (a CI job, a Dockerfile, a `&&` chain, a nightly probe) was told
+  // the install succeeded. The detection was never the problem; dropping the result was.
+  let verified = null;
+  let smoke = null;
   if (!FLAG_NO_VERIFY) {
-    verifyInstall(cacheDir);
-    await smokeQuery(cacheDir);
+    verified = verifyInstall(cacheDir);
+    smoke = await smokeQuery(cacheDir);
   }
 
   // ── onboarding: detect the toolkit + make offers (all optional, all non-fatal) ──
@@ -3128,6 +3207,36 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       }
     }
   } catch { /* informational only */ }
+
+  // ── FINAL STEP: THE POST-INSTALL SELF-CHECK — the thing that runs on a stranger's machine and
+  //    CAN FAIL (ADR-053 §2, ADR-055 build item 2). Deliberately last, so it observes the machine in
+  //    the exact state the user is left in, after every wiring step and every optional offer.
+  //
+  //    ON A HEALTHY MACHINE: one calm confirming line. No nagging, no restating what already
+  //    printed above.
+  //    ON A BROKEN ONE: the violations, plainly, and a NON-ZERO exit code.
+  //
+  //    "Never block a healthy install" is honoured literally: a healthy install still exits 0 and
+  //    nothing above this point is undone. What changes is that a genuinely broken install can no
+  //    longer masquerade as a successful one to a script. The user's OWN hooks and third-party
+  //    plugins are enumerated and reported but NEVER charged against them — only registrations this
+  //    package ships can make this fail.
+  if (!FLAG_NO_SELFCHECK) {
+    const selfcheck = await runSelfCheck({
+      installState: verified ? { repos: verified.repos, reader: verified.reader, mcp: verified.mcp } : null,
+      quiet: true,
+    });
+    if (selfcheck.exitCode !== 0) {
+      console.log(`\n  ${c.dim(`Re-run  ${c.bold('npx ruvnet-brain --doctor --hooks')}  after fixing, to re-check.`)}`);
+      process.exitCode = selfcheck.exitCode;
+    }
+  }
+  // The grounding smoke result is consumed here rather than discarded: it is a SEPARATE claim from
+  // "installed and reachable" (an unproven grounding is not a broken install), so it informs the
+  // user without failing the install.
+  if (smoke && smoke.grounded === false) {
+    warn('grounding was not proven on this run — the install is present but no verifiable citation came back.');
+  }
 })().catch((e) => {
   die(e && e.message ? e.message : String(e));
 });

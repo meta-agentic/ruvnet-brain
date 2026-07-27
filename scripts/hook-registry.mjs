@@ -128,7 +128,15 @@ export function shimIdIn(command) {
  */
 export function shimTable(repo = REPO) {
   let src = '';
-  try { src = fs.readFileSync(path.join(repo, 'plugin/scripts/hook-shim.mjs'), 'utf8'); } catch { return {}; }
+  // TWO LAYOUTS, ONE PARSER. In the checkout the payload sits under `plugin/`; in a PACKED install
+  // (~/.claude/plugins/cache/ruvnet-brain/ruvnet-brain/<v>/) the payload IS the root — `scripts/` and
+  // `hooks/` hang directly off it. The self-check reads the INSTALLED tree on a stranger's machine,
+  // so the authority-parser has to resolve both or it silently returns {} there and every mode/
+  // offBehavior assertion degrades to "undeclared" — a hand-copied list by omission.
+  for (const rel of ['plugin/scripts/hook-shim.mjs', 'scripts/hook-shim.mjs']) {
+    try { src = fs.readFileSync(path.join(repo, rel), 'utf8'); break; } catch { /* try next layout */ }
+  }
+  if (!src) return {};
   const table = {};
   const re = /'([\w-]+)':\s*\{([^}]*)\}/g;
   let m;
@@ -148,7 +156,12 @@ export function shimTable(repo = REPO) {
 
 /** The checked-in out-of-shim contract file (ADR-055 §6). Missing file → no contracts, not a throw. */
 export function loadContracts(repo = REPO) {
-  const file = path.join(repo, 'plugin/hooks/hook-contracts.json');
+  // Same two-layout rule as shimTable() above — checkout (`plugin/hooks/`) or packed install
+  // (`hooks/`). Absence stays a non-throw empty result: on a packed install that predates this file
+  // the honest answer is "no out-of-shim contracts shipped here", not a crash and not an invention.
+  const candidates = ['plugin/hooks/hook-contracts.json', 'hooks/hook-contracts.json']
+    .map((rel) => path.join(repo, rel));
+  const file = candidates.find((f) => fs.existsSync(f)) ?? candidates[0];
   try {
     const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
     return {
@@ -214,8 +227,13 @@ function readRegistrations(file) {
   return out;
 }
 
-/** The ruvnet-brain plugin copy Claude Code actually booted, if this machine has one installed. */
-function installedPluginHooks(home) {
+/**
+ * The ruvnet-brain plugin copy Claude Code actually booted, if this machine has one installed.
+ * Exported because the post-install self-check (scripts/selfcheck.mjs) must read the INSTALLED
+ * hooks.json rather than the repo's — a stranger's machine has no checkout, and a self-check that
+ * reads the preimage instead of the booted copy is the adjacent-door defect ADR-055 F16 names.
+ */
+export function installedPluginHooks(home = os.homedir()) {
   const base = path.join(home, '.claude', 'plugins', 'cache', 'ruvnet-brain', 'ruvnet-brain');
   let versions = [];
   try { versions = fs.readdirSync(base); } catch { return null; }
