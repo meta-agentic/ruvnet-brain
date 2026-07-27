@@ -1,0 +1,25 @@
+{
+  "_note": "REAL writes from this repo's own git log — every one of them a code file that legitimately mentions rvf / agentdb / ruflo / ruvector, which is exactly the population the fourth wall must NOT touch. Loaded via `git show <sha>:<path>` so the bytes are the historical ones, with the working-tree file as a fallback when git history is unavailable (a shallow CI clone). Selected mechanically: the first 20 distinct code files across the last 400 commits of origin/main whose content matches /(rvf|agentdb|ruflo|ruvector)/i and is 300–120000 chars. Not curated for passing — curating this list would be the ceremony ADR-055 refuses.",
+  "writes": [
+    { "sha": "28c940f5", "path": "plugin/scripts/ground-ruvnet.sh" },
+    { "sha": "408b01c1", "path": "tests/integration/console-instant-cold.test.mjs" },
+    { "sha": "3501ef48", "path": "kb/forge-mcp-all.mjs" },
+    { "sha": "3501ef48", "path": "plugin/scripts/ground-before-write.sh" },
+    { "sha": "3501ef48", "path": "plugin/scripts/grounding-stamp.sh" },
+    { "sha": "3501ef48", "path": "plugin/scripts/session-start.sh" },
+    { "sha": "3501ef48", "path": "tests/unit/brain-off.test.mjs" },
+    { "sha": "a49e2e2f", "path": "tests/unit/distill-project.test.mjs" },
+    { "sha": "aa97e8d4", "path": "tests/unit/console-honesty-regressions.test.mjs" },
+    { "sha": "0203d33a", "path": "scripts/capability-registry.mjs" },
+    { "sha": "0203d33a", "path": "scripts/distill-project.mjs" },
+    { "sha": "0203d33a", "path": "scripts/memory-doctor.mjs" },
+    { "sha": "0203d33a", "path": "scripts/wired-check.mjs" },
+    { "sha": "0203d33a", "path": "tests/unit/token-meter.test.mjs" },
+    { "sha": "d7b606af", "path": "tests/integration/health-repair.test.mjs" },
+    { "sha": "f6a91475", "path": "tests/unit/install-ruvector-db-cwd.test.mjs" },
+    { "sha": "0ff4c2e6", "path": "plugin/scripts/verify-interface.sh" },
+    { "sha": "0ff4c2e6", "path": "tests/unit/verify-interface.test.mjs" },
+    { "sha": "a537f884", "path": "scripts/console-engine.mjs" },
+    { "sha": "75954f1c", "path": "scripts/self-update.mjs" }
+  ]
+}

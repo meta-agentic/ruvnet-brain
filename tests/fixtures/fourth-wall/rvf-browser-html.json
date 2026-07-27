@@ -1,0 +1,6 @@
+{
+  "repo": "ruvector",
+  "path": "examples/rvf/scripts/rvf-browser.html",
+  "title": "rvf-browser.html",
+  "fullText": "UI page examples/rvf/scripts/rvf-browser.html full text content:\nRVF Browser — Vector Search in the Browser \n \n \n \n RVF Browser Example \n Vector search running entirely in the browser via WASM. No backend required. \n\n \n 1. Create Store \n 2. Ingest 100 Vectors \n 3. Query Top-5 \n 4. Show Status \n \n\n Click the buttons above to run each step.\n\nPrerequisites:\n npm install @ruvector/rvf-wasm\n # or load from CDN (see script below)"
+}

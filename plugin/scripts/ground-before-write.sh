@@ -73,7 +73,17 @@ fi
 
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
-[ "${RUVNET_SKIP_GROUNDING_CHECK:-0}" = "1" ] && exit 0
+
+# The blanket override, NARROWED (ADR-055 §3.5, verbatim: "the blanket RUVNET_SKIP_GROUNDING_CHECK=1
+# regime is retired for the fourth wall"). It still disarms the RECENCY wall below, exactly as
+# documented since ADR-0012 — but it no longer disarms the SUBSTANCE stage, which has its own
+# in-band, reasoned, receipted token. The reason is the whole point of issue #46: recency is a
+# ceremony you can reasonably choose to skip, while "you are writing the opposite of the source you
+# were just shown" is not a ceremony, and a variable exported once at the top of a session must not
+# buy a day of contradicting writes. Note the substance stage never blocks on ABSENCE of evidence,
+# so with the recency wall skipped and nothing stamped, it permits — as it should.
+SKIP_RECENCY=0
+[ "${RUVNET_SKIP_GROUNDING_CHECK:-0}" = "1" ] && SKIP_RECENCY=1
 
 # This gate is a BLOCKING wall (the #1-failure preventer), so by deliberate design (ADR-0021, and
 # enforced by ground-before-write.test.mjs) it depends on NOTHING fragile — pure bash builtins, no
@@ -108,8 +118,10 @@ NOW=$(date +%s 2>/dev/null) || exit 0
 # Scan the WHOLE tool input (path + content + new_string) — where the code mentions the
 # product is where the hand-roll hides.
 MISSING=""
+SEEN=""
 for t in agentdb metaharness ruvector aidefence agentic-flow agentic-qe ruv-swarm rvf ruflo; do
   [[ $INPUT == *"$t"* ]] || continue
+  SEEN="$SEEN$t "
   STAMP="$STAMP_DIR/$t"
   if [ -f "$STAMP" ]; then
     # GNU date reads a file's mtime with -r; BSD/macOS needs stat -f %m. Either failing → allow
@@ -119,7 +131,41 @@ for t in agentdb metaharness ruvector aidefence agentic-flow agentic-qe ruv-swar
   fi
   MISSING="$MISSING$t "
 done
-[ -n "$MISSING" ] || exit 0
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+# STAGE 2 — THE SUBSTANCE WALL (ADR-055 §3, issue #46). Runs only once the recency wall above has
+# PASSED: a term the model has never grounded is stopped by stage 1 and never reaches here.
+#
+# ── THE DEPENDENCY CONTRACT, AND WHY THIS DOES NOT BREAK IT ────────────────────────────────────
+# Everything above this line is pure bash builtins, by standing contract (ADR-0021, enforced by
+# ground-before-write.test.mjs): the recency wall is THE blocking wall, so it can never fail open
+# because a tool went missing. That contract is unchanged and still tested — the assertion now
+# reads the file UP TO THIS MARKER.
+#
+# The substance stage is different in kind and is allowed one dependency, node, because deciding
+# "does this write contradict the source the brain returned?" requires a real JSON parse of the
+# payload (this repo has paid twice for pretending otherwise — issue #13's quote truncation) plus a
+# read of the evidence ledger. It is therefore built to FAIL OPEN, loudly and by construction: no
+# node, no checker file, no ledger, any non-2 exit → the write proceeds. The only thing that can
+# produce a refusal here is a detector that found a contradiction, which is ADR-055 §1.2's
+# "malfunction ≠ decision" applied to the one stage that has something to malfunction.
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+if [ -z "$MISSING" ] || [ "$SKIP_RECENCY" = "1" ]; then
+  [ -n "$SEEN" ] || exit 0
+  SUBSTANCE="$(dirname "${BASH_SOURCE[0]}")/grounding-substance.mjs"
+  [ -f "$SUBSTANCE" ] || exit 0
+  command -v node >/dev/null 2>&1 || exit 0
+  SUB_OUT=$(printf '%s' "$INPUT" | node "$SUBSTANCE" 2>&1)
+  SUB_RC=$?
+  if [ "$SUB_RC" = "2" ]; then
+    printf '%s\n' "$SUB_OUT" >&2
+    exit 2
+  fi
+  # Anything else — clean pass, a crash, a timeout, an unknown code — permits the write. An override
+  # acceptance line (exit 0 with stderr) is surfaced so the record is visible in the transcript.
+  [ -n "$SUB_OUT" ] && printf '%s\n' "$SUB_OUT" >&2
+  exit 0
+fi
 
 read -r -d '' MSG <<EOF || true
 ⛔ BLOCKED — you are writing rUv-domain code the brain has not seen: ${MISSING% }

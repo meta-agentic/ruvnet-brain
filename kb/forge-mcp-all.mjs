@@ -122,6 +122,20 @@ const repoList = (REPOS.length ? REPOS : discovered);
 // anything but { event, version, count } — no query text, no repo names, no paths, ever. Batched
 // to at most one send per machine per day. Loaded dynamically + fully guarded so a missing module
 // (older bundle) or any telemetry failure can never break, block, or delay a query.
+// ── THE FOURTH WALL (ADR-055 §3, issue #46) — evidence at retrieval. ────────────────────────────
+// The substance writer turns THIS answer's documents into machine-usable facts (packages, install
+// commands, the origins the source itself carries, exported symbols, posture in the source's own
+// words) and appends one JSON line to the evidence ledger the write-path gate reads. Loaded exactly
+// like brain-alarm and telemetry above — dynamic + guarded — for two reasons: an already-installed
+// bundle predates this module and must keep answering without it, and evidence capture must never
+// break, delay or surface into a query (ADR-055: capped file, swallowed failures).
+// build-bundle.mjs understands this `import(new URL(...))` form and ships the module (see its
+// localImportsOf; the plain-literal pattern alone would have missed it, as it once missed the GONG).
+let evidence = null;
+import(new URL('./forge-evidence.mjs', import.meta.url).href)
+  .then((m) => { evidence = m; })
+  .catch(() => { /* module absent (pre-2026-07-27 bundle) — the brain answers exactly as before */ });
+
 let telemetry = null;
 let telemetryVersion = 'unknown';
 import(new URL('./telemetry-ping.mjs', import.meta.url).href)
@@ -266,7 +280,22 @@ async function handle(msg) {
             telemetry.recordEvent('search', { version: telemetryVersion });
           }
         } catch { /* never */ }
-        return ok(id, { content: [{ type: 'text', text: body }], isError: false });
+        // ── SUBSTANCE (ADR-055 §3.1). THE SUCCESS PATH, AND ONLY THE SUCCESS PATH. ───────────────
+        // Every non-answer returned BEFORE this point and minted nothing: the switched-off soft
+        // answer (line ~190), the GONG outage, the thrown error in the catch below, and the empty
+        // result — which reaches here but carries `results.length === 0`, so buildReceipt produces
+        // no sources and appendEvidence writes no line. That is the same discipline
+        // grounding-stamp.sh had to learn (ADR-054 §3), stated once and replayed by
+        // tests/unit/fourth-wall.test.mjs T4 for all five shapes.
+        let receipt = null;
+        try { if (evidence) receipt = evidence.recordAnswer({ query, repos, results }); } catch { /* never */ }
+        return ok(id, {
+          content: [{ type: 'text', text: body }],
+          isError: false,
+          // The typed receipt (ADR-055 §3.1). Compact on purpose — structuredContent is context the
+          // user pays for; the full fact record lives in the ledger, not on the wire.
+          ...(receipt ? { structuredContent: { grounding: receipt } } : {}),
+        });
       } catch (e) {
         const body = `search_ruvnet error: ${e.message}`;
         // k re-derived: the try-block's `k` is out of scope here, and an error response is still
