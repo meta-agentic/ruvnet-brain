@@ -87,6 +87,12 @@ describe('an MCP call timeout is both STOPPED and RECORDED', () => {
       RUVNET_BRAIN_KB: path.join(home, 'kb'),
       RUVNET_BRAIN_CALL_TIMEOUT_MS: '2000', // the seam that makes this path testable at all
       HOME: fakeHome,
+      // USERPROFILE too: os.homedir() reads HOME on POSIX but USERPROFILE on win32, so setting
+      // only HOME left brain-alarm writing to the RUNNER'S real home on Windows while this test
+      // watched an empty temp dir. It failed as "timed out waiting for health.json" — which reads
+      // like the fix not working, when the fix was working and the test was looking in the wrong
+      // place. Redirect both, so the assertion can only fail for the reason it exists to catch.
+      USERPROFILE: fakeHome,
       // brain-alarm.mjs writes to os.homedir()/.cache/ruvnet-brain, so redirecting HOME is what
       // keeps this test off the developer's REAL health.json.
       // NTFY_TOPIC is cleared deliberately: reportBrainDown() sends an urgent ntfy push when a
