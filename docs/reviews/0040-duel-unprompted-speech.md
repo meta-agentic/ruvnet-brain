@@ -1,5 +1,8 @@
 # Adversarial duel — ADR-040, the unprompted-speech chokepoint
 
+Updated: 2026-07-24
+Created: 2026-07-23
+
 **Date:** 2026-07-23 · **Duelists:** Fable 5 vs GPT-5.6 (codex) · **Mode:** assigned opposing
 stances, adversarial, converge · **Governs:** ADR-040, DDD-0004 §"The enforcement chokepoint"
 

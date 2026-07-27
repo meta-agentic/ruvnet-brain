@@ -381,7 +381,9 @@ describe('the settings write path cannot lose a choice the user made', () => {
     // Async `spawn` + Promise.all is what makes it real: all four exist before any of them writes,
     // and the shared release instant then actually releases them together. The control below proves
     // the harness can still see the failure.
-    const KEYS = [['learningScope', 'user'], ['advocacy', 'important-only'], ['autoApply', true], ['newProjectDefaults', true]];
+    // advocacy is a 1-5 dial since ADR-052 (was a 3-value enum) — 4 is just a real, non-default value,
+    // same role 'important-only' played before: proving the race doesn't silently drop this key.
+    const KEYS = [['learningScope', 'user'], ['advocacy', 4], ['autoApply', true], ['newProjectDefaults', true]];
 
     /** Launch all writers first, THEN wait. The ordering here is the entire point of this test. */
     const raceOnce = async (module, fnSrc) => {

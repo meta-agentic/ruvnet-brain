@@ -1,5 +1,7 @@
 # DDD-0009 — The Consent bounded context
 
+Updated: 2026-07-27
+
 Governs **ADR-035** (consent and legibility).
 
 **Status**: Proposed (2026-07-22)

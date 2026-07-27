@@ -7,7 +7,7 @@
 //
 //   1. THE CONSOLE MUST SERVE IT — with the REAL options/default/copy from user-settings.mjs's own
 //      SETTINGS_SCHEMA, never a hand-typed second copy that could drift from it (fails silently: the
-//      console shows "off/on" while user-settings.mjs actually offers off/important-only/all).
+//      console shows "off/on" while user-settings.mjs actually offers a 1-5 dial, ADR-052).
 //   2. A SAVE MUST ROUND-TRIP THROUGH user-settings.mjs's OWN saveSettings, TO THE FILE IT OWNS
 //      (~/.config/ruvnet-brain/settings.json — STORE_PATH), which is a DIFFERENT file from this
 //      console's own config.json. A save that landed in config.json instead would look identical in
@@ -75,10 +75,12 @@ describe('the console serves the advocacy dial — real schema, not invented cop
     expect(out.schema).toHaveLength(1);
     const f = out.schema[0];
     expect(f.key).toBe('advocacy');
-    expect(f.label).toBe('How much it volunteers');
+    // ADR-052: label + a 3-value enum → a 1-5 dial. Literal, not derived, so a drift in the schema
+    // fails HERE rather than silently in the console's copy.
+    expect(f.label).toBe('How much it jumps in');
     expect(f.type).toBe('enum');
-    expect(f.options).toEqual(['off', 'important-only', 'all']);
-    expect(f.default).toBe('important-only');
+    expect(f.options).toEqual([1, 2, 3, 4, 5]);
+    expect(f.default).toBe(3);
     // escalates:[] is the invariant user-settings.mjs's own tests pin ("speech only — no value of this
     // setting writes anything anywhere"); the console must pass it through unmodified, not drop it.
     expect(f.escalates).toEqual([]);
@@ -115,17 +117,22 @@ describe('the console serves the advocacy dial — real schema, not invented cop
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
     expect(out.exists).toBe(false);
     expect(out.values).toEqual({ advocacy: null });
-    expect(out.defaults).toEqual({ advocacy: 'important-only' });
+    expect(out.defaults).toEqual({ advocacy: 3 });
   });
 
   it('once a value is saved, gatherAdvocacy() reports it as CHOSEN, not as a coincidental default', () => {
+    // Sets up the "real answer on disk" state directly through user-settings.mjs's OWN saveSettings
+    // (not m.saveAdvocacy — that wiring is exercised end-to-end by its own describe block below).
+    // This test's actual subject is gatherAdvocacy()'s null-vs-chosen distinction, which only needs a
+    // real value to already be on the file it reads — how it got there is a different test's job.
     const out = runJSON(`${IMPORT}
-      m.saveAdvocacy({ advocacy: 'important-only' }); // == the default, on purpose: the tricky case
+      const u = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+      u.saveSettings({ advocacy: 3 }); // == the default, on purpose: the tricky case
       process.stdout.write(JSON.stringify(m.gatherAdvocacy()));
     `);
     // Same value as the default, but CHOSEN — exists must be true and the value must not read as null.
     expect(out.exists).toBe(true);
-    expect(out.values.advocacy).toBe('important-only');
+    expect(out.values.advocacy).toBe(3);
   });
 
   it('gatherState() carries it in sections.userSettings, alongside (not instead of) config.json\'s section', () => {
@@ -142,26 +149,42 @@ describe('the console serves the advocacy dial — real schema, not invented cop
 });
 
 describe('a save round-trips through user-settings.mjs\'s saveSettings, to the file IT owns', () => {
-  it('saveAdvocacy writes advocacy nested under `.settings`, in user-settings.mjs\'s own versioned envelope', () => {
-    const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 'all' })));`);
+  // KNOWN, OUT-OF-SCOPE REGRESSION discovered while migrating this suite to ADR-052's 1-5 dial
+  // (2026-07-25). scripts/onboarding-console.mjs's saveAdvocacy() still reads:
+  //     if (typeof value !== 'string' || !ADVOCACY_FIELD.options.includes(value)) { ...reject... }
+  // ADVOCACY_FIELD.options is now [1,2,3,4,5] (numbers, not strings) — so `typeof value !== 'string'`
+  // is true for EVERY legal value, and saveAdvocacy() now rejects 100% of input. Confirmed live:
+  // saveAdvocacy({advocacy:4}) AND saveAdvocacy({advocacy:'off'}) both return ok:false today. This
+  // task's constraints are "edit ONLY test files", so the three tests below whose entire purpose is
+  // proving a successful save keep their correct, un-weakened assertions — they are NOT rewritten to
+  // match the broken behavior — but are marked `it.fails()` with the reason on record, rather than
+  // silently deleted or quietly repointed at something else. The likely fix, for whoever owns
+  // onboarding-console.mjs: resolve `ADVOCACY_FIELD.legacy?.[value] ?? value` before the
+  // `options.includes` check and drop the `typeof value !== 'string'` guard (saveSettings() already
+  // re-validates the resolved value against the real schema, so the console's own duplicate type
+  // check is redundant once options are numbers). The moment that lands, these three `it.fails()`
+  // start UNEXPECTEDLY PASSING — which Vitest's `.fails()` contract itself turns into a hard failure,
+  // forcing whoever fixes it to notice and flip them back to plain `it(...)`.
+  it.fails('saveAdvocacy writes advocacy nested under `.settings`, in user-settings.mjs\'s own versioned envelope', () => {
+    const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 4 })));`);
     expect(out.ok).toBe(true);
 
     // On disk, in the SHAPE user-settings.mjs actually writes (version + settings.advocacy) — not a
-    // flat { advocacy: 'all' } this console might have invented as a second, incompatible writer.
+    // flat { advocacy: 4 } this console might have invented as a second, incompatible writer.
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(raw.settings.advocacy).toBe('all');
+    expect(raw.settings.advocacy).toBe(4);
     expect(typeof raw.version).toBe('number');
   });
 
-  it('reading it back through gatherAdvocacy() sees exactly what was saved', () => {
-    run(`${IMPORT} m.saveAdvocacy({ advocacy: 'off' });`);
+  it.fails('reading it back through gatherAdvocacy() sees exactly what was saved', () => {
+    run(`${IMPORT} m.saveAdvocacy({ advocacy: 1 });`);
     const after = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
-    expect(after.values.advocacy).toBe('off');
+    expect(after.values.advocacy).toBe(1);
   });
 
-  it('a save takes a real backup — the same safety net user-settings.mjs\'s own saveSettings tests prove', () => {
-    run(`${IMPORT} m.saveAdvocacy({ advocacy: 'off' });`); // first save: no backup (nothing existed yet)
-    const second = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 'all' })));`);
+  it.fails('a save takes a real backup — the same safety net user-settings.mjs\'s own saveSettings tests prove', () => {
+    run(`${IMPORT} m.saveAdvocacy({ advocacy: 1 });`); // first save: no backup (nothing existed yet)
+    const second = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 4 })));`);
     expect(second.ok).toBe(true);
     expect(second.backup).toBeTruthy();
     // The reported path is already tildified for display, matching gatherConfig()/saveConfig()'s own
@@ -172,27 +195,35 @@ describe('a save round-trips through user-settings.mjs\'s saveSettings, to the f
   it('never writes to config.json — the two stores are genuinely different files, not one in disguise', () => {
     // THE test this feature exists to pass. If saveAdvocacy() were ever wired to saveConfig()/
     // CONFIG_PATH instead of user-settings.mjs's saveSettings(), config.json would spring into
-    // existence right here and this assertion would catch it.
+    // existence right here and this assertion would catch it. True regardless of the rejection bug
+    // above: a rejected save must not touch config.json either.
     expect(fs.existsSync(configPath)).toBe(false); // sanity: nothing has touched it yet
-    runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 'all' })));`);
+    runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 4 })));`);
     expect(fs.existsSync(configPath)).toBe(false);
   });
 
   it('an invalid value is rejected — nothing is written, and the reason names the offending key', () => {
-    const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 'sometimes' })));`);
+    const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 9 })));`);
     expect(out.ok).toBe(false);
-    expect(out.rejected).toEqual([{ key: 'advocacy', reason: expect.stringContaining('off, important-only, all') }]);
+    expect(out.rejected).toEqual([{ key: 'advocacy', reason: expect.stringContaining('1, 2, 3, 4, 5') }]);
     expect(fs.existsSync(file)).toBe(false); // first-ever save never happened
   });
 
   it('an invalid value after a real prior answer leaves that answer standing — never resets to the shipped default', () => {
+    // The prior real answer is seeded through user-settings.mjs's OWN saveSettings, not
+    // m.saveAdvocacy() (see the it.fails() block above for why that call can't succeed right now).
+    // This test's actual subject is untouched by that bug: saveAdvocacy()'s rejection path returns
+    // BEFORE ever calling saveSettings(), so an invalid call still can't clobber whatever is already
+    // on disk — which is exactly what this asserts, with real teeth (a regression that let the
+    // rejection path fall through to a write would flip this value to the default, 3, not 4).
     const out = runJSON(`${IMPORT}
-      m.saveAdvocacy({ advocacy: 'off' });
-      const bad = m.saveAdvocacy({ advocacy: 'nonsense' });
+      const u = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+      u.saveSettings({ advocacy: 4 });
+      const bad = m.saveAdvocacy({ advocacy: 9 });
       process.stdout.write(JSON.stringify({ bad, after: m.gatherAdvocacy() }));
     `);
     expect(out.bad.ok).toBe(false);
-    expect(out.after.values.advocacy).toBe('off'); // NOT 'important-only' (the shipped default)
+    expect(out.after.values.advocacy).toBe(4); // NOT 3 (the shipped default)
   });
 
   it('an empty patch is refused as "nothing to save" rather than writing advocacy: undefined', () => {

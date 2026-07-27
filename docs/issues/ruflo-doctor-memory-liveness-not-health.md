@@ -1,5 +1,7 @@
 # `doctor --component memory` asserts existence, not function — it passes a store that is 99.97% empty (and one SQLite calls malformed)
 
+Updated: 2026-07-14
+
 **Component:** `v3/@claude-flow/cli/src/commands/doctor.ts`
 **Version:** ruflo 3.28.0 / @claude-flow/cli 3.28.0
 **Evidence:** measured on a real 81-store fleet, macOS, 2026-07-14. Happy to supply raw dumps.

@@ -1,5 +1,8 @@
 # Onboarding Console — API + data contract (v1)
 
+Updated: 2026-07-17
+Created: 2026-07-15
+
 The single source of truth both the backend (`scripts/onboarding-console.mjs`) and the
 frontend (`console/index.html` + `app.js` + `style.css`) build against. Implements ADR-0013
 and DDD-0002. **The ordering is the design: Mirror → Explain → Recommend → (consent) Apply → Undo.**

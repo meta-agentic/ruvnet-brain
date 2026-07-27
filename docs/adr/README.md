@@ -1,3 +1,6 @@
+
+Updated: 2026-07-27
+Created: 2026-06-29
 > **Before writing or reviewing any ADR, read [`../PRINCIPLES.md`](../PRINCIPLES.md).**
 > An ADR that contradicts a principle is wrong, and the contradiction is the finding.
 

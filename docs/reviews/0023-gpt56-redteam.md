@@ -1,5 +1,7 @@
 # ADR-0023 Red-Team Review — GPT-5.6
 
+Updated: 2026-07-18
+
 Reviewer stance: adversarial architecture review of `docs/adr/0023-intelligent-updating-stable-spine.md` against the actual code in `plugin/hooks/hooks.json`, `plugin/mcp/server.mjs`, `plugin/scripts/session-start.sh`, `bin/install.mjs`, `scripts/release.mjs`, and the effective bundled updater `kb/forge-update.mjs` because `scripts/forge-update.mjs` is absent.
 
 One thing I agree with: splitting boot-frozen declarations from invoked behavior is the right direction. Everything below is about the places where this ADR either does not implement that split, implements it unsafely, or chooses a more complex mechanism than needed.

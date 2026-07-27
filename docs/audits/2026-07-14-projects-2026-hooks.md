@@ -1,5 +1,7 @@
 # Every project committed in 2026 — every hook, read verbatim (2026-07-14)
 
+Updated: 2026-07-14
+
 125 git repos with a 2026 commit (depth ≤3 under ~/Code). Read-only.
 
 ## Real projects (82)

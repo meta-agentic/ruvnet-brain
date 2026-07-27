@@ -1,5 +1,7 @@
 # RuvNet-Brain 4.0 line — what's new (the major-release highlights)
 
+Updated: 2026-07-25
+
 > **Source of truth** for the `/whats-new` command and the first-run upgrade message. Curated, honest,
 > major-only — not the point-release churn. If a claim here isn't true of the shipping build, it does not
 > belong here. The self-measurement claims are deliberately hedged: they are *new and filling*, not

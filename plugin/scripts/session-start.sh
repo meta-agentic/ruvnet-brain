@@ -475,6 +475,29 @@ esac
   BANNER_KB=$(grep -m1 '"releaseTag"' "$HOME/.cache/ruvnet-brain/kb/SOURCE.json" 2>/dev/null | sed -E 's/.*"releaseTag": *"([^"]+)".*/\1/')
 
 # ── THE OFF STATE LINE (ADR-054 §3) — and then nothing else. ────────────────────────────────────
+# ── ASCII→SVG drift (ADR-055 §8) ─────────────────────────────────────────────────────────────────
+# The owner: ASCII art should become SVG "as a standard course of business… at the appropriate time."
+# The appropriate time is HERE and nowhere else. The ascii-to-svg skill has advertised since
+# 2026-01-08 that it is "fully automatic via global PostToolUse hook … set-and-forget"; that hook
+# never existed, and it never could — converting a diagram needs a MODEL, and a PostToolUse hook has
+# ~5s, no session and no tokens. ADR-055 v1 then moved conversion to pre-push and reproduced the same
+# impossibility one chokepoint over (a git hook is also just a shell). Session start is the one place
+# in the whole system where a model is actually in the room to act on what it is told.
+#
+# So the split is: this measures, the SKILL converts. Deterministic here (hash + the skill's own
+# confidence scoring), generative there. It never converts, never writes and never blocks — worst
+# case is one line nobody acts on. It prints NOTHING when there is nothing to do, which is what keeps
+# it believable; measured at ~80ms, and silent in a repo with no manifest, so it costs other projects
+# nothing. Advertising-class, so it dies with the brain like everything else below.
+# `${CLAUDE_PROJECT_DIR:-$PWD}` is the house form (line 82) — a bare $CLAUDE_PROJECT_DIR resolves to
+# "/scripts/..." when unset. The -f guard is also the SCOPE: the detector derives its root from its
+# own location, so it must only ever run in a project that actually ships it. Other projects get a
+# failed test and zero output, which is exactly right.
+ASCII_DRIFT="${CLAUDE_PROJECT_DIR:-$PWD}/scripts/ascii-drift.mjs"
+if [ "$BRAIN_OFF" != "1" ] && [ -f "$ASCII_DRIFT" ]; then
+  node "$ASCII_DRIFT" --quiet 2>/dev/null || true
+fi
+
 #
 # Everything from here down is the confidence banner, the capability announcement and THE PLAYBOOK:
 # ~2,000 tokens of the brain talking about itself. All of it is advertising, all of it dies when the

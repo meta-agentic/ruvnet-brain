@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [updating, self-update, plugin, hot-reload, rollback, mcp, hooks]
 supersedes: []
 relates: [ADR-020, ADR-021, ADR-022]
-updated: 2026-07-22
+updated: 2026-07-27
 updated_source: derived-from-git
 ---
 

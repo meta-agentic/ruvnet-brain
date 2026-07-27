@@ -1,6 +1,7 @@
 ---
 name: brain-score
 description: Score ANY repository 0-100 across 8 dimensions using the exact evidence-or-it-didn't-happen scorecard RuvNet-Brain applies to itself. Use when the user says "score this repo", "score my repo", "scorecard", "brain-score", "how good is this codebase", "rate this project", "audit quality", or asks for an honest 0-100 quality assessment of a repository. Every deduction must cite evidence from the actual repo; a known architectural flaw caps its dimension at ≤70; a "what I did NOT test" section is mandatory; all scores are out of 100, never out of 10.
+updated: 2026-07-10
 ---
 
 # Brain-Score — the 8-dimension repo scorecard (0–100)

@@ -42,9 +42,72 @@ describe('the predicate — a mention is not a caller', () => {
     expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
   });
 
-  it('accepts an npm script in package.json', () => {
+  // ADR-056, 2026-07-27. This assertion used to expect 'wired', and that belief is exactly how
+  // scripts/doc-currency.mjs sat in the repo reported as wired while NOTHING ran it — it is absent
+  // from pre-push, gate.sh, gates.mjs and every workflow, and its only "caller" was the package.json
+  // line DEFINING it. Defining a script is not invoking it. The npm-script case is still a real way
+  // in for a human, so it is not 'unwired' either; it is its own honest state.
+  it('an npm script NOBODY runs is MANUAL, not wired (the doc-currency false green)', () => {
     w('scripts/widget.mjs', 'export const x = 1;\n');
     w('package.json', JSON.stringify({ scripts: { go: 'node scripts/widget.mjs' } }));
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('manual');
+  });
+
+  it('an npm script a WORKFLOW runs is wired', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('package.json', JSON.stringify({ scripts: { go: 'node scripts/widget.mjs' } }));
+    w('.github/workflows/ci.yml', 'jobs:\n  a:\n    steps:\n      - run: npm run go\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
+  });
+
+  it('an npm script another COMPOSITE script runs is wired', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('package.json', JSON.stringify({ scripts: { go: 'node scripts/widget.mjs', all: 'npm run go && echo ok' } }));
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
+  });
+
+  it('an npm LIFECYCLE script is wired — npm itself runs it', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('package.json', JSON.stringify({ scripts: { prepare: 'node scripts/widget.mjs' } }));
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
+  });
+
+  // Both of these were introduced BY THE ADR-056 FIX ITSELF, in the JSDoc documenting it, and each
+  // silently flipped the audited module back to 'wired'. Caught only by re-reading the row after the
+  // change instead of trusting it. They are the block-comment form of the defect the whole file
+  // already fixed twice (prose in v1; whole-line `//` usage examples in the 2026-07-23 regrade).
+  it('an invocation-shaped path in a JSDoc BODY line is NOT a caller', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/other.mjs', '/**\n * Run it: node scripts/widget.mjs --flag\n */\nexport const y = 2;\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('unwired');
+  });
+
+  it('an `npm run <script>` mention in a JSDoc BODY line does not make it automated', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('package.json', JSON.stringify({ scripts: { go: 'node scripts/widget.mjs' } }));
+    w('scripts/other.mjs', '/**\n * A human types: npm run go\n */\nexport const y = 2;\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('manual');
+  });
+
+  // git requires hooks to be named exactly `pre-push` — extensionless — so the extension filter
+  // excluded this repo's primary ship gate from the caller set. Anything wired ONLY from pre-push
+  // read as unwired, which is how the currency check still reported `manual` immediately after being
+  // wired into it.
+  it('an EXTENSIONLESS git hook counts as a caller', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/git-hooks/pre-push', '#!/bin/sh\nnode "$ROOT/scripts/widget.mjs" --check\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
+  });
+
+  it('an extensionless file OUTSIDE git-hooks is still not scanned (scope stays narrow)', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/NOTES', 'node scripts/widget.mjs\n');
+    expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('unwired');
+  });
+
+  it('a GENERATOR method (`*gen()`) is still real code, not a stripped JSDoc line', () => {
+    w('scripts/widget.mjs', 'export const x = 1;\n');
+    w('scripts/other.mjs', "const o = {\n  *gen() { return import('./widget.mjs'); }\n};\nexport default o;\n");
     expect(stateOf(audit({ repo, standalone: [], held: {} }), 'scripts/widget.mjs')).toBe('wired');
   });
 

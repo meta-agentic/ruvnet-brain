@@ -1,5 +1,7 @@
 # UX QE suite — first real run (thresholds frozen from these numbers)
 
+Updated: 2026-07-24
+
 Run 2026-07-24 on the dev Mac (Darwin arm64, M3 Max), `npm run qe:ux`. Every number below was MEASURED
 on a real run — Playwright chromium 1228 driving the real console server, and a real cold launch parsed
 for terminal timing. Nothing here is asserted from memory. The suite is **model-free**: it drives a

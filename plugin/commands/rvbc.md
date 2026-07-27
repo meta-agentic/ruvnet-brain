@@ -1,5 +1,6 @@
 ---
 description: "RvBC — RuvNet Brain Console. Opens the live console page: your whole RuvNet stack on one page — what's installed, what your AI learned, one-click reversible fixes. Read-only until you click. (Also: /rvcb, /brain-console — all the same thing.)"
+updated: 2026-07-20
 ---
 
 Launch the **RuvNet Brain Console** for the user. Same console as `/ruvnet-brain:configure`,

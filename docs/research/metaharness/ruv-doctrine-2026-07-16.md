@@ -1,5 +1,7 @@
 # rUv's operating doctrine — distilled from the 2026-07-16 hackerspace call + the meta-wrapper gist
 
+Updated: 2026-07-17
+
 **Status:** distillation of rUv's own spoken practice (Read.ai transcript, local-only) and his
 public gist (`docs/research/metaharness/ruv-gist-meta-wrapper.md`). Spoken doctrine = intent;
 verify shipped behavior against repo source before asserting a capability. The verbatim transcript

@@ -1,5 +1,7 @@
 # DDD-0005 — The Learning bounded context
 
+Updated: 2026-07-27
+
 Governs **ADR-028** (what proactive means), **ADR-029** (which lessons are universal), **ADR-030**
 (how a lesson acts), **ADR-031** (the compounding brain).
 

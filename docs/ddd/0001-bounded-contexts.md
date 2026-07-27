@@ -1,5 +1,7 @@
 # DDD-0001: Bounded contexts for RuvNet Brain
 
+Updated: 2026-07-27
+
 **Status**: Proposed
 **Date**: 2026-07-09
 **Related**: ADR-0011 (verified quality program), ADR-0002 (ground-truth gate), ADR-0008 (autonomous loop)

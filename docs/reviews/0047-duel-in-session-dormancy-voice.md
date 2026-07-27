@@ -1,5 +1,7 @@
 # Duel record — ADR-047 / DDD-0012 (in-session dormancy voice)
 
+Updated: 2026-07-24
+
 Date: 2026-07-24 · Governs `docs/adr/0047-in-session-dormancy-voice.md`, `docs/ddd/0012-advocacy-delivery-context.md`
 Duelists: **Fable 5** (stance: this will annoy users and destroy trust) · **GPT-5.6-Sol** (stance: empirical, told to RUN it)
 

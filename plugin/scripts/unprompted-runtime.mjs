@@ -237,21 +237,41 @@ if (!candidates.length) silent();
 const SETTINGS_MODULE = process.env.RUVNET_USER_SETTINGS_MODULE || path.join(CODE_ROOT, 'scripts', 'user-settings.mjs');
 const ADVOCACY_MODULE = process.env.RUVNET_ADVOCACY_OUTCOMES_MODULE || path.join(CODE_ROOT, 'scripts', 'advocacy-outcomes.mjs');
 
-let _dial;
-async function advocacyDial() {
-  if (_dial !== undefined) return _dial;
-  // Default matches anticipate.sh: 'important-only' (the owner's "recommend on") when settings are
-  // unreadable/absent — on for important findings, one setting away from silent, never unbounded.
-  _dial = 'important-only';
+// THE 1–5 DIAL (ADR-052). This runtime is the SINGLE enforcement chokepoint (DDD-0004): the level maps
+// to exactly what each channel is allowed to deliver, and no producer decides. LEVEL_POLICY is the one
+// source of truth for that mapping — it is mirrored in the human copy of user-settings.mjs's `levels`,
+// and the two must move together.
+//   1 Only-when-I-ask : nothing unprompted (alarms still fire)
+//   2 Critical-only   : advocacy for HIGH-severity findings only; no promotions
+//   3 Balanced        : advocacy for relevant findings; no promotions          ← default
+//   4 Proactive       : advocacy + lesson-promotion nudges
+//   5 Maximum help    : advocacy + promotions (broadest)
+const LEVEL_POLICY = {
+  1: { advocacy: false, promotion: false, severityFloor: null },
+  2: { advocacy: true,  promotion: false, severityFloor: 'high' },
+  3: { advocacy: true,  promotion: false, severityFloor: null },
+  4: { advocacy: true,  promotion: true,  severityFloor: null },
+  5: { advocacy: true,  promotion: true,  severityFloor: null },
+};
+const LEGACY_LEVEL = { off: 1, 'important-only': 3, all: 4 };   // defensive: map a raw pre-migration value too
+
+let _level;
+async function advocacyLevel() {
+  if (_level !== undefined) return _level;
+  // Default 3 (Balanced) — matches user-settings' default AND preserves the old 'important-only'
+  // behaviour (advocacy on, promotion off) for anyone who never touched the setting.
+  _level = 3;
   try {
     const m = await import(pathToFileURL(SETTINGS_MODULE).href);
     if (typeof m.loadSettings === 'function') {
-      const v = m.loadSettings().values?.advocacy;
-      if (v === 'off' || v === 'important-only' || v === 'all') _dial = v;
+      const v = m.loadSettings().values?.advocacy;   // loadSettings already migrates legacy strings → 1-5
+      const n = typeof v === 'number' ? v : LEGACY_LEVEL[v];
+      if (Number.isInteger(n) && n >= 1 && n <= 5) _level = n;
     }
   } catch { /* keep the safe default */ }
-  return _dial;
+  return _level;
 }
+async function policy() { return LEVEL_POLICY[await advocacyLevel()] || LEVEL_POLICY[3]; }
 
 let _ledger = null;      // { shouldStillOffer, record, ACTIONS } or null if unavailable
 let _ledgerTried = false;
@@ -294,11 +314,11 @@ for (const c of candidates) {
       break;
 
     case 'promotion': {
-      // Onboarding + advocacy level. DDD-0004's three-channels table: promotion is "silenced by
-      // anything below all". A block effect from promotion is a protocol violation → drop it.
+      // DDD-0004's three-channels table + ADR-052's 1–5 dial: lesson-promotion nudges are delivered
+      // only at levels 4–5 (Proactive / Maximum). A block effect from promotion is a protocol
+      // violation → drop it.
       if (c.effect !== 'advisory') break;
-      const dial = await advocacyDial();
-      if (dial !== 'all') break;
+      if (!(await policy()).promotion) break;   // levels 1–3 ⇒ no promotion nudges
       advisories.push({ copy, hookEventName });
       break;
     }
@@ -310,11 +330,12 @@ for (const c of candidates) {
       if (c.effect !== 'advisory') break;                    // advocacy cannot block
       const findingId = typeof c.findingId === 'string' && c.findingId.trim() ? c.findingId.trim() : '';
       if (!findingId) break;                                 // malformed advocacy candidate → drop
-      const dial = await advocacyDial();
-      if (dial === 'off') break;                             // INVARIANT 2: off ⇒ nothing, exit 0, stdout ""
+      const severity = typeof c.severity === 'string' && c.severity.trim() ? c.severity.trim() : null;
+      const pol = await policy();
+      if (!pol.advocacy) break;                              // level 1 ⇒ nothing (INVARIANT 2: exit 0, stdout "")
+      if (pol.severityFloor === 'high' && severity !== 'high' && severity !== 'critical') break;   // level 2 ⇒ high-severity only
       const led = await ledger();
       if (!led) break;                                       // cannot verify the ledger → stay silent (safe)
-      const severity = typeof c.severity === 'string' && c.severity.trim() ? c.severity.trim() : null;
       const stateHash = typeof c.observationHash === 'string' && c.observationHash.trim() ? c.observationHash.trim() : null;
       let offer = true;
       try { offer = led.shouldStillOffer(findingId, { severity, stateHash }); } catch { offer = false; }

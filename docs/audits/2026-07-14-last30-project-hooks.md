@@ -1,5 +1,7 @@
 # The last 30 projects — every hook, read verbatim (2026-07-14)
 
+Updated: 2026-07-14
+
 Read-only. Every command string extracted in full; duplication PROVEN by exact-match dedup;
 unparseable files listed raw below (count: 0).
 

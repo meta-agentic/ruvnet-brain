@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { todayNY } from '../../plugin/scripts/md-stamp.mjs';
+import { todayNY, ensureStamp, hasStamp, stampInsertionPoint } from '../../plugin/scripts/md-stamp.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const HOOK = path.join(REPO_ROOT, 'plugin/scripts/md-stamp.mjs');
@@ -221,5 +221,64 @@ describe('md-stamp — the date is honest across timezones (ships to other machi
   it('an invalid timezone falls back to system-local instead of throwing', () => {
     expect(() => todayNY(new Date(), 'Not/AZone')).not.toThrow();
     expect(todayNY(new Date(), 'Not/AZone')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+// ── ENSURE (ADR-056 §2/§3) ───────────────────────────────────────────────────────────────────────
+// The hook above only REFRESHES. These cover the second entry point — insertion — which exists
+// because the duel proved insert-on-touch "never reaches a stale file, by definition of stale."
+// Placement is by SHAPE, and the refusals matter more than the insertions: a wrong insert corrupts
+// a document, and five plugin/skills/*/SKILL.md files stop loading if line 1 is not their YAML.
+describe('ensureStamp — insertion is by shape, and it refuses what it does not understand', () => {
+  it('inserts INSIDE frontmatter, leaving name/description intact (the SKILL.md loader contract)', () => {
+    const src = '---\nname: brain-build\ndescription: does a thing\n---\n\n# Title\n\nbody\n';
+    const out = ensureStamp(src, { updated: '2026-07-10' });
+    expect(out.startsWith('---\nname: brain-build\n')).toBe(true);   // line 1 is STILL the YAML fence
+    expect(out).toContain('description: does a thing\nupdated: 2026-07-10\n---');
+    expect(out.match(/^---/gm).length).toBe(2);                       // exactly one frontmatter block
+  });
+
+  it('REFUSES an unrecognised prologue rather than corrupting it (README opens with <div>)', () => {
+    const src = '<div align="center">\n\n![hero](assets/hero.png)\n\n</div>\n';
+    expect(stampInsertionPoint(src)).toBeNull();
+    expect(ensureStamp(src, { updated: '2026-07-10' })).toBe(src);   // byte-for-byte untouched
+  });
+
+  it('REFUSES MDX imports/exports and license banners', () => {
+    for (const p of ['import X from "y";\n\n# T\n', 'export const a = 1;\n\n# T\n', '/* (c) 2026 */\n\n# T\n']) {
+      expect(ensureStamp(p, { updated: '2026-07-10' })).toBe(p);
+    }
+  });
+
+  it('places the stamp after a leading H1 — the shape every stamped doc in this repo uses', () => {
+    const src = '# DDD-0008 — Currency\n\nbody text\n';
+    const out = ensureStamp(src, { updated: '2026-07-22', created: '2026-07-20' });
+    expect(out).toBe('# DDD-0008 — Currency\n\nUpdated: 2026-07-22\nCreated: 2026-07-20\n\nbody text\n');
+  });
+
+  it('NEVER invents a date — no derived `updated` means no stamp at all', () => {
+    const src = '# T\n\nbody\n';
+    expect(ensureStamp(src, {})).toBe(src);
+    expect(ensureStamp(src, { updated: 'today' })).toBe(src);
+    expect(ensureStamp(src, { updated: '2026-7-1' })).toBe(src);      // malformed ⇒ refused
+  });
+
+  it('is a no-op on an already-stamped document, in any of the three shapes', () => {
+    const plain = '# T\n\nUpdated: 2026-01-01\n\nbody\n';
+    const fm = '---\nname: x\nupdated: 2026-01-01\n---\n\nbody\n';
+    // The badge shape self-update.mjs maintains in README — missed until 2026-07-27, which made the
+    // sweep report README as "prologue not recognised": right outcome, wrong reason.
+    const badge = '<div>\n\n### X — [![X version 1.0 — updated 2026-07-27 06:02 EDT](https://img.shields.io/badge/x)](y)\n';
+    for (const s of [plain, fm, badge]) {
+      expect(hasStamp(s)).toBe(true);
+      expect(ensureStamp(s, { updated: '2026-09-09' })).toBe(s);
+    }
+  });
+
+  it('IS IDEMPOTENT — the whole safety argument, since a hook write re-fires the hook', () => {
+    const src = '# T\n\nbody\n';
+    const once = ensureStamp(src, { updated: '2026-07-10' });
+    expect(ensureStamp(once, { updated: '2026-07-10' })).toBe(once);
+    expect(ensureStamp(once, { updated: '2026-08-11' })).toBe(once);  // still stamped ⇒ still no-op
   });
 });

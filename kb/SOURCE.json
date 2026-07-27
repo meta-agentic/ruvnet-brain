@@ -1,19 +1,19 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-24T20:29:11.349Z",
+  "builtUtc": "2026-07-27T10:01:33.811Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
-    "cognitum-claude-plugin": {
-      "kbName": "cognitum-claude-plugin",
-      "sourceRepo": "https://github.com/cognitum-one/cognitum-claude-plugin",
-      "sourceCommit": "83f7adb33194bed33ee552b24423e5117f527687",
-      "sourceDescribe": "83f7adb",
-      "builtUtc": "2026-07-24T20:29:11.349Z",
+    "open-claude-code": {
+      "kbName": "open-claude-code",
+      "sourceRepo": "https://github.com/ruvnet/open-claude-code",
+      "sourceCommit": "09f4a1e415272f29d35d28b949a87acdfeefb057",
+      "sourceDescribe": "v2.0.0-nightly.20260725",
+      "builtUtc": "2026-07-27T10:01:33.811Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
-      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-claude-plugin-kb-bundle.zip",
-      "selfUpdate": "node forge-update.mjs cognitum-claude-plugin"
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/open-claude-code-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs open-claude-code"
     }
   }
 }

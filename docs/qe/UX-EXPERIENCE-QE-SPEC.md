@@ -1,5 +1,7 @@
 # UX-Experience QE Suite — spec (requested by owner 2026-07-24)
 
+Updated: 2026-07-24
+
 Status: **BUILT (local Mac probes) + PASSING 2026-07-24** — build order steps 1–2 done; steps 3–4 (CI
 matrix, Codex host) open. The runnable suite is `npm run qe:ux` (`scripts/qe/ux-suite.mjs`,
 `tests/ux/render-probe.mjs`, `tests/ux/command-probe.mjs`); real first-run numbers and the frozen

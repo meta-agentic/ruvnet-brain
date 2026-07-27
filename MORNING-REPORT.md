@@ -1,5 +1,8 @@
 # Morning Report — RuvNet Brain (2026-06-30)
 
+Updated: 2026-06-30
+Created: 2026-06-29
+
 **Everything you asked for is built and live. Verified, not asserted — every claim below has a check behind it.**
 
 Commit `7d31302` on `main`. Explainer redeployed. Brain bundle re-released.

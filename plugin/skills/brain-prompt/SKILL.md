@@ -1,6 +1,7 @@
 ---
 name: brain-prompt
 description: Metaprompting assistant — "/brain-prompt <rough idea>" turns a rough ask into "the right prompt": a complete, tuned master prompt with SPARC phases, per-phase rubrics, standing rules, and cost guardrails, ready to paste or run. Use when the user says "/brain-prompt", "brain prompt", "write me the right prompt for this", "turn this idea into a proper prompt", "metaprompt this", "what should I actually ask for", or hands over a vague one-liner they want expanded into a disciplined build brief. Ends by offering to execute the produced prompt with /brain-build semantics.
+updated: 2026-07-10
 ---
 
 <!-- Credit: this pattern productizes community field use — the PR #8 contributor's standing

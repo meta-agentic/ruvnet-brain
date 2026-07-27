@@ -1,5 +1,6 @@
 ---
 description: Open the RuvNet Brain Onboarding Console — a local web page that mirrors YOUR machine's RuvNet setup, explains it in plain English, and lets you safely configure and fix it. Read-only until you click; every machine change is explained first and is reversible.
+updated: 2026-07-15
 ---
 
 Launch the **RuvNet Brain Onboarding Console** for the user — a locally-served web page that reads

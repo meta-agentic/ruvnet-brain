@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [metaharness, routing, cost, reasoning-effort, onboarding, configurator]
 supersedes: []
 relates: [ADR-013, ADR-014]
-updated: 2026-07-22
+updated: 2026-07-27
 updated_source: derived-from-git
 ---
 

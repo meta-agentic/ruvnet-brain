@@ -1,5 +1,8 @@
 # Security Policy
 
+Updated: 2026-07-22
+Created: 2026-07-06
+
 RuvNet Brain runs on your machine, downloads a knowledge bundle, and (with your consent) can update
 itself — so we take reports seriously and fix them in the open. This policy exists because the project's
 first security review was a private, responsible disclosure; the next reporter should have a clear path.

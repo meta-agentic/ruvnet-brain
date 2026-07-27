@@ -1,5 +1,7 @@
 # Always-running MetaHarness coding service on GCP
 
+Updated: 2026-07-16
+
 **Status:** research only; no service, harness, cloud resource, or deployment has been created.  
 **Research date:** 2026-07-16  
 **Locally verified:** `metaharness@0.3.1`, `@metaharness/harness@0.1.0`, `@metaharness/host-claude-code@0.1.2`, `@metaharness/host-codex@0.1.2`, and `codex-cli 0.142.5`.

@@ -1,5 +1,7 @@
 # Codex skill manifests
 
+Updated: 2026-07-24
+
 Thin TOML manifests that expose the brain to a Codex host, following rUv's own convention
 (`metaharness/.codex/skills/*/skill.toml` — `repo-genome` for the `mcp_tool` variant,
 `example-harness` for the `shell` variant).
