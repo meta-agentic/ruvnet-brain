@@ -38,6 +38,11 @@
 // fixture hook body is a NODE script (bash can be absent on Windows), and the two genuinely
 // POSIX-only measurements — process-group signalling and descendant survival — assert the HONEST
 // `null` ("not measurable") on win32 rather than a fabricated pass.
+//
+// That reasoning was right and still landed six red assertions on windows-latest, because it only
+// audited the fixtures and never the CHECKER: `fireHook` handed cmd.exe a command line it mangled,
+// so no fixture ran at all. §1b below is that defect, its verbatim measurement, and the rule that
+// closes it — proven on every platform, since the rule is a pure function of (command, platform).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -46,7 +51,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   fireHook, assertContract, runBattery, resolveInstalledSurface, readInstalledRegistrations,
-  checkCoexistence, runSecurityScan, selfCheck, formatVerdict,
+  checkCoexistence, runSecurityScan, selfCheck, formatVerdict, shellInvocation,
   STDIN_REGIMES, STDOUT_CAP_BYTES, ALLOWED_EXITS,
 } from '../../scripts/selfcheck.mjs';
 
@@ -167,6 +172,112 @@ describe('external process-group watchdog — the hand-rolled remainder', () => 
     // Either way `null` must never be charged as a violation.
     const v = assertContract({ rec: { event: 'PostToolUse', matcher: '*', handler: 'healthy.mjs' }, measurement: { ...m, survivors: null }, mode: 'advisory', timeoutSec: 5 });
     expect(v.map((x) => x.kind)).not.toContain('orphan');
+  });
+});
+
+// ── §1b THE SHELL INVOCATION — the Windows-only defect that made §1 unmeasurable ────────────────
+//
+// WHY THIS SECTION EXISTS, in the exact order it was learned. §1's three hang assertions and §2's
+// flood + healthy assertions all went red on windows-latest (Actions run 30280922684) while macOS
+// and linux were green. The verbatim measurement, from the HEALTHY fixture — the one that must
+// produce ZERO violations — was eight violations, two per stdin regime:
+//
+//   { "kind": "exit-code",    "regime": "valid", "detail": "[valid] exited 1; a 'advisory' hook may only exit 0" }
+//   { "kind": "stderr-trace", "regime": "valid", "detail": "[valid] printed what looks like a stack
+//     trace on stderr: node:internal/modules/cjs/loader:1433\r" }
+//   …the same pair again for empty, garbage and held.
+//
+// Read that carefully: `held` exited 1 as well. The regime whose entire purpose is to WEDGE the
+// hook returned in milliseconds. Nothing ran — every fixture died in node's module loader before
+// its first line, because the command string was mangled on its way through cmd.exe. That is a
+// defect in the SHIPPED checker, not in the tests: on a Windows user's machine the same code path
+// would have reported every hook this package ships as a contract violation and failed the
+// post-install self-check with findings that were entirely an artifact of the checker.
+//
+// The rule is a pure function of (command, platform), which is the whole reason these assertions
+// can run — and fail — on a mac. What they CANNOT do is prove the Windows end-to-end behaviour;
+// only the windows-unit job can, and §1 is that proof.
+//
+// TWO SEPARATE DETAILS, and they were NOT equally guilty — the mutants below were run before this
+// comment was written, and the first draft of it was wrong:
+//   • `windowsVerbatimArguments: true` is the one that was actually breaking. It is what run
+//     30280922684 measured, and dropping it alone reproduces the failure.
+//   • The quote-wrap is not load-bearing for TODAY's registrations (they all begin `node …`, so
+//     cmd's rule 2 never fires) but it is load-bearing the moment a command begins with a quoted
+//     interpreter path — `"C:\Program Files\nodejs\node.exe" …` — which is one plugin-root change
+//     away. It is also exactly what node's own normalizeSpawnArguments() does. The test below
+//     proves the hazard is real rather than asserting a shape nobody can break.
+describe('the shell invocation — how a hook command reaches a shell on each platform', () => {
+  /**
+   * cmd.exe's own documented quote handling, from `cmd /?` rule 2, which applies whenever /S is
+   * given: "if the first character is a quote character then strip the leading character and
+   * remove the last quote character on the command line, preserving any text after the last quote
+   * character." Modelling it here is what makes the assertion about the RESULT — the command line
+   * cmd actually executes — rather than about our own argv shape.
+   */
+  const cmdSlashS = (line) => {
+    if (!line.startsWith('"')) return line; // rule 2 does not fire; whatever we wrote, cmd runs
+    const last = line.lastIndexOf('"');
+    return line.slice(1, last) + line.slice(last + 1);
+  };
+
+  const WIN_COMSPEC = { COMSPEC: 'C:\\WINDOWS\\system32\\cmd.exe' };
+  // The real registered shape: an absolute Windows path, in quotes, with a space in it (Actions
+  // runners use C:\Users\RUNNER~1\… but a user's home is routinely "C:\Users\Jane Smith\…").
+  const REAL = 'node "C:\\Users\\Jane Smith\\.claude\\plugins\\cache\\ruvnet-brain\\ruvnet-brain\\3.9.92\\scripts\\hook-shim.mjs" ground-before-write';
+
+  it('win32: cmd.exe gets /d /s /c, the command quote-wrapped, and NO libuv escaping', () => {
+    const inv = shellInvocation(REAL, 'win32', WIN_COMSPEC);
+    expect(inv.file).toBe('C:\\WINDOWS\\system32\\cmd.exe');
+    expect(inv.args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
+    expect(inv.args[3]).toBe(`"${REAL}"`);
+    // THE ONE THAT WAS RED. Without this flag libuv escapes the argument MSVC-style —
+    // `"node \"C:\Users\Jane Smith\…\hook-shim.mjs\" ground-before-write"` — cmd.exe passes the
+    // backslashes through untouched, node.exe's argv parser turns each `\"` back into a literal
+    // quote, and node goes looking for a file whose name starts with a quote character. That is
+    // `node:internal/modules/cjs/loader:1433`, verbatim, in run 30280922684.
+    expect(inv.windowsVerbatimArguments).toBe(true);
+  });
+
+  it('win32: the quote-wrap is what saves a command that BEGINS with a quoted interpreter path', () => {
+    // This is the case that proves the wrap is not decoration. cmd's rule 2 only fires when the
+    // command line starts with a quote — true for `"C:\Program Files\nodejs\node.exe" …`, and one
+    // plugin-root change away from being true for us.
+    const quotedInterp = '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Jane Smith\\rb\\scripts\\hook-shim.mjs" ground';
+    // Unwrapped, cmd eats a quote that belonged to a PATH and hands node a mangled line…
+    expect(cmdSlashS(quotedInterp), 'the hazard must be real or the wrap proves nothing').not.toBe(quotedInterp);
+    // …wrapped, the outer quotes are what rule 2 consumes, and the command survives byte-for-byte.
+    const inv = shellInvocation(quotedInterp, 'win32', WIN_COMSPEC);
+    expect(cmdSlashS(inv.args[3])).toBe(quotedInterp);
+  });
+
+  it('win32: every command the REAL shipped hooks.json registers is invoked the fixed way', () => {
+    // Not a fixture string — the actual registrations, so a future hook whose command form breaks
+    // Windows is caught here rather than by a stranger. The plugin root is substituted with a
+    // Windows path containing a space, because that is the case that failed.
+    const regs = readInstalledRegistrations(path.join(REPO_ROOT, 'plugin', 'hooks', 'hooks.json'));
+    expect(regs.length).toBeGreaterThan(0);
+    for (const r of regs) {
+      const command = r.command.replaceAll('${CLAUDE_PLUGIN_ROOT}', 'C:\\Users\\Jane Smith\\.claude\\plugins\\cache\\rb');
+      const inv = shellInvocation(command, 'win32', WIN_COMSPEC);
+      expect(inv.windowsVerbatimArguments, `libuv would escape: ${command}`).toBe(true);
+      expect(inv.args[3], `not quote-wrapped: ${command}`).toBe(`"${command}"`);
+      // And what cmd actually executes is the registration, unchanged.
+      expect(cmdSlashS(inv.args[3]), `mangled on win32: ${command}`).toBe(command);
+    }
+  });
+
+  it('a COMSPEC that is not cmd takes the POSIX-shaped branch, never cmd syntax', () => {
+    const inv = shellInvocation(REAL, 'win32', { COMSPEC: 'C:\\Program Files\\Git\\bin\\bash.exe' });
+    expect(inv.args).toEqual(['-c', REAL]);
+    expect(inv.windowsVerbatimArguments).toBe(false); // bash gets no cmd quote-wrapping
+  });
+
+  it('posix: /bin/sh -c with the command untouched, and no Windows escaping to opt out of', () => {
+    const inv = shellInvocation(REAL, 'linux');
+    expect(inv.file).toBe('/bin/sh');
+    expect(inv.args).toEqual(['-c', REAL]); // execve takes argv as an array — nothing to quote
+    expect(inv.windowsVerbatimArguments).toBe(false);
   });
 });
 

@@ -198,6 +198,48 @@ function groupAlive(pid) {
 }
 
 /**
+ * HOW TO HAND A COMMAND STRING TO A SHELL — the one genuinely platform-specific step in firing a
+ * hook, and the one this file got wrong for its whole first release.
+ *
+ * MEASURED, NOT REASONED. On windows-latest (Actions run 30280922684, job windows-unit) EVERY
+ * firing of EVERY fixture came back `exited 1` with `node:internal/modules/cjs/loader:1433` on
+ * stderr — under all four stdin regimes, including `held`, where the hook is supposed to hang. The
+ * hooks never ran at all: node.exe was handed a filename it could not resolve. Two details in the
+ * win32 spawn were missing. They are NOT equally guilty and the comment says which is which,
+ * because "both are required" would be a guess and only one of them was measured red:
+ *
+ *   1. `windowsVerbatimArguments: true` — THE DEFECT. Without it libuv escapes each argument for
+ *      the MSVC command-line convention, so `node "C:\…\hook-shim.mjs" ground` goes on the wire as
+ *      `"node \"C:\…\hook-shim.mjs\" ground"`. cmd.exe does not understand `\"`; it passes the
+ *      backslashes through, node.exe's argv parser turns each `\"` back into a literal quote, and
+ *      node goes looking for a file whose name begins with a quote character.
+ *   2. The command wrapped in its OWN quotes — CORRECTNESS, not the current failure. `cmd /?` rule
+ *      2 (which applies whenever /S is given) is: "if the first character is a quote character then
+ *      strip the leading character and remove the last quote character on the command line". Every
+ *      registration we ship today begins `node …`, so rule 2 never fires and the wrap changes
+ *      nothing — but a command beginning with a quoted interpreter path
+ *      (`"C:\Program Files\nodejs\node.exe" …`) would have a PATH quote eaten instead. The wrap
+ *      gives rule 2 something of its own to consume. Proven by the §1b test named for that case.
+ *
+ * This is node's own answer to the identical problem — `normalizeSpawnArguments()` in
+ * lib/child_process.js does exactly this for `shell: true`, cmd-vs-other branch included. We cannot
+ * simply pass `shell: true` because the shell choice is part of what is under test (a hook must be
+ * fired the way the host fires it), so the rule is reproduced here and exported so it can be proven
+ * on ANY platform — it is a pure function of (command, platform), which is the only reason a
+ * Windows-only defect is testable on a mac.
+ */
+export function shellInvocation(command, platform = process.platform, env = process.env) {
+  if (platform !== 'win32') return { file: '/bin/sh', args: ['-c', command], windowsVerbatimArguments: false };
+  const file = env.COMSPEC || 'cmd.exe';
+  // `/d /s /c` and the quote-wrapping are cmd.exe's contract specifically. A COMSPEC pointing at
+  // anything else (bash.exe, pwsh) takes the POSIX-shaped branch rather than being fed cmd syntax.
+  if (/^(?:.*\\)?cmd(?:\.exe)?$/i.test(file)) {
+    return { file, args: ['/d', '/s', '/c', `"${command}"`], windowsVerbatimArguments: true };
+  }
+  return { file, args: ['-c', command], windowsVerbatimArguments: false };
+}
+
+/**
  * Fire ONE registration under ONE stdin regime, with the watchdog armed.
  * Returns a measurement — never a verdict. Verdicts are assembled in assertContract() below, so
  * that "what happened" and "what was required" stay two separate, separately-testable things.
@@ -209,14 +251,14 @@ export function fireHook({ command, event, regime, timeoutSec, cwd, env = {}, gr
     // ${CLAUDE_PLUGIN_ROOT} already substituted by the caller. Testing the module or the hook BODY
     // instead of this string is the adjacent-door defect (ADR-053 §2.1) — the shim layer that
     // actually runs on a stranger's machine would go untested.
-    const shell = process.platform === 'win32' ? process.env.COMSPEC || 'cmd.exe' : '/bin/sh';
-    const args = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-c', command];
-    const child = spawn(shell, args, {
+    const inv = shellInvocation(command);
+    const child = spawn(inv.file, inv.args, {
       cwd,
       env: { ...process.env, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: process.platform !== 'win32', // own process group — required for the group kill
       windowsHide: true,
+      windowsVerbatimArguments: inv.windowsVerbatimArguments, // ignored on Unix; load-bearing on win32
     });
 
     let stdout = Buffer.alloc(0);
