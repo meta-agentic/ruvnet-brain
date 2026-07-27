@@ -71,6 +71,12 @@ const argv = process.argv.slice(2);
 const STANDALONE = [
   ['lesson-seed', 'one-shot seeding, run deliberately by a human'],
   ['lesson-ratify', 'the human control surface — a CLI is its entire purpose'],
+  ['stamp-sweep', 'ADR-055 §2 — the ONE-TIME backfill half of the stamp rule. A human runs it once '
+    + '(--apply) to reach the files nobody is editing; the ongoing half is the md-stamp PostToolUse '
+    + 'hook, which IS wired. Deliberately not in a gate: it WRITES to documents, and a writer that '
+    + 'fires unattended on every push is how a repo gets a churn diff it did not ask for. It shares '
+    + 'its entire placement implementation with the hook (ensureStamp/stampInsertionPoint/hasStamp), '
+    + 'so there is no second copy to drift. Converged 2026-07-27: 132 stamped, 0 stampable.'],
   ['memory-doctor', 'diagnostic CLI'],
   ['token-report', 'diagnostic CLI'],
   ['agentdb-fleet-doctor', 'diagnostic CLI run by hand when a fleet looks wrong'],
