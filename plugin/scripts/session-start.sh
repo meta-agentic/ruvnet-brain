@@ -19,6 +19,57 @@ if [ "${RUVNET_BRAIN_METER:-1}" != "0" ]; then
   [ -n "$METER_TMP" ] && exec 1>"$METER_TMP"
 fi
 
+# ── BRAIN OFF — THE INTERNAL SPLIT (ADR-054 §3). ────────────────────────────────────────────────
+#
+# The two duel reviewers disagreed here in a way that turned out to be the design. Fable: OFF must
+# NOT suppress the updater or the alarms — an off machine still has to be able to receive the fix
+# for an off-state bug, or the bug is permanent. GPT-5.6: background work while the product claims
+# to be "off" is undisclosed background work, which is its own lie. Both halves are right, so this
+# hook does not have ONE answer; it splits down the middle:
+#
+#   KEEPS RUNNING while off — the auto-update heartbeat, the nightly-failure escalation, the GONG
+#     health alarm, the open-issue SLA banner, the token meter, the .running-version bookkeeping.
+#     None of those are the brain speaking about itself; they are the machine staying maintainable.
+#     (The console DISCLOSES this in the off state and offers to pause updates too — GPT's half.)
+#
+#   GOES SILENT while off — every byte of advertising: the confidence banner, THE PLAYBOOK, the
+#     console first-load offer, the router nudge, the what's-new line, the major-line welcome, the
+#     token-intelligence line, the star ask.
+#
+#   EXACTLY ONE LINE REMAINS — "brain OFF by your setting (since <date>)". That single line resolves
+#     the silence-vs-legibility contradiction both reviewers flagged from opposite directions: total
+#     silence makes an off brain indistinguishable from a broken one, and this repo has already had
+#     a dark brain nobody noticed for days.
+#
+# THE ONCE-EVER OFFERS ARE NOT CONSUMED while suppressed. Their stamps (.console-offered,
+# .router-profile-nudged, .star-ask-shown, .last-announced-version, .last-major-milestone) are
+# written at the moment they PRINT. Suppressing the print while still writing the stamp would burn
+# a once-per-machine offer into a session that never showed it — the user turns the brain back on
+# and has silently, permanently lost the first-load console offer. So each suppressed block is
+# skipped whole, stamp included.
+#
+# The sentinel is read directly, not only from the shim's forwarded snapshot, because this hook is
+# also invoked outside the shim (by a bare install and by the test suite). RUVNET_BRAIN_OFF, when
+# present, is the shim's ONE resolved answer for this invocation (ADR-054 §4) and wins ties.
+#
+# The `! -r` clause mirrors the node readers: `[ -f ]`, like fs.existsSync, answers "no sentinel" on
+# an unreadable directory, which would report ON for a user who switched OFF. Only genuine absence
+# counts as on — see the same note in ground-before-write.sh and scripts/brain-state.mjs.
+BRAIN_STATE_DIR="${RUVNET_BRAIN_STATE_DIR:-$HOME/.config/ruvnet-brain}"
+OFF_FILE="$BRAIN_STATE_DIR/brain-off"
+BRAIN_OFF=0
+if [ "${RUVNET_BRAIN_OFF:-0}" = "1" ] || [ -f "$OFF_FILE" ] \
+   || { [ -d "$BRAIN_STATE_DIR" ] && [ ! -r "$BRAIN_STATE_DIR" ]; }; then
+  BRAIN_OFF=1
+fi
+OFF_SINCE=""
+if [ "$BRAIN_OFF" = "1" ]; then
+  # The date, from the file's own JSON when it has one, else its mtime. Never invented: if neither
+  # is readable the line simply omits the date rather than printing a plausible-looking one.
+  OFF_SINCE=$(sed -n 's/.*"since"[[:space:]]*:[[:space:]]*"\([0-9-]\{10\}\).*/\1/p' "$OFF_FILE" 2>/dev/null | head -1)
+  [ -n "$OFF_SINCE" ] || OFF_SINCE=$(date -r "$OFF_FILE" +%Y-%m-%d 2>/dev/null)
+fi
+
 # ── nightly failure escalation (Stuart, 2026-07-12): "you need to jump in and fix it" — checked in
 # EVERY session, any project, via an absolute path (this hook fires everywhere, the marker lives in
 # one place). scripts/nightly-wrapper.sh writes this ONLY after a real failure survives its own
@@ -53,7 +104,19 @@ fi
 GONG_KB="$HOME/.cache/ruvnet-brain/kb"
 GONG_HEALTH="$HOME/.cache/ruvnet-brain/health.json"
 BRAIN_PROBLEM=""
-if [ ! -d "$GONG_KB" ]; then
+# ADR-054 §3 (Health): an ABSENT knowledge bundle on a machine where the user switched the brain OFF
+# is "disabled by choice", never "THE BRAIN IS DOWN". Screaming a red alarm at someone for the exact
+# state they asked for is the product lying about its own condition — and it would train them to
+# ignore the alarm that matters. Note the narrowness: ONLY the absent-bundle class is reframed. A
+# bundle that IS present but broken (missing reader deps, a failed real search) still rings, because
+# that is a genuine breakage waiting for them the moment they switch back on.
+GONG_ABSENT_BY_CHOICE=0
+if [ "$BRAIN_OFF" = "1" ] && { [ ! -d "$GONG_KB" ] || ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; }; then
+  GONG_ABSENT_BY_CHOICE=1
+fi
+if [ "$GONG_ABSENT_BY_CHOICE" = "1" ]; then
+  BRAIN_PROBLEM=""
+elif [ ! -d "$GONG_KB" ]; then
   BRAIN_PROBLEM="the brain cache directory is MISSING ($GONG_KB) — reinstall: npx github:stuinfla/ruvnet-brain"
 elif ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; then
   BRAIN_PROBLEM="NO vector stores (.rvf) found in $GONG_KB — the brain is empty; reinstall: npx github:stuinfla/ruvnet-brain --force"
@@ -78,8 +141,10 @@ fi
 # make sure people see it the first time they load the solution. One yes/no, once ever per machine;
 # on yes the model launches it FOR them (/rvbc). Offered before the router nudge — seeing your whole
 # stack comes before tuning one part of it.
+# OFF: skipped WHOLE — print and stamp together (see the split note at the top). A once-ever offer
+# consumed by a session that never showed it is an offer the user can never receive.
 CONSOLE_OFFERED="$HOME/.cache/ruvnet-brain/.console-offered"
-if [ ! -f "$CONSOLE_OFFERED" ]; then
+if [ "$BRAIN_OFF" != "1" ] && [ ! -f "$CONSOLE_OFFERED" ]; then
   mkdir -p "$HOME/.cache/ruvnet-brain" 2>/dev/null
   touch "$CONSOLE_OFFERED" 2>/dev/null
   echo "[RuvNet Brain — FIRST LOAD: offer the Console once]"
@@ -141,7 +206,7 @@ fi
 # a profile the engine takes the catalog as-is, which may assume subscriptions this user lacks.
 ROUTER_DIR="$HOME/.claude/model-router"
 ROUTER_NUDGE="$HOME/.cache/ruvnet-brain/.router-profile-nudged"
-if [ ! -f "$ROUTER_DIR/profile.json" ] && [ ! -f "$ROUTER_NUDGE" ]; then
+if [ "$BRAIN_OFF" != "1" ] && [ ! -f "$ROUTER_DIR/profile.json" ] && [ ! -f "$ROUTER_NUDGE" ]; then
   touch "$ROUTER_NUDGE" 2>/dev/null
   echo "[RuvNet Brain — MetaHarness routing is available but not set up for THIS user yet]"
   echo "Near the top of your first response, offer ONCE, in one line (then respect the answer):"
@@ -186,7 +251,9 @@ RUNNING_V=""
   RUNNING_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
 ANNOUNCED_FILE="$STATE_DIR/.last-announced-version"
 LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
-if [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
+# OFF: skipped whole, stamp included — the "what's new" line is the good-news channel, which is
+# advertising, and burning the once-per-version stamp would silently cost the user the announcement.
+if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
     3.2.*|3.1.*) WHATS_NEW="now opens with the Console — type /rvbc and see your whole RuvNet stack on one live page: what's installed, what your AI has actually learned (real memories and distilled lessons from YOUR projects, drill-down to the verbatim cards), which subscription pays for what, and one-click reversible fixes for anything stale or drifted. It offers itself the first time you load; every number on it is measured from your machine, never projected." ;;
@@ -211,7 +278,7 @@ fi
 # 4.x. It is deliberately HONEST about the version — per Accepted ADR-042 the number stays 3.9.x-dev
 # until the 4.0 line is field-verified, so on 3.9.x it says "the 4.0-line enhancements have landed", NEVER
 # "you're on 4.0". Non-blocking; the model decides tone; the full story is /whats-new (docs/RELEASE-NOTES-4.0.md).
-if [ -n "$RUNNING_V" ]; then
+if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ]; then
   V_NODEV="${RUNNING_V%%-*}"; V_MAJOR="${V_NODEV%%.*}"; V_REST="${V_NODEV#*.}"; V_MINOR="${V_REST%%.*}"; V_PATCH="${V_REST#*.}"
   case "$V_PATCH" in *.*) V_PATCH="${V_PATCH%%.*}" ;; esac
   V_MAJOR="${V_MAJOR:-0}"; V_MINOR="${V_MINOR:-0}"; V_PATCH="${V_PATCH:-0}"
@@ -241,6 +308,13 @@ if [ -n "$RUNNING_V" ]; then
   fi
 fi
 
+# ADR-054: this one is KEPT while the brain is off, deliberately. It is not advertising — it is the
+# consent gate on whether FIXES can arrive without the user running a command, and §3's rule is that
+# an off machine must still be able to receive the fix for an off-state bug. Suppressing it would
+# mean a user who switches off before ever answering can never get automatic updates at all. The
+# console states the same fact from the other side ("off — still auto-updating; click to pause
+# updates too"), so the two surfaces agree.
+#
 # One-time consent question (asked at most once ever, per machine) — security-conscious default:
 # self-update is powerful (it can change the model's own instructions), so it's opt-in via an explicit
 # yes, not silently on. Once answered, never asked again; the answer is a plain yes/no file, not a flag
@@ -347,7 +421,9 @@ fi
 # first successful search_ruvnet — so this never fires on a machine where the brain hasn't earned it).
 # The .star-ask-shown stamp is written the moment it prints, BEFORE the echo, so even a killed
 # session can't cause a repeat. Both stamps are local files; nothing here touches the network.
-if [ -f "$STATE_DIR/.grounded-once" ] && [ ! -f "$STATE_DIR/.star-ask-shown" ]; then
+# OFF: skipped whole, stamp included — asking for a star while the user has the thing switched off
+# is the worst possible moment for it, and burning the once-EVER stamp would lose the ask forever.
+if [ "$BRAIN_OFF" != "1" ] && [ -f "$STATE_DIR/.grounded-once" ] && [ ! -f "$STATE_DIR/.star-ask-shown" ]; then
   if touch "$STATE_DIR/.star-ask-shown" 2>/dev/null; then
     echo "[RuvNet Brain — one-time note. This will NEVER be shown again on this machine.]"
     echo "The brain has now grounded real answers for this user. ONCE, at a natural closing moment in"
@@ -397,6 +473,43 @@ esac
 # The brain bundle stamps its own provenance (SOURCE.json releaseTag) at build time.
 [ -f "$HOME/.cache/ruvnet-brain/kb/SOURCE.json" ] && \
   BANNER_KB=$(grep -m1 '"releaseTag"' "$HOME/.cache/ruvnet-brain/kb/SOURCE.json" 2>/dev/null | sed -E 's/.*"releaseTag": *"([^"]+)".*/\1/')
+
+# ── THE OFF STATE LINE (ADR-054 §3) — and then nothing else. ────────────────────────────────────
+#
+# Everything from here down is the confidence banner, the capability announcement and THE PLAYBOOK:
+# ~2,000 tokens of the brain talking about itself. All of it is advertising, all of it dies when the
+# brain is off, and exactly ONE line replaces it.
+#
+# ONE line, and no instruction attached. Total silence would make an off brain indistinguishable
+# from a broken one — this repo has already shipped a dark brain that nobody noticed for days, which
+# is the whole reason the GONG exists. But an off brain that explains itself at length is just
+# advertising wearing a state label. So: the fact, the date, and a note not to raise it unprompted.
+# The date comes from the switch file itself and is omitted rather than invented if unreadable.
+#
+# It deliberately does NOT say how to switch the brain back on. That mechanism belongs to the user
+# and to the console; handing it to the model in a context block is the same consent problem
+# protect-brain-state.sh exists to wall off.
+if [ "$BRAIN_OFF" = "1" ]; then
+  # An absent knowledge bundle is folded INTO this same line rather than added as a second one — the
+  # GONG's alarm was suppressed for it above (ADR-054 §3 Health), and replacing one alarm with two
+  # quiet lines would just be a quieter version of the same over-speaking.
+  OFF_KB_NOTE=""
+  [ "$GONG_ABSENT_BY_CHOICE" = "1" ] && OFF_KB_NOTE="; no knowledge bundle on this machine — disabled by choice, not broken"
+  echo "[RuvNet Brain — brain OFF by your setting${OFF_SINCE:+ (since $OFF_SINCE)}$OFF_KB_NOTE. Do not mention it unless the user asks.]"
+  # The meter still finalizes below — an off session's byte count is a real measurement.
+  if [ -n "$METER_TMP" ]; then
+    exec 1>&3 3>&-
+    cat "$METER_TMP" 2>/dev/null
+    METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
+    rm -f "$METER_TMP" 2>/dev/null
+    METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
+    mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
+      printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
+        >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
+  fi
+  exit 0
+fi
 
 cat <<EOF
 [RuvNet Brain v$BANNER_V — active this session${BANNER_D:+ · last updated $BANNER_D}${BANNER_KB:+ · knowledge bundle $BANNER_KB}]

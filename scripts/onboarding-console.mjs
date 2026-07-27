@@ -45,6 +45,10 @@ import { learnings } from './learnings.mjs';
 import { gatesSurvey } from './gates.mjs';
 // The write-safety primitives, borrowed rather than re-implemented. See saveConfig for why.
 import { withLock, writeAtomic, LOCK_WAIT_MS, loadSettings, saveSettings, SETTINGS_SCHEMA as USER_SETTINGS_SCHEMA } from './user-settings.mjs';
+// The brain on/off switch (ADR-054). The sentinel is the enforcement artifact; settings.json holds
+// only a mirror. The console is the ONE surface allowed to flip it — protect-brain-state.sh walls
+// the file off from agent edits — so both halves of the write live here, in saveBrainPower().
+import { isBrainOff, readOffState, setBrainOff, setBrainOn, disagreement } from './brain-state.mjs';
 // Lessons: read model + the two user verbs. Every mutation goes through lesson-store's own
 // updateLessons/ratify/demote/restore — this file adds a SURFACE, never a second writer.
 import { loadLessons, updateLessons, ratify, demote, restore, pending, weightOf, TRIGGERS, ENFORCEMENT, ORIGIN, STATUS } from './lesson-store.mjs';
@@ -448,6 +452,127 @@ function saveAdvocacy(values) {
     backup: result.backup ? result.backup.replace(HOME, '~') : null,
     values: { advocacy: result.values.advocacy },
     log: result.log,
+  };
+}
+
+/**
+ * ── THE MASTER SWITCH (ADR-054) — its OWN section, deliberately not folded into the dial above ───
+ *
+ * `brainEnabled` lives in the SAME settings.json as `advocacy`, but it is served and saved
+ * separately, and the separation is the design rather than an accident of growth:
+ *
+ *   1. IT IS NOT A SETTING, IT IS A SWITCH. The enforcement artifact is the sentinel file
+ *      (scripts/brain-state.mjs); the settings key is a MIRROR kept so the choice is visible where a
+ *      user looks for their choices. Saving it therefore has to write TWO things, and a save path
+ *      that writes two things must not be the same one that writes the ordinary dials — the moment
+ *      it is, an unrelated dial save starts touching the switch.
+ *   2. THE TWO CAN LEGITIMATELY DISAGREE (an older release drops the mirror key — see gate test 1),
+ *      so this section carries `disagreement` and the ordinary dial section has nothing like it.
+ *   3. IT MUST DISCLOSE WHAT KEEPS RUNNING. `notes` carries the maintenance-continues line, because
+ *      the one thing worse than background work while "off" is UNDISCLOSED background work — GPT-5.6's
+ *      half of the duel's single genuine disagreement.
+ *
+ * Same widget, same consent gate, same save/undo handling as the advocacy dial (the page renders it
+ * through the shared buildSettingsForm), just a different endpoint and a different store semantics.
+ */
+const BRAIN_FIELD = USER_SETTINGS_SCHEMA.find((s) => s.key === 'brainEnabled');
+
+function gatherBrainPower() {
+  const state = readOffState();
+  const settings = loadSettings();
+  return {
+    off: state.off,
+    since: state.since,
+    reason: state.reason,
+    switchPath: state.path.replace(HOME, '~'),
+    // The RESOLVED answer — what the machine actually does — not the mirror's opinion of it.
+    values: { brainEnabled: !state.off },
+    defaults: { brainEnabled: BRAIN_FIELD.default },
+    schema: [BRAIN_FIELD],
+    disagreement: disagreement(settings.values.brainEnabled),
+    // Stated on the surface, not buried in a doc. Every line here is a thing that KEEPS HAPPENING
+    // while the brain is off; if one of them ever stops being true, this list is what has to change.
+    notes: state.off
+      ? [
+        'Still running while off: version updates, the health alarm, and the open-issue banner — an off machine has to be able to receive the fix for an off-state bug.',
+        'Stopped while off: retrieval from rUv\'s source, the grounding gate on your write path, everything the brain volunteers, and learning from this session.',
+        'Already-running Claude Code and Codex sessions pick this up on their next hook or next search; a tool DESCRIPTION they cached at startup refreshes at their next restart.',
+      ]
+      : [
+        'While the brain is on it retrieves from rUv\'s real source before answering, and its hooks watch your write path.',
+        'Switching it off stops retrieval, the grounding gate, everything it volunteers, and learning — updates and health alarms keep running, and you can pause those separately.',
+      ],
+  };
+}
+
+/**
+ * PUSH THE NEW SWITCH POSITION INTO THE STATE CACHE, IMMEDIATELY.
+ *
+ * FOUND BY A LIVE HTTP SMOKE, not by a unit test, and it is worth saying which: every unit
+ * assertion around saveBrainPower() passed while the real server, queried over real HTTP one second
+ * after a successful `off` save, answered `off: false`. `/api/state` is cache-first by design (the
+ * 2026-07-17 outage bargain: never compute inline on a request), and nothing invalidated the cache
+ * on this write — so the page's own master switch would have rendered ON for a machine that was OFF
+ * until a background refresh happened to land. That is the exact class of statement this console
+ * exists to make impossible.
+ *
+ * PATCH, then back-date — not `expireCachesEmbedding`, and both halves are deliberate:
+ *   • PATCH the value, because for THIS field "stale" is not an acceptable stand-in for "wrong".
+ *     Back-dating alone still hands the next reader `off: false`, merely labelled old.
+ *   • BACK-DATE anyway, so the record is honestly marked as a measurement due for replacement and
+ *     serveCached's kickRefresh() produces a wholly fresh one. Staleness here is caused by a WRITE,
+ *     not by time passing — the doctrine expireCachesEmbedding's own header states.
+ *   • NOT the shared helper: it calls writeCache WITHOUT a scope, and STATE_CACHE is project-scoped.
+ *     Dropping the scope would make the next read a scope MISMATCH, which takes the COLD path and
+ *     computes inline — reintroducing the multi-second freeze on the very next page load.
+ */
+function publishBrainPowerToCache() {
+  try {
+    const c = readJSON(STATE_CACHE);
+    if (!c || !c.data || !c.data.sections) return;   // nothing cached yet — the next read is cold and correct
+    c.data.sections.brainPower = gatherBrainPower();
+    writeCache(STATE_CACHE, new Date(0).toISOString(), c.data, c.scope ?? null);
+  } catch { /* a cache we cannot rewrite is one the next refresh replaces anyway */ }
+}
+
+/**
+ * SAVE — the sentinel FIRST, the mirror second, and the receipt tells the truth about both.
+ *
+ * Order matters and is not arbitrary. The sentinel is what every reader enforces from; the mirror is
+ * a record. If the mirror write fails after the switch has flipped, the machine is in the state the
+ * user asked for and one display is stale — recoverable, and reported. If it were the other way
+ * round, a failed sentinel write would leave a settings file claiming a state the machine is not in,
+ * which is the console showing a toggle wired to nothing.
+ *
+ * The mirror goes through user-settings.mjs's own saveSettings — same lock, same atomic rename, same
+ * backup-before-write as every other key. No second writer.
+ */
+function saveBrainPower(values) {
+  const value = values && typeof values === 'object' ? values.brainEnabled : undefined;
+  if (value === undefined) return { ok: false, log: 'nothing was saved — no recognised settings were supplied' };
+  if (typeof value !== 'boolean') {
+    const reason = `expected true or false, got ${JSON.stringify(value)}`;
+    return { ok: false, rejected: [{ key: 'brainEnabled', reason }], log: `nothing was saved — brainEnabled: ${reason}` };
+  }
+
+  const flipped = value ? setBrainOn() : setBrainOff('switched off from the console');
+  if (!flipped.ok) return { ok: false, log: `nothing was changed — ${flipped.log}` };
+
+  const mirrored = saveSettings({ brainEnabled: value });
+  const state = readOffState();
+  publishBrainPowerToCache();
+  return {
+    ok: true,
+    off: state.off,
+    since: state.since,
+    backup: mirrored.backup ? mirrored.backup.replace(HOME, '~') : null,
+    values: { brainEnabled: !state.off },
+    // Honest about the half-failure rather than reporting a clean success: the switch is what counts
+    // and it moved, but say so plainly if the visible record did not follow it.
+    log: mirrored.ok
+      ? (value ? 'the brain is on' : 'the brain is off — updates and health alarms keep running')
+      : `the brain is ${value ? 'on' : 'off'}, but your settings file could not be updated to match (${mirrored.log})`,
+    mirrored: mirrored.ok,
   };
 }
 
@@ -1401,6 +1526,11 @@ function gatherState(cwd, { fleet = true } = {}) {
   } catch { try { savings.utilization = utilization({}); } catch { savings.utilization = null; } }
   const config = gatherConfig();
   const userSettings = gatherAdvocacy();
+  // ADR-054: its own section, never folded into userSettings — see gatherBrainPower()'s header for
+  // the three reasons. A failure here must not blank the page: the switch's own surface degrading is
+  // no reason to lose the rest of the machine's state.
+  let brainPower = null;
+  try { brainPower = gatherBrainPower(); } catch { brainPower = null; }
   let gates = null;
   try { gates = gatesSurvey({ repo: REPO }); } catch { gates = null; }
   const recommendations = buildWiringRecommendations({ sites: wiring.sites });
@@ -1434,7 +1564,7 @@ function gatherState(cwd, { fleet = true } = {}) {
     generatedAt: new Date().toISOString(),
     preStateHash,
     host: { user: os.userInfo().username, platform: process.platform, node: process.version, npmPrefix: NPM_PREFIX.replace(HOME, '~'), brainVersion: brainVersionOnDisk() },
-    sections: { wiring, memory, savings, config, userSettings, gates, recommendations },
+    sections: { wiring, memory, savings, config, userSettings, brainPower, gates, recommendations },
   };
   // Cache the last good state so repeat page-loads paint instantly, same as the stack audit does.
   // TOKEN is per-server-run and must never touch disk — ?fast=1 splices the live one back in.
@@ -2015,6 +2145,9 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         if (url === '/api/apply') return sendJSON(res, 200, apply(Array.isArray(body.ids) ? body.ids : []));
         if (url === '/api/save-config') return sendJSON(res, 200, saveConfig(body.values || {}));
         if (url === '/api/save-advocacy') return sendJSON(res, 200, saveAdvocacy(body.values || {}));
+        // ADR-054 — a distinct endpoint because it writes a distinct thing (the sentinel + the
+        // mirror), never routed through save-advocacy/save-config.
+        if (url === '/api/save-brain-power') return sendJSON(res, 200, saveBrainPower(body.values || {}));
         if (url === '/api/undo') return sendJSON(res, 200, undo(body.undoToken));
         if (url === '/api/set-lesson') return sendJSON(res, 200, setLesson(body));
         return sendJSON(res, 404, { error: 'unknown endpoint' });
@@ -2137,7 +2270,7 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   else { console.log(`\n  onboarding-console — the RuvNet Brain configure page\n\n    --serve [--open]   start the local server (and open your browser)\n    --print-state      print the read-only state JSON and exit (for tests)\n    --print-stack      print the stack audit JSON and exit\n`); }
 }
 
-export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy };
+export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy, gatherBrainPower, saveBrainPower };
 // Exported for the cross-project cache-isolation test (console-cache-scope.test.mjs). serveCached's
 // scopeKey is the guard that stops one project's cached state being served for another.
 export { serveCached, writeCache };

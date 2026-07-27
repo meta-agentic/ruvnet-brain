@@ -24,6 +24,8 @@
 //     can never masquerade as health. First-install (spine never seeded) stays quiet.
 //   • Per-invocation consistency (finding 14, accepted middle): active.json is read once; the whole
 //     invocation runs from one immutable tree — a hook never straddles two generations.
+//   • Brain OFF is a CONTRACT PER HOOK, not one early-exit (ADR-054 §3): each table entry declares
+//     `offBehavior`, resolved ONCE per invocation against the sentinel (see BRAIN_OFF below).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,18 +42,58 @@ const VERSIONS = path.join(BRAIN_HOME, 'versions');
 // into "C:\C:\…" — the fallback silently pointed at a nonexistent tree (issue #38).
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// The dispatch table — hook id → { file (relative to <codeRoot>/plugin/scripts), interpreter, mode }.
-// Adding a hook here is a SHELL change (requiresRestart); changing a hook's BODY never is.
+// ── BRAIN OFF (ADR-054 §2/§4) — resolved ONCE, here, for the whole invocation. ──────────────────
+//
+// A bare existsSync on the sentinel, on purpose and by contract. This file is BOOT-FROZEN, so it may
+// not import scripts/brain-state.mjs (that module lives in the spine, outside this frozen tree, and
+// an import of it would reintroduce exactly the version-straddling this shim exists to prevent).
+// The duplication is deliberate and is held by test, not by comment: tests/unit/brain-off.test.mjs
+// drives the REAL shim against the REAL sentinel path, so a drift between the two copies goes red.
+//
+// The read happens once and is carried through the rest of the invocation (ADR-054 §4, per-operation
+// snapshot) — a hook must never straddle a mid-flight flip any more than it straddles two generations.
+// statSync, not existsSync: existsSync does not throw on EACCES, it returns false — so an unreadable
+// state directory reported "no sentinel" and silently switched a user's brain back on. Only genuine
+// absence (ENOENT/ENOTDIR) means ON; every other error means we cannot tell, and "cannot tell" must
+// not override a choice the user already made. Same rule, same codes, as scripts/brain-state.mjs.
+const BRAIN_STATE_DIR = process.env.RUVNET_BRAIN_STATE_DIR || path.join(os.homedir(), '.config', 'ruvnet-brain');
+let BRAIN_OFF = false;
+try { fs.statSync(path.join(BRAIN_STATE_DIR, 'brain-off')); BRAIN_OFF = true; }
+catch (e) { BRAIN_OFF = !(e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')); }
+
+// The dispatch table — hook id → { file (relative to <codeRoot>/plugin/scripts), interpreter, mode,
+// offBehavior }. Adding a hook here is a SHELL change (requiresRestart); changing a BODY never is.
+//
+// `offBehavior` is the per-plane OFF contract (ADR-054 §3), as DATA rather than as ifs scattered
+// through nine scripts. Both duel reviewers converged on why one boolean kill-switch is wrong: it
+// either lies about being off (something keeps speaking) or it over-kills (it removes protections
+// that have nothing to do with retrieval). So each hook states its own answer:
+//
+//   'silence' — this hook exists to advertise, ground, or learn. Off means it does not run at all
+//               and writes ZERO bytes. Nothing downstream can tell it apart from not being installed.
+//   'run'     — this is a SAFETY WALL that guards money or honesty, not retrieval. route-dispatch
+//               stops a subagent fan-out inheriting an expensive model; verify-interface stops a
+//               guessed CLI flag; design-wall stops an ungraded surface shipping; protect-state
+//               guards the user's own consent record. None of those become acceptable because the
+//               brain is off — turning retrieval off must not quietly disarm the product's walls.
+//   'partial' — the hook splits INTERNALLY. session-start still runs the auto-updater heartbeat, the
+//               GONG health alarm and the SLA banner (an off machine must still receive fixes,
+//               otherwise the fix for an off-state bug can never arrive) while suppressing every
+//               advertising byte. The snapshot is forwarded as RUVNET_BRAIN_OFF so the body reads
+//               ONE resolved answer instead of racing the filesystem again mid-run.
 const TABLE = {
-  'session-start':    { file: 'session-start.sh',    interpreter: 'bash', mode: 'advisory' },
-  'ground-ruvnet':    { file: 'ground-ruvnet.sh',    interpreter: 'bash', mode: 'advisory' },
-  'hijack-ruvnet':    { file: 'hijack-ruvnet.sh',    interpreter: 'bash', mode: 'advisory' },
-  'route-dispatch':   { file: 'route-dispatch.sh',   interpreter: 'bash', mode: 'blocking' },
-  'verify-interface': { file: 'verify-interface.sh', interpreter: 'bash', mode: 'blocking' },
-  'design-wall':      { file: 'design-wall.sh',      interpreter: 'bash', mode: 'blocking' },
-  'learn-capture':    { file: 'learn-capture.sh',    interpreter: 'bash', mode: 'advisory' },
-  'learn-flush':      { file: 'learn-flush.mjs',     interpreter: 'node', mode: 'advisory' },
-  'md-stamp':         { file: 'md-stamp.mjs',        interpreter: 'node', mode: 'advisory' },
+  'session-start':    { file: 'session-start.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'partial' },
+  'ground-ruvnet':    { file: 'ground-ruvnet.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
+  'hijack-ruvnet':    { file: 'hijack-ruvnet.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
+  'route-dispatch':   { file: 'route-dispatch.sh',   interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  'verify-interface': { file: 'verify-interface.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  'design-wall':      { file: 'design-wall.sh',      interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  // The consent guard (ADR-054 §3): it protects the OFF state itself, so it is the one hook that
+  // matters MORE while the brain is off. 'run', permanently.
+  'protect-state':    { file: 'protect-brain-state.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  'learn-capture':    { file: 'learn-capture.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
+  'learn-flush':      { file: 'learn-flush.mjs',     interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
+  'md-stamp':         { file: 'md-stamp.mjs',        interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
   // The unprompted-speech chokepoint (ADR-040 / DDD-0004). ONE runtime is the sole writer of
   // user-facing bytes for every unprompted hook: it spawns the real producers (anticipate, lesson)
   // in candidate mode, applies the per-channel policy, and writes the final envelope itself. `channel`
@@ -59,7 +101,7 @@ const TABLE = {
   // exit code, and an opted-in lesson BLOCK must propagate as exit 2 (an advisory delivery is exit 0
   // and passes straight through; a spawn error is exit 1, which CC treats as a non-blocking notice).
   // The CC event name is forwarded to the runtime as an extra argv (see runHook's arg plumbing).
-  'unprompted-speech': { file: 'unprompted-runtime.mjs', interpreter: 'node', mode: 'blocking', channel: 'unprompted' },
+  'unprompted-speech': { file: 'unprompted-runtime.mjs', interpreter: 'node', mode: 'blocking', channel: 'unprompted', offBehavior: 'silence' },
 };
 
 const hookId = process.argv[2];
@@ -68,6 +110,13 @@ if (!entry) {
   process.stderr.write(`[hook-shim] unknown hook id: ${JSON.stringify(hookId)} — known: ${Object.keys(TABLE).join(', ')}\n`);
   process.exit(0); // an unknown id is a shell bug, but it must never block the user's turn
 }
+
+// The 'silence' contract, enforced before ANY work: no spine resolution, no spawn, no stderr — not
+// even the loud-fallback line, because a broken spine is not news to a user who switched the brain
+// off. Exit 0 unconditionally: a silenced hook is the absence of a hook, and the absence of a hook
+// never blocks a turn. An unknown/absent offBehavior defaults to running, so a future entry that
+// forgets to declare one fails toward the pre-ADR-054 behaviour rather than toward silent death.
+if (BRAIN_OFF && entry.offBehavior === 'silence') process.exit(0);
 
 /** Resolve the active code root. Returns { root, source } or null (→ fallback). */
 function resolveCodeRoot() {
@@ -108,7 +157,14 @@ function runHook(file) {
   // The unprompted-speech chokepoint uses this to receive the CC event name:
   // `hook-shim.mjs unprompted-speech UserPromptSubmit` → `unprompted-runtime.mjs UserPromptSubmit`.
   const extraArgs = process.argv.slice(3);
-  const r = spawnSync(cmd, [file, ...extraArgs], { stdio: 'inherit', env: process.env });
+  // Forward the ONE resolved OFF snapshot to a 'partial' body (ADR-054 §4). The body could stat the
+  // sentinel itself — and session-start.sh still does, because it is also invoked directly, outside
+  // this shim, by tests and by a bare install. Passing it means the two readings cannot disagree
+  // within a single invocation if the user flips the switch while the hook is mid-run.
+  const env = (BRAIN_OFF && entry.offBehavior === 'partial')
+    ? { ...process.env, RUVNET_BRAIN_OFF: '1' }
+    : process.env;
+  const r = spawnSync(cmd, [file, ...extraArgs], { stdio: 'inherit', env });
   if (r.error) {
     process.stderr.write(`[hook-shim] ${entry.file}: ${r.error.message}\n`);
     return entry.mode === 'blocking' ? 1 : 0;

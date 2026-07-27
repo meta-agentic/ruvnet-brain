@@ -380,7 +380,18 @@ describe('registry hygiene', () => {
    * the inside — the correct shape for a blocking hook. A `|| true` here would silently disarm every
    * opted-in refusal, the exact disarm the next assertion exists to prevent.
    */
-  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'unprompted-speech']);
+  /**
+   * THE FIFTH WALL (ADR-054 §3): `protect-state`. It is on this list for exactly the reason the four
+   * above are — its exit code IS its contract. It refuses an agent Write/Edit to the two files that
+   * record the user's own choice (the brain on/off sentinel, and the settings mirror plus its
+   * backups and lock). `|| true` on it would turn "the model may not switch the brain back on" from
+   * a wall into a suggestion, which is the state the duel's finding says does not hold.
+   *
+   * It is also the one hook in the registry whose offBehavior is 'run' *because* it protects OFF: a
+   * consent guard that switched itself off when the user switched the brain off would guard nothing
+   * at the only moment it is needed.
+   */
+  const BLOCKING = Object.freeze(['route-dispatch', 'verify-interface', 'design-wall', 'unprompted-speech', 'protect-state']);
   const isBlocking = (cmd) => BLOCKING.some((b) => cmd.includes(b));
 
   it('gives every ADVISORY hook a `|| true` failsafe — a hook error must never reach the user', () => {

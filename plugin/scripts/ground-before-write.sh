@@ -40,6 +40,37 @@ INPUT=""
 while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
 [ -n "$INPUT" ] || exit 0
 
+# ── BRAIN OFF — THE FIRST CHECK IN THE FILE (ADR-054 §3). ───────────────────────────────────────
+# This gate demands a fresh grounding stamp, and a stamp can only be minted by a successful
+# search_ruvnet. With the brain switched off there IS no search_ruvnet, so an unmodified gate would
+# block every rUv-domain write forever with an instruction the user has deliberately made
+# impossible to follow. That is the "something bad happened because it can be turned off" failure
+# the owner's build mandate rules out, and it is why this check comes before the opt-in check,
+# before the tool check and before the file-type check: nothing this gate does downstream is
+# meaningful while its evidence source is switched off.
+#
+# It degrades to ONE advisory line on stdout and exit 0 — never a block. PreToolUse stdout on exit 0
+# is transcript-only (it does not enter the model's context), so this is legibility for the person
+# reading their own session, not another channel of unsolicited speech.
+#
+# Both duel reviewers independently caught that this hook is wired in the USER's settings.json,
+# OUTSIDE plugin/hooks/hooks.json and therefore outside the shim's dispatch table — so the shim's
+# per-hook offBehavior cannot reach it and the check has to live here, in the body. It is a pure
+# `[ -f ]` on a path built from bash parameter expansion only: this gate's standing contract
+# (ADR-0021, enforced by ground-before-write.test.mjs) is that it depends on no node, no jq, no
+# python, so it can never fail-open because a tool went missing.
+#
+# The `! -r` clause is the bash half of a polarity bug gate test 5 found in the node half: an
+# unreadable state directory makes `[ -f ]` (like fs.existsSync) answer "no sentinel", which would
+# re-arm this gate for a user who had switched the brain off — the two readers disagreeing about the
+# same machine. "The directory is there and we cannot read it" is not evidence of ON.
+BRAIN_STATE_DIR="${RUVNET_BRAIN_STATE_DIR:-$HOME/.config/ruvnet-brain}"
+BRAIN_OFF_FILE="$BRAIN_STATE_DIR/brain-off"
+if [ -f "$BRAIN_OFF_FILE" ] || { [ -d "$BRAIN_STATE_DIR" ] && [ ! -r "$BRAIN_STATE_DIR" ]; }; then
+  echo "[RuvNet Brain is off by your setting — the grounding gate is advisory only, nothing is blocked.]"
+  exit 0
+fi
+
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
 [ "${RUVNET_SKIP_GROUNDING_CHECK:-0}" = "1" ] && exit 0

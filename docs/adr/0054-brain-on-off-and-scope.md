@@ -1,7 +1,7 @@
 ---
 id: ADR-054
 title: Brain on/off and per-part scope — a user-controlled brain that can never silently lie about being off
-status: Accepted
+status: Implemented
 date: 2026-07-26
 updated: 2026-07-26
 authors: [Stuart Kerr, Claude Code]
@@ -18,9 +18,23 @@ governs:
 
 # ADR-054: Brain on/off and per-part scope
 
-**Status**: Accepted (duel-verified 2026-07-26 — v1 scope REDUCED by the duel; record below)
+**Status**: Implemented (v1 = on/off only, shipped v3.9.84-dev — duel-verified 2026-07-26; record below)
 **Date**: 2026-07-26
 **Related**: ADR-052 (proactivity-you-control), ADR-053 (experience QA), ADR-023 (stable spine)
+
+> **Implemented 2026-07-26, v3.9.84-dev.** v1 = ON/OFF only; per-family scope stays measure-first per
+> §1 and NO scope plumbing was built. All 8 gate tests live in `tests/unit/brain-off.test.mjs` (54
+> assertions, green); gates 1 and 3 were written and RUN RED first and their verbatim failing output
+> is recorded in that file's header. Surfaces: `scripts/brain-state.mjs` (the sentinel),
+> `scripts/user-settings.mjs` (`brainEnabled` mirror), `plugin/scripts/hook-shim.mjs` (per-entry
+> `offBehavior`), `session-start.sh` (internal split), `ground-before-write.sh`, `grounding-stamp.sh`
+> (stamp-on-result), `plugin/scripts/protect-brain-state.sh` + `hooks.json` (the consent guard —
+> a SHELL change, requiresRestart, flagged), `kb/forge-mcp-all.mjs` (disabled soft answer),
+> `bin/install.mjs` (uninstall removes the sentinel), and the console's own on/off section.
+> One finding the build added to the design: `fs.existsSync` / `[ -f ]` return FALSE rather than
+> throwing on an unreadable state directory, so the first draft of the sentinel reader reproduced the
+> very fail-open polarity §2 chose the sentinel to dissolve. Gate 5 caught it. All five readers now
+> treat only genuine absence (ENOENT/ENOTDIR, or a readable dir with no file) as ON.
 
 ## Context
 

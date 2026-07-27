@@ -52,6 +52,65 @@ function meterLog(entry) {
   } catch { /* never let metering break a query */ }
 }
 
+// ── THE OFF SWITCH (ADR-054 §2/§3) — read per call, never cached. ───────────────────────────────
+// A bare existsSync on ~/.config/ruvnet-brain/brain-off. It is duplicated from scripts/brain-state.mjs
+// rather than imported for a hard structural reason: this file ships INSIDE the knowledge bundle,
+// and bundle-import-graph.test.mjs proves every static import of a bundled entrypoint resolves
+// inside kb/ — an import reaching out to scripts/ would be MODULE_NOT_FOUND on every real install
+// (that exact failure has already shipped twice, issue #32). The duplication is held by test, not by
+// comment: tests/unit/brain-off.test.mjs drives THIS server against the REAL sentinel path.
+//
+// Read at CALL time, not at module load. This server is a long-lived warm child; caching the answer
+// at boot would mean a mid-session flip did nothing until the next restart, which is exactly the
+// failure ADR-054 §4 (per-operation snapshot) rules out.
+function brainOffState() {
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const dir = process.env.RUVNET_BRAIN_STATE_DIR || path.join(home, '.config', 'ruvnet-brain');
+    const file = path.join(dir, 'brain-off');
+    // statSync, not existsSync — existsSync returns false (rather than throwing) on EACCES, so an
+    // unreadable state dir silently read as "on" and answered as if grounded. Only ENOENT/ENOTDIR
+    // mean the user did not switch it off. Same rule as scripts/brain-state.mjs and the hook shim.
+    try { fs.statSync(file); }
+    catch (e) { if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')) return null; return { off: true, since: null }; }
+    let since = null;
+    try { since = JSON.parse(fs.readFileSync(file, 'utf8')).since ?? null; } catch { /* contents are metadata */ }
+    return { off: true, since };
+  } catch { return null; }
+}
+
+/**
+ * THE SOFT ANSWER. Not an error, not an outage, not an empty result — a deliberate state.
+ *
+ * Three properties, each load-bearing and each pinned by test:
+ *
+ *  1. IT TELLS THE MODEL TO TELL THE USER. The model must not silently answer RuvNet questions from
+ *     memory while believing it is grounded, and it must not conclude the brain is broken.
+ *  2. IT NEVER HANDS THE MODEL THE LEVER. No command, no file path, no setting name, no console
+ *     route. An agent-initiated flip is a consent violation (ADR-054 §3); the corresponding wall is
+ *     protect-brain-state.sh, and this text is the half of the pair that avoids the temptation
+ *     instead of merely refusing it. The user is told what is true; the model is not told how to
+ *     undo their choice.
+ *  3. IT CARRIES MACHINE-READABLE `disabled: true`. Telemetry, the GONG and the grounding stamp all
+ *     have to distinguish "switched off" from "succeeded" and from "broken" — three states, not
+ *     two. The plain phrase below is ALSO the marker grounding-stamp.sh matches on (quote-free, so
+ *     it survives being JSON-encoded into a PostToolUse payload).
+ */
+function disabledResult(id, k, state) {
+  const body =
+    'The RuvNet Brain is disabled — this user switched it off in their own settings'
+    + `${state.since ? ` on ${String(state.since).slice(0, 10)}` : ''}. No search was run and no source was retrieved.\n\n`
+    + '➡ INSTRUCTION TO THE MODEL: TELL THE USER, plainly and early, that the RuvNet Brain is '
+    + 'switched off, so anything you say about rUv\'s ecosystem comes from your own memory and is '
+    + 'not grounded in his source. Do NOT present an ungrounded answer as a grounded one, do NOT '
+    + 'report this as an outage or a failure, and do NOT try to change the setting or offer to — it '
+    + 'is the user\'s to change, not yours.';
+  meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: body.length, disabled: true });
+  // isError:false — a state the user chose is not a failure. `disabled` is the field every counter
+  // must branch on so a switched-off machine is never scored as either success or outage.
+  return ok(id, { content: [{ type: 'text', text: body }], isError: false, disabled: true, _meta: { disabled: true } });
+}
+
 const KB_DIR = process.env.KB_DIR || process.cwd();
 const REPOS = (process.env.KB_REPOS || '').split(',').map((s) => s.trim()).filter(Boolean);
 let discovered = [];
@@ -124,6 +183,11 @@ async function handle(msg) {
         const query = String(args.query || '').trim();
         const k = Math.max(1, parseInt(args.k ?? 6, 10) || 6);
         if (!query) return err(id, -32602, 'query is required');
+        // BEFORE any retrieval work (ADR-054 §3): no model load, no store read, no telemetry event,
+        // no grounded-once stamp. A switched-off brain must be indistinguishable from one that never
+        // ran — including in what it costs and in what it counts.
+        const offState = brainOffState();
+        if (offState) return disabledResult(id, k, offState);
         const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND

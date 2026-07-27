@@ -1,13 +1,34 @@
 #!/bin/bash
 # grounding-stamp.sh — PostToolUse hook on the brain's search_ruvnet tool.
 #
-# The other half of ground-before-write.sh. When the model ACTUALLY consults the RuvNet Brain,
-# this records WHICH ecosystem products the query grounded — one stamp file per product term,
-# read later by the write-path gate. No stamp, no write.
+# The other half of ground-before-write.sh. When the model ACTUALLY consults the RuvNet Brain and
+# the brain ACTUALLY answers, this records WHICH ecosystem products that answer grounded — one stamp
+# file per product term, read later by the write-path gate. No stamp, no write.
 #
-# ONLY the QUERY counts. The tool RESULT lists every repo in the corpus in its "Searched 37
-# repos" banner — stamping from the result would mark EVERYTHING grounded on every call and
-# the gate would never fire again. (A check that can't fail protects nothing.)
+# ── WHICH TERMS: the QUERY. WHETHER TO STAMP AT ALL: the RESULT. ────────────────────────────────
+#
+# Those are two different questions and the original version answered both with the query, which is
+# how the gate quietly stopped meaning anything. Found by the 2026-07-26 F5×GPT-5.6 duel and fixed
+# as part of ADR-054 §3 ("stamps mint ONLY on a successful grounded result"):
+#
+#   • WHICH TERMS still comes from the query, and must. The tool RESULT lists every repo in the
+#     corpus in its "Searched 37 repos" banner — stamping the terms found in the result would mark
+#     EVERYTHING grounded on every call and the gate would never fire again. (A check that cannot
+#     fail protects nothing.) That original reasoning was right and is unchanged.
+#
+#   • WHETHER TO STAMP could never have come from the query, and did. A refusal, an outage, a thrown
+#     module error, an empty result — and, since ADR-054, a "the brain is switched off" soft answer —
+#     each minted a full 24-hour stamp for every product named in the question that was ASKED. So
+#     the way to open the write gate was to ask the brain something while it was broken or disabled.
+#     Measured on the pre-fix tree, in tests/unit/brain-off.test.mjs's recorded red run: five
+#     distinct non-answers, five valid stamps.
+#
+# The success signal is the one line kb/forge-mcp-all.mjs prints on every genuinely-executed search
+# and on nothing else — `Searched <n> RuvNet repos (...)` — with the four known non-answers refused
+# explicitly first. Cheapest reliable signal in the payload: no parsing, no field extraction, plain
+# substring matching over the raw stdin, all of it bash builtins. The refusal markers are quote-free
+# on purpose: a PostToolUse payload JSON-encodes the tool response, so anything containing a double
+# quote would arrive as \" and never match.
 #
 # CONTRACT: PostToolUse is non-blocking — always exit 0, swallow every failure.
 
@@ -17,14 +38,35 @@ INPUT=""
 while IFS= read -r _l || [ -n "$_l" ]; do INPUT+="$_l"; done
 [ -n "$INPUT" ] || exit 0
 
-# First raw "query" key in the JSON is tool_input's — inside tool_response text, quotes are
-# escaped (\"query\") so they cannot match this pattern.
+shopt -s nocasematch 2>/dev/null || true
+
+# ── 1. REFUSE the known non-answers, before anything else. Each of these minted a real 24h stamp. ──
+case "$INPUT" in
+  # ADR-054: the brain is switched off. The exact phrase is pinned to the producer by test.
+  *"RuvNet Brain is disabled"*) exit 0 ;;
+  # The GONG: every repo failed. An outage is not grounding.
+  *"RUVNET BRAIN IS DOWN"*)     exit 0 ;;
+  # A thrown error inside the tool.
+  *"search_ruvnet error:"*)     exit 0 ;;
+  # The search ran and matched nothing. A real answer to the wrong question — but the brain showed
+  # the model no source, so there is nothing for a stamp to attest to.
+  *"(no results"*)              exit 0 ;;
+esac
+
+# ── 2. REQUIRE the success banner. No banner ⇒ no successful search happened in this payload ⇒ no
+# stamp. This is what makes a missing or empty tool_response mint nothing, which is the query-only
+# behaviour finally gone.
+case "$INPUT" in
+  *"Searched "*"RuvNet repos"*) ;;
+  *) exit 0 ;;
+esac
+
+# ── 3. WHICH terms — from the QUERY only, as it always was. The first raw "query" key in the JSON is
+# tool_input's; inside tool_response text the quotes are escaped (\"query\") so they cannot match.
 QUERY=""
 re='"query"[[:space:]]*:[[:space:]]*"([^"]*)"'
 [[ $INPUT =~ $re ]] && QUERY="${BASH_REMATCH[1]}"
 [ -n "$QUERY" ] || exit 0
-
-shopt -s nocasematch 2>/dev/null || true
 
 DIR="$HOME/.cache/ruvnet-brain/grounded"
 mkdir -p "$DIR" 2>/dev/null || exit 0

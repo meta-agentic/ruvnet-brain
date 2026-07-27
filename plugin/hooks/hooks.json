@@ -1,5 +1,5 @@
 {
-  "_note": "STABLE SPINE (ADR-023): every hook routes through hook-shim.mjs, which resolves the ACTIVE generation from ~/.cache/ruvnet-brain/active.json per invocation and executes the hook BODY from that immutable tree — so hook behavior updates the moment update-apply.mjs flips the pointer, with NO Claude Code restart. This file itself is boot-frozen (CC reads it once at startup): its matchers/timeouts and the shim's dispatch table are the near-frozen SHELL — changing them is rare and honestly flagged requiresRestart by the release classifier. This reroute (unprompted producers → the runtime) IS such a SHELL change: requiresRestart, flagged, accepted. Advisory hooks keep `|| true` (they can never block a turn). FOUR blocking hooks have NO `|| true` — the shim propagates their exact exit codes by typed contract (mode:'blocking' in its table): route-dispatch, verify-interface, design-wall, AND unprompted-speech. route-dispatch's deliberate exit-2 wall against model-inheriting subagent fan-outs survives the indirection; unprompted-speech is blocking because a user-opted-in lesson refusal (exit 2) must propagate — the runtime, not a `|| true`, decides. UNPROMPTED SPEECH IS NOW ONE SEAM (ADR-040 / DDD-0004): the bare `anticipate.sh` (UserPromptSubmit) and `lesson-hooks.sh` (UserPromptSubmit + PreToolUse-write/-bash) lines are gone; each unprompted event routes through `hook-shim.mjs unprompted-speech <CCEvent>`, and the runtime spawns the real producers in candidate mode and is the SOLE writer of user-facing bytes. Hook semantics themselves are unchanged from the pre-spine file: SessionStart = confidence signal, UserPromptSubmit = intent-level grounding/drift/take-the-wheel + unprompted advocacy/lessons, PreToolUse = action-level interception + unprompted lessons, PostToolUse/SessionEnd = learning capture/flush.",
+  "_note": "STABLE SPINE (ADR-023): every hook routes through hook-shim.mjs, which resolves the ACTIVE generation from ~/.cache/ruvnet-brain/active.json per invocation and executes the hook BODY from that immutable tree — so hook behavior updates the moment update-apply.mjs flips the pointer, with NO Claude Code restart. This file itself is boot-frozen (CC reads it once at startup): its matchers/timeouts and the shim's dispatch table are the near-frozen SHELL — changing them is rare and honestly flagged requiresRestart by the release classifier. This reroute (unprompted producers → the runtime) IS such a SHELL change: requiresRestart, flagged, accepted. Advisory hooks keep `|| true` (they can never block a turn). FIVE blocking hooks have NO `|| true` — the shim propagates their exact exit codes by typed contract (mode:'blocking' in its table): route-dispatch, verify-interface, design-wall, unprompted-speech, AND protect-state. protect-state (ADR-054 §3) is the newest and is a SHELL change — a new matcher registration, honestly flagged requiresRestart: it walls the user's own consent record (the brain on/off sentinel and the settings mirror) off from agent Write/Edit, because once the brain can be switched off, an agent switching it back on is a consent violation and a prompt asking it not to is advisory. It carries offBehavior:'run' in the shim table — it is the one hook that matters MORE while the brain is off. route-dispatch's deliberate exit-2 wall against model-inheriting subagent fan-outs survives the indirection; unprompted-speech is blocking because a user-opted-in lesson refusal (exit 2) must propagate — the runtime, not a `|| true`, decides. UNPROMPTED SPEECH IS NOW ONE SEAM (ADR-040 / DDD-0004): the bare `anticipate.sh` (UserPromptSubmit) and `lesson-hooks.sh` (UserPromptSubmit + PreToolUse-write/-bash) lines are gone; each unprompted event routes through `hook-shim.mjs unprompted-speech <CCEvent>`, and the runtime spawns the real producers in candidate mode and is the SOLE writer of user-facing bytes. Hook semantics themselves are unchanged from the pre-spine file: SessionStart = confidence signal, UserPromptSubmit = intent-level grounding/drift/take-the-wheel + unprompted advocacy/lessons, PreToolUse = action-level interception + unprompted lessons, PostToolUse/SessionEnd = learning capture/flush.",
   "_platform": "posix",
   "hooks": {
     "SessionStart": [
@@ -63,6 +63,16 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" route-dispatch",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "^(Write|Edit|MultiEdit|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" protect-state",
             "timeout": 5
           }
         ]

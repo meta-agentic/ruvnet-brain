@@ -85,7 +85,11 @@ describe('low — schema completeness', () => {
 
 describe('low — validation refuses rather than guesses', () => {
   it('accepts a fully-specified valid object unchanged', () => {
-    const input = { learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
+    // FULLY specified means every key in SETTINGS_SCHEMA — `brainEnabled` joined it with ADR-054.
+    // The assertion below is a deep equality against the complete values object, so a new key must
+    // be added here rather than the assertion loosened: the point of this test is that validate()
+    // returns exactly what it was given when everything given is valid.
+    const input = { brainEnabled: false, learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
     const r = validate(input);
     expect(r.ok).toBe(true);
     expect(r.values).toEqual(input);
@@ -180,7 +184,11 @@ describe('medium — round trip through a real file', () => {
   });
 
   it('saves and reads back exactly what was chosen', () => {
-    const chosen = { learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
+    // `brainEnabled: false` is deliberately a NON-default here: this round-trip must prove the
+    // MIRROR key survives a real save/load, which is the only thing settings.json is responsible for
+    // under ADR-054. (Writing the mirror never touches the sentinel — the switch is flipped only by
+    // brain-state.mjs, via the console. See brain-off.test.mjs for that half.)
+    const chosen = { brainEnabled: false, learningScope: 'user', advocacy: 'all', autoApply: true, newProjectDefaults: true };
     const saved = saveSettings(chosen, { file });
     expect(saved.ok).toBe(true);
 

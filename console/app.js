@@ -2664,9 +2664,9 @@ function buildSettingsForm(cfg, { endpoint }) {
  * now just the advocacy dial (ADR-032 §DDD-0004 "the three channels": this control is the volume knob
  * on the speech channel). Two stores, two forms, one shared widget — see buildSettingsField/Form.
  */
-function renderSettings(cfg, us) {
+function renderSettings(cfg, us, bp) {
   const body = $('#body-settings');
-  const groups = [cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
+  const groups = [bp, cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
   if (!groups.length) {
     setChips('chips-settings', [chip('no schema', 'grey')]);
     body.replaceChildren(el('p', { class: 'muted' }, 'No editable settings were received.'));
@@ -2684,6 +2684,23 @@ function renderSettings(cfg, us) {
     groups.some((c) => c.exists === false) ? chip('not created yet', 'wait') : null].filter(Boolean));
 
   const main = [];
+  // THE MASTER SWITCH GOES FIRST (ADR-054). It is the setting every other setting on this page is
+  // conditional on — a volume knob below a power switch reads as more important than the power
+  // switch only if you put it above it. Its own endpoint, because a save writes the sentinel AND
+  // the mirror; the shared widget, because a bespoke control is one more thing to keep honest.
+  if (bp && Array.isArray(bp.schema) && bp.schema.length) {
+    main.push(buildSettingsForm(bp, { endpoint: '/api/save-brain-power' }));
+    // The disclosure, rendered from what the SERVER says keeps running — never re-typed here, so it
+    // cannot drift from the behaviour session-start.sh actually implements.
+    if (bp.off && bp.since) {
+      main.push(el('p', { class: 'fineprint' },
+        `Off since ${String(bp.since).slice(0, 10)}${bp.reason ? ` — ${bp.reason}` : ''}.`));
+    }
+    for (const note of (bp.notes || [])) main.push(el('p', { class: 'fineprint' }, note));
+    if (bp.disagreement) {
+      main.push(el('p', { class: 'fineprint warn' }, bp.disagreement.note));
+    }
+  }
   if (cfg && Array.isArray(cfg.schema) && cfg.schema.length) main.push(buildSettingsForm(cfg, { endpoint: '/api/save-config' }));
   if (us && Array.isArray(us.schema) && us.schema.length) main.push(buildSettingsForm(us, { endpoint: '/api/save-advocacy' }));
 
@@ -2905,7 +2922,7 @@ async function loadState() {
         lastMemory = c.memory;
         renderMemory(c.memory);
         renderSavings(c.savings);
-        renderSettings(c.config, c.userSettings);
+        renderSettings(c.config, c.userSettings, c.brainPower);
         renderGates(c.gates);
         dismissStandby();
       }
@@ -2919,7 +2936,7 @@ async function loadState() {
     lastMemory = s.memory;
     renderMemory(s.memory);
     renderSavings(s.savings);
-    renderSettings(s.config, s.userSettings);
+    renderSettings(s.config, s.userSettings, s.brainPower);
     renderGates(s.gates);
     addRecommendations(s.recommendations, 'state');
     recsSettled('state', true);

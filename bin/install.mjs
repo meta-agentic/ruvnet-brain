@@ -1587,6 +1587,18 @@ function disableSpendGuard() {
 const upgradeNoticeStatePath = () =>
   process.env.RUVNET_UPGRADE_NOTICE_FILE || path.join(os.homedir(), '.config', 'ruvnet-brain', 'upgrade-notice.json');
 
+// The brain on/off switch (ADR-054 §2). Same duplicate-rather-than-import rule as the line above:
+// this installer runs standalone from a fetched tarball and may not depend on scripts/brain-state.mjs.
+//
+// IT IS REMOVED ON --uninstall, and that is a deliberate lifecycle decision, not tidiness (ADR-054
+// §5, Fable's inherited-invisible-OFF find). If an uninstall preserved it, the next `npx
+// ruvnet-brain` would install a product that boots switched off, says almost nothing, and gives the
+// user no reason to suspect a stale file from a previous life is the cause. `--update` and the
+// nightly never touch it — only an explicit uninstall, which is the one moment the user has said
+// they want none of this on their machine.
+const brainOffSentinelPath = () =>
+  path.join(process.env.RUVNET_BRAIN_STATE_DIR || path.join(os.homedir(), '.config', 'ruvnet-brain'), 'brain-off');
+
 /**
  * Everything this installer can leave on a machine, DERIVED from disk — never asserted.
  *
@@ -1815,6 +1827,8 @@ function uninstallAll() {
     // installer alone writes to, safe to remove outright (not the whole ~/.config/ruvnet-brain/ dir,
     // which can also hold lessons.json/settings.json this installer never creates and must not touch).
     ['upgrade-notice state', upgradeNoticeStatePath()],
+    // ADR-054 §5: a reinstall must never inherit an invisible OFF. See brainOffSentinelPath().
+    ['brain on/off switch', brainOffSentinelPath()],
   ]) {
     if (!fs.existsSync(target)) continue;
     try { fs.rmSync(target, { recursive: true, force: true }); ok(`removed the ${label}`); }

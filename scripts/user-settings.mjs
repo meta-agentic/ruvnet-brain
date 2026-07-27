@@ -75,6 +75,36 @@ export const SETTINGS_VERSION = 1;
  */
 export const SETTINGS_SCHEMA = Object.freeze([
   Object.freeze({
+    key: 'brainEnabled',
+    label: 'Is the brain switched on',
+    type: 'bool',
+    default: true,
+    // NOT an escalation in either direction. `escalates` lists values that cause work OUTSIDE the
+    // project you are standing in, and this setting only ever REMOVES work: false stops retrieval,
+    // stops the advocacy hooks and stops the learning capture. true is the shipped state every
+    // existing install is already in, so it cannot be the value that "reaches past this repo".
+    escalates: Object.freeze([]),
+    help: 'Whether the brain is working at all — retrieval, grounding hooks and everything it volunteers.',
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // THIS KEY IS A MIRROR, NOT THE SWITCH (ADR-054 §2). Read scripts/brain-state.mjs before
+    // wiring anything to it.
+    //
+    // The enforcement artifact is the sentinel file ~/.config/ruvnet-brain/brain-off. This entry
+    // exists so the choice is VISIBLE where a user goes looking for their choices, and so the
+    // console has something to render — but nothing enforces off by reading this value, and nothing
+    // ever should. The reason is mechanical and was measured, not theorised: validate() below DROPS
+    // unknown keys, so any older release that saves ANY setting deletes this one and the machine
+    // silently comes back on. tests/unit/brain-off.test.mjs reproduces that exact sequence and
+    // asserts the sentinel survives it.
+    //
+    // Consequence for callers: when this value and the sentinel disagree, the SENTINEL is in force.
+    // brain-state.disagreement() returns the fact so a surface can show it rather than pick a side.
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+    whyItMatters: 'On, the brain retrieves from rUv\'s real source before answering, and its hooks watch the write path. Off, it stops retrieving, stops volunteering, and stops learning from your work — the machine is quiet and answers about the RuvNet stack come from the model\'s own memory instead of from source. The switch is a file, so it survives updates and both states are readable by every part of the product at once.',
+    downside: 'Off, answers about rUv\'s ecosystem are no longer grounded in his source and nothing warns you when they drift, the write-path grounding gate stops enforcing, and nothing is learned from this or any later session until you switch it back on. Updates and health alarms keep running while it is off, which the console states plainly rather than hiding.',
+  }),
+
+  Object.freeze({
     key: 'learningScope',
     label: 'What it learns from',
     type: 'enum',
