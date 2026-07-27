@@ -7,7 +7,8 @@
 // a bare CI runner. If a check needs the 512MB brain and the brain is absent, it SKIPs LOUDLY
 // (printed with a reason) — a skip is never a silent pass.
 //
-// Usage:  node scripts/claims-verify.mjs        (or: npm run claims:verify)
+// Usage:  node scripts/claims-verify.mjs        (or: npm run claims:verify)  — READ-ONLY gate
+//         node scripts/claims-verify.mjs --fix  (or: npm run claims:fix)     — regenerate the surfaces
 // Exit:   0 = every claim regenerated (skips allowed, printed); 1 = any claim failed.
 //
 // Verify functions take artifact paths as parameters (repo paths as defaults) so tests can
@@ -18,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -141,6 +142,7 @@ export async function verifyCheaperFactor(file = path.join(ROOT, 'kb', 'metaharn
 // coverage-summary.json produced by `npm run test:cov` and fails if the badge drifts >1pt from it.
 // Mirrors verifyChunkCountSurfaces (re-derive from artifact) rather than string-matching. ADR-0020.
 export const BADGE_RE = /coverage-(\d+)%25%20of%20ALL%20source/;
+export const BADGE_RE_G = new RegExp(BADGE_RE.source, 'g'); // the writer needs the global form
 
 /** Extract the integer % the README coverage badge advertises, or null if the badge is gone/malformed. */
 export function readBadgePct(readme) {
@@ -148,10 +150,159 @@ export function readBadgePct(readme) {
   return m ? Number(m[1]) : null;
 }
 
-export function verifyCoverageBadge(
+// Every place the README states the coverage % IN PROSE (the badge has its own regex above). ONE
+// table feeds both the checker (drift ⇒ FAIL) and the writer (--fix rewrites them), so a phrasing
+// can never be guarded by one and missed by the other — which is how a badge and its own caption
+// end up disagreeing.
+export const COVERAGE_PROSE_RES = [
+  /(\d+)% of ALL source/g,
+  /(\d+)% is the honest number/g,
+];
+
+/** Every prose statement of the coverage % in the README, as { pct, text }. */
+export function readCoverageClaims(readme) {
+  const out = [];
+  for (const re of COVERAGE_PROSE_RES) for (const m of readme.matchAll(re)) out.push({ pct: Number(m[1]), text: m[0] });
+  return out;
+}
+
+// ── FRESHNESS IS A PRECONDITION, not a nicety (2026-07-26) ──────────────────────────────────────
+// The defect: coverage/coverage-summary.json sat NINE DAYS stale (mtime Jul 18) while this gate
+// re-derived "the truth" from it and graded the badge against a measurement nobody had taken since;
+// then a coverage run that ended on a failing test deleted it and wrote nothing at all. One
+// unvalidated, rottable input, three possible lies: a false FAIL, a false PASS, a crash. A truth-gate
+// that trusts a rotting artifact is ceremony wearing the costume of substance.
+//
+// So the coverage claim is now UNVERIFIABLE unless the artifact is (1) present, (2) COMPLETE — it
+// contains an entry for every file the coverage config says it measures, so a half-written summary
+// from an aborted run can never be mistaken for a measurement — and (3) NEWER than every source in
+// that set (and newer than the config that defines the set, since a config edit redefines the
+// denominator). Unverifiable ⇒ a LOUD skip naming the exact regenerate command. Never a number.
+//
+// WHY MTIME, NOT A CONTENT HASH STORED BESIDE THE SUMMARY (the alternative I rejected): a hash
+// sidecar is only evidence if it is written by whatever produced the summary. Nothing in this
+// pipeline can do that — vitest writes coverage-summary.json, and any hash THIS script wrote
+// afterwards would be a hash of the tree as it looks at gate time, i.e. a self-certifying stamp
+// that agrees with itself by construction and cannot detect the very drift it exists to catch.
+// mtime is produced by the OS as a side effect of the write we actually care about: evidence, not
+// testimony. Its known weaknesses are both handled: a git checkout resets every source mtime to
+// checkout time, but the coverage run that follows writes the summary later, so a fresh CI clone is
+// always fresh; and `touch` can forge an mtime, but this gate defends against ROT, not against a
+// hostile committer — who could edit the advertised number directly anyway.
+export const COVERAGE_REGEN_CMD = 'npm run test:cov';
+
+const DIR_PRUNE = new Set(['node_modules', '.git', 'coverage', 'dist', 'clones']);
+
+/** Minimal glob → RegExp for the shapes coverage.include/exclude actually use (`**`, `*`, `?`). */
+function globToRe(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        i++;
+        if (glob[i + 1] === '/') { i++; re += '(?:.*/)?'; } else re += '.*';
+      } else re += '[^/]*';
+    } else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`);
+}
+
+/**
+ * The source set the coverage summary CLAIMS to measure — read from vitest.config.mjs itself
+ * (imported, not regex-scraped, so a future edit to the globs is followed automatically instead of
+ * silently mis-parsed). Falls back to the summary's own file keys when the config can't be imported
+ * (e.g. devDeps absent), and says so, rather than pretending to know the denominator.
+ */
+export async function coverageSourceSet(vitestFile = path.join(ROOT, 'vitest.config.mjs'), root = ROOT) {
+  let cfg;
+  try {
+    cfg = (await import(pathToFileURL(vitestFile).href)).default;
+  } catch (e) {
+    return { files: null, derivedFrom: null, reason: `cannot import ${path.basename(vitestFile)}: ${e.message}` };
+  }
+  const cov = cfg?.test?.coverage ?? {};
+  const include = Array.isArray(cov.include) ? cov.include : null;
+  if (!include || !include.length) {
+    return { files: null, derivedFrom: null, reason: `${path.basename(vitestFile)} declares no coverage.include globs` };
+  }
+  const exclude = (Array.isArray(cov.exclude) ? cov.exclude : []).map(globToRe);
+  const incl = include.map(globToRe);
+
+  const files = [];
+  const walk = (dir) => {
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of ents) {
+      const abs = path.join(dir, ent.name);
+      if (ent.isDirectory()) { if (!DIR_PRUNE.has(ent.name)) walk(abs); continue; }
+      if (!ent.isFile()) continue;
+      const rel = path.relative(root, abs).split(path.sep).join('/');
+      if (incl.some((r) => r.test(rel)) && !exclude.some((r) => r.test(rel))) files.push(abs);
+    }
+  };
+  walk(root);
+  return { files, derivedFrom: include, reason: null };
+}
+
+/**
+ * Is the coverage artifact admissible as evidence?
+ * → { fresh, code: 'fresh'|'absent'|'unreadable'|'partial'|'stale', reason }
+ * `reason` always names the exact regenerate command, so a skip is actionable, never just sad.
+ */
+export async function coverageFreshness(
+  summaryFile = path.join(ROOT, 'coverage', 'coverage-summary.json'),
+  vitestFile = path.join(ROOT, 'vitest.config.mjs'),
+  root = ROOT,
+) {
+  const rel = (p) => path.relative(root, p).split(path.sep).join('/') || p;
+  const regen = ` — regenerate with \`${COVERAGE_REGEN_CMD}\``;
+
+  if (!fs.existsSync(summaryFile)) {
+    return { fresh: false, code: 'absent', reason: `${rel(summaryFile)} absent — no coverage run has produced it (a run that ends on a failing test deletes it and writes nothing)${regen}` };
+  }
+  let summary, summaryMtime;
+  try {
+    summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+    summaryMtime = fs.statSync(summaryFile).mtimeMs;
+  } catch (e) {
+    return { fresh: false, code: 'unreadable', reason: `${rel(summaryFile)} is present but unreadable (${e.message}) — a half-written artifact is not a measurement${regen}` };
+  }
+
+  const measured = new Set(Object.keys(summary).filter((k) => k !== 'total').map((k) => path.resolve(root, k)));
+  const { files, reason: setReason } = await coverageSourceSet(vitestFile, root);
+
+  // Compare against the config's source set when we can derive it; otherwise fall back to the files
+  // the summary itself names (still catches "source edited after the run", just not "file never measured").
+  const sources = files ?? [...measured];
+  if (files) {
+    const unmeasured = files.filter((f) => !measured.has(path.resolve(f)));
+    if (unmeasured.length) {
+      const sample = unmeasured.slice(0, 3).map(rel).join(', ');
+      return { fresh: false, code: 'partial', reason: `${rel(summaryFile)} is PARTIAL — ${unmeasured.length} file(s) the coverage config measures are missing from it (${sample}${unmeasured.length > 3 ? ', …' : ''}), so its total is a denominator nobody measured${regen}` };
+    }
+  }
+
+  let newest = { file: null, mtime: -Infinity };
+  for (const f of [...sources, vitestFile]) {
+    let m;
+    try { m = fs.statSync(f).mtimeMs; } catch { continue; }
+    if (m > newest.mtime) newest = { file: f, mtime: m };
+  }
+  if (newest.file && newest.mtime > summaryMtime) {
+    const age = Math.round((newest.mtime - summaryMtime) / 1000);
+    const human = age >= 86400 ? `${(age / 86400).toFixed(1)} days` : age >= 3600 ? `${(age / 3600).toFixed(1)} h` : `${age}s`;
+    return { fresh: false, code: 'stale', reason: `${rel(summaryFile)} is STALE — ${rel(newest.file)} was modified ${human} AFTER the coverage run that produced it, so the summary measures source that no longer exists${regen}${files ? '' : ` (source set inferred from the summary itself: ${setReason})`}` };
+  }
+  return { fresh: true, code: 'fresh', reason: `${rel(summaryFile)} covers all ${sources.length} configured source file(s) and is newer than every one of them` };
+}
+
+export async function verifyCoverageBadge(
   readmeFile = path.join(ROOT, 'README.md'),
   summaryFile = path.join(ROOT, 'coverage', 'coverage-summary.json'),
   vitestFile = path.join(ROOT, 'vitest.config.mjs'),
+  root = ROOT,
 ) {
   let readme, vitestCfg;
   try {
@@ -170,12 +321,20 @@ export function verifyCoverageBadge(
   if (!allTrue) {
     return fail('vitest.config.mjs no longer sets coverage `all: true` — the badge advertises "ALL source", so the denominator must be every shipped file, not a flattering subset');
   }
-
-  // The number is re-derived from the real coverage run. If it hasn't been run, SKIP LOUDLY —
-  // never a silent pass. CI runs `npm run test:cov` immediately before this gate.
-  if (!fs.existsSync(summaryFile)) {
-    return skip(`coverage/coverage-summary.json absent — run \`npm run test:cov\` first (CI does, right before this gate), then this re-derives the real % and checks the badge's "${advertised}%" claim`);
+  // The badge is not the only place the README states the number; the prose must move with it, or
+  // one of the two is lying no matter which one matches the artifact.
+  const proseDrift = readCoverageClaims(readme).filter((c) => c.pct !== advertised);
+  if (proseDrift.length) {
+    return fail(`README states the coverage % ${proseDrift.length + 1} different ways: badge ${advertised}%, but also ${proseDrift.map((c) => `"${c.text}"`).join(', ')} — one number, every surface (\`npm run claims:fix\`)`);
   }
+
+  // FRESHNESS PRECONDITION — refuse to grade a claim against an artifact that cannot be trusted.
+  // Never a derived number, never a silent pass; a loud SKIP that names the command that fixes it.
+  const state = await coverageFreshness(summaryFile, vitestFile, root);
+  if (!state.fresh) {
+    return skip(`coverage claim NOT GRADED (badge says "${advertised}%", unverified): ${state.reason}`);
+  }
+
   let summary;
   try {
     summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
@@ -192,9 +351,9 @@ export function verifyCoverageBadge(
   const TOL = 1; // floor(min) is stable across a whole integer band; ±1 absorbs boundary jitter.
   const detail = metrics.map((k) => `${k} ${t[k].pct}%`).join(', ');
   if (Math.abs(advertised - realFloor) > TOL) {
-    return fail(`coverage badge advertises ${advertised}% but the re-derived floor is ${realFloor}% (${detail}). Update the README badge AND prose to ${realFloor}% — re-derive from \`npm run test:cov\`, never hand-type it.`);
+    return fail(`coverage badge advertises ${advertised}% but the re-derived floor is ${realFloor}% (${detail}). Update the README badge AND prose to ${realFloor}% — run \`npm run claims:fix\`, never hand-type it.`);
   }
-  return pass(`badge ${advertised}% within ${TOL}pt of re-derived floor ${realFloor}% (min metric ${min.toFixed(2)}%; all:true; ${detail})`);
+  return pass(`badge ${advertised}% within ${TOL}pt of re-derived floor ${realFloor}% (min metric ${min.toFixed(2)}%; all:true; ${detail}); artifact fresh: ${state.reason}`);
 }
 
 // ── claim 6: "32 repos · N source chunks" — the advertised chunk count regenerates ──────────────
@@ -218,12 +377,38 @@ export function computePublicChunkTotal(kbDir = path.join(ROOT, 'kb')) {
   return { total, stores };
 }
 
+/** Every built store on disk, private ones included — what "N built stores incl. private" advertises. */
+export function countBuiltStores(kbDir = path.join(ROOT, 'kb')) {
+  return fs.readdirSync(kbDir).filter((f) => /\.big\.rvf\.idmap\.json$/.test(f)).length;
+}
+
+/** The three brain census numbers every public surface quotes, all from the same artifacts. */
+export function brainCensus(kbDir = path.join(ROOT, 'kb')) {
+  const { total, stores } = computePublicChunkTotal(kbDir);
+  return { chunks: total, publicStores: stores, builtStores: countBuiltStores(kbDir) };
+}
+
+// ONE table of "how a census number appears on a public surface", shared by the checker (drift ⇒
+// FAIL) and the writer (--fix ⇒ restamp). Four surfaces cannot drift four ways when one table decides
+// what the number looks like in all of them. `(?<![\d,])` stops a rule matching the tail of a longer
+// number. Each group is rewritten in the writer with its own format (raw for a data-count attribute,
+// comma-grouped for prose).
+export const SURFACE_CLAIM_RULES = [
+  { name: 'chunk count', key: 'chunks', re: /(?<![\d,])(\d{1,3}(?:,\d{3})+)([^0-9]{0,40}?chunks)/gis, groups: [{ i: 1, fmt: 'comma' }] },
+  { name: 'chunk counter', key: 'chunks', re: /data-count="(\d{4,})"([^>]*>)([\d,]+)(<\/span>\s*chunks)/gi, groups: [{ i: 1, fmt: 'raw' }, { i: 3, fmt: 'comma' }] },
+  { name: 'public-store count', key: 'publicStores', re: /(?<![\d,])(\d{1,3}(?:,\d{3})*)(\s+public\s+stores)/gi, groups: [{ i: 1, fmt: 'comma' }] },
+  { name: 'public-store counter', key: 'publicStores', re: /data-count="(\d+)"([^>]*>)([\d,]+)(<\/span>\s*public\s+stores)/gi, groups: [{ i: 1, fmt: 'raw' }, { i: 3, fmt: 'comma' }] },
+  { name: 'built-store count', key: 'builtStores', re: /(?<![\d,])(\d{1,3}(?:,\d{3})*)(\s+built\s+stores)/gi, groups: [{ i: 1, fmt: 'comma' }] },
+];
+
+const fmtNum = (n, fmt) => (fmt === 'comma' ? n.toLocaleString('en-US') : String(n));
+
 export function verifyChunkCountSurfaces(kbDir = path.join(ROOT, 'kb'), surfaces = CHUNK_SURFACES, root = ROOT) {
   if (!fs.existsSync(kbDir) || !fs.readdirSync(kbDir).some((f) => f.endsWith('.big.rvf.idmap.json'))) {
     return skip('brain not installed — kb/*.big.rvf.idmap.json absent, cannot re-derive the chunk count (runs on machines with the brain)');
   }
-  const { total, stores } = computePublicChunkTotal(kbDir);
-  const want = total.toLocaleString('en-US');
+  const census = brainCensus(kbDir);
+  const want = census.chunks.toLocaleString('en-US');
 
   const problems = [];
   for (const rel of surfaces) {
@@ -231,17 +416,20 @@ export function verifyChunkCountSurfaces(kbDir = path.join(ROOT, 'kb'), surfaces
     if (!fs.existsSync(p)) { problems.push(`${rel}: file missing`); continue; }
     const s = fs.readFileSync(p, 'utf8');
     if (!s.includes(want)) problems.push(`${rel}: does not contain "${want}"`);
-    // any OTHER comma-grouped number quoted as a chunk count (…"128,994 source chunks"…) is stale
-    for (const m of s.matchAll(/(\d{1,3}(?:,\d{3})+)(?:[^0-9]{0,40}?)chunks/gis)) {
-      if (m[1] !== want) problems.push(`${rel}: stale chunk count "${m[1]}" (expected "${want}")`);
-    }
-    // the explainer's animated counter carries the raw (comma-free) value in a data-count attribute
-    for (const m of s.matchAll(/data-count="(\d{4,})"[^>]*>[^<]*<\/span>\s*chunks/gi)) {
-      if (Number(m[1]) !== total) problems.push(`${rel}: stale data-count="${m[1]}" (expected ${total})`);
+    // Any census number quoted anywhere on the surface must BE the re-derived one. Store counts are
+    // drift-checked but not required to be present — not every surface quotes them.
+    for (const rule of SURFACE_CLAIM_RULES) {
+      for (const m of s.matchAll(rule.re)) {
+        for (const g of rule.groups) {
+          if (Number(String(m[g.i]).replace(/,/g, '')) !== census[rule.key]) {
+            problems.push(`${rel}: stale ${rule.name} "${m[0].trim()}" (expected ${fmtNum(census[rule.key], g.fmt)})`);
+          }
+        }
+      }
     }
   }
-  if (problems.length) return fail(`chunk count drifted: ${problems.join('; ')} — re-run this ledger after updating every surface together`);
-  return pass(`${want} chunks re-derived from ${stores} public big-store idmaps; all ${surfaces.length} surfaces quote it`);
+  if (problems.length) return fail(`brain census drifted: ${problems.join('; ')} — one pass fixes every surface: \`npm run claims:fix\``);
+  return pass(`${want} chunks · ${census.publicStores} public stores · ${census.builtStores} built stores re-derived from the idmaps; all ${surfaces.length} surfaces quote them`);
 }
 
 // ── claim 5: "version surfaces agree" ───────────────────────────────────────────────────────────
@@ -254,6 +442,119 @@ export function verifyVersionSurfaces(root = ROOT) {
   const out = `${res.stdout || ''}${res.stderr || ''}`.trim().split('\n').pop() || '(no output)';
   if (res.status !== 0) return fail(`sync-version --check exited ${res.status}: ${out}`);
   return pass(out);
+}
+
+// ── the WRITER (--fix): regenerate every advertised number in ONE pass ──────────────────────────
+// Four surfaces quoted "149,930" for a fortnight after the brain moved to 150,161 because keeping
+// them in step was a human chore performed four times. The fix is not more diligence, it is one
+// writer: `npm run claims:fix` re-derives the census from the idmaps and the coverage % from the
+// coverage summary, and stamps ALL of them together. sync-version.mjs's idiom exactly — one source
+// of truth, everything else inherits, `--check` (here: the plain gate) proves it.
+//
+// The writer obeys the SAME freshness precondition as the gate: it will not propagate a coverage
+// number derived from an absent/stale/partial artifact. A writer that stamps a rotten number is
+// worse than no writer — it launders the rot into four more places.
+
+/**
+ * Rewrite the numeric groups of one rule to `value`; returns { out, hits } (hits = groups changed).
+ * Offsets are computed from a cursor that only moves forward WITHIN each match, so a rule whose two
+ * groups can hold identical text (`data-count="1234">1234</span>`) still rewrites the right one —
+ * a plain string replace would have clobbered the first occurrence twice.
+ */
+function restampRule(s, rule, value) {
+  let out = '', last = 0, hits = 0;
+  for (const m of s.matchAll(rule.re)) {
+    let rel = 0;
+    for (const g of rule.groups) {
+      const cur = m[g.i];
+      if (cur === undefined) continue;
+      const idx = m[0].indexOf(cur, rel);
+      if (idx < 0) continue;
+      rel = idx + cur.length;
+      const want = fmtNum(value, g.fmt);
+      if (cur === want) continue;
+      const at = m.index + idx;
+      out += s.slice(last, at) + want;
+      last = at + cur.length;
+      hits++;
+    }
+  }
+  return { out: out + s.slice(last), hits };
+}
+
+export async function applyFix({
+  root = ROOT,
+  kbDir = path.join(root, 'kb'),
+  surfaces = CHUNK_SURFACES,
+  readmeFile = path.join(root, 'README.md'),
+  summaryFile = path.join(root, 'coverage', 'coverage-summary.json'),
+  vitestFile = path.join(root, 'vitest.config.mjs'),
+  write = false,
+} = {}) {
+  const report = { changed: [], census: null, coverage: { skipped: true, reason: 'not attempted' }, notes: [] };
+  const edits = new Map(); // abs path -> content
+
+  const readSurface = (rel) => {
+    const p = path.join(root, rel);
+    if (edits.has(p)) return { p, s: edits.get(p) };
+    if (!fs.existsSync(p)) return { p, s: null };
+    return { p, s: fs.readFileSync(p, 'utf8') };
+  };
+
+  // ---- the brain census (chunks + store counts), re-derived from the idmap sidecars -------------
+  const haveBrain = fs.existsSync(kbDir) && fs.readdirSync(kbDir).some((f) => f.endsWith('.big.rvf.idmap.json'));
+  if (!haveBrain) {
+    report.notes.push('brain not installed — chunk/store counts left untouched (nothing to re-derive them from)');
+  } else {
+    const census = brainCensus(kbDir);
+    report.census = census;
+    for (const rel of surfaces) {
+      const { p, s } = readSurface(rel);
+      if (s === null) { report.notes.push(`${rel}: file missing, skipped`); continue; }
+      let next = s, hits = 0;
+      for (const rule of SURFACE_CLAIM_RULES) {
+        const r = restampRule(next, rule, census[rule.key]);
+        next = r.out; hits += r.hits;
+      }
+      if (!next.includes(census.chunks.toLocaleString('en-US'))) {
+        // A surface with no existing claim is REPORTED, never improvised into someone else's prose —
+        // the first stamp on a new surface is a deliberate one-time copy edit.
+        report.notes.push(`${rel}: no chunk-count claim to restamp — add one by hand once (e.g. "${census.chunks.toLocaleString('en-US')} source chunks"), then this keeps it fresh`);
+      }
+      if (hits) { edits.set(p, next); report.changed.push(rel); }
+    }
+  }
+
+  // ---- the coverage % (badge + every prose copy), re-derived from the coverage summary ----------
+  const state = await coverageFreshness(summaryFile, vitestFile, root);
+  if (!state.fresh) {
+    report.coverage = { skipped: true, reason: state.reason, code: state.code };
+  } else {
+    const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+    const metrics = ['statements', 'branches', 'functions', 'lines'];
+    const pcts = metrics.map((k) => summary.total?.[k]?.pct);
+    if (pcts.some((v) => typeof v !== 'number')) {
+      report.coverage = { skipped: true, reason: 'coverage summary has no usable total.*.pct', code: 'malformed' };
+    } else {
+      const pct = Math.floor(Math.min(...pcts));
+      const relReadme = path.relative(root, readmeFile).split(path.sep).join('/');
+      const { p, s } = readSurface(relReadme);
+      const before = s ?? fs.readFileSync(readmeFile, 'utf8');
+      let next = before, hits = 0;
+      for (const rule of [{ re: BADGE_RE_G, groups: [{ i: 1, fmt: 'raw' }] }, ...COVERAGE_PROSE_RES.map((re) => ({ re, groups: [{ i: 1, fmt: 'raw' }] }))]) {
+        const r = restampRule(next, rule, pct);
+        next = r.out; hits += r.hits;
+      }
+      report.coverage = { skipped: false, pct, metrics: Object.fromEntries(metrics.map((k, i) => [k, pcts[i]])), changed: hits > 0 };
+      if (hits) {
+        edits.set(p, next);
+        if (!report.changed.includes(relReadme)) report.changed.push(relReadme);
+      }
+    }
+  }
+
+  if (write) for (const [p, s] of edits) fs.writeFileSync(p, s);
+  return report;
 }
 
 // ── the ledger ──────────────────────────────────────────────────────────────────────────────────
@@ -308,6 +609,24 @@ export async function runLedger(entries = ledger) {
 }
 
 async function main() {
+  // --fix is the ONLY writing path; the gate itself never mutates a surface.
+  if (process.argv.includes('--fix')) {
+    const report = await applyFix({ write: true });
+    if (report.census) {
+      console.log(`[claims:fix] census re-derived: ${report.census.chunks.toLocaleString('en-US')} chunks · ${report.census.publicStores} public stores · ${report.census.builtStores} built stores`);
+    }
+    if (report.coverage.skipped) {
+      console.log(`[claims:fix] coverage % NOT stamped (left exactly as it was): ${report.coverage.reason}`);
+    } else {
+      console.log(`[claims:fix] coverage % re-derived: ${report.coverage.pct}% = floor(min ${Object.entries(report.coverage.metrics).map(([k, v]) => `${k} ${v}%`).join(', ')})`);
+    }
+    for (const n of report.notes) console.log(`[claims:fix] ${n}`);
+    console.log(report.changed.length
+      ? `[claims:fix] rewrote ${report.changed.length} surface(s) in one pass: ${report.changed.join(', ')}`
+      : '[claims:fix] every surface already agrees with the artifacts — nothing to write');
+    console.log('');
+  }
+
   const rows = await runLedger();
 
   console.log('## Claims ledger — every advertised number must regenerate from an artifact\n');

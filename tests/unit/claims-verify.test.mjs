@@ -162,6 +162,31 @@ describe('verifyCoverageBadge — the badge % is RE-DERIVED from the real covera
   // The four live metrics measured 2026-07-18 (min = branches 14.55 → floor 14, the shipped badge).
   const liveIsh = { statements: 16.21, branches: 14.55, functions: 19.69, lines: 17.38 };
 
+  // Since 2026-07-26 the checker refuses to grade an artifact it cannot show is fresher than the
+  // source it measures (tests/unit/claims-artifact-freshness.test.mjs). A grading test therefore
+  // needs a COMPLETE fixture — config, source, summary, mtimes — not just a `total` block: the old
+  // half-fixtures paired a tmp summary with the REPO's config, which is exactly the "measures a
+  // source set it has never seen" shape the precondition now rejects.
+  const gradable = (name, pcts, badgePct) => {
+    const root = path.join(TMP, name);
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'coverage'), { recursive: true });
+    const src = path.join(root, 'src', 'a.mjs');
+    const vitestFile = path.join(root, 'vitest.config.mjs');
+    const readmeFile = path.join(root, 'README.md');
+    const summaryFile = path.join(root, 'coverage', 'coverage-summary.json');
+    fs.writeFileSync(src, 'export const a = 1;\n');
+    fs.writeFileSync(vitestFile, 'export default { test: { coverage: { all: true, include: ["src/*.mjs"], exclude: [] } } };\n');
+    fs.writeFileSync(readmeFile, `# X\n[![coverage](https://img.shields.io/badge/coverage-${badgePct}%25%20of%20ALL%20source%20·%20honest-b58900)](#)\n`);
+    fs.writeFileSync(summaryFile, JSON.stringify({
+      total: { statements: { pct: pcts.statements }, branches: { pct: pcts.branches }, functions: { pct: pcts.functions }, lines: { pct: pcts.lines } },
+      [src]: { statements: { pct: pcts.statements } },
+    }));
+    const at = (f, s) => { const t = new Date(Date.now() + s * 1000); fs.utimesSync(f, t, t); };
+    at(src, -600); at(vitestFile, -600); at(summaryFile, -300); // measured AFTER the source it measures
+    return { root, readmeFile, summaryFile, vitestFile };
+  };
+
   it('readBadgePct parses the advertised integer from the real README, null when the badge is gone', () => {
     const n = readBadgePct(fs.readFileSync(realReadme, 'utf8'));
     expect(typeof n).toBe('number');
@@ -169,37 +194,37 @@ describe('verifyCoverageBadge — the badge % is RE-DERIVED from the real covera
     expect(readBadgePct('no badge here')).toBeNull();
   });
 
-  it('passes: a badge that matches floor(min of the four metrics) within 1pt', () => {
-    const readme15 = writeTmp('README-15.md', '# X\n[![coverage](https://img.shields.io/badge/coverage-15%25%20of%20ALL%20source%20·%20honest-b58900)](#)\n');
-    const res = verifyCoverageBadge(readme15, summary({ statements: 17, branches: 15.4, functions: 20, lines: 18 }), realVitest);
-    expect(res.status).toBe('PASS');
+  it('passes: a badge that matches floor(min of the four metrics) within 1pt', async () => {
+    const f = gradable('cov-pass', { statements: 17, branches: 15.4, functions: 20, lines: 18 }, 15);
+    const res = await verifyCoverageBadge(f.readmeFile, f.summaryFile, f.vitestFile, f.root);
+    expect(res.status, res.evidence).toBe('PASS');
     expect(res.evidence).toContain('15');
   });
 
-  it('KNOWN-BAD (the exact live lie just fixed): badge says 10% while the real floor is 14% → FAIL naming both', () => {
-    const lyingReadme = writeTmp('README-10.md', '# X\n[![coverage](https://img.shields.io/badge/coverage-10%25%20of%20ALL%20source%20·%20honest-b58900)](#)\n');
-    const res = verifyCoverageBadge(lyingReadme, summary(liveIsh), realVitest);
+  it('KNOWN-BAD (the exact live lie just fixed): badge says 10% while the real floor is 14% → FAIL naming both', async () => {
+    const f = gradable('cov-lying', liveIsh, 10);
+    const res = await verifyCoverageBadge(f.readmeFile, f.summaryFile, f.vitestFile, f.root);
     expect(res.status).toBe('FAIL');
     expect(res.evidence).toContain('10%'); // the false claim
     expect(res.evidence).toContain('14%'); // the re-derived truth
   });
 
-  it('SKIPs LOUDLY (never a silent pass) when the coverage summary has not been generated', () => {
-    const res = verifyCoverageBadge(realReadme, path.join(TMP, 'no-such-summary.json'), realVitest);
+  it('SKIPs LOUDLY (never a silent pass) when the coverage summary has not been generated', async () => {
+    const res = await verifyCoverageBadge(realReadme, path.join(TMP, 'no-such-summary.json'), realVitest);
     expect(res.status).toBe('SKIP');
     expect(res.evidence).toContain('test:cov');
   });
 
-  it('fails when the coverage badge is gone from the README entirely', () => {
+  it('fails when the coverage badge is gone from the README entirely', async () => {
     const noBadge = writeTmp('README-no-badge.md', '# RuvNet Brain\n\nNo badge here.\n');
-    const res = verifyCoverageBadge(noBadge, summary(liveIsh), realVitest);
+    const res = await verifyCoverageBadge(noBadge, summary(liveIsh), realVitest);
     expect(res.status).toBe('FAIL');
     expect(res.evidence).toContain('badge');
   });
 
-  it('fails when vitest.config no longer sets all: true, even with the badge intact', () => {
+  it('fails when vitest.config no longer sets all: true, even with the badge intact', async () => {
     const vitestCfg = writeTmp('vitest-no-all.config.mjs', 'export default { test: { coverage: { all: false } } };\n');
-    const res = verifyCoverageBadge(realReadme, summary(liveIsh), vitestCfg);
+    const res = await verifyCoverageBadge(realReadme, summary(liveIsh), vitestCfg);
     expect(res.status).toBe('FAIL');
     expect(res.evidence).toContain('all: true');
   });

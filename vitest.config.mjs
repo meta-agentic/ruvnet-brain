@@ -24,6 +24,14 @@ export default defineConfig({
       // verifyCoverageBadge RE-DERIVES the README badge % from (it no longer string-matches a
       // hardcoded "10%" needle — a gate that can't fail isn't a gate). ADR-0020.
       reporter: ['text-summary', 'lcov', 'json-summary'],
+      // WHY (2026-07-26, measured): vitest's default is `reportOnFailure: false`, and its coverage
+      // provider does `if (!this.options.reportOnFailure) await this.cleanAfterRun()` — so ANY run
+      // with a failing test wipes coverage/ and writes NOTHING. That is how the honesty gate ended up
+      // grading a nine-day-old summary and then, once the file was gone, grading nothing at all while
+      // still being asked for a number. The measurement is not the pass/fail verdict: coverage of a
+      // red run is still a real measurement of what executed, and whether it may be quoted is decided
+      // by claims-verify's freshness precondition, not by silently deleting the evidence.
+      reportOnFailure: true,
       // Regression floor: CI fails below these. Set to the measured value ROUNDED DOWN (see the
       // commit that changed this line for the measured values). Raise as coverage grows; never
       // lower silently.

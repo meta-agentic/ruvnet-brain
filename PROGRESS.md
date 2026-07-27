@@ -1,6 +1,48 @@
 # RuvNet Brain — Build Progress (living tracker)
 
-`Updated: 2026-07-26 midday EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+`Updated: 2026-07-27 late-morning EDT` · honest status, no overclaiming. "DONE" means proven with pasted evidence.
+
+---
+
+## 2026-07-27 — the honesty gate was reading a rotting artifact — v3.9.90-dev (branch `fix/claims-artifact-freshness`)
+
+**Two public surfaces were lying, and the same defect produced both.** The README coverage badge
+said 26% while the ledger re-derives 28%, and 149,930 source chunks outlived the real 150,161 on
+four surfaces (README, explainer/index.html, llms.txt, llms-full.txt) — plus "54 public stores"
+(really 62) and README's "57 built stores" (really 69).
+
+**Root cause, measured, not guessed.** `claims-verify.mjs` graded the coverage claim from
+`coverage/coverage-summary.json` without ever asking whether that file was still true. It was nine
+days stale (mtime Jul 18). Worse, vitest's default is `reportOnFailure: false` and its provider does
+`if (!this.options.reportOnFailure) await this.cleanAfterRun()` — so **any** run with a failing test
+DELETES the coverage directory and writes nothing. Reproduced live here: a complete run, 5 failures,
+`coverage/` gone. One unvalidated rottable input, three possible lies: a false FAIL, a false PASS, a
+crash. Same class as #46 — ceremony wearing the costume of substance.
+
+**Fixed at cause, both halves.** (1) `reportOnFailure: true` — a red run still produces a complete
+measurement, because whether a number may be QUOTED is a decision for the gate, not something to
+settle by deleting the evidence. (2) The coverage claim is now UNVERIFIABLE unless the artifact is
+present, COMPLETE (an entry for every file `coverage.include` covers — a fragment's total is a
+denominator nobody measured) and NEWER than every source in that set and the config that defines it.
+Unverifiable ⇒ a loud `SKIPPED (not a pass)` naming `npm run test:cov`, never a derived number. The
+source set is imported from `vitest.config.mjs` rather than hand-copied, so it follows the globs.
+mtime over a hash sidecar, deliberately: a hash this script wrote would be self-certifying.
+
+**One writer, one pass.** `npm run claims:fix` re-derives the census from the idmaps and the % from
+the summary and stamps README + all four surfaces together; the gate stays read-only by default, and
+the writer obeys the same freshness precondition (it will not propagate a rotten number). `count-chunks.mjs`
+now delegates to it — a second writer with its own regexes is how four surfaces drift four ways.
+
+**Proof.** Red-first, verbatim in the test headers: the decisive red was `expected 'PASS' to be
+'SKIP'` — the stale artifact GRADED, and graded as a pass. Mutation test re-breaks the precondition
+and proves the same fixture goes back to PASSing. Also found: `tests/mutation/*.test.mjs` was in
+vitest's include list but no npm script or CI step ever ran it — both mutation suites had never once
+executed in CI. Now `npm run test:mutation`, wired into ci.yml.
+
+**Honest coverage: 28%** = floor(min(statements 29.1, branches 28.62, functions 34.87, lines 30.67))
+over 117 first-party source files, from a complete 2,009-test run. Thresholds unchanged — every
+measured value already clears them; raising them to a laptop-measured floor would risk a red CI for
+no honesty gain.
 
 ---
 

@@ -52,6 +52,13 @@ jobs:
         run: |
           npm i --no-audit --no-fund --loglevel=error
           npm run test:cov
+      - name: Mutation tests (the guards must FALL on broken code)
+        # tests/mutation/*.test.mjs was listed in vitest.config.mjs's include from the day it was
+        # written, but NO npm script and NO CI step ever ran that directory — so the falsifiability
+        # proofs for the proactivity detector and (2026-07-26) the coverage-freshness precondition
+        # were never once executed by CI. A test that never runs cannot fail, which makes it exactly
+        # the ceremony it was written to replace. Brain-independent, ~11s.
+        run: npm run test:mutation
       - name: Claims ledger (every advertised number regenerates — coverage badge re-derived from the fresh coverage-summary.json above, not string-matched)
         run: npm run claims:verify
       - name: Installer smoke test
