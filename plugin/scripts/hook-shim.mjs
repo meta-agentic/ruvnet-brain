@@ -102,6 +102,27 @@ const TABLE = {
   // and passes straight through; a spawn error is exit 1, which CC treats as a non-blocking notice).
   // The CC event name is forwarded to the runtime as an extra argv (see runHook's arg plumbing).
   'unprompted-speech': { file: 'unprompted-runtime.mjs', interpreter: 'node', mode: 'blocking', channel: 'unprompted', offBehavior: 'silence' },
+  // THE LIFECYCLE PLANE (ADR-055 §2, build item 1). Stop was the ONE registered hook that bypassed
+  // this table entirely — hooks.json pointed straight at continuation-gate.mjs, so it had no mode,
+  // no offBehavior, and no spine resolution, contradicting this file's own `_note` and leaving
+  // ADR-054's off-contract undefined for the only event that can force a turn to continue
+  // (ADR-055 F5/F14). Routing it here costs nothing behaviourally — `mode:'advisory'` forces exit 0
+  // exactly as the `|| true` it replaces did — and buys the two things F5 was about: a hot body via
+  // the spine, and a declared answer to "what happens when the brain is off".
+  //
+  // offBehavior 'run', DECIDED (ADR-055 left this open by name: "Stop — undecided today, F5).
+  // ADR-054's rule is the discriminator, applied literally: 'silence' is for hooks whose job is to
+  // ADVERTISE, GROUND, or LEARN; 'run' is for walls that guard money or honesty rather than
+  // retrieval. The continuation gate does none of the first three — it reads the user's own work
+  // ledger, needs no corpus, no network and no brain — and it does the last: ADR-043 exists because
+  // a turn ending clean on an open commitment is a dishonest turn. Switching retrieval off is not
+  // consent to abandon work mid-goal, and a gate that disarmed itself there would be the ADR-054
+  // over-kill failure exactly.
+  // FORWARD NOTE, deliberately not pre-declared: ADR-055 §3.4 gives this gate a SECOND input —
+  // grounding debt — which IS brain-dependent. When build item 6 lands, this entry becomes
+  // 'partial' (work-ledger retained, grounding-debt bytes suppressed). Declaring 'partial' today
+  // would declare a split that does not exist, which is the ceremony ADR-055 §4 refuses by name.
+  'continuation-gate': { file: 'continuation-gate.mjs', interpreter: 'node', mode: 'advisory', offBehavior: 'run' },
 };
 
 const hookId = process.argv[2];
