@@ -52,7 +52,12 @@ function packedFiles() {
     timeout: 120000,
   });
   const report = JSON.parse(out);
-  return new Set((report[0]?.files || []).map((f) => f.path));
+  // Normalize separators: on Windows npm reports `scripts\selfcheck.mjs` while the import
+  // specifiers this gate derives are always POSIX-style `scripts/selfcheck.mjs`. Comparing them
+  // raw made every path "missing" on windows-unit — a gate that fails for a reason unrelated to
+  // the thing it guards teaches people to ignore it, which is how the defect it exists to catch
+  // gets waved through.
+  return new Set((report[0]?.files || []).map((f) => String(f.path).split(path.sep).join('/').replace(/\\/g, '/')));
 }
 
 describe('the published tarball contains every module the installer imports', () => {
