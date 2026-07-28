@@ -79,13 +79,23 @@ test('warm-brain explicitly instantiates the embedder the battery requires', () 
   const workflow = fs.readFileSync(CI_WORKFLOW, 'utf8');
   assert.match(
     workflow,
-    /pipeline\(['"]feature-extraction['"],\s*['"]Xenova\/all-MiniLM-L6-v2['"]/,
-    'a successful reader query may warm only the reranker; CI must instantiate the embedder explicitly',
+    /requiredEmbedderModels\(process\.env\.RUVNET_BRAIN_KB\)/,
+    'CI must derive required embedders from the installed RVF sidecars, not a stale hard-coded model',
   );
   assert.match(
     workflow,
-    /configureModel\(T,\s*modelCache\)/,
-    'the explicit warm must point transformers at the same KB_MODEL_CACHE the battery inspects',
+    /for\s*\(const model of requiredEmbedderModels\(process\.env\.RUVNET_BRAIN_KB\)\)/,
+    'CI must warm every embedder required by the installed RVF sidecars',
+  );
+  assert.match(
+    workflow,
+    /T\.pipeline\(['"]feature-extraction['"],\s*model,/,
+    'a successful reader query may warm only the reranker; CI must instantiate each required embedder explicitly',
+  );
+  assert.match(
+    workflow,
+    /T\.env\.localModelPath\s*=\s*modelCache/,
+    'the explicit warm must read models from the same KB_MODEL_CACHE the battery inspects',
   );
   assert.match(
     workflow,
