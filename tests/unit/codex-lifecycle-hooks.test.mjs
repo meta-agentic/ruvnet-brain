@@ -30,6 +30,26 @@ function installGeneration(brain, version, shimSource) {
   }));
 }
 
+function installGroundingGeneration(brain, version) {
+  const scripts = path.join(brain, 'versions', version, 'scripts');
+  fs.mkdirSync(scripts, { recursive: true });
+  for (const file of [
+    'codex-hook-adapter.mjs',
+    'hook-shim.mjs',
+    'hook-shim-bash.mjs',
+    'ground-before-write.sh',
+    'grounding-substance.mjs',
+    'hook-input.mjs',
+  ]) {
+    fs.copyFileSync(path.join(ROOT, 'plugin', 'scripts', file), path.join(scripts, file));
+  }
+  fs.writeFileSync(path.join(brain, 'active.json'), JSON.stringify({
+    generation: version,
+    version,
+    codeRoot: `versions/${version}`,
+  }));
+}
+
 function fire(home, id, payload, extraEnv = {}) {
   return spawnSync(process.execPath, [WRAPPER, id], {
     cwd: ROOT,
@@ -195,6 +215,62 @@ describe('Codex lifecycle adapter', () => {
     expect(normalized.tool_name).toBe('Edit');
     expect(normalized.tool_input.file_path).toBe('/tmp/project/src/rvf.ts');
     expect(normalized.tool_input.new_string).toBe(patch);
+  });
+
+  it('blocks the founding remote-import contradiction through the installed Codex boundary', () => {
+    const { home, brain } = fixture();
+    installGroundingGeneration(brain, 'v1');
+    const project = path.join(home, 'project');
+    const profile = path.join(home, '.claude', 'model-router', 'profile.json');
+    const evidence = path.join(home, 'evidence.jsonl');
+    fs.mkdirSync(path.join(project, 'src'), { recursive: true });
+    fs.mkdirSync(path.dirname(profile), { recursive: true });
+    fs.mkdirSync(path.join(brain, 'grounded'), { recursive: true });
+    fs.writeFileSync(profile, '{}');
+    fs.writeFileSync(path.join(brain, 'grounded', 'rvf'), '');
+    fs.writeFileSync(path.join(brain, 'grounded', 'ruvector'), '');
+    fs.writeFileSync(evidence, `${JSON.stringify({
+      v: 1,
+      ts: new Date().toISOString(),
+      query: 'rvf browser local',
+      sources: [{
+        repo: 'ruvector',
+        path: 'examples/rvf/scripts/rvf-browser.html',
+        packages: [{
+          name: '@ruvector/rvf-wasm',
+          install: 'npm install @ruvector/rvf-wasm',
+          manager: 'npm',
+        }],
+        posture: ['No backend required.', 'entirely in the browser'],
+        enforceable: true,
+      }],
+    })}\n`);
+    const target = path.join(project, 'src', 'rvf.ts');
+    const patch = `*** Begin Patch
+*** Add File: ${target}
++import { RvfDatabase } from "https://esm.sh/@ruvector/rvf-wasm";
+*** End Patch
+`;
+
+    const result = fire(home, 'ground-before-write', {
+      session_id: 'codex-fourth-wall',
+      turn_id: 'turn-fourth-wall',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'apply_patch',
+      tool_input: { command: patch },
+      cwd: project,
+    }, {
+      MODEL_ROUTER_PROFILE: profile,
+      RUVNET_EVIDENCE_FILE: evidence,
+      RUVNET_BRAIN_STATE_DIR: path.join(home, 'brain-state'),
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('GROUNDING-NET (D1)');
+    expect(result.stderr).toContain('ruvector/examples/rvf/scripts/rvf-browser.html');
+    expect(result.stderr).toContain('npm install @ruvector/rvf-wasm');
+    expect(result.stderr).toContain('https://esm.sh/@ruvector/rvf-wasm');
   });
 
   it('normalizes spawn_agent into the shared Agent routing contract', () => {
