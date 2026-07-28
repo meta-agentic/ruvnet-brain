@@ -173,6 +173,7 @@ export const RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-result.json'
 export const LOAD_BEARING = Object.freeze([
   'scripts/learning-replay.mjs',
   'scripts/ci/learning-replay-recorder.mjs',
+  'scripts/ci/learning-replay-codex-adapter.mjs',
   'scripts/lesson-store.mjs',
   'scripts/lesson-gate.mjs',
   'plugin/scripts/lesson-hooks.sh',
@@ -507,6 +508,7 @@ export function verifyRufloFlag(bin = RUFLO_BIN) {
 
 // ── the fixture world ───────────────────────────────────────────────────────────────────────────
 const CLAUDE_BIN = process.env.RUVNET_CLAUDE_BIN || path.join(os.homedir(), '.npm-global', 'bin', 'claude');
+const CODEX_BIN = process.env.RUVNET_CODEX_BIN || 'codex';
 
 /** Project B's task. Shares no content word with the lesson — the lesson cannot be string-matched into it. */
 export const REPLAY_PROMPT =
@@ -665,6 +667,14 @@ export function nightlyRefresh(dirs, { ruflo = RUFLO_BIN } = {}) {
   const versionDir = path.join(dirs.brainHome, 'versions', gen);
   fs.mkdirSync(versionDir, { recursive: true });
   fs.cpSync(path.join(ROOT, 'plugin'), versionDir, { recursive: true });
+  // Codex discovers the installed plugin's global hook manifest, not fixture-local `.codex` hooks.
+  // The stable wrapper resolves this fixture generation through RUVNET_BRAIN_HOME, so replace only
+  // the fixture generation's host adapter with the replay tap. The real hook body remains the copied
+  // hook-shim beside it; the adapter merely records delivery and blocks the first proposed command.
+  fs.copyFileSync(
+    path.join(ROOT, 'scripts', 'ci', 'learning-replay-codex-adapter.mjs'),
+    path.join(versionDir, 'scripts', 'codex-hook-adapter.mjs'),
+  );
   fs.writeFileSync(path.join(dirs.brainHome, 'active.json'), JSON.stringify({ codeRoot: versionDir, generation: gen }, null, 2));
   fs.writeFileSync(path.join(dirs.brainHome, '.spine-seeded'), gen);
 
@@ -712,6 +722,23 @@ function writeSettings(file, { dirs, stateDir, attemptsFile }) {
   return file;
 }
 
+export function buildCodexArgv({ model = 'gpt-5.6-sol', prompt = REPLAY_PROMPT, appendSystemPrompt = null } = {}) {
+  const fullPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${prompt}` : prompt;
+  return [
+    'exec',
+    '--ephemeral',
+    '--sandbox', 'read-only',
+    '--color', 'never',
+    '--json',
+    '--ignore-rules',
+    '--dangerously-bypass-hook-trust',
+    '-m', model,
+    '-c', 'model_reasoning_effort="low"',
+    '-c', 'shell_environment_policy.inherit="all"',
+    fullPrompt,
+  ];
+}
+
 /**
  * Run ONE arm and return what it produced.
  *
@@ -727,28 +754,71 @@ export function replayRunError(events, processResult) {
   return `${status}${result.result || result.terminal_reason || 'model execution failed'}`;
 }
 
-export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, tag, forceCommand = null }) {
-  const attempts = path.join(dirs.transcripts, `${tag}.attempts.jsonl`);
-  const settings = writeSettings(path.join(dirs.base, `settings-${tag}.json`), { dirs, stateDir, attemptsFile: attempts });
-  const streamFile = path.join(dirs.transcripts, `${tag}.stream.jsonl`);
+export function parseCodexRunError(events, processResult) {
+  if (processResult?.error) return String(processResult.error.message || processResult.error);
+  const failed = events.find((event) => event.type === 'turn.failed');
+  if (failed) return String(failed.error?.message || failed.error || 'Codex turn failed');
+  if (events.some((event) => event.type === 'turn.completed') && processResult?.status === 0) return null;
+  const errorItem = events.find((event) => event.type === 'item.completed' && event.item?.type === 'error');
+  if (errorItem) return String(errorItem.item?.message || errorItem.item?.text || 'Codex execution failed');
+  return processResult?.status && processResult.status !== 0
+    ? `Codex exited ${processResult.status}`
+    : null;
+}
 
-  const argv = [
-    '-p', REPLAY_PROMPT,
-    '--model', model,
-    '--tools', 'Bash',
-    '--permission-mode', 'bypassPermissions',
-    '--setting-sources', '',
-    '--settings', settings,
-    '--output-format', 'stream-json',
-    '--verbose',
-    '--include-hook-events',
-    '--no-session-persistence',
-    '--max-budget-usd', '0.30',
-  ];
-  if (appendSystemPrompt) argv.push('--append-system-prompt', appendSystemPrompt);
+export function codexLessonBeforeTool(sequence) {
+  const lesson = sequence.find((event) => event.kind === 'lesson');
+  const tool = sequence.find((event) => event.kind === 'tool');
+  return Boolean(lesson && tool && BigInt(lesson.atNs) < BigInt(tool.atNs));
+}
+
+export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appendSystemPrompt = null, tag, forceCommand = null }) {
+  const attempts = path.join(dirs.transcripts, `${tag}.attempts.jsonl`);
+  const sequenceFile = path.join(dirs.transcripts, `${tag}.sequence.jsonl`);
+  const streamFile = path.join(dirs.transcripts, `${tag}.stream.jsonl`);
+  let binary;
+  let argv;
+  if (host === 'codex') {
+    binary = CODEX_BIN;
+    argv = buildCodexArgv({ model, appendSystemPrompt });
+  } else {
+    const settings = writeSettings(path.join(dirs.base, `settings-${tag}.json`), { dirs, stateDir, attemptsFile: attempts });
+    binary = CLAUDE_BIN;
+    argv = [
+      '-p', REPLAY_PROMPT,
+      '--model', model,
+      '--tools', 'Bash',
+      '--permission-mode', 'bypassPermissions',
+      '--setting-sources', '',
+      '--settings', settings,
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--include-hook-events',
+      '--no-session-persistence',
+      '--max-budget-usd', '0.30',
+    ];
+    if (appendSystemPrompt) argv.push('--append-system-prompt', appendSystemPrompt);
+  }
 
   const started = Date.now();
-  const r = spawnSync(CLAUDE_BIN, argv, { cwd: dirs.projectB, encoding: 'utf8', timeout: 300_000, maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(binary, argv, {
+    cwd: dirs.projectB,
+    encoding: 'utf8',
+    timeout: 300_000,
+    maxBuffer: 64 * 1024 * 1024,
+    env: {
+      ...process.env,
+      RUVNET_BRAIN_HOME: dirs.brainHome,
+      RUVNET_BRAIN_STATE_DIR: stateDir,
+      RUVNET_LESSON_STORE: dirs.lessons,
+      RUVNET_LESSON_GATE_STATE: dirs.gateState,
+      RUVNET_REPLAY_ATTEMPTS_FILE: attempts,
+      RUVNET_REPLAY_SEQUENCE_FILE: sequenceFile,
+      RUVNET_REPLAY_LESSON_PROBE: LESSON_STATEMENT.slice(0, 60),
+      RUVNET_REPLAY_RECORDER: path.join(ROOT, 'scripts', 'ci', 'learning-replay-recorder.mjs'),
+      CLAUDE_PLUGIN_ROOT: path.join(ROOT, 'plugin'),
+    },
+  });
   const wallMs = Date.now() - started;
   fs.writeFileSync(streamFile, r.stdout || '');
   if (r.stderr) fs.writeFileSync(path.join(dirs.transcripts, `${tag}.stderr.txt`), r.stderr);
@@ -757,12 +827,21 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
 
   const probe = LESSON_STATEMENT.slice(0, 60);
   let lessonIndex = -1, firstToolIndex = -1, lessonDelivered = false;
-  events.forEach((e, i) => {
-    if (lessonIndex === -1 && e.type === 'system' && e.subtype === 'hook_response'
-      && typeof e.output === 'string' && e.output.includes(probe)) { lessonIndex = i; lessonDelivered = true; }
-    if (firstToolIndex === -1 && e.type === 'assistant'
-      && Array.isArray(e.message?.content) && e.message.content.some((c) => c.type === 'tool_use')) firstToolIndex = i;
-  });
+  const sequence = fs.existsSync(sequenceFile)
+    ? fs.readFileSync(sequenceFile, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+    : [];
+  if (host === 'codex') {
+    lessonIndex = sequence.findIndex((event) => event.kind === 'lesson');
+    firstToolIndex = sequence.findIndex((event) => event.kind === 'tool');
+    lessonDelivered = lessonIndex !== -1;
+  } else {
+    events.forEach((e, i) => {
+      if (lessonIndex === -1 && e.type === 'system' && e.subtype === 'hook_response'
+        && typeof e.output === 'string' && e.output.includes(probe)) { lessonIndex = i; lessonDelivered = true; }
+      if (firstToolIndex === -1 && e.type === 'assistant'
+        && Array.isArray(e.message?.content) && e.message.content.some((c) => c.type === 'tool_use')) firstToolIndex = i;
+    });
+  }
 
   const attemptLines = fs.existsSync(attempts)
     ? fs.readFileSync(attempts, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -792,14 +871,17 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
     lessonDelivered,
     lessonIndex,
     firstToolIndex,
-    lessonBeforeFirstToolCall: lessonDelivered && firstToolIndex > -1 && lessonIndex < firstToolIndex,
+    lessonBeforeFirstToolCall: host === 'codex'
+      ? codexLessonBeforeTool(sequence)
+      : lessonDelivered && firstToolIndex > -1 && lessonIndex < firstToolIndex,
     costUsd: result?.total_cost_usd ?? null,
     wallMs,
     modelUsed: events.find((e) => e.type === 'system' && e.subtype === 'init')?.model
       || events.find((e) => e.type === 'assistant')?.message?.model || model,
+    host,
     transcript: path.relative(ROOT, streamFile),
     exit: r.status,
-    spawnError: replayRunError(events, r),
+    spawnError: host === 'codex' ? parseCodexRunError(events, r) : replayRunError(events, r),
   };
 }
 
@@ -808,7 +890,7 @@ const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const usage = () => `Usage:
-  node scripts/learning-replay.mjs [--n N] [--model MODEL]
+  node scripts/learning-replay.mjs [--n N] [--host codex|claude-code] [--model MODEL]
   node scripts/learning-replay.mjs --check
   node scripts/learning-replay.mjs --dry-run
   node scripts/learning-replay.mjs --mutant <${Object.keys(MUTANTS).join('|')}>
@@ -874,7 +956,8 @@ async function main() {
   const dryRun = has('--dry-run');
   const mutant = arg('--mutant', null);
   const n = Math.max(1, parseInt(arg('--n', mutant ? '1' : '3'), 10) || 1);
-  const model = arg('--model', 'haiku');
+  const host = arg('--host', 'codex');
+  const model = arg('--model', host === 'codex' ? 'gpt-5.6-sol' : 'haiku');
   const outFile = arg('--out', RESULT_FILE);
   const keep = has('--keep-fixtures');
 
@@ -895,7 +978,7 @@ async function main() {
   if (!flag.ok) {
     const artifact = writeArtifact(outFile, {
       verdict: VERDICT.UNKNOWN, why: `premise not verified: ${flag.why}`, n: 0, passes: 0, fails: 0, unknowns: 0, controlTokenRuns: 0, rate: 0, runs: [],
-    }, { model, mutant });
+    }, { host, model, mutant });
     console.log(`  → UNKNOWN (never a pass). artifact: ${path.relative(ROOT, outFile)}`);
     process.exit(EXIT.UNKNOWN);
   }
@@ -946,7 +1029,7 @@ async function main() {
     writeArtifact(outFile, {
       verdict: VERDICT.UNKNOWN, why: `--dry-run: no model was called, so nothing was measured (wire probe: treated ${onBytes}B, control ${offBytes}B)`,
       n: 0, passes: 0, fails: 0, unknowns: 0, controlTokenRuns: 0, rate: 0, runs: [],
-    }, { model, mutant, record: rec, seed, refresh });
+    }, { host, model, mutant, record: rec, seed, refresh });
     console.log(`  → UNKNOWN (a dry run is never a pass). artifact: ${path.relative(ROOT, outFile)}`);
     if (!keep) rmrf(base);
     process.exit(EXIT.UNKNOWN);
@@ -956,11 +1039,11 @@ async function main() {
   for (let i = 1; i <= n; i++) {
     const treatedState = mutant === 'brain-off-treated' ? dirs.stateOff : dirs.stateOn;
     const treated = runArm({
-      dirs, arm: 'treated', stateDir: treatedState, model, tag: `run${i}-treated`,
+      dirs, arm: 'treated', stateDir: treatedState, model, host, tag: `run${i}-treated`,
       forceCommand: mutant === 'wrong-subcommand' ? WRONG_SUBCOMMAND_COMMAND : null,
     });
     const control = runArm({
-      dirs, arm: 'control', stateDir: dirs.stateOff, model, tag: `run${i}-control`,
+      dirs, arm: 'control', stateDir: dirs.stateOff, model, host, tag: `run${i}-control`,
       // MUTANT seed-control: the control is handed the lesson through a channel the brain does not
       // own. Its artifact then carries the token, and invariant 6 must fire.
       appendSystemPrompt: mutant === 'seed-control' ? LESSON_STATEMENT : null,
@@ -994,7 +1077,7 @@ async function main() {
   const agg = aggregate(runs);
   const costUsd = runs.reduce((s, r) => s + (r.treated.costUsd || 0) + (r.control.costUsd || 0), 0);
   const wallMs = runs.reduce((s, r) => s + (r.treated.wallMs || 0) + (r.control.wallMs || 0), 0);
-  writeArtifact(outFile, agg, { model, mutant, record: rec, seed, refresh, flag, costUsd, wallMs });
+  writeArtifact(outFile, agg, { host, model, mutant, record: rec, seed, refresh, flag, costUsd, wallMs });
 
   console.log(`\n  RATE ${agg.passes}/${agg.n} · token carried by treated ${agg.treatedTokenRuns}/${agg.n} vs control ${agg.controlTokenRuns}/${agg.n}`);
   console.log(`  EXECUTION GATE: treated named the real subcommand ${agg.treatedSubcommandRuns}/${agg.n} · exited 0 ${agg.treatedExecutedRuns}/${agg.n} · RETRIEVED ${agg.treatedRetrievedRuns}/${agg.n} · control worked ${agg.controlWorkedRuns}/${agg.n}`);
@@ -1050,6 +1133,7 @@ function writeArtifact(file, agg, meta = {}) {
     why: agg.why,
     sha: headSha(),
     at: new Date().toISOString(),
+    host: meta.host || null,
     model: meta.model || null,
     // The alias asked for ("haiku") is not the model that answered. Record the id the session
     // actually reported, so a result can never be attributed to a model that never ran.

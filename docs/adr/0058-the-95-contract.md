@@ -19,6 +19,9 @@ governs:
   - plugin/scripts/hijack-ruvnet.sh
   - plugin/scripts/session-start.sh
   - scripts/behavioral-l1-l4.mjs
+  - scripts/learning-replay.mjs
+  - scripts/ci/learning-replay-recorder.mjs
+  - scripts/ci/learning-replay-codex-adapter.mjs
   - scripts/no-silent-substitution.mjs
   - scripts/qe/ux-suite.mjs
   - scripts/claims-verify.mjs

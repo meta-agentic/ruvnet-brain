@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HOOK_INPUT = path.resolve(HERE, '..', '..', 'plugin', 'scripts', 'hook-input.mjs');
 const out = process.argv[2];
+const sequenceOut = process.argv[3];
 
 let payload = '';
 try { payload = fs.readFileSync(0, 'utf8'); } catch { payload = ''; }
@@ -38,11 +39,18 @@ let command = '';
 const r = spawnSync(process.execPath, [HOOK_INPUT, 'command'], { input: payload, encoding: 'utf8' });
 if (r.status === 0) command = String(r.stdout || '').trim();
 
+const atNs = process.hrtime.bigint().toString();
 if (out) {
   try {
     fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.appendFileSync(out, JSON.stringify({ at: Date.now(), command }) + '\n');
+    fs.appendFileSync(out, JSON.stringify({ at: Date.now(), atNs, command }) + '\n');
   } catch { /* a recorder that cannot write must still block; a silent run is worse than a lost line */ }
+}
+if (sequenceOut) {
+  try {
+    fs.mkdirSync(path.dirname(sequenceOut), { recursive: true });
+    fs.appendFileSync(sequenceOut, JSON.stringify({ kind: 'tool', atNs, command }) + '\n');
+  } catch { /* blocking still wins over a missing receipt */ }
 }
 
 // stderr is the channel exit 2 feeds back to the model (stdout is ignored on 2). Terse on purpose:

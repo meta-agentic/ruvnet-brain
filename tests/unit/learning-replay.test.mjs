@@ -20,7 +20,7 @@ import {
   verdictForRun, aggregate, checkArtifact, LOAD_BEARING,
   assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
-  replayRunError,
+  replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -50,6 +50,52 @@ describe('executor failures remain visible in replay evidence', () => {
     }];
     expect(replayRunError(events, {})).toContain("HTTP 429");
     expect(replayRunError(events, {})).toContain("weekly limit");
+  });
+
+  it('preserves a Codex turn failure instead of treating an empty artifact as model behavior', () => {
+    const events = [
+      { type: 'turn.started' },
+      { type: 'item.completed', item: { type: 'error', message: 'capacity exhausted' } },
+      { type: 'turn.failed', error: { message: 'capacity exhausted' } },
+    ];
+    expect(parseCodexRunError(events, { status: 1 })).toContain('capacity exhausted');
+  });
+
+  it('does not mistake Codex advisory hook notices for a failed completed turn', () => {
+    const events = [
+      { type: 'item.completed', item: { type: 'error', message: 'hook trust bypass is enabled' } },
+      { type: 'turn.started' },
+      { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } },
+    ];
+    expect(parseCodexRunError(events, { status: 0 })).toBeNull();
+  });
+});
+
+describe('Codex subscription replay host', () => {
+  it('runs Codex read-only with the installed Brain plugin hooks trusted', () => {
+    const args = buildCodexArgv({ model: 'gpt-5.6-sol', prompt: 'fixture prompt' });
+    expect(args.slice(0, 2)).toEqual(['exec', '--ephemeral']);
+    expect(args).toContain('--sandbox');
+    expect(args).toContain('read-only');
+    expect(args).toContain('--json');
+    expect(args).not.toContain('--ignore-user-config');
+    expect(args).toContain('--dangerously-bypass-hook-trust');
+    expect(args).toContain('shell_environment_policy.inherit="all"');
+    expect(args).toContain('gpt-5.6-sol');
+    expect(args.at(-1)).toBe('fixture prompt');
+    expect(args.join(' ')).not.toMatch(/max-budget-usd|permission-mode|include-hook-events/);
+  });
+
+  it('proves lesson delivery happened before the first recorded tool attempt', () => {
+    expect(codexLessonBeforeTool([
+      { kind: 'lesson', atNs: '100' },
+      { kind: 'tool', atNs: '200' },
+    ])).toBe(true);
+    expect(codexLessonBeforeTool([
+      { kind: 'tool', atNs: '100' },
+      { kind: 'lesson', atNs: '200' },
+    ])).toBe(false);
+    expect(codexLessonBeforeTool([{ kind: 'tool', atNs: '100' }])).toBe(false);
   });
 });
 
@@ -261,7 +307,9 @@ describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checke
     spawnSync(RUFLO_BIN, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { encoding: 'utf8', timeout: 120_000, cwd: dir });
     spawnSync(RUFLO_BIN, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', db], { encoding: 'utf8', timeout: 120_000, cwd: dir });
   });
-  afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  });
 
   t('the CORRECT command retrieves', () => {
     const e = executeProducedCommand('ruflo memory search -q "caching strategy"', { cwd: dir, base: dir });
