@@ -23,6 +23,21 @@ import {
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
+describe('CLI help is side-effect free', () => {
+  it('--help prints usage, exits zero, and does not overwrite the replay artifact', () => {
+    const artifact = path.resolve(import.meta.dirname, '../../data/learning-replay-result.json');
+    const before = fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null;
+    const r = spawnSync(process.execPath, ['scripts/learning-replay.mjs', '--help'], {
+      cwd: path.resolve(import.meta.dirname, '../..'),
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('Usage:');
+    expect(fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null).toBe(before);
+  });
+});
+
 // A PASSING run under the CURRENT oracle: the token, the real subcommand, a command that executed
 // and retrieved, and the lesson before the first tool call. Every test below removes exactly one.
 const run = (o) => ({

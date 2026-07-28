@@ -796,6 +796,13 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
+const usage = () => `Usage:
+  node scripts/learning-replay.mjs [--n N] [--model MODEL]
+  node scripts/learning-replay.mjs --check
+  node scripts/learning-replay.mjs --dry-run
+  node scripts/learning-replay.mjs --mutant <${Object.keys(MUTANTS).join('|')}>
+
+Exit: 0=PASS, 1=FAIL, 3=INCONCLUSIVE, 4=UNKNOWN.`;
 
 /** The command mutant `wrong-subcommand` substitutes: the grader's exact defect, right flag on a wrong verb. */
 export const WRONG_SUBCOMMAND_COMMAND = 'ruflo recall -q "caching strategy"';
@@ -848,6 +855,10 @@ export function checkArtifact({ file = RESULT_FILE, repo = ROOT, maxAgeDays = 14
 }
 
 async function main() {
+  if (has('--help') || has('-h')) {
+    console.log(usage());
+    return;
+  }
   const check = has('--check');
   const dryRun = has('--dry-run');
   const mutant = arg('--mutant', null);
