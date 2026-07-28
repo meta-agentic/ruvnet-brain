@@ -56,7 +56,7 @@ function seedBrain(tag) {
  * Run the installer. `breakLookup` copies it with the repo slug pointed at a nonexistent repo so
  * the real GitHub call genuinely 404s — exercising the fallback path rather than simulating it.
  */
-function runInstaller({ breakLookup = false } = {}) {
+function runInstaller({ breakLookup = false, latestTag } = {}) {
   let script = INSTALLER;
   if (breakLookup) {
     script = path.join(work, 'bin', 'install.mjs');
@@ -72,7 +72,12 @@ function runInstaller({ breakLookup = false } = {}) {
   const res = spawnSync(process.execPath, [script, '--no-verify'], {
     encoding: 'utf8',
     timeout: 180_000,
-    env: { ...process.env, HOME: home, RUVNET_BRAIN_TEST: '1' },
+    env: {
+      ...process.env,
+      HOME: home,
+      RUVNET_BRAIN_TEST: '1',
+      RUVNET_BRAIN_TEST_LATEST_TAG: latestTag || '',
+    },
   });
   // eslint-disable-next-line no-control-regex
   return `${res.stdout || ''}${res.stderr || ''}`.replace(/\x1b\[[0-9;]*m/g, '');
@@ -85,10 +90,15 @@ function runInstaller({ breakLookup = false } = {}) {
  * only cares about the verdict, and letting it actually fetch would make the suite depend on the
  * network and take minutes. Streams stdout and kills the child the moment the decision appears.
  */
-function runUntilDecision(timeoutMs = 90_000) {
+function runUntilDecision({ latestTag, timeoutMs = 90_000 } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [INSTALLER, '--no-verify'], {
-      env: { ...process.env, HOME: home, RUVNET_BRAIN_TEST: '1' },
+      env: {
+        ...process.env,
+        HOME: home,
+        RUVNET_BRAIN_TEST: '1',
+        RUVNET_BRAIN_TEST_LATEST_TAG: latestTag || '',
+      },
     });
     let buf = '';
     const done = () => { try { child.kill('SIGKILL'); } catch { /* already gone */ } // eslint-disable-next-line no-control-regex
@@ -108,7 +118,7 @@ describe('stale-install trap', () => {
   it('a STALE brain triggers a download instead of being skipped', async () => {
     seedBrain(ANCIENT); // stands in for the reported June build
 
-    const out = await runUntilDecision();
+    const out = await runUntilDecision({ latestTag: `v${currentVersion()}` });
 
     expect(out, 'must recognise it is behind').toMatch(/out of date/i);
     expect(out, 'must NOT claim it is current').not.toMatch(/already current/i);
@@ -117,7 +127,7 @@ describe('stale-install trap', () => {
   it('a CURRENT brain still skips — the fix must not force a 2 GB re-download on everyone', () => {
     seedBrain(`v${currentVersion()}`);
 
-    const out = runInstaller();
+    const out = runInstaller({ latestTag: `v${currentVersion()}` });
 
     expect(out).toMatch(/already current/i);
     expect(out).not.toMatch(/out of date/i);

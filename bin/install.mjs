@@ -288,6 +288,14 @@ async function resolveRelease() {
     return { tag: FORCED_VERSION, url: fallbackUrl(FORCED_VERSION), source: 'forced' };
   }
 
+  // Deterministic integration seam: stale/current behavior must not depend on GitHub API quota.
+  // It is inert unless the installer's existing mutation-safe test mode is explicitly enabled.
+  if (process.env.RUVNET_BRAIN_TEST === '1' && process.env.RUVNET_BRAIN_TEST_LATEST_TAG) {
+    const tag = process.env.RUVNET_BRAIN_TEST_LATEST_TAG;
+    info(`test mode: latest Release is ${c.bold(tag)}`);
+    return { tag, url: fallbackUrl(tag), source: 'latest' };
+  }
+
   try {
     info(`checking ${RELEASE_API} …`);
     const rel = await fetchJson(RELEASE_API);
