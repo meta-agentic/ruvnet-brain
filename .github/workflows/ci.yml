@@ -272,6 +272,22 @@ jobs:
         # stranger actually runs.
         run: |
           set -e
+          # A normal query currently loads the cross-encoder reranker but can answer from the RVF's
+          # stored vectors without ever instantiating the query embedder. That made the old "warm"
+          # step green while Xenova/all-MiniLM-L6-v2 remained absent. Import the INSTALLED bundle's
+          # resolver, configure it with this job's KB_MODEL_CACHE, and execute one real embedding.
+          node --input-type=module <<'NODE' > /tmp/embedder-warm.log 2>&1
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          const resolver = pathToFileURL(path.join(process.env.RUVNET_BRAIN_KB, 'resolve-deps.mjs')).href;
+          const { loadTransformers, configureModel } = await import(resolver);
+          const { T, modelCache, via } = await loadTransformers();
+          configureModel(T, modelCache);
+          const embed = await T.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+          await embed('warm the exact query embedder', { pooling: 'mean', normalize: true });
+          if (typeof embed.dispose === 'function') await embed.dispose();
+          console.log(`embedder instantiated via ${via}; cache=${modelCache}`);
+          NODE
           READER="$RUVNET_BRAIN_KB/forge-ask-all.mjs"
           if [ -f "$READER" ]; then
             echo "warming via the INSTALLED reader: $READER"

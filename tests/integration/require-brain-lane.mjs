@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const RUN_TESTS = path.join(ROOT, 'plugin', 'test', 'run-tests.mjs');
+const CI_WORKFLOW = path.join(ROOT, '.github', 'workflows', 'ci.yml');
 
 // Runs the real battery against a freshly-created EMPTY brain dir (deleted afterward). Explicitly
 // deletes any inherited REQUIRE_BRAIN so a caller's environment (e.g. running this file FROM inside
@@ -71,5 +72,19 @@ test('REQUIRE_BRAIN=1 — THE MUTANT: the same empty brain dir converts the skip
     r.stdout,
     /core capability battery skipped but REQUIRE_BRAIN=1/,
     'must list the specific failure so the lane names why it is red',
+  );
+});
+
+test('warm-brain explicitly instantiates the embedder the battery requires', () => {
+  const workflow = fs.readFileSync(CI_WORKFLOW, 'utf8');
+  assert.match(
+    workflow,
+    /pipeline\(['"]feature-extraction['"],\s*['"]Xenova\/all-MiniLM-L6-v2['"]/,
+    'a successful reader query may warm only the reranker; CI must instantiate the embedder explicitly',
+  );
+  assert.match(
+    workflow,
+    /configureModel\(T,\s*modelCache\)/,
+    'the explicit warm must point transformers at the same KB_MODEL_CACHE the battery inspects',
   );
 });
