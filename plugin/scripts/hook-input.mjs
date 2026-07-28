@@ -331,6 +331,47 @@ const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
  * half-word that could be mistaken for a literal token. `dynamic: true` means the EXECUTABLE itself
  * is unknown — the caller must fail open.
  */
+/**
+ * PAYLOAD — every field of a tool event that can carry code or a command, joined by newline.
+ *
+ * WHY THIS LIVES HERE (2026-07-27): hijack-ruvnet.sh built this same union with a `jq` expression,
+ * behind `command -v jq >/dev/null 2>&1 || { exit 0; }`. On any machine WITHOUT jq that line
+ * silently disabled the ENTIRE action-level interceptor — the product's central promise, gone, with
+ * no notice to anyone. Reproduced live 2026-07-27: with jq on PATH the hook emits its advisory;
+ * with jq removed from PATH it emits ABSOLUTELY NOTHING and exits 0.
+ *
+ * Silent-off is scored equal to crashing (DDD-0013, External-Signal invariant 6). node is guaranteed
+ * in Claude Code's environment — verify-interface.sh:155 already depends on exactly that — so the
+ * union moves into the shared parser, which is where the ACL says host-envelope knowledge belongs,
+ * and the jq dependency disappears instead of being made conditional.
+ */
+/**
+ * EMIT — build a PreToolUse response envelope. The second half of removing jq from hijack-ruvnet.sh:
+ * the first jq call PARSED the event, this one BUILT the reply (`jq -n --arg ctx ... --arg dec ...`).
+ * Removing only the parse half left the hook dying at the emit half with "jq: command not found" —
+ * caught 2026-07-27 by running it under a PATH with jq genuinely absent instead of assuming one fix
+ * covered both. JSON.stringify does the escaping jq's --arg was there for.
+ */
+export function preToolUseEnvelope(decision, additionalContext) {
+  return JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: String(decision || 'defer'),
+      additionalContext: String(additionalContext || ''),
+    },
+  }, null, 2);
+}
+
+export function payloadOf(ev) {
+  const keys = ['content', 'file_text', 'new_string', 'old_string', 'command', 'code', 'file_path'];
+  const out = [];
+  for (const k of keys) {
+    const v = field(ev, `tool_input.${k}`);
+    if (typeof v === 'string' && v.length) out.push(v);
+  }
+  return out.join('\n');
+}
+
 export function commandNodes(cmd, depth = 0, acc = []) {
   if (typeof cmd !== 'string' || !cmd || depth > MAX_DEPTH || acc.length >= MAX_NODES) return acc;
   const { nodes, subs } = parseLevel(cmd);
@@ -443,6 +484,8 @@ if (isMain()) {
     else if (which === 'command') out = commandOf(ev);
     else if (which === 'field') out = field(ev, process.argv[3] || '');
     else if (which === 'invocations') out = invocationLines(commandOf(ev), process.argv[3] || '');
+    else if (which === 'payload') out = payloadOf(ev);
+    else if (which === 'emit') out = preToolUseEnvelope(process.argv[3], process.argv[4]);
     process.stdout.write(out);
     // ALWAYS exit 0: a parse miss is an empty string, never a crash the gate has to survive.
     process.exit(0);

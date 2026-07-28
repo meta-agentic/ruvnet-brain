@@ -28,13 +28,26 @@ if [ -n "$BASH_VERSION" ]; then
 else
   INPUT=$(head -c 32768 2>/dev/null)
 fi
-command -v jq >/dev/null 2>&1 || { exit 0; }   # need jq for safe JSON; stay silent if absent.
-
-# Combine every field that can carry code/commands across Write / Edit / Bash (+ doc variants).
-PAYLOAD=$(printf '%s' "$INPUT" | jq -r '
-  [ .tool_input.content?, .tool_input.file_text?, .tool_input.new_string?, .tool_input.old_string?,
-    .tool_input.command?, .tool_input.code?, .tool_input.file_path? ]
-  | map(select(. != null)) | join("\n")' 2>/dev/null)
+# NO jq (2026-07-27). This line used to read:
+#     command -v jq >/dev/null 2>&1 || { exit 0; }   # need jq for safe JSON; stay silent if absent.
+# On any machine WITHOUT jq that silently disabled THE ENTIRE ACTION-LEVEL INTERCEPTOR — the
+# product's central promise — and told nobody. Reproduced live before the fix: with jq on PATH the
+# hook emits its advisory; with jq removed from PATH it emitted ABSOLUTELY NOTHING and exited 0.
+# jq is NOT guaranteed on a corporate laptop or a hardened CI image; node IS guaranteed in Claude
+# Code's environment, and verify-interface.sh:155 already depends on exactly that. So the field
+# union moved into the shared parser (hook-input.mjs `payloadOf`, reachable as the `payload` CLI
+# mode) and the dependency is gone rather than made conditional.
+#
+# SILENT-OFF IS SCORED EQUAL TO CRASHING (DDD-0013, External-Signal invariant 6). If node itself is
+# somehow absent, this SAYS SO once on stderr instead of vanishing — a capability that cannot
+# function must announce it, never fake health by staying quiet.
+NODE_BIN=$(command -v node 2>/dev/null)
+if [ -z "$NODE_BIN" ]; then
+  printf '%s\n' "[RuvNet Brain] hijack protection is OFF on this machine: node not found on PATH." >&2
+  exit 0
+fi
+HOOK_INPUT="$(dirname "$0")/hook-input.mjs"
+PAYLOAD=$(printf '%s' "$INPUT" | "$NODE_BIN" "$HOOK_INPUT" payload 2>/dev/null)
 [ -z "$PAYLOAD" ] && exit 0
 
 MSG=""
@@ -61,11 +74,8 @@ fi
 
 FULL="[RuvNet Brain — hijack] $MSG  Confirm the exact capability with the search_ruvnet MCP tool before writing this, and ground the implementation in rUv's real source. Do not assert these tools' behavior from memory."
 
-jq -n --arg ctx "$FULL" --arg dec "$DECISION" '{
-  hookSpecificOutput: {
-    hookEventName: "PreToolUse",
-    permissionDecision: $dec,
-    additionalContext: $ctx
-  }
-}'
+# EMIT via the shared parser, not jq (2026-07-27). Removing jq from the PARSE half alone left this
+# line dying with "jq: command not found" on a jq-less machine — the hook got all the way to a
+# correct verdict and then could not say it. Both halves or neither.
+"$NODE_BIN" "$HOOK_INPUT" emit "$DECISION" "$FULL"
 exit 0
