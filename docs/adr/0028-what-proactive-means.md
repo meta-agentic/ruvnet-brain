@@ -103,30 +103,40 @@ SHA it was measured on), consumed by `scripts/claims-verify.mjs`'s critical-inva
 nightly by `scripts/nightly-wrapper.sh` with `.github/workflows/learning-replay.yml` as the currency
 gate on its freshness.
 
-**Measured 2026-07-27, claude-haiku-4-5, four independent N=3 sets (12 runs, 12 control arms,
-~$0.09 and ~60s per set), each after a real refresh — a new Stable-Spine generation installed and
-the pointer flipped between record and replay:**
+**Measured 2026-07-27, claude-haiku-4-5, FIVE independent N=3 sets (15 runs, 15 control arms,
+~$0.09–0.16 and ~55–70s per set), each after a real refresh — a new Stable-Spine generation
+installed and the pointer flipped between record and replay:**
 
 | | measured |
 |---|---|
-| treated arm carried the token | **12/12** |
-| brain-off control carried the token | **3/12** |
-| lesson delivered before the first tool call (treated) | **12/12** |
-| set verdicts | PASS · INCONCLUSIVE · INCONCLUSIVE · INCONCLUSIVE |
+| treated arm carried the token | **15/15** |
+| brain-off control carried the token | **3/15** |
+| lesson delivered before the first tool call (treated) | **15/15** |
+| set verdicts | PASS · INCONCLUSIVE · INCONCLUSIVE · INCONCLUSIVE · **PASS** |
 
-**The separation is clean and the trap is usually INVALID, and both halves of that sentence
-matter.** The lesson changes the produced artifact every single time it is delivered. But haiku
-reaches `--query` unaided in roughly a quarter of control runs — and under ADR-058's aggregation
-(N=3, any single control success invalidates the set) a per-run contamination rate of ~0.25 leaves
-the trap conclusive only ≈ 42% of nights. **The committed artifact today says INCONCLUSIVE**, and
-`claims-verify.mjs` reports it as a loud SKIP — never a pass.
+**Why five sets, stated so it cannot be mistaken for fishing:** every set after the first was forced
+by an edit to a file in `LOAD_BEARING`, which by this harness's own currency rule invalidates the
+recorded result. Sets 2–4 were shipped and committed exactly as measured, INCONCLUSIVE included —
+the artifact was never re-rolled to improve it. The committed artifact today reflects set 5 because
+set 5 is the one measured on the shipped code, and the row above exists so that PASS is never read
+without the other four.
+
+**The separation is clean AND the trap is invalid a large fraction of the time, and both halves of
+that sentence matter.** The lesson changed the produced artifact on every single run where it was
+delivered — 15/15, with the control at 3/15. But haiku reaches `--query` unaided in roughly a fifth
+of control runs, and under ADR-058's aggregation (N=3, any single control success invalidates the
+set) a per-run contamination rate of ~0.2 leaves the trap conclusive only ≈ 51% of nights. Three of
+five sets landed INCONCLUSIVE, `claims-verify.mjs` reported each as a loud SKIP, and `--check`
+exited 3. **None of those was ever a pass.**
 
 That is the invariant working, not failing: on those nights the trap genuinely measured the model's
 priors rather than the brain's delivery, and saying so is the entire point. The fix is NOT to
 loosen the token to `-q`-only so `--query` stops counting — the control demonstrably reached a
 correct way of passing the query WITHOUT the lesson, and crediting the lesson anyway is exactly the
 self-deception invariant 6 exists to stop. The fix, when it comes, is a token whose control-side
-prior is genuinely low, chosen BEFORE the runs rather than after them.
+prior is genuinely low, chosen BEFORE the runs rather than after them. **Until then, treat a green
+LEARNING-REPLAY night as ~50/50 to be reportable at all — a property of this trap, not of the wire
+it measures.**
 
 **What that does NOT license.** Three things, stated so the number is not read as more than it is:
 

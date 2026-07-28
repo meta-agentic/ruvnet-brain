@@ -1,22 +1,22 @@
 {
   "invariant": "LEARNING-REPLAY",
-  "verdict": "INCONCLUSIVE",
-  "why": "1/3 CONTROL run(s) produced the token — DDD-0013 invariant 6: the trap is INVALID, not passed",
-  "sha": "ffab89f9233fe27767c3d6669a9f5c3aae267e46",
-  "at": "2026-07-28T03:05:45.822Z",
+  "verdict": "PASS",
+  "why": "3/3 runs passed (bar 2/3)",
+  "sha": "5a8411e2ebb5ab045786e6d1e94a96f217c9b350",
+  "at": "2026-07-28T03:11:52.922Z",
   "model": "haiku",
   "modelResolved": "claude-haiku-4-5-20251001",
   "mutant": null,
   "n": 3,
-  "passes": 1,
+  "passes": 3,
   "fails": 0,
-  "unknowns": 1,
-  "controlTokenRuns": 1,
+  "unknowns": 0,
+  "controlTokenRuns": 0,
   "treatedTokenRuns": 3,
-  "rate": 0.3333,
+  "rate": 1,
   "threshold": ">=2/3",
-  "costUsd": 0.0879,
-  "wallSeconds": 63.3,
+  "costUsd": 0.1615,
+  "wallSeconds": 61.7,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
@@ -28,8 +28,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785207881604",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-1785207879257/brain-home/versions/d4-refresh-1785207881604",
+    "generation": "d4-refresh-1785208250694",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-1785208249491/brain-home/versions/d4-refresh-1785208250694",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -37,25 +37,25 @@
   "runs": [
     {
       "i": 1,
-      "verdict": "INCONCLUSIVE",
-      "why": "the CONTROL arm produced the token (flagged) — the model would have got it right without the lesson, so this trap measured nothing",
+      "verdict": "PASS",
+      "why": "treated \"flagged\" vs control \"other\", lesson delivered before the first tool call",
       "treated": {
         "class": "flagged",
         "subcommandCorrect": false,
         "command": "ruflo memory recall -q \"caching strategy\"",
         "lessonIndex": 1,
-        "firstToolIndex": 13,
+        "firstToolIndex": 14,
         "lessonBeforeFirstToolCall": true,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
-        "class": "flagged",
+        "class": "other",
         "subcommandCorrect": false,
-        "command": "ruflo recall --query \"caching strategy\"",
+        "command": "ruflo recall --help",
         "lessonDelivered": false,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run1-control.stream.jsonl"
       }
     },
     {
@@ -67,10 +67,10 @@
         "subcommandCorrect": false,
         "command": "ruflo memory recall -q \"caching strategy\"",
         "lessonIndex": 1,
-        "firstToolIndex": 13,
+        "firstToolIndex": 14,
         "lessonBeforeFirstToolCall": true,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run2-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run2-treated.stream.jsonl"
       },
       "control": {
         "class": "other",
@@ -78,30 +78,30 @@
         "command": "ruflo recall caching",
         "lessonDelivered": false,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run2-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run2-control.stream.jsonl"
       }
     },
     {
       "i": 3,
-      "verdict": "UNKNOWN",
-      "why": "the control arm produced no ruflo invocation at all — there is no comparable artifact to difference against",
+      "verdict": "PASS",
+      "why": "treated \"flagged\" vs control \"other\", lesson delivered before the first tool call",
       "treated": {
         "class": "flagged",
         "subcommandCorrect": false,
-        "command": "ruflo memory recall -q \"caching strategy\"",
+        "command": "ruflo recall -q \"caching strategy\"",
         "lessonIndex": 1,
         "firstToolIndex": 12,
         "lessonBeforeFirstToolCall": true,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run3-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run3-treated.stream.jsonl"
       },
       "control": {
-        "class": "none",
+        "class": "other",
         "subcommandCorrect": false,
-        "command": "which ruflo",
+        "command": "ruflo recall --topic caching",
         "lessonDelivered": false,
         "model": "claude-haiku-4-5-20251001",
-        "transcript": ".ruvnet-brain/learning-replay/run-1785207879257/transcripts/run3-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-1785208249491/transcripts/run3-control.stream.jsonl"
       }
     }
   ]
