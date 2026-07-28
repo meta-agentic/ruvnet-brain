@@ -1,0 +1,72 @@
+{
+  "_what": "ONE REAL end-to-end SignalDebt lifecycle on this repo's own CI: push -> red -> surfaced -> fixed -> green -> closed. The existence proof for the external-signal watch plane (ADR-058 §D3, DDD-0013 Context 2), which until now had never been shown closing a real loop on real data.",
+  "_incident": "2026-07-28, origin/main. .github/workflows/learning-replay.yml carried an UNQUOTED COLON inside a step name. GitHub's workflow parser rejects a bare `: ` inside an unquoted YAML scalar, so the whole file was invalid and every run of that workflow concluded `failure` without executing a step. Two consecutive pushes went red that way. Commit 68b1ce7 quoted the step name; the very next run concluded `success`.",
+
+  "_provenance": {
+    "capturedAt": "2026-07-28T04:12:00Z",
+    "capturedBy": "gh CLI against the live GitHub API — every databaseId, conclusion, headSha and timestamp below is COPIED from that output, none is authored",
+    "command": "gh run list --workflow learning-replay.yml --repo stuinfla/ruvnet-brain --limit 20 --json databaseId,conclusion,status,headSha,createdAt,workflowName,event,url",
+    "perRunDetail": "gh run view <databaseId> --repo stuinfla/ruvnet-brain --json databaseId,conclusion,status,headSha,headBranch,createdAt,updatedAt,workflowName,displayTitle,event,url",
+    "reverify": "The runs are public. Re-run either command above to confirm these three rows still read exactly as recorded here.",
+    "_honesty": "If a future maintainer cannot reproduce these IDs, this fixture is WRONG and must be recaptured — never edited to agree with a test."
+  },
+
+  "repo": "stuinfla/ruvnet-brain",
+  "workflow": "learning-replay.yml",
+
+  "lifecycle": [
+    {
+      "phase": "red-1",
+      "role": "The first push that landed on the broken workflow file. The debt opens here.",
+      "run": {
+        "databaseId": 30325577756,
+        "conclusion": "failure",
+        "status": "completed",
+        "headSha": "2818207c081f3729091459564b945072f4030c8c",
+        "headBranch": "main",
+        "event": "push",
+        "workflowName": "learning-replay",
+        "displayTitle": "fix(gate): the D4 delegation read `.verdict` when the function return…",
+        "createdAt": "2026-07-28T03:18:45Z",
+        "updatedAt": "2026-07-28T03:18:45Z",
+        "url": "https://github.com/stuinfla/ruvnet-brain/actions/runs/30325577756"
+      }
+    },
+    {
+      "phase": "red-2",
+      "role": "A SECOND, different SHA, still red — the workflow file was still invalid 38 minutes later. A distinct SignalDebt with its own key, not a re-nag of the first.",
+      "run": {
+        "databaseId": 30327349291,
+        "conclusion": "failure",
+        "status": "completed",
+        "headSha": "06bf252a959da308f331e1579f7a50d581583dc4",
+        "headBranch": "main",
+        "event": "push",
+        "workflowName": "learning-replay",
+        "displayTitle": "fix(claims): the advertised chunk count was stale by 2 — regenerated …",
+        "createdAt": "2026-07-28T03:57:09Z",
+        "updatedAt": "2026-07-28T03:57:09Z",
+        "url": "https://github.com/stuinfla/ruvnet-brain/actions/runs/30327349291"
+      }
+    },
+    {
+      "phase": "green",
+      "role": "THE FIX. Quoting the step name made the workflow parseable and it ran green 77 seconds after the previous red. This is the transition that must close the outstanding red with exactly one line.",
+      "run": {
+        "databaseId": 30327405302,
+        "conclusion": "success",
+        "status": "completed",
+        "headSha": "68b1ce710087e82df0e8f4d0cc9b5694957df198",
+        "headBranch": "main",
+        "event": "push",
+        "workflowName": "learning-replay",
+        "displayTitle": "fix(ci): an unquoted colon in a step name broke the whole learning-re…",
+        "createdAt": "2026-07-28T03:58:26Z",
+        "updatedAt": "2026-07-28T03:58:45Z",
+        "url": "https://github.com/stuinfla/ruvnet-brain/actions/runs/30327405302"
+      }
+    }
+  ],
+
+  "_ghRunListShape": "scripts/signal-watch.mjs consumes exactly what `gh run list --json status,conclusion,workflowName` returns: a JSON ARRAY whose first element is the newest run for that commit. tests/unit/signal-lifecycle.test.mjs projects each `run` object above onto that shape at test time rather than storing a second hand-written copy, so the fixture cannot drift from its own provenance block."
+}

@@ -1,6 +1,6 @@
 # DDD-0013 — The Verdict context and the External-Signal context
 
-Updated: 2026-07-27 | Version 1.0.0
+Updated: 2026-07-28 | Version 1.0.1
 Created: 2026-07-27
 
 Governs **ADR-058** (the 95 contract). Relates: DDD-0004, DDD-0005, DDD-0008, DDD-0010, ADR-050,
@@ -165,4 +165,5 @@ asserted from a document field.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | No model change. Context 2's SignalDebt transitions are now EXERCISED end to end for the first time, on real data — `tests/unit/signal-lifecycle.test.mjs` + `tests/fixtures/signal-watch/ci-lifecycle-learning-replay.json` | The aggregate said `pending → resolved(conclusion) \| unverifiable(reason)`, **"No other transitions"**, and no test had ever walked one debt across them. It now walks a real one: this repo's `learning-replay.yml` went red on two SHAs (runs `30325577756`, `30327349291`) because of an unquoted colon in a step name, and `68b1ce7` turned it green (run `30327405302`). Invariants 2, 5 and 7 are asserted by name — red surfaces with the actionable minimum, a still-red debt is never re-nagged, the green closes the outstanding red with exactly one line, and every green after that emits zero bytes. Invariant 3 (one writer per state file) is respected by construction: the test appends to `pending.jsonl` as the observer, polls into `ci-status.json` as the poller, and never crosses them |
 | 2026-07-27 | Created | Bounded contexts for ADR-058. Two-sided duel; both designs independently produced a tri-state per-invariant verdict and a vector-minimum release gate, and both refused a shared kernel between the two contexts for the ADR-050 reason. Every invariant above is tied to a dated failure in this repo, not to a principle |
