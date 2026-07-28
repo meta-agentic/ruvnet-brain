@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { searchAll, discoverRepos } from './forge-ask-all.mjs';
 import { guardPassages } from './forge-guard-injection.mjs';
+import { answerFromCards, renderCardHit } from './card-lane.mjs';
 
 // ── THE GONG (brain-alarm.mjs): a total retrieval failure must NEVER read as "(no results)". ──
 // Loaded dynamically + guarded (same pattern as telemetry) so an older bundle without the module
@@ -202,6 +203,26 @@ async function handle(msg) {
         // ran — including in what it costs and in what it counts.
         const offState = brainOffState();
         if (offState) return disabledResult(id, k, offState);
+        // ── FAST LANE — FIRST RESPONDER (card-lane.mjs) ─────────────────────────────────────────
+        // Tried on EVERY query, BEFORE the heavy cross-repo search below. Zero ML: keyword overlap
+        // over kb/capability-cards.md. Measured 2026-07-27: the heavy path (searchAll) costs
+        // ~19.6s warm / ~73s cold, almost entirely transformer load/init — while the single most
+        // common question this brain answers ("does rUv already ship X? which tool do I reach
+        // for?") is fully answered by the capability cards alone. A confident hit here answers in
+        // low-single-digit milliseconds and NEVER touches either ONNX model (searchAll below is
+        // simply never called). A miss falls straight through to the unchanged heavy path — see
+        // card-lane.mjs's header for the honesty contract (silence-or-fallthrough, never a
+        // fabricated hit; naming a repo is not by itself sufficient confidence).
+        const cardHit = answerFromCards(query, KB_DIR);
+        if (cardHit.hit) {
+          const cardBody = renderCardHit(cardHit);
+          meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: cardBody.length, cardLane: true });
+          return ok(id, {
+            content: [{ type: 'text', text: cardBody }],
+            isError: false,
+            structuredContent: { cardLane: { repo: cardHit.repo, path: cardHit.path, bodyOverlap: cardHit.bodyOverlap, coverage: cardHit.coverage, namedRepo: cardHit.namedRepo } },
+          });
+        }
         const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND

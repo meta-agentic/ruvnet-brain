@@ -194,6 +194,35 @@ if (hasConcepts) for (const suf of ['concepts.big.rvf', 'concepts.big.rvf.idmap.
 const hasGists = fs.existsSync(path.join(KB, 'ruv-gists.big.rvf'));
 if (hasGists) for (const suf of ['ruv-gists.big.rvf', 'ruv-gists.big.rvf.idmap.json', 'ruv-gists.big.rvf.embed.json', 'ruv-gists.big.passages.jsonl', 'ruv-gists.big.meta.json', 'ruv-gists.passages.jsonl', 'ruv-gists.meta.json']) cp(suf, OUT);
 
+// capability-cards.md — the FAST LANE's zero-ML answer source (kb/card-lane.mjs, the first
+// responder search_ruvnet consults before the heavy cross-repo search). Ships as its own small
+// text file, NOT only baked into concepts.big.rvf, so the fast lane can answer without opening
+// any vector store or loading either ONNX model. Re-filtered by the SAME PRIVATE_STORES fence
+// applied to every other shipped artifact above — reapplied here rather than trusted from the
+// source file, because a raw-file copy is a NEW shipping path for this exact content
+// (scripts/build-concepts.mjs already fences it into the concepts store; that fence must not be
+// silently regained by a second path that copies the same source file without it).
+{
+  const cardsSrc = path.join(KB, 'capability-cards.md');
+  if (fs.existsSync(cardsSrc)) {
+    const raw = fs.readFileSync(cardsSrc, 'utf8');
+    const parts = raw.split(/^##\s+/m);
+    const kept = [];
+    let filteredAny = false;
+    for (const sec of parts.slice(1)) {
+      const nl = sec.indexOf('\n');
+      const repo = nl < 0 ? '' : sec.slice(0, nl).trim();
+      if (repo && PRIVATE_STORES.has(repo.toLowerCase())) { filteredAny = true; continue; }
+      kept.push(`## ${sec}`);
+    }
+    fs.writeFileSync(path.join(OUT, 'capability-cards.md'), parts[0] + kept.join(''));
+    copied++;
+    if (filteredAny) console.log('[build-bundle] filtered private repo card(s) out of shipped capability-cards.md');
+  } else {
+    console.log('[build-bundle] note: kb/capability-cards.md absent — the fast lane ships with no card source and will honestly fall through on every query');
+  }
+}
+
 // shared runtime tools. forge-guard-injection.mjs is REQUIRED — forge-mcp-all.mjs imports it, so a
 // bundle without it crashes the brain on startup (MODULE_NOT_FOUND). forge-update.mjs is the consumer
 // self-updater (reads SOURCE.json, copied below).
