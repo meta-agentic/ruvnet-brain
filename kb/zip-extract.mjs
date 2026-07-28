@@ -190,19 +190,29 @@ export async function extractZip(zipPath, destDir) {
     let files = 0;
     let bytes = 0;
 
-    for (const e of entries) {
+    const normalizedEntryNames = entries.map((entry) => entry.name.replace(/\\/g, '/'));
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+      const e = entries[entryIndex];
       if (e.flags & 0x1) throw new Error(`entry "${e.name}" is encrypted — this archive cannot be extracted without a password`);
       const target = safeJoin(destDir, e.name);
       if (target === null) throw new Error(`entry "${e.name}" would escape the destination directory — refusing to extract (possible zip-slip)`);
 
       // PowerShell Compress-Archive can encode directories without a trailing slash and marks them
-      // only with the DOS directory attribute. Treating such an entry as a zero-byte file poisons
-      // the next nested entry (`vendor` file, then `vendor/package.json` → ENOTDIR) and also poisons
-      // the PowerShell fallback because -Force cannot replace that file with a directory.
+      // inconsistently across PowerShell/.NET versions: some archives carry the DOS directory bit,
+      // while others carry neither that bit nor a trailing slash. A zero-byte entry that is an
+      // ancestor of another central-directory entry is unambiguously a directory, so use the
+      // archive's own tree as the final signal. Treating it as a file poisons the next nested entry
+      // (`vendor` file, then `vendor/package.json` → ENOTDIR).
       const unixType = (e.externalAttrs >>> 16) & 0xf000;
+      const normalizedName = normalizedEntryNames[entryIndex].replace(/\/+$/, '');
+      const hasDescendant = e.uncompSize === 0 && normalizedEntryNames.some(
+        (candidate, candidateIndex) => candidateIndex !== entryIndex
+          && candidate.startsWith(`${normalizedName}/`),
+      );
       const isDirectory = e.name.endsWith('/')
         || (e.externalAttrs & 0x10) !== 0
-        || ((e.versionMadeBy >> 8) === 3 && unixType === 0x4000);
+        || ((e.versionMadeBy >> 8) === 3 && unixType === 0x4000)
+        || hasDescendant;
       if (isDirectory) {
         try {
           if (fs.existsSync(target) && !fs.lstatSync(target).isDirectory()) {

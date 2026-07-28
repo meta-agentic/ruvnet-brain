@@ -52,7 +52,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KB = path.join(ROOT, 'kb');
 
 // resolve-deps lives in the real kb/ regardless of --dir (fixtures point --dir elsewhere).
-const { loadRvf, loadTransformers, configureModel, chooseModelCache } =
+const { loadRvf, loadTransformers, configureModel, chooseModelCache, closeReadonlyRvf } =
   await import(path.join(KB, 'resolve-deps.mjs')).then((m) => m);
 
 const FULL_BODY_MARK = '(full body):';
@@ -180,7 +180,7 @@ export async function qaStore(dir, store, variant, { roundtrip = true, samples =
       res.fails.push(`R1 round-trip error: ${e.message.split('\n')[0]}`);
     }
   }
-  if (db) await db.close();
+  await closeReadonlyRvf(db);
   return res;
 }
 

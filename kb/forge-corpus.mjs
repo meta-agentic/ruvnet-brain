@@ -100,7 +100,10 @@ export function buildCorpus({
     }
   }
 
-  const rel = (absolute) => path.relative(root, absolute);
+  // Corpus paths are durable identifiers shared across macOS, Linux, and Windows. Persisting the
+  // host separator makes the same file hash to a different chunk ID on Windows and also breaks the
+  // slash-based skip/full-prefix rules below. Canonicalize at the filesystem boundary once.
+  const rel = (absolute) => path.relative(root, absolute).split(path.sep).join('/');
   const read = (absolute) => fs.readFileSync(absolute, 'utf8');
   const tryRead = (absolute) => {
     try {

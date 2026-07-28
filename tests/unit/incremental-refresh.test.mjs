@@ -22,6 +22,7 @@ import {
   stageRvfDelta,
   stableChunkId,
 } from '../../kb/incremental-refresh.mjs';
+import { closeReadonlyRvf } from '../../kb/resolve-deps.mjs';
 
 describe('legacy BGE zero-embed migration', () => {
   it('rekeys sequential IDs while preserving internal RVF labels', () => {
@@ -303,7 +304,7 @@ describe('stageRvfDelta — mutate a staged copy, never the live store', () => {
 
       const staged = await RvfDatabase.openReadonly(stagePath);
       const ids = (await staged.query([0, 0, 1], 3)).map((hit) => hit.id);
-      await staged.close();
+      await closeReadonlyRvf(staged);
       expect(ids).toContain(newC);
       expect(ids).toContain(oldA);
       expect(ids).not.toContain(oldB);

@@ -53,7 +53,10 @@ function installGroundingGeneration(brain, version) {
 function fire(home, id, payload, extraEnv = {}) {
   return spawnSync(process.execPath, [WRAPPER, id], {
     cwd: ROOT,
-    env: { ...process.env, HOME: home, ...extraEnv },
+    // os.homedir() follows USERPROFILE on Windows, so HOME alone does not isolate the wrapper there.
+    // The explicit product override is the portable contract and prevents a CI runner's real
+    // preinstalled generation from leaking onboarding/health output into these fixture assertions.
+    env: { ...process.env, HOME: home, RUVNET_BRAIN_HOME: path.join(home, '.cache', 'ruvnet-brain'), ...extraEnv },
     input: JSON.stringify(payload),
     encoding: 'utf8',
     timeout: 4_000,

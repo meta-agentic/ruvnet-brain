@@ -60,6 +60,24 @@ export function loadRvf() {
 }
 
 /**
+ * Close a database that was opened with RvfDatabase.openReadonly().
+ *
+ * @ruvector/rvf 0.3.4 currently calls saveMappings() even for readonly handles. On Windows that
+ * write fails with FsyncFailed, after the backend has already released the native handle and
+ * cleared its maps. A read operation must not be reported as failed solely because the SDK tried
+ * to persist unchanged mappings during readonly close. Suppress only that exact upstream failure;
+ * every other close error remains fatal.
+ */
+export async function closeReadonlyRvf(db) {
+  if (!db) return;
+  try {
+    await db.close();
+  } catch (error) {
+    if (!/\bFsyncFailed\b/.test(String(error?.message || error))) throw error;
+  }
+}
+
+/**
  * Network guard for the reader path (issue #27, reported by Jan Lafko): in a network-restricted
  * sandbox the cold-cache embedder pull opened 53 connections to an unreachable host and hung
  * FOREVER — no timeout, no error, a killed session. transformers.js fetches model files with the

@@ -129,11 +129,8 @@ export function field(ev, dottedPath) {
 // fields rather than as text to be re-derived — and shrink string handling to the minimum that the
 // remaining raw-Bash surface genuinely requires. This file should get smaller over time, not larger.
 // A new patch here is a signal to move the boundary, not to deepen the parser.
-// Filed as stuinfla/ruvnet-brain#48, which is where this decision lives until an ADR supersedes it.
-// (An earlier draft of this line also claimed an ADR-055 conflict-matrix row; that row was never
-// written — ADR-055 carries F1–F22 and none of them is this. A pointer to a doc that does not say
-// what the pointer claims is the same defect class this file exists to stop: asserting structure
-// that is not actually there.)
+// Tracked as stuinfla/ruvnet-brain#48 and ADR-055 conflict-matrix finding F23. Both deliberately
+// remain open until the structured boundary has executable migration tests, not merely this note.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 //
 // WHAT IS A COMMAND, AND WHAT IS DATA:

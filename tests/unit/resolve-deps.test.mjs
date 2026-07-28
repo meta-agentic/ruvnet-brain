@@ -6,7 +6,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chooseModelCache, configureModel, loadRvf, loadTransformers } from '../../kb/resolve-deps.mjs';
+import {
+  chooseModelCache,
+  closeReadonlyRvf,
+  configureModel,
+  loadRvf,
+  loadTransformers,
+} from '../../kb/resolve-deps.mjs';
 
 const MODEL_SLUG = 'Xenova/all-MiniLM-L6-v2';
 let tmp;
@@ -86,6 +92,20 @@ describe('loadRvf — resolves the RVF SDK from the project', () => {
     } finally {
       if (saved === undefined) delete process.env.RVF_MODULE_PATH; else process.env.RVF_MODULE_PATH = saved;
     }
+  });
+});
+
+describe('closeReadonlyRvf — @ruvector/rvf readonly-close compatibility', () => {
+  it('accepts the SDK 0.3.4 FsyncFailed raised after a readonly handle is released', async () => {
+    await expect(closeReadonlyRvf({
+      close: async () => { throw new Error('Durable write (fsync) failed: RVF error 0x0303: FsyncFailed'); },
+    })).resolves.toBeUndefined();
+  });
+
+  it('never hides a different close failure', async () => {
+    await expect(closeReadonlyRvf({
+      close: async () => { throw new Error('StoreClosed unexpectedly'); },
+    })).rejects.toThrow('StoreClosed unexpectedly');
   });
 });
 

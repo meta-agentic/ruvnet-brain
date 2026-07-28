@@ -534,7 +534,7 @@ duplicates below are identical, so none dedupe): Bash = 6 hooks, warm wall ≈ 3
 (+ security-guidance + vercel layers); Stop = 3 behaviors (P15 + J2 + security asyncRewake);
 SessionStart worst-case is security-guidance's 180s; SessionEnd = 3 concurrent state writers.
 
-## Appendix B — Conflict matrix (Fable F1–F15; GPT-5.6 additions F16–F22; convergence marked)
+## Appendix B — Conflict matrix (Fable F1–F15; GPT-5.6 additions F16–F23; convergence marked)
 
 - **F1** Timeout-unit schism, user layer — **fixed 03:00 tonight; now a regression fixture.**
 - **F2** Untimed blocking route-dispatch (user layer, 600s default) — the ADR-053 duel find
@@ -585,6 +585,13 @@ SessionStart worst-case is security-guidance's 180s; SessionEnd = 3 concurrent s
 - **F22** (GPT, verified in source) `rvf-browser.html` itself offers a CDN alternative — network
   posture cannot be a store-level verdict; policy file required (§3.2). This finding reshaped
   D1.
+- **F23** (issue #48, verified in current source) Interface verification still governs at an
+  unstructured boundary. The issue-#44 `commandNodes()` classifier is materially safer than the
+  four regex generations it replaced, but raw Bash remains a string language whose executable
+  structure must be inferred. Long-term, managed ecosystem commands move to a finite,
+  name-addressable tool surface with an explicit safe default for unknown names; shell parsing
+  shrinks to the unavoidable raw-Bash remainder. Until executable boundary-migration tests land,
+  this remains open and blocks a claim that the architecture has eliminated the defect class.
 
 **Post-authoring status (found 2026-07-27, re-verifying this ADR against later code — commit
 `95cf72e`, "the D9 hook-hardening pass"):** F20 (held-open-stdin hang, confirmed red in ADR-053 §2

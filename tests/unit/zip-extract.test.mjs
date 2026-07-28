@@ -37,9 +37,9 @@ let goodZip;
  * directory entries carry the DOS directory bit but do not necessarily end in "/".
  * The values are hand-built from the ZIP headers so this test does not depend on PowerShell.
  */
-function windowsDirectoryZip() {
+function windowsDirectoryZip({ externalAttrs = 0x10 } = {}) {
   const entries = [
-    { name: 'ruvnet-brain/vendor', data: Buffer.alloc(0), crc: 0, externalAttrs: 0x10 },
+    { name: 'ruvnet-brain/vendor', data: Buffer.alloc(0), crc: 0, externalAttrs },
     { name: 'ruvnet-brain/vendor/package.json', data: Buffer.from('ok\n'), crc: 0xda160e7d, externalAttrs: 0 },
   ];
   const locals = [];
@@ -211,6 +211,17 @@ describe('Windows archive directory metadata', () => {
     const archive = path.join(tmp, 'powershell-directory.zip');
     const dest = path.join(tmp, 'out-powershell-directory');
     fs.writeFileSync(archive, windowsDirectoryZip());
+
+    await extractZip(archive, dest);
+
+    expect(fs.statSync(path.join(dest, 'ruvnet-brain', 'vendor')).isDirectory()).toBe(true);
+    expect(fs.readFileSync(path.join(dest, 'ruvnet-brain', 'vendor', 'package.json'), 'utf8')).toBe('ok\n');
+  });
+
+  it('infers an attribute-less zero-byte ancestor as a directory from its nested entry', async () => {
+    const archive = path.join(tmp, 'powershell-directory-no-attrs.zip');
+    const dest = path.join(tmp, 'out-powershell-directory-no-attrs');
+    fs.writeFileSync(archive, windowsDirectoryZip({ externalAttrs: 0 }));
 
     await extractZip(archive, dest);
 
