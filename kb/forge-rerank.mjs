@@ -74,11 +74,21 @@ async function loadCE() {
 // score one (query, passage) pair → relevance logit (higher = more relevant). Used as the per-pair
 // fallback when a batched call fails (see ceScoreBatch below) — kept isolated so one bad passage in a
 // batch degrades to -Infinity for just that item instead of losing the whole batch's scores.
-async function ceScore(ce, query, passage) {
-  const inputs = ce.tok(query, { text_pair: passage.slice(0, 3000), padding: true, truncation: true });
+async function ceScore(ce, query, passage, maxLength) {
+  const inputs = ce.tok(query, tokOpts(passage.slice(0, 3000), maxLength));
   const out = await ce.model(inputs);
   const logits = out.logits.data;
   return logits.length ? Number(logits[0]) : -Infinity;
+}
+
+// Tokenizer options for ONE (query, passage) pair or batch. `maxLength` is the ONLY knob the
+// cascade adds: leaving it undefined truncates at the model's own 512-token limit, which is the
+// pre-cascade behaviour byte-for-byte. Passing e.g. 192 makes the model read a PREFIX of each
+// passage — the same model, the same head, the same logit scale, just less of the document.
+function tokOpts(textPair, maxLength) {
+  const o = { text_pair: textPair, padding: true, truncation: true };
+  if (maxLength > 0) o.max_length = maxLength;
+  return o;
 }
 
 // Cap how many (query, passage) pairs go into ONE tokenizer+model forward pass. Cross-repo pools can
@@ -90,17 +100,13 @@ const CE_BATCH_SIZE = 16;
 // score a whole batch of (query, passage) pairs in ONE forward pass per chunk — the actual perf win
 // vs. one ONNX invocation per candidate (100+ pooled across repos). Falls back to per-pair scoring
 // (isolating a single bad passage to -Infinity) if a chunk's batched call throws.
-async function ceScoreBatch(ce, query, passages) {
+async function ceScoreBatch(ce, query, passages, maxLength) {
   if (!passages.length) return [];
   const scores = new Array(passages.length);
   for (let start = 0; start < passages.length; start += CE_BATCH_SIZE) {
     const chunk = passages.slice(start, start + CE_BATCH_SIZE);
     try {
-      const inputs = ce.tok(new Array(chunk.length).fill(query), {
-        text_pair: chunk.map((p) => p.slice(0, 3000)),
-        padding: true,
-        truncation: true,
-      });
+      const inputs = ce.tok(new Array(chunk.length).fill(query), tokOpts(chunk.map((p) => p.slice(0, 3000)), maxLength));
       const out = await ce.model(inputs);
       const dims = out.logits.dims;
       const numLabels = dims && dims.length ? dims[dims.length - 1] : 1;
@@ -109,7 +115,7 @@ async function ceScoreBatch(ce, query, passages) {
     } catch (e) {
       if (process.env.CE_DEBUG) console.error('CE batch scoring failed, falling back to per-pair:', e.message);
       for (let i = 0; i < chunk.length; i++) {
-        try { scores[start + i] = await ceScore(ce, query, chunk[i]); }
+        try { scores[start + i] = await ceScore(ce, query, chunk[i], maxLength); }
         catch { scores[start + i] = -Infinity; }
       }
     }
@@ -198,7 +204,7 @@ function shardRanges(total, maxShards) {
   return ranges;
 }
 
-function callWorker(w, query, passages) {
+function callWorker(w, query, passages, maxLength) {
   return new Promise((resolve, reject) => {
     const id = ++_msgId;
     const done = (fn, v) => { w.off('message', onMsg); w.off('error', onErr); w.off('exit', onExit); fn(v); };
@@ -206,18 +212,18 @@ function callWorker(w, query, passages) {
     const onErr = (e) => done(reject, e);
     const onExit = (code) => done(reject, new Error(`CE worker exited (${code}) mid-task`));
     w.on('message', onMsg); w.on('error', onErr); w.on('exit', onExit);
-    w.postMessage({ id, query, passages });
+    w.postMessage({ id, query, passages, maxLength });
   });
 }
 
-async function ceScoreParallel(query, passages) {
+async function ceScoreParallel(query, passages, maxLength) {
   if (!_pool) _pool = spawnPool(ceWorkerCount());
   const ranges = shardRanges(passages.length, _pool.length);
   const used = _pool.slice(0, ranges.length);
   if (used.some((w) => w.__ceDead)) throw new Error('CE worker pool degraded (a worker exited)');
   for (const w of used) w.ref(); // keep the event loop alive while tasks are in flight
   try {
-    const parts = await Promise.all(ranges.map((r, i) => callWorker(used[i], query, passages.slice(r.start, r.end))));
+    const parts = await Promise.all(ranges.map((r, i) => callWorker(used[i], query, passages.slice(r.start, r.end), maxLength)));
     const scores = new Array(passages.length);
     for (let i = 0; i < ranges.length; i++) {
       for (let j = 0; j < parts[i].length; j++) scores[ranges[i].start + j] = parts[i][j];
@@ -231,14 +237,14 @@ async function ceScoreParallel(query, passages) {
 // Dispatch: parallel path for big pools when workers are enabled and healthy, the pre-existing
 // inline ceScoreBatch otherwise. NEVER crashes where the inline path worked — any worker failure
 // (construction throw, worker death, worker-side error) tears the pool down and falls back inline.
-async function ceScoreAuto(ce, query, passages) {
+async function ceScoreAuto(ce, query, passages, maxLength) {
   const eligible = !_poolBroken
     && ceWorkerCount() >= 2
     && passages.length >= ceParallelMin()
     && passages.length > CE_BATCH_SIZE; // a single chunk has nothing to parallelize
   if (eligible) {
     try {
-      const scores = await ceScoreParallel(query, passages);
+      const scores = await ceScoreParallel(query, passages, maxLength);
       _stats.parallelCalls++;
       return scores;
     } catch (e) {
@@ -248,7 +254,7 @@ async function ceScoreAuto(ce, query, passages) {
     }
   }
   _stats.inlineCalls++;
-  return ceScoreBatch(ce, query, passages);
+  return ceScoreBatch(ce, query, passages, maxLength);
 }
 
 // Diagnostics + lifecycle helpers (rerankKb/rerankPairs contracts unchanged). ceWorkerStats lets
@@ -275,6 +281,45 @@ export async function rerankKb({ dir, name, query, k = 6, variant, pool = 20 }) 
   const scored = base.map((d, i) => ({ ...d, ceScore: scores[i] }));
   scored.sort((a, b) => b.ceScore - a.ceScore);
   return scored.slice(0, k);
+}
+
+// ── STAGE 1 OF THE CASCADE ──────────────────────────────────────────────────────────────────────
+// Score every (query, passage) pair with the SAME cross-encoder but reading only the first
+// `maxLength` tokens of each passage. This is the cheap, high-recall selector that decides which
+// pairs are worth a FULL read (rerankPairs, below).
+//
+// WHY A PREFIX AND NOT THE BI-ENCODER DISTANCE. The obvious cheap signal is free — the vector
+// distances are already computed. It was measured and it does not work. On held-out question s-05
+// ("instant rollback without replaying the whole day") the document the full cross-encoder ranks
+// FIRST out of 608 — agenticow/examples/rollback-quarantine.mjs, ce +1.717, a 4.6-logit margin over
+// second place — sits at rank 593 of 608 BY VECTOR DISTANCE. A distance-ordered cascade would have
+// to keep 594 of 608 pairs to retain it, which saves nothing. The bi-encoder is not a weak proxy
+// for the cross-encoder on that question; it is very nearly an inverted one. This is the same
+// failure that made the flat pool cap of ADR-057 drop that answer.
+//
+// A prefix score does not have that problem, because it is the same model and the same head
+// reading a subset of the same input, so it is a genuine approximation of the full score rather
+// than a different opinion. That is the property agentic-qe's rabitq.ts names as the cascade
+// contract: "a cheap ranking proxy to shrink the candidate pool, then run exact ... on the
+// survivors" (agentic-qe/src/shared/utils/rabitq.ts).
+//
+// THE COST CURVE, measured 2026-07-27 on 608 real corpus passages drawn to the production length
+// distribution (62.8% of production passages reach the model's 512-token ceiling; mean 397 tokens):
+//   full (512)      16223 ms   1.000x
+//   max_length=256   7087 ms   0.437x
+//   max_length=192   5195 ms   0.320x     <- the shipped stage-1 budget
+//   max_length=128   3334 ms   0.206x
+//   max_length=64    1589 ms   0.098x
+// Below 192 the ranking starts losing documents the full model ranks in its top 3, so 192 is
+// where the curve stops being free. Cost is superlinear in length (attention is quadratic), which
+// is why cutting the sequence buys more than cutting the pool: half the tokens is well under half
+// the time, while half the pool is exactly half the time.
+export async function cePrefilterScores(query, docs, { maxLength = 192 } = {}) {
+  if (!Array.isArray(docs) || docs.length === 0) return [];
+  let ce;
+  try { ce = await loadCE(); }
+  catch (e) { if (process.env.CE_DEBUG) console.error('CE load failed, no prefilter scores:', e.message); return null; }
+  return ceScoreAuto(ce, query, docs.map((d) => (typeof d === 'string' ? d : d.fullText || d.text || '')), maxLength);
 }
 
 // rerankPairs — cross-repo common-scale scorer. Given an ALREADY-RETRIEVED candidate list (e.g.
@@ -312,13 +357,13 @@ if (IS_CE_WORKER) {
       ort.InferenceSession.create = (buf, opts = {}) => orig(buf, { ...opts, intraOpNumThreads: cap, interOpNumThreads: 1 });
     }
   } catch { /* onnxruntime-node not present — transformers' fallback backend keeps its defaults */ }
-  parentPort.on('message', async ({ id, query, passages }) => {
+  parentPort.on('message', async ({ id, query, passages, maxLength }) => {
     try {
       const hadCE = !!_ce;
       const t0 = Date.now();
       const ce = await loadCE();
       if (!hadCE && process.env.CE_DEBUG) console.error(`[ce-worker] model loaded in ${Date.now() - t0}ms`);
-      parentPort.postMessage({ id, scores: await ceScoreBatch(ce, query, passages) });
+      parentPort.postMessage({ id, scores: await ceScoreBatch(ce, query, passages, maxLength) });
     } catch (e) {
       parentPort.postMessage({ id, error: String((e && e.message) || e) });
     }

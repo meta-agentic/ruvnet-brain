@@ -96,12 +96,16 @@ const STANDALONE = [
   // change the answers?" and its --collect phase costs one full uncapped all-repos query per
   // held-out question (~2-8 min each, ~120 questions). Nothing may schedule that. Run by a human
   // whenever the retrieval pool policy is touched; `npm run cap:report` replays the recorded scores.
-  ['rerank-cap-eval', 'human-run measurement harness — --collect is hours of cross-encoder time; never scheduled'],
+  ['rerank-cap-eval', 'human-run measurement harness — --collect is hours of cross-encoder time; never scheduled. '
+    + 'Collects an uncapped baseline (--cap 0), a real capped run (--cap N, ADR-057) or a real cascade run '
+    + '(--cascade K, ADR-059); all three are collected FOR REAL because batch composition moves scores'],
   // The other half of the same measurement (ADR-057): --collect/--report replays a cap offline,
   // this one runs the real thing warm and paired, because batch composition moves cross-encoder
   // scores and a replayed cap is therefore an approximation of a real one. ~35 minutes of ONNX
   // inference for 24 questions; human-run, never scheduled.
-  ['rerank-cap-warm-ab', 'human-run measurement harness — the real warm A/B behind ADR-057; never scheduled'],
+  ['rerank-cap-warm-ab', 'human-run measurement harness — the real warm paired A/B behind ADR-057 (--cap) and '
+    + 'ADR-059 (--cascade); never scheduled. Both policies share it on purpose: a number is only comparable '
+    + 'to another number taken the same way'],
 
   // ADDED 2026-07-23 (P7 sweep, ADR-037 honesty bar — each reason verified against reality below,
   // not written blind. See PROGRESS.md / the wiring report for the per-item evidence.)
