@@ -46,7 +46,15 @@ function fireRuntime(event, { producers, env = {}, payload } = {}) {
   const r = spawnSync('node', [RUNTIME, event], {
     input: JSON.stringify(payload ?? { prompt: 'a prompt long enough to look like a real goal statement', session_id: 's1' }),
     encoding: 'utf8',
-    timeout: 20000,
+    // TIMEOUT ORDERING (2026-07-27): the OUTER spawn timeout must exceed the INNER producer
+    // deadline, or the outer SIGKILL lands first and the test sees EMPTY stdout — which reads as
+    // 'the runtime chose silence' when it actually means 'we killed it mid-sentence'. It was
+    // inverted here (outer 20000 < inner 30000), and integration-linux went red on a DIFFERENT
+    // test each run — the tell that it was load, not logic. macOS never reproduced it.
+    // Inner is now 8000: a `/bin/bash printf` needs milliseconds, so 8s is enormous headroom even
+    // on a saturated runner, and it lets the runtime's OWN timeout handling fire and report
+    // instead of dying to an external kill. A guard below pins outer > inner.
+    timeout: 30000,
     env: {
       ...process.env,
       // The runtime gives ALL producers ONE 4s global deadline and then FAILS CLOSED — a producer
@@ -64,7 +72,7 @@ function fireRuntime(event, { producers, env = {}, payload } = {}) {
       //
       // A generous deadline restores the meaning of both halves. The 4s default still ships; only
       // the measurement environment changes, which is the one thing that was actually broken.
-      RUVNET_UNPROMPTED_TIMEOUT_MS: '30000',
+      RUVNET_UNPROMPTED_TIMEOUT_MS: '8000',
       ...(producers ? { RUVNET_UNPROMPTED_PRODUCERS: JSON.stringify(producers) } : {}),
       ...env,
     },
@@ -491,5 +499,26 @@ describe('GPT-5.6-Sol REJECT → hardened: channel binding, fail-closed producer
     expect(r.code).toBe(0);
     const env = JSON.parse(r.stdout);   // MUST parse — the old async write truncated a big envelope mid-JSON
     expect(env.hookSpecificOutput.additionalContext.length).toBe(8192);
+  });
+});
+
+// ── ORDERING GUARD (2026-07-27) ──────────────────────────────────────────────────────────────────
+// The defect this pins: the outer spawn timeout was SHORTER than the inner producer deadline, so an
+// external SIGKILL beat the runtime's own timeout handling and the test observed empty stdout. Empty
+// stdout is a MEANINGFUL value in this suite — several cases assert byte-exact silence — so an outer
+// kill can make a broken run look like a correct one. That is a test which cannot fail on broken
+// code, in the one suite whose job is proving silence is deliberate.
+describe('the harness cannot kill the runtime before the runtime can answer', () => {
+  it('every outer spawn timeout exceeds every inner producer deadline, in BOTH advocacy suites', () => {
+    const files = ['tests/integration/unprompted-speech-registry.test.mjs',
+                   'tests/integration/advocacy-dial-levels.test.mjs'];
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      const outer = [...src.matchAll(/timeout:\s*(\d+)/g)].map((m) => Number(m[1]));
+      const inner = [...src.matchAll(/RUVNET_UNPROMPTED_TIMEOUT_MS:\s*'(\d+)'/g)].map((m) => Number(m[1]));
+      expect(outer.length, `${f}: no outer timeout found`).toBeGreaterThan(0);
+      expect(inner.length, `${f}: no inner timeout found`).toBeGreaterThan(0);
+      expect(Math.min(...outer), `${f}: outer must exceed inner`).toBeGreaterThan(Math.max(...inner));
+    }
   });
 });

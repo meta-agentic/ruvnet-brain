@@ -55,10 +55,18 @@ const PROMO = (over = {}) => JSON.stringify({
 function fire(advocacy, candidateLines) {
   const r = spawnSync('node', [RUNTIME, 'UserPromptSubmit'], {
     input: JSON.stringify({ prompt: 'a prompt long enough to look like a real goal statement', session_id: 's1' }),
-    encoding: 'utf8', timeout: 20000,
+    // TIMEOUT ORDERING (2026-07-27): the OUTER spawn timeout must exceed the INNER producer
+    // deadline, or the outer SIGKILL lands first and the test sees EMPTY stdout — which reads as
+    // 'the runtime chose silence' when it actually means 'we killed it mid-sentence'. It was
+    // inverted here (outer 20000 < inner 30000), and integration-linux went red on a DIFFERENT
+    // test each run — the tell that it was load, not logic. macOS never reproduced it.
+    // Inner is now 8000: a `/bin/bash printf` needs milliseconds, so 8s is enormous headroom even
+    // on a saturated runner, and it lets the runtime's OWN timeout handling fire and report
+    // instead of dying to an external kill. A guard below pins outer > inner.
+    encoding: 'utf8', timeout: 30000,
     env: {
       ...process.env,
-      RUVNET_UNPROMPTED_TIMEOUT_MS: '30000',
+      RUVNET_UNPROMPTED_TIMEOUT_MS: '8000',
       RUVNET_UNPROMPTED_PRODUCERS: JSON.stringify([emitter()]),
       RUVNET_SETTINGS_FILE: writeSettings(advocacy),
       RUVNET_ADVOCACY_OUTCOMES: path.join(dir, 'outcomes.jsonl'),   // fresh → never offered → not suppressed
