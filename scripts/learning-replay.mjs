@@ -711,9 +711,37 @@ async function main() {
 
   console.log(`\n  RATE ${agg.passes}/${agg.n} · token carried by treated ${agg.treatedTokenRuns}/${agg.n} vs control ${agg.controlTokenRuns}/${agg.n}`);
   console.log(`  ${INVARIANT}: ${agg.verdict} — ${agg.why}`);
+  if (!keep) pruneArchive(dirs);
   console.log(`  cost $${costUsd.toFixed(4)} · ${(wallMs / 1000).toFixed(1)}s wall · transcripts: ${path.relative(ROOT, dirs.transcripts)}`);
   console.log(`  artifact: ${path.relative(ROOT, outFile)}\n`);
   process.exit(EXIT[agg.verdict] ?? EXIT.UNKNOWN);
+}
+
+/**
+ * RETENTION. "Transcripts archived" must not mean "the disk fills".
+ *
+ * Each run builds a whole fixture world, and the nightly refresh step copies plugin/ into it — ~12MB
+ * per invocation, every night, forever. Measured 2026-07-27 after nine invocations in one session:
+ * 36MB, of which the transcripts were under 300KB. So the EVIDENCE is kept and the SCAFFOLDING is
+ * dropped: everything under the run directory except transcripts/ goes, and only the most recent
+ * KEEP_RUNS run directories survive. `--keep-fixtures` retains everything for debugging.
+ *
+ * Deliberately not "delete the whole run dir": the transcripts ARE the archive ADR-058 asks for, and
+ * an archive nobody kept is the same as a claim nobody checked.
+ */
+const KEEP_RUNS = 14;
+function pruneArchive(dirs) {
+  try {
+    for (const e of fs.readdirSync(dirs.base, { withFileTypes: true })) {
+      if (e.name === 'transcripts') continue;
+      rmrf(path.join(dirs.base, e.name));
+    }
+  } catch { /* nothing to prune */ }
+  try {
+    const root = path.dirname(dirs.base);
+    const runs = fs.readdirSync(root).filter((d) => d.startsWith('run-')).sort();
+    for (const old of runs.slice(0, Math.max(0, runs.length - KEEP_RUNS))) rmrf(path.join(root, old));
+  } catch { /* nothing to prune */ }
 }
 
 /** The machine-readable result. A verdict with no SHA is a verdict about nothing. */
