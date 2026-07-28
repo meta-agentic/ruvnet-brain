@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmHome } from '../helpers/reap-detached.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const GROUND_HOOK = path.join(REPO_ROOT, 'plugin/scripts/ground-ruvnet.sh');
@@ -57,10 +58,16 @@ beforeEach(() => {
   fs.writeFileSync(path.join(cacheDir(), '.last-update-check'), now); // session-start.sh
 });
 
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
-  fs.rmSync(tmpHome, { recursive: true, force: true });
-});
+// TEARDOWN RACES A LEGITIMATE DETACHED WRITER, so it retries (2026-07-27).
+// session-start.sh's spine seed is deliberately detached and outlives the hook — it has to, or the
+// spine is never seeded on a machine whose hook exits in 200ms (plugin/scripts/detach.mjs's header
+// has the full reasoning). It writes active.json, a whole versions/<v>/ payload copy, and a receipt
+// into HOME *after* the hook returned, which is exactly when this deletes HOME: measured
+// `ENOTEMPTY: rmdir .../.cache/ruvnet-brain` on roughly one run in four. The race predates the
+// detach — the seed was always backgrounded — it was just narrow enough to hide.
+// `maxRetries`/`retryDelay` is node's own documented answer for a directory another process is
+// still touching. No assertion changes: this is cleanup, not contract.
+afterEach(() => { rmHome(tmpHome, tmp); });
 
 const hookEnv = (env = {}) => ({
   ...process.env,

@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmHome } from '../helpers/reap-detached.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -55,8 +56,7 @@ beforeEach(() => {
   fs.writeFileSync(path.join(cacheDir, '.last-update-check'), now);
 });
 afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
-  fs.rmSync(tmpHome, { recursive: true, force: true });
+  rmHome(tmpHome, tmp);
 });
 
 function signalDir() { return path.join(tmpHome, '.cache', 'ruvnet-brain', 'external-signals'); }

@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmHome } from '../helpers/reap-detached.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const GROUND_HOOK = path.join(REPO_ROOT, 'plugin/scripts/ground-ruvnet.sh');
@@ -52,8 +53,7 @@ beforeEach(() => {
 
 afterEach(() => {
   try { fs.chmodSync(tmp, 0o755); } catch { /* only matters for the read-only-cwd test */ }
-  fs.rmSync(tmp, { recursive: true, force: true });
-  fs.rmSync(tmpHome, { recursive: true, force: true });
+  rmHome(tmpHome, tmp);
 });
 
 function runGroundHook(prompt, { env = {} } = {}) {

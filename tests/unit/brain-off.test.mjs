@@ -61,6 +61,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmHome } from '../helpers/reap-detached.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -97,7 +98,10 @@ beforeEach(() => {
   settingsFile = path.join(stateDir, 'settings.json');
   sentinel = path.join(stateDir, 'brain-off');
 });
-afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+// Teardown retries: session-start.sh's spine seed is deliberately detached and still writing
+// into HOME when this runs (plugin/scripts/detach.mjs's header explains why it must be). Node's
+// own maxRetries/retryDelay is the documented answer; no assertion changes.
+afterEach(() => { rmHome(tmp); });
 
 const childEnv = (extra = {}) => ({
   ...process.env,
