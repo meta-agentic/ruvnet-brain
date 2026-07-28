@@ -4,7 +4,7 @@ title: The 95 contract — one observable per dimension, one mutant per observab
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-27
-impl: unbuilt
+impl: partial — D1/D2/D3/D5/D6/D7/D8 + the release-gate vector shipped; D4 in flight
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
 supersedes: []
@@ -21,6 +21,7 @@ governs:
   - scripts/claims-verify.mjs
   - kb/card-lane-budget.json
   - scripts/qe/card-lane-gate.mjs
+  - scripts/release-vector.mjs
 ---
 
 # ADR-058: The 95 contract
@@ -281,3 +282,4 @@ correct: **the strong claim was the defect.**
 |---|---|---|
 | 2026-07-27 | Initial draft, two-sided duel | Owner: *"get every single one of these numbers to be 95 or better… I want Fable 5 and GPT-5.6 to pull it together into an ADR and a DDD."* Both designs converged on tri-state per-invariant verdicts, vector-minimum release, and mandatory mutants; GPT's `PASS/FAIL/UNKNOWN` naming adopted. GPT's `gh auth` claim checked and found FALSE. Already-narrowed deductions verified first-hand at `install.mjs:3240-3248` and `verify-interface.sh:173` |
 | 2026-07-27 | D6 built: `kb/card-lane-budget.json` + `scripts/qe/card-lane-gate.mjs`, wired into `scripts/qe/ux-suite.mjs` | Both `governs:`-listed files above; §D6 mutants proven (1,100ms sleep → real `ux-suite.mjs` FAIL, not warn; a silent, undocumented manifest-threshold raise across ≥2 commits shows as `presumed-stale` under `node scripts/doc-currency.mjs --check`, per this document's own drift rule). Measured on this machine: p50 0.0245ms / p95 0.0481ms / max 0.0768ms over 100 in-process firings — well inside the 250ms/1000ms budget in `kb/card-lane-budget.json` |
+| 2026-07-27 | **Seven dimensions landed and the release gate itself was built.** D8 `.github/workflows/stranger-matrix.yml` (5 images, real `npm pack` tarball, virgin HOME) · D7 `tests/regression/interface-gate-corpus.test.mjs` · D5 `tests/mesh/coexistence.test.mjs` · D2 `tests/experience/scenarios.json` + `report.mjs` · D1 `REQUIRE_BRAIN` in `ci.yml` · D3 `scripts/signal-watch.mjs` · D6 as the row above. And item 10, `scripts/release-vector.mjs`, now emits the eight-invariant vector this document specified — first run reads **7 PASS, D4 UNKNOWN, verdict UNKNOWN, exit 1**, which is the design working: seven green cells do not average into a pass. | Every `governs:` path above moved. Verified by re-reading each against this document's §D1–§D8 rather than by date-stamping. **The score is expected to read BELOW 38 on the first Gen-2 run** — the stranger matrix went red on all five images and found a real, weeks-old defect this ADR had already recorded twice without anyone fixing it: `session-start.sh` emits 8,795–10,320 bytes against selfcheck's 4,096 cap, and leaves orphaned descendants after SIGTERM. A gate that goes red on its first run against a defect the docs already knew about is the gate doing its job, not the gate being wrong. |
