@@ -23,6 +23,7 @@
 // on one lucky run.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { recordAnswer, evidenceFile } from '../../kb/forge-evidence.mjs';
 
@@ -120,22 +121,33 @@ describe('defect 2 — no lane may read a lazily-imported writer without awaitin
 
 describe('the writer itself still writes — the guard above is about wiring, not about this', () => {
   it('a card-shaped result carrying real facts appends exactly one ledger line', () => {
-    const f = evidenceFile();
-    const before = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
-    const r = recordAnswer({
-      query: 'receipt-lane test',
-      repos: ['synaptic-mesh'],
-      results: [{
-        repo: 'synaptic-mesh',
-        path: 'capability-cards.md#synaptic-mesh',
-        text: 'npm install synaptic-mesh — runs fully local, no backend required.\nimport { Mesh } from "synaptic-mesh";',
-        score: 0.4,
-      }],
-    });
-    const after = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
-    expect(r?.receiptId, 'a successful answer must produce a receipt id').toBeTruthy();
-    expect(r.sources.length).toBeGreaterThan(0);
-    expect(after, 'exactly one line appended').toBe(before + 1);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grounding-receipt-'));
+    const f = path.join(dir, 'evidence.jsonl');
+    const previous = process.env.RUVNET_EVIDENCE_FILE;
+    process.env.RUVNET_EVIDENCE_FILE = f;
+    const lineCount = () => (fs.existsSync(f)
+      ? fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).length : 0);
+    try {
+      const before = lineCount();
+      const r = recordAnswer({
+        query: 'receipt-lane test',
+        repos: ['synaptic-mesh'],
+        results: [{
+          repo: 'synaptic-mesh',
+          path: 'capability-cards.md#synaptic-mesh',
+          text: 'npm install synaptic-mesh — runs fully local, no backend required.\nimport { Mesh } from "synaptic-mesh";',
+          score: 0.4,
+        }],
+      });
+      const after = lineCount();
+      expect(r?.receiptId, 'a successful answer must produce a receipt id').toBeTruthy();
+      expect(r.sources.length).toBeGreaterThan(0);
+      expect(after, 'exactly one JSONL record appended').toBe(before + 1);
+    } finally {
+      if (previous === undefined) delete process.env.RUVNET_EVIDENCE_FILE;
+      else process.env.RUVNET_EVIDENCE_FILE = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('a factless source mints a receipt but writes NO ledger line — extraction is deterministic', () => {

@@ -80,6 +80,13 @@ const STANDALONE = [
   ['memory-doctor', 'diagnostic CLI'],
   ['token-report', 'diagnostic CLI'],
   ['agentdb-fleet-doctor', 'diagnostic CLI run by hand when a fleet looks wrong'],
+  ['agentdb-context', 'targeted full-fidelity AgentDB recall CLI run by a human (`--grep`, `--key`, '
+    + '`--window`). Its former automatic 36-hour dump was deliberately retired from the machine-wide '
+    + 'SessionStart hook after 61KB of output hid the current checkpoint; SessionStart now prints the '
+    + 'checkpoint plus a compact lesson index and directs topic recall through `ruflo memory search`.'],
+  ['onboarding-console', 'human-started local server reached through the shipped `/rvbc`, `/rvcb`, '
+    + '`/brain-console`, and `/ruvnet-brain:configure` command documents. The command host executes '
+    + 'those instructions; there is intentionally no in-process source caller for a long-running CLI.'],
   ['ingest-meeting', 'one-shot ingestion, run by hand'],
   ['fix-metaharness-memretrieve', 'one-shot historical repair; kept for the record'],
   ['gen-console-images', 'build-time asset generation, run by hand'],

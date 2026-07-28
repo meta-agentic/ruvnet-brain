@@ -164,6 +164,10 @@ describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () 
 });
 
 describe('the CLI is the door that actually gets walked through', () => {
+  // Each invocation runs the real D1-D8 subprocess graph. Under the full parallel unit suite the
+  // first measured 26.1s on this machine, beyond vitest's 20s per-test default, while completing
+  // normally. Keep vitest's outer budget just above the command's own 180s timeout so a real hang
+  // returns a named runner failure instead of being killed by an unrelated test-runner clock.
   it('exits non-zero whenever the verdict is not PASS, and prints the DEGRADED ban list', () => {
     // An earlier reading of a gate in this repo showed "FAIL (hard)" next to exit 0 — it was the
     // harness reading a pipe's status, not the process's. Read the process's status directly.
@@ -175,7 +179,7 @@ describe('the CLI is the door that actually gets walked through', () => {
     if (verdictLine !== 'PASS') {
       for (const banned of RV.BANNED_WHEN_DEGRADED) expect(r.stdout).toContain(banned);
     }
-  });
+  }, 190_000);
 
   it('--json emits a machine-readable verdict carrying the candidate SHA', () => {
     const r = spawnSync('node', ['scripts/release-vector.mjs', '--json'], { cwd: REPO, encoding: 'utf8', timeout: 180_000 });
@@ -184,5 +188,5 @@ describe('the CLI is the door that actually gets walked through', () => {
     expect(j.results).toHaveLength(8);
     expect(j.verdict).toBe(RV.verdictOf(j.results));
     for (const x of j.results) expect(x.sha).toBe(j.sha);   // every result stamped with the same SHA
-  });
+  }, 190_000);
 });

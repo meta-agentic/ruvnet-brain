@@ -36,6 +36,7 @@ describe('configureModel — offline-first embedder wiring', () => {
     const T = { env: {} };
     configureModel(T, tmp);
     expect(T.env.localModelPath).toBe(tmp);
+    expect(T.env.cacheDir).toBe(tmp);
   });
   it('ALLOWS remote download when the model is NOT already cached', () => {
     const T = { env: {} };

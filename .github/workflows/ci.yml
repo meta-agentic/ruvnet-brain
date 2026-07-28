@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Currency and mutation tests inspect historical commits. In a depth-1 clone, HEAD is
+          # treated as every file's root commit and ADR-0013 falsely appears newer than its stamp.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -147,6 +151,9 @@ jobs:
       - name: Keep checkout byte-exact (tests read repo files and compare contents; CRLF would lie)
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+        with:
+          # The full unit suite includes the same git-history-backed currency/fixture assertions.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -283,6 +290,9 @@ jobs:
           const { loadTransformers, configureModel } = await import(resolver);
           const { T, modelCache, via } = await loadTransformers();
           configureModel(T, modelCache);
+          // The pinned installed resolver can predate the source fix: localModelPath controls reads,
+          // while cacheDir controls remote downloads. Force both at the actual CI door.
+          T.env.cacheDir = modelCache;
           const embed = await T.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
           await embed('warm the exact query embedder', { pooling: 'mean', normalize: true });
           if (typeof embed.dispose === 'function') await embed.dispose();

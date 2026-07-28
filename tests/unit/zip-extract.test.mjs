@@ -96,7 +96,19 @@ describe.skipIf(!CAN_ZIP)('a bad archive fails LOUDLY, naming what was wrong', (
   it('corrupt compressed bytes -> throws, naming the archive AND the entry (never a silent empty dir)', async () => {
     const bad = path.join(tmp, 'bad.zip');
     const buf = fs.readFileSync(goodZip);
-    for (let i = 200; i < 260; i++) buf[i] ^= 0xff; // damage payload, leave the central directory intact
+    // Damage the KNOWN deflated entry's payload, not arbitrary archive offsets. The old 200..260
+    // range happened to hit payload bytes on macOS's `zip`, but landed in harmless metadata/padding
+    // on GitHub's Ubuntu image — so the "corrupt" archive was valid and correctly did not throw.
+    const entryName = Buffer.from('ruvnet-brain/forge-mcp-all.mjs');
+    const nameAt = buf.indexOf(entryName);
+    expect(nameAt, 'fixture entry must exist in the local header').toBeGreaterThanOrEqual(30);
+    const headerAt = nameAt - 30;
+    expect(buf.readUInt32LE(headerAt), 'fixture must point at a ZIP local header').toBe(0x04034b50);
+    expect(buf.readUInt16LE(headerAt + 8), 'fixture entry must be deflated').toBe(8);
+    const dataAt = headerAt + 30 + buf.readUInt16LE(headerAt + 26) + buf.readUInt16LE(headerAt + 28);
+    const compSize = buf.readUInt32LE(headerAt + 18);
+    expect(compSize, 'fixture entry must carry compressed payload bytes').toBeGreaterThan(8);
+    for (let i = dataAt + 2; i < dataAt + Math.min(compSize, 18); i++) buf[i] ^= 0xff;
     fs.writeFileSync(bad, buf);
     let err = null;
     try { await extractZip(bad, path.join(tmp, 'out-bad')); } catch (e) { err = e; }

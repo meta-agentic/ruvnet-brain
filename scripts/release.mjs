@@ -62,6 +62,11 @@ runOrDie('version sync', process.execPath, ['scripts/sync-version.mjs', '--check
 // becomes a gate, on the ship path, where this repo's gates run 8/8 against prose's 0/6.
 runOrDie('wired (no orphan modules)', process.execPath, ['scripts/wired-check.mjs', '--check']);
 
+// THE NORTH-STAR VECTOR — a release may not average one broken/unknown invariant into a pass.
+// This is the real ship path, not an npm alias or a test import: every check-only preflight and
+// every publish attempt executes the eight D1-D8 detectors on the candidate SHA.
+runOrDie('release vector (all critical invariants PASS)', process.execPath, ['scripts/release-vector.mjs']);
+
 // A2. Stable Spine restart classifier (ADR-023, red-team finding 18): diff the boot-frozen SHELL
 // (hooks.json, hook-shim, MCP server, .mcp.json, skills/, commands/) against the previous release
 // tag and SAY OUT LOUD whether this release needs a restart. The classification is computed, never

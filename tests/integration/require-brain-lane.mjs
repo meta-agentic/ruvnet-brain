@@ -87,4 +87,9 @@ test('warm-brain explicitly instantiates the embedder the battery requires', () 
     /configureModel\(T,\s*modelCache\)/,
     'the explicit warm must point transformers at the same KB_MODEL_CACHE the battery inspects',
   );
+  assert.match(
+    workflow,
+    /T\.env\.cacheDir\s*=\s*modelCache/,
+    'the pinned installed resolver may set only localModelPath; CI must direct remote downloads to KB_MODEL_CACHE too',
+  );
 });

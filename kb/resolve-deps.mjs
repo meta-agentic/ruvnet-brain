@@ -164,7 +164,11 @@ export function chooseModelCache() {
  */
 export function configureModel(T, modelCache) {
   const haveLocalModel = fs.existsSync(path.join(modelCache, 'Xenova/all-MiniLM-L6-v2'));
+  // localModelPath is where an already-present model is READ. cacheDir is where a remote model is
+  // DOWNLOADED. Setting only the former made a successful warm write into transformers.js's own
+  // node_modules/.cache while the battery inspected KB_MODEL_CACHE and correctly found it cold.
   T.env.localModelPath = modelCache;
+  T.env.cacheDir = modelCache;
   T.env.allowRemoteModels = !haveLocalModel; // fresh machine -> download from HuggingFace
   return { modelCache, haveLocalModel };
 }
