@@ -1,7 +1,15 @@
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
-    include: ['tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs', 'tests/mutation/*.test.mjs'],
+    include: [
+      'tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs', 'tests/mutation/*.test.mjs',
+      // ADR-058 §D7: the interface-gate incident corpus. Listed here AND given its own npm script
+      // (test:regression) AND its own CI step — tests/mutation/*.test.mjs sat in this same include
+      // array for days with no script and no CI step ever invoking it (see the CI comment on the
+      // "Mutation tests" step), so being listed here is necessary but was already PROVEN insufficient
+      // once on this exact file; the corpus is not considered wired until its CI step is green.
+      'tests/regression/*.test.mjs',
+    ],
     // Windows runners spawn processes MUCH slower than macOS/Linux (Git Bash startup dominates), and
     // a large slice of this suite deliberately exercises real shell hooks as subprocesses rather than
     // mocking them. vitest's 5s default is marginal there — hook-battery and token-meter timed out on
