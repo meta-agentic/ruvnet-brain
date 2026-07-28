@@ -36,14 +36,6 @@
     {
       "layer": "plugin",
       "event": "PreToolUse",
-      "matcher": "Task",
-      "handler": "route-dispatch.sh",
-      "reason": "UNANCHORED, known (ADR-055 F3), and the severe one: a BLOCKING cost wall that also matches TaskStop by substring, while missing Agent-named dispatch entirely. Anchoring it alone would make the Agent gap worse, so the matcher and the wall's distribution (item 8) have to move together.",
-      "retiredBy": "ADR-055 build item 8 (distribute the walls, matcher `^(Task|Agent)$`)"
-    },
-    {
-      "layer": "plugin",
-      "event": "PreToolUse",
       "matcher": "Bash",
       "handler": "verify-interface.sh",
       "reason": "UNANCHORED, known (ADR-055 F4/F12): also selects BashOutput. One of three blocking walls on the same event that each re-parse the same payload — the parse-once execution-guard is the real fix, not six anchor characters.",

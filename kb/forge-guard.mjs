@@ -158,8 +158,7 @@ async function main() {
   let variants;
   if (variant) variants = [variant];
   else {
-    variants = [];
-    if (fs.existsSync(path.join(dir, `${name}.rvf`))) variants.push('small');
+    variants = ['small'];
     if (fs.existsSync(path.join(dir, `${name}.big.rvf`))) variants.push('big');
   }
 

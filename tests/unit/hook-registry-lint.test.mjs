@@ -216,6 +216,13 @@ describe('the merged census — six registries, not one', () => {
     expect(hasFailsafe('node x.mjs || true')).toBe(true);
     expect(hasFailsafe('node x.mjs')).toBe(false);
   });
+
+  it('the shipped dispatch wall covers Task and Agent exactly, without catching TaskStop', () => {
+    const dispatch = mesh(repoReg.records).filter((r) => r.layer === 'plugin' && r.handler === 'route-dispatch.sh');
+    expect(dispatch).toHaveLength(1);
+    expect(dispatch[0].matcher).toBe('^(Task|Agent)$');
+    expect(matchedTools(dispatch[0].matcher, 'PreToolUse')).toEqual(['Task', 'Agent']);
+  });
 });
 
 describe('mesh invariants over the layers this repo OWNS (must stay clean — this is the CI gate)', () => {
@@ -447,12 +454,11 @@ describe.skipIf(MACHINE_SKIP_REASON)(
       expect(c.mesh, `merged mesh ${c.mesh} vs the ${plugin} hook-contract.test.mjs can see`).toBeGreaterThan(plugin * 2);
     });
 
-    it.fails('F3 — route-dispatch is registered BLOCKING from two code copies (plugin spine + marketplace clone)', () => {
-      const f = record('F3', [
-        'OWNER ACTION (ADR-055 build item 8): distribute the dispatch wall through the plugin with an',
-        'anchored `^(Task|Agent)$` matcher and delete the ~/.claude/settings.json copy. Until then two',
-        'blocking walls guard one call from two code roots, and only one of them updates with the spine:',
-      ], lintM1(fullReg.records));
+    it('F3 — route-dispatch has exactly one blocking registration in the merged mesh', () => {
+      // F3 is closed and is no longer an expected-red Appendix-B condition. Keep the live
+      // regression here because this merged-machine assertion catches a user-layer duplicate that
+      // the repo-only invariant cannot see, but do not record an empty finding as stale debt.
+      const f = lintM1(fullReg.records);
       expect(f).toEqual([]);
     });
 

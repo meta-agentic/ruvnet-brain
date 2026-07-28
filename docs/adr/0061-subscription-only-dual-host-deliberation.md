@@ -18,7 +18,9 @@ governs:
 
 # ADR-061: Subscription-only dual-host deliberation
 
-**Status**: Proposed — Codex review completed; Claude review is still required before acceptance.
+**Status**: Proposed
+
+Codex review is complete; Claude review is still required before acceptance.
 **Date**: 2026-07-28
 
 ## Context

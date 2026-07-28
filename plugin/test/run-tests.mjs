@@ -243,7 +243,11 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
       const resp = await rpc({ jsonrpc: '2.0', id: 100 + i, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: q.query, k: q.k || 3 } } });
       const text = resp?.result?.content?.[0]?.text || '';
       const m = text.match(/#1\s+repo=(\S+)\s+\(relevance ([^;]+);/);
-      const repo = m?.[1];
+      // The permanent zero-ML card lane is a real grounded answer too. It deliberately does not
+      // impersonate the heavy lane's `#1 ... relevance` format, so the QE oracle must recognize
+      // both response contracts or every fast answer is mislabeled "(no hit)".
+      const fast = text.match(/FAST LANE[^\n]*\brepo="([^"]+)"/);
+      const repo = m?.[1] || fast?.[1];
       const rel = m && m[2] !== 'n/a' ? parseFloat(m[2]) : null;
       const exp = q.expectRepo;
       const repoOk = !exp || (Array.isArray(exp) ? exp.includes(repo) : repo === exp);
