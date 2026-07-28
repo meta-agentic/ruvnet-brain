@@ -2653,7 +2653,10 @@ export async function offerClaudeMd() {
 // sitting under the <50ms budget and blowing past it on every single prompt. `.cjs` forces
 // CommonJS unambiguously regardless of any stray package.json a user's HOME might contain.
 const STATUSLINE_HELPER_NAME = 'ruvnet-brain-statusline.cjs';
-const statuslineHelperPath = () => path.join(telemetryStateDir(), STATUSLINE_HELPER_NAME);
+// Exported (ADR-058 D5): the coexistence suite reconstructs the exact "ours" command string under
+// an overridden HOME, so the settings.json byte-preservation claim is measured against the real
+// path computation rather than a hand-copied guess.
+export const statuslineHelperPath = () => path.join(telemetryStateDir(), STATUSLINE_HELPER_NAME);
 const statuslinePrefPath = () => path.join(telemetryStateDir(), '.statusline-pref');
 const settingsJsonPath = () => path.join(os.homedir(), '.claude', 'settings.json');
 
@@ -2718,7 +2721,10 @@ function backupSettingsJson(settingsPath) {
   return backup;
 }
 
-function writeSettingsStatusLine(detected, command) {
+// Exported (ADR-058 D5): same testability contract as wireCodexHost — the coexistence suite calls
+// this directly against a scratch settings.json rather than reaching for the CLI, so the invariant
+// under test is the real write path, never a reimplementation of it.
+export function writeSettingsStatusLine(detected, command) {
   const backup = detected.exists ? backupSettingsJson(detected.path) : null;
   const next = { ...(detected.json || {}), statusLine: { type: 'command', command } };
   fs.mkdirSync(path.dirname(detected.path), { recursive: true });
@@ -2732,7 +2738,9 @@ function writeSettingsStatusLine(detected, command) {
 // machineFootprint() comment this replaces) so a status line the user has since folded their own
 // script into, or edited by hand, is left completely alone. Same "refuse rather than guess"
 // discipline removeClaudeMdBlock() already applies to CLAUDE.md, and the same backup-first courtesy.
-function removeSettingsStatusLine() {
+// Exported (ADR-058 D5): the uninstall-side mirror, made independently callable for the same
+// reason as writeSettingsStatusLine above.
+export function removeSettingsStatusLine() {
   const settingsPath = settingsJsonPath();
   const detected = detectStatusLine(settingsPath);
   if (!detected.exists || detected.parseError || !detected.hasStatusLine) return 'absent';
