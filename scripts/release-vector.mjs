@@ -91,16 +91,28 @@ export const INVARIANTS = [
     name: 'LEARNING-REPLAY',
     dimension: 'D4',
     incident: 'L4 asserted the hook\'s own prose contained words — it proved the brain SPOKE, never that anything LISTENED',
-    detect() {
-      // Deliberately UNKNOWN rather than FAIL while unbuilt: FAIL would assert we measured a
-      // regression, and we measured nothing. UNKNOWN still sinks the verdict — that is the point.
-      const artifact = 'evals/learning-replay.json';
-      if (!exists(artifact)) return { state: 'UNKNOWN', why: 'counterfactual replay not built; no artifact at ' + artifact };
-      let j;
-      try { j = JSON.parse(read(artifact)); } catch { return { state: 'UNKNOWN', why: 'replay artifact unparseable' }; }
-      if (j.sha !== headSha()) return { state: 'UNKNOWN', why: `replay graded ${String(j.sha).slice(0, 7)}, candidate is ${headSha().slice(0, 7)}` };
-      if (j.result === 'INCONCLUSIVE') return { state: 'UNKNOWN', why: 'control arm also succeeded — the trap measured nothing' };
-      return { state: j.result === 'PASS' ? 'PASS' : 'FAIL', why: `replay rate ${j.passed ?? '?'}/${j.trials ?? '?'}` };
+    async detect() {
+      // DELEGATED to scripts/learning-replay.mjs's own checkArtifact(), not reimplemented here.
+      //
+      // This detector originally required `artifact.sha === HEAD`, which is WRONG in a way worth
+      // recording: committing the artifact necessarily changes HEAD, so a strict-equality rule can
+      // never be satisfied by its own commit and would read UNKNOWN forever. The trap's own rule
+      // binds to SUBSTANCE instead — `git diff <artifactSha>..HEAD -- LOAD_BEARING` — so a verdict
+      // stays valid until code that could actually change the outcome moves. Same ADR-055 design
+      // law as everywhere else: bind to the thing that can invalidate the claim, not to a
+      // convenient token that merely correlates with it. Two gates disagreeing about what "current"
+      // means is how a product ends up with two truths.
+      let mod;
+      try { mod = await import(new URL('./learning-replay.mjs', import.meta.url).href); }
+      catch { return { state: 'UNKNOWN', why: 'counterfactual replay harness absent' }; }
+      let r;
+      try { r = mod.checkArtifact(); } catch (e) { return { state: 'UNKNOWN', why: `replay artifact unreadable: ${e.message}` }; }
+      const v = String(r?.verdict || 'UNKNOWN').toUpperCase();
+      // INCONCLUSIVE never rounds up (DDD-0013 invariant 6): a trap whose CONTROL arm also produced
+      // the token measured nothing about the brain, and measuring nothing is not passing.
+      if (v === 'INCONCLUSIVE' || v === 'SKIP') return { state: 'UNKNOWN', why: r?.why || 'trap invalid — control also succeeded' };
+      if (v !== 'PASS' && v !== 'FAIL') return { state: 'UNKNOWN', why: r?.why || `unrecognised verdict ${v}` };
+      return { state: v, why: r?.why || v };
     },
   },
   {

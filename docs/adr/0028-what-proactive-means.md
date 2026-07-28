@@ -3,7 +3,7 @@ id: ADR-028
 title: What "proactive" means — the maturity ladder, and why a page you must visit is not proactivity
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [strategy, proactivity, north-star, measurement, 4.0]
 supersedes: []
@@ -88,6 +88,71 @@ receives it, exit 0 so it never refuses), and to make blocking a narrow exceptio
 specific rule into. Governed by ADR-035.
 
 **L4 and L5 remain unbuilt.** 4.0 is not claimable until both land with the five test classes green.
+
+### L5 — what is now MEASURED, and what is still unbuilt (2026-07-27, ADR-058 §D4)
+
+The sentence above stayed true for a reason worth naming: L5's falsifiable test — *"a lesson
+validated in project A demonstrably changes behaviour in project B, and survives a nightly
+refresh"* — had no harness, so "unbuilt" and "unmeasured" were indistinguishable. An independent
+grader scored D4 36/100 with the deduction *"L5 is explicitly unbuilt. The required proof is project
+A outcome changing behavior in project B and surviving refresh."*
+
+**That proof now exists as a check, and it is a RATE, not a verdict:** `scripts/learning-replay.mjs`,
+invariant name **`LEARNING-REPLAY`**, result artifact `data/learning-replay-result.json` (stating the
+SHA it was measured on), consumed by `scripts/claims-verify.mjs`'s critical-invariant vector, run
+nightly by `scripts/nightly-wrapper.sh` with `.github/workflows/learning-replay.yml` as the currency
+gate on its freshness.
+
+**Measured 2026-07-27, claude-haiku-4-5, FIVE independent N=3 sets (15 runs, 15 control arms,
+~$0.09–0.16 and ~55–70s per set), each after a real refresh — a new Stable-Spine generation
+installed and the pointer flipped between record and replay:**
+
+| | measured |
+|---|---|
+| treated arm carried the token | **15/15** |
+| brain-off control carried the token | **3/15** |
+| lesson delivered before the first tool call (treated) | **15/15** |
+| set verdicts | PASS · INCONCLUSIVE · INCONCLUSIVE · INCONCLUSIVE · **PASS** |
+
+**Why five sets, stated so it cannot be mistaken for fishing:** every set after the first was forced
+by an edit to a file in `LOAD_BEARING`, which by this harness's own currency rule invalidates the
+recorded result. Sets 2–4 were shipped and committed exactly as measured, INCONCLUSIVE included —
+the artifact was never re-rolled to improve it. The committed artifact today reflects set 5 because
+set 5 is the one measured on the shipped code, and the row above exists so that PASS is never read
+without the other four.
+
+**The separation is clean AND the trap is invalid a large fraction of the time, and both halves of
+that sentence matter.** The lesson changed the produced artifact on every single run where it was
+delivered — 15/15, with the control at 3/15. But haiku reaches `--query` unaided in roughly a fifth
+of control runs, and under ADR-058's aggregation (N=3, any single control success invalidates the
+set) a per-run contamination rate of ~0.2 leaves the trap conclusive only ≈ 51% of nights. Three of
+five sets landed INCONCLUSIVE, `claims-verify.mjs` reported each as a loud SKIP, and `--check`
+exited 3. **None of those was ever a pass.**
+
+That is the invariant working, not failing: on those nights the trap genuinely measured the model's
+priors rather than the brain's delivery, and saying so is the entire point. The fix is NOT to
+loosen the token to `-q`-only so `--query` stops counting — the control demonstrably reached a
+correct way of passing the query WITHOUT the lesson, and crediting the lesson anyway is exactly the
+self-deception invariant 6 exists to stop. The fix, when it comes, is a token whose control-side
+prior is genuinely low, chosen BEFORE the runs rather than after them. **Until then, treat a green
+LEARNING-REPLAY night as ~50/50 to be reportable at all — a property of this trap, not of the wire
+it measures.**
+
+**What that does NOT license.** Three things, stated so the number is not read as more than it is:
+
+1. **It measures DELIVERY and EFFECT, not the promotion bar.** The fixture lesson is stored unscoped,
+   which `lesson-gate.mjs` treats as "applies anywhere, by declaration". ADR-029's win-twice
+   cross-project bar — the thing that decides which lessons EARN the right to travel — is not
+   exercised by this trap. The *Compounding rate* row below (lessons promoted ÷ lessons learned) is
+   therefore still unmeasured; only the *survival across a refresh* half of it is.
+2. **A control that also succeeds INVALIDATES the result** (DDD-0013 invariant 6). The trap reports
+   INCONCLUSIVE, never a pass — and it is structurally unable to do otherwise. Measured live: with
+   the control pre-seeded, the harness reported INCONCLUSIVE and exited 3.
+3. **One trap is one trap.** L5 as a LEVEL means every validated lesson compounds across every
+   project; this proves one lesson did, three times out of three, on one machine, on one model.
+
+So the honest line is: **L5's mechanism is now measurable and measured; L5 as a level is still
+unbuilt.** The difference between those two sentences is the entire reason this section exists.
 
 **4.0 is defined as L3 + L4 + L5 shipped and measured.** Not L2 polished. This is the entire content
 of the version decision, and it is why v3.5.0-dev was deliberately not called 4.0.

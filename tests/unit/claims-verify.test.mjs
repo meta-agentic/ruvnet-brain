@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ledger,
+  invariants,
   verifyBaseline,
   verifyHeldOutStrata,
   verifyCheaperFactor,
@@ -35,13 +36,21 @@ const writeTmp = (name, content) => {
 };
 
 describe('ledger shape', () => {
-  it('has six claims, each with claim/source/verify', () => {
-    expect(ledger.length).toBe(6);
+  it('has six number claims plus one row per registered invariant, each with claim/source/verify', () => {
+    // The bare `6` was correct until ADR-058's critical-invariant VECTOR started riding the same
+    // runner (so a named invariant obeys the identical "a skip is never a silent pass" rule). Kept
+    // as an arithmetic identity rather than bumped to a new magic number: a new invariant must still
+    // be a deliberate edit here, and a claim quietly disappearing still goes red.
+    expect(ledger.length).toBe(6 + invariants.length);
     for (const entry of ledger) {
       expect(typeof entry.claim).toBe('string');
       expect(typeof entry.source).toBe('string');
       expect(typeof entry.verify).toBe('function');
     }
+  });
+
+  it('registers LEARNING-REPLAY in the invariant vector', () => {
+    expect(invariants.map((i) => i.name)).toContain('LEARNING-REPLAY');
   });
 });
 

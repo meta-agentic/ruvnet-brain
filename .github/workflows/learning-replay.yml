@@ -1,0 +1,113 @@
+name: learning-replay
+# ADR-058 §D4 "counterfactual replay · 36 → 95". The deduction this closes, verbatim from the grader:
+# "L5 is explicitly unbuilt. The required proof is project A outcome changing behavior in project B
+# and surviving refresh."
+#
+# THE INVARIANT IS `LEARNING-REPLAY`. The result artifact is data/learning-replay-result.json, it
+# states the SHA it was measured on, and scripts/claims-verify.mjs consumes it as one entry of the
+# critical-invariant VECTOR. UNKNOWN is never PASS — not here, not in the ledger, not anywhere.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# WHY THIS WORKFLOW DOES NOT BURN TOKENS BY DEFAULT, stated plainly rather than quietly.
+#
+# The trap needs a real model session AND the real global `ruflo` binary (it records into a project's
+# `.swarm/memory.db` with `ruflo memory store` and refreshes it with `ruflo memory distill`). A bare
+# GitHub runner has neither. Pretending otherwise would produce a permanently-UNKNOWN nightly, and a
+# check whose only outcome is UNKNOWN is a check nobody reads.
+#
+# So the spend lives where the credentials live — the owner's local nightly, scripts/nightly-wrapper.sh,
+# which runs the full N=3 replay every night and rewrites the artifact. THIS workflow is the CURRENCY
+# GATE on that artifact: every night it asserts the committed result is present, well-formed, PASS,
+# measured on a SHA that is still current for the load-bearing files, and not stale. A local nightly
+# that silently stops running therefore turns this red, which is the failure mode that matters —
+# ADR-055's rule that a job must PROVE it ran, applied to a token-priced measurement.
+#
+# The token-burning path exists here too and is one click away (`workflow_dispatch` with
+# run_replay=true), gated on an ANTHROPIC_API_KEY secret being present. If the secret is absent the
+# job says so and reports UNKNOWN — it never falls back to "green because we skipped it".
+on:
+  schedule:
+    # 02:31 America/New_York = 06:31 UTC. Off-the-hour on purpose (every scheduled workflow on GitHub
+    # piles onto :00), and AFTER the local 03:15 nightly has had a night to rewrite the artifact.
+    - cron: '31 6 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/learning-replay.mjs'
+      - 'scripts/ci/learning-replay-recorder.mjs'
+      - 'data/learning-replay-result.json'
+      - '.github/workflows/learning-replay.yml'
+  workflow_dispatch:
+    inputs:
+      run_replay:
+        description: 'Spend real tokens and re-measure (needs the ANTHROPIC_API_KEY secret)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  currency:
+    name: LEARNING-REPLAY artifact is current and PASS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # checkArtifact() runs `git merge-base --is-ancestor` and `git diff <sha>..HEAD` over the
+          # load-bearing files. A shallow clone cannot answer either, and would silently degrade the
+          # currency check into "the SHA is not an ancestor" — UNKNOWN for the wrong reason.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Falsifiability guards (the trap's own unit tests must be green first)
+        run: |
+          npm i --no-audit --no-fund --loglevel=error
+          npx vitest run tests/unit/learning-replay.test.mjs
+      - name: LEARNING-REPLAY — gate on the recorded result
+        # Exit 0 only on PASS. 1 FAIL, 3 INCONCLUSIVE, 4 UNKNOWN — none of which is a pass.
+        run: npm run learning:replay:check
+
+  replay:
+    name: Re-measure with real tokens (manual, opt-in)
+    if: github.event_name == 'workflow_dispatch' && inputs.run_replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Refuse to fake it when the credentials are absent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "ANTHROPIC_API_KEY is not set in this repository's secrets."
+            echo "The counterfactual replay needs a REAL model session. Without one there is nothing"
+            echo "to measure, and a skipped measurement is UNKNOWN — never a pass. Failing loudly."
+            exit 4
+          fi
+      - name: Install the ruflo global binary (Rule 21: the global one, never npx, never pinned)
+        run: npm i -g ruflo@latest
+      - name: Install the Claude Code CLI
+        run: npm i -g @anthropic-ai/claude-code
+      - name: Run the N=3 counterfactual replay
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RUVNET_CLAUDE_BIN: claude
+          RUVNET_RUFLO_BIN: ruflo
+        run: |
+          npm i --no-audit --no-fund --loglevel=error
+          npm run learning:replay -- --n 3 --model haiku
+      - name: Archive the transcripts (the trap's evidence, not its conclusion)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: learning-replay-transcripts
+          path: |
+            data/learning-replay-result.json
+            .ruvnet-brain/learning-replay/**
+          if-no-files-found: warn
+          retention-days: 30

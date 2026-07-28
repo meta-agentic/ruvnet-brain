@@ -100,6 +100,29 @@ sh scripts/memdb-health.sh .swarm/memory.db >> "$LOG" 2>&1 \
   && echo "===== memdb-health canary: OK =====" >> "$LOG" \
   || echo "===== memdb-health canary: UNHEALTHY (see line above) =====" >> "$LOG"
 
+# ── LEARNING-REPLAY: the D4 counterfactual trap (ADR-058 §D4). THE ONE STANDING TOKEN SPEND, priced
+# in the open: N=3 replay, two model arms per run, ~$0.09 and ~55s measured 2026-07-27 on haiku.
+#
+# It runs HERE, and not on a GitHub runner, because the trap needs credentials a bare runner does not
+# have — a real model session AND the real global `ruflo` binary (it records into a fixture project's
+# .swarm/memory.db and refreshes it with `ruflo memory distill`). .github/workflows/learning-replay.yml
+# is the currency gate on the artifact this writes; if this step stops running, that workflow goes red
+# on staleness rather than everything staying quietly green.
+#
+# Best-effort, same shape as the canaries below: it never blocks the publish. Its exit code is not
+# thrown away though — it is written to the log by name, because 0/1/3/4 are four different facts
+# (PASS / the lesson stopped transferring / the trap was invalidated / it could not be measured) and
+# collapsing them into "failed" is how the seven prior silent-death bugs in this file happened.
+echo "===== LEARNING-REPLAY counterfactual trap — $(date -u +%FT%TZ) =====" >> "$LOG"
+/usr/local/bin/node scripts/learning-replay.mjs --n 3 --model haiku >> "$LOG" 2>&1
+LR_RC=$?
+case "$LR_RC" in
+  0) echo "===== LEARNING-REPLAY: PASS =====" >> "$LOG" ;;
+  1) echo "===== LEARNING-REPLAY: FAIL — a lesson recorded in project A stopped changing behaviour in project B =====" >> "$LOG" ;;
+  3) echo "===== LEARNING-REPLAY: INCONCLUSIVE — the control arm also produced the token; the trap measured nothing tonight =====" >> "$LOG" ;;
+  *) echo "===== LEARNING-REPLAY: UNKNOWN (exit $LR_RC) — never a pass; see the lines above =====" >> "$LOG" ;;
+esac
+
 # ── GONG LAYER 3: brain-health canary (Stuart, 2026-07-12 — the brain must NEVER be dark silently).
 # One real query against the LIVE cache brain every night. forge-ask-all.mjs exits non-zero on a
 # total retrieval failure (all repos erroring) and rings kb/brain-alarm.mjs itself; this adds the
