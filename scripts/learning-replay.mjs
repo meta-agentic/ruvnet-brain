@@ -252,6 +252,11 @@ export function aggregate(runs, { threshold = 2 / 3 } = {}) {
   const fails = perRun.filter((r) => r.verdict === VERDICT.FAIL).length;
   const unknowns = perRun.filter((r) => r.verdict === VERDICT.UNKNOWN).length;
   const controlTokenRuns = perRun.filter((r) => carriesToken(r.controlClass)).length;
+  // The EFFECT SIZE, reported even when the verdict is INCONCLUSIVE. An invalid trap still measured
+  // two real rates, and printing only `passes` throws away the more informative half: "treated 3/3,
+  // control 1/3" says something a bare "2/3 below the bar" does not. This is a report, never an
+  // input to the verdict — the verdict stays governed by invariant 6 above.
+  const treatedTokenRuns = perRun.filter((r) => carriesToken(r.treatedClass)).length;
 
   let verdict, why;
   if (n === 0) {
@@ -275,7 +280,7 @@ export function aggregate(runs, { threshold = 2 / 3 } = {}) {
   if (verdict === VERDICT.PASS && controlTokenRuns > 0) {
     throw new Error('LEARNING-REPLAY: refusing to report PASS while a control arm produced the token (DDD-0013 invariant 6)');
   }
-  return { verdict, why, n, passes, fails, unknowns, controlTokenRuns, rate: n ? +(passes / n).toFixed(4) : 0, runs: perRun };
+  return { verdict, why, n, passes, fails, unknowns, controlTokenRuns, treatedTokenRuns, rate: n ? +(passes / n).toFixed(4) : 0, runs: perRun };
 }
 
 // ── the real CLI's real interface, re-verified at run time ──────────────────────────────────────
@@ -704,7 +709,7 @@ async function main() {
   const wallMs = runs.reduce((s, r) => s + (r.treated.wallMs || 0) + (r.control.wallMs || 0), 0);
   writeArtifact(outFile, agg, { model, mutant, record: rec, refresh, flag, costUsd, wallMs });
 
-  console.log(`\n  RATE ${agg.passes}/${agg.n} · control produced the token in ${agg.controlTokenRuns}/${agg.n}`);
+  console.log(`\n  RATE ${agg.passes}/${agg.n} · token carried by treated ${agg.treatedTokenRuns}/${agg.n} vs control ${agg.controlTokenRuns}/${agg.n}`);
   console.log(`  ${INVARIANT}: ${agg.verdict} — ${agg.why}`);
   console.log(`  cost $${costUsd.toFixed(4)} · ${(wallMs / 1000).toFixed(1)}s wall · transcripts: ${path.relative(ROOT, dirs.transcripts)}`);
   console.log(`  artifact: ${path.relative(ROOT, outFile)}\n`);
@@ -729,6 +734,7 @@ function writeArtifact(file, agg, meta = {}) {
     fails: agg.fails,
     unknowns: agg.unknowns,
     controlTokenRuns: agg.controlTokenRuns,
+    treatedTokenRuns: agg.treatedTokenRuns ?? null,
     rate: agg.rate,
     threshold: '>=2/3',
     costUsd: meta.costUsd != null ? +meta.costUsd.toFixed(4) : null,
