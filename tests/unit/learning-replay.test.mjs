@@ -18,9 +18,24 @@ import path from 'node:path';
 import {
   INVARIANT, VERDICT, EXIT, classifyCommand, subcommandCorrect, carriesToken,
   verdictForRun, aggregate, checkArtifact, LOAD_BEARING,
+  assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
+  PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
 } from '../../scripts/learning-replay.mjs';
+import { spawnSync } from 'node:child_process';
 
-const run = (o) => ({ treatedClass: 'flagged', controlClass: 'positional', lessonBeforeFirstToolCall: true, ...o });
+// A PASSING run under the CURRENT oracle: the token, the real subcommand, a command that executed
+// and retrieved, and the lesson before the first tool call. Every test below removes exactly one.
+const run = (o) => ({
+  treatedClass: 'flagged',
+  controlClass: 'positional',
+  lessonBeforeFirstToolCall: true,
+  treatedSubcommandCorrect: true,
+  treatedExecOk: true,
+  treatedRetrieved: true,
+  treatedExecWhy: 'exit 0; the output carries the seeded memory',
+  controlWorked: false,
+  ...o,
+});
 
 describe('the oracle is a PARSE, not a grep', () => {
   it('scores the token only when the query is actually delivered through -q/--query', () => {
@@ -58,12 +73,185 @@ describe('the oracle is a PARSE, not a grep', () => {
     expect(classifyCommand('/Users/x/.npm-global/bin/ruflo memory search -q "x"')).toBe('flagged');
   });
 
-  it('records subcommand correctness WITHOUT gating on it', () => {
+  it('separates the TOKEN from the SUBCOMMAND — both are real, and both are now gated', () => {
     expect(subcommandCorrect('ruflo memory search -q "x"')).toBe(true);
     expect(subcommandCorrect('ruflo recall -q "x"')).toBe(false);
-    // …and the token is carried in BOTH, which is the whole reason it is reported and not gated.
+    // The token IS carried by the wrong-subcommand form — which is exactly why the token alone was
+    // never sufficient, and why `ruflo recall -q` was certified as a PASS until 2026-07-28.
     expect(carriesToken(classifyCommand('ruflo recall -q "x"'))).toBe(true);
   });
+});
+
+// ── THE EXECUTION GATE ──────────────────────────────────────────────────────────────────────────
+// The grader's finding, verbatim: "PASS depends on token use, control contrast and lesson delivery —
+// not successful command execution or successful retrieval." These tests fail against the oracle as
+// it shipped on 2026-07-27.
+describe('the execution gate — a command that would not work is not learned behavior', () => {
+  it('MUTANT 1 — right flag, WRONG subcommand is FAIL, not PASS', () => {
+    const v = verdictForRun(run({ treatedSubcommandCorrect: false }));
+    expect(v.verdict).toBe(VERDICT.FAIL);
+    expect(v.verdict).not.toBe(VERDICT.PASS);
+    expect(v.why).toMatch(/WRONG SUBCOMMAND/);
+  });
+
+  it('MUTANT 2 — the command executed and exited 0 but RETRIEVED NOTHING is FAIL', () => {
+    // Deliberately exitOk:true. `ruflo memory search -q "<absent>"` really does exit 0, so an
+    // exit-status gate passes this run. Only the retrieval assertion catches it.
+    const v = verdictForRun(run({ treatedExecOk: true, treatedRetrieved: false }));
+    expect(v.verdict).toBe(VERDICT.FAIL);
+    expect(v.why).toMatch(/RETRIEVED NOTHING/);
+  });
+
+  it('a command that never executed at all is FAIL', () => {
+    expect(verdictForRun(run({ treatedExecOk: false })).verdict).toBe(VERDICT.FAIL);
+  });
+
+  it('MUTANT 3 — a CONTROL arm whose command WORKED is INCONCLUSIVE even without the token', () => {
+    const v = verdictForRun(run({ controlClass: 'positional', controlWorked: true }));
+    expect(v.verdict).toBe(VERDICT.INCONCLUSIVE);
+    expect(v.verdict).not.toBe(VERDICT.PASS);
+  });
+
+  it('`subcommandCorrect: false` is STRUCTURALLY unable to coexist with a PASS verdict', () => {
+    // Prove the guard by breaking the thing it guards: hand aggregate() a run set that the
+    // 2026-07-27 oracle scored 3/3 PASS — three treated arms carrying the token on `ruflo recall`.
+    const asShipped = [
+      run({ treatedSubcommandCorrect: false, treatedExecOk: false, treatedRetrieved: false }),
+      run({ treatedSubcommandCorrect: false, treatedExecOk: false, treatedRetrieved: false }),
+      run({ treatedSubcommandCorrect: false, treatedExecOk: false, treatedRetrieved: false }),
+    ];
+    const agg = aggregate(asShipped);
+    expect(agg.passes).toBe(0);
+    expect(agg.verdict).toBe(VERDICT.FAIL);
+    expect(agg.treatedTokenRuns).toBe(3);        // the token WAS carried, and is still reported
+    expect(agg.treatedSubcommandRuns).toBe(0);   // …and nothing worked, which is now impossible to omit
+    expect(agg.treatedRetrievedRuns).toBe(0);
+  });
+
+  it('every PASS aggregate can emit carries working execution evidence — the property the tripwire guards', () => {
+    // aggregate() recomputes every per-run verdict, so a PASS beside red evidence cannot be
+    // constructed from outside; the throw in aggregate() is a tripwire on a future edit of
+    // verdictForRun, and this is the property it protects, checked over what aggregate can emit.
+    const clean = aggregate([run({}), run({}), run({})]);
+    expect(clean.verdict).toBe(VERDICT.PASS);
+    const passes = clean.runs.filter((x) => x.verdict === VERDICT.PASS);
+    expect(passes.length).toBe(3);
+    for (const r of passes) {
+      expect(r.treatedSubcommandCorrect).toBe(true);
+      expect(r.treatedExecOk).toBe(true);
+      expect(r.treatedRetrieved).toBe(true);
+    }
+    // …and one broken arm in the set costs that run its pass, at every mixed ratio.
+    expect(aggregate([run({}), run({}), run({ treatedRetrieved: false })]).passes).toBe(2);
+    expect(aggregate([run({}), run({ treatedRetrieved: false }), run({ treatedRetrieved: false })]).verdict).toBe(VERDICT.FAIL);
+  });
+
+  it('names both new mutants so the gate is reproducible, not just asserted', () => {
+    expect(Object.keys(MUTANTS)).toContain('wrong-subcommand');
+    expect(Object.keys(MUTANTS)).toContain('empty-store');
+    expect(subcommandCorrect(WRONG_SUBCOMMAND_COMMAND)).toBe(false);
+    expect(carriesToken(classifyCommand(WRONG_SUBCOMMAND_COMMAND))).toBe(true);
+  });
+});
+
+describe('assertRetrieved reads RETURNED CONTENT, never exit status', () => {
+  it('accepts the real `memory search` hit, truncation and all', () => {
+    // The real table row, copied from live output on 2026-07-28.
+    const real = '[INFO] Searching: "caching strategy" (semantic)\n'
+      + '| note-caching-stra... |  0.79 | default   | The caching strategy for this pr... |\n'
+      + '[INFO] Found 1 results';
+    expect(assertRetrieved(real).retrieved).toBe(true);
+  });
+
+  it('rejects every failure shape the live CLI actually emits — including the two that EXIT 0', () => {
+    // measured 2026-07-28, real global binary:
+    expect(assertRetrieved('[INFO] Searching: "x" (semantic)\n[WARN] No results found').retrieved).toBe(false); // exit 0
+    expect(assertRetrieved('\nMemory Management Commands\n\nUsage: claude-flow memory <subcommand> [options]\n').retrieved).toBe(false); // exit 0
+    expect(assertRetrieved('[ERROR] Unknown command: recall').retrieved).toBe(false); // exit 1
+    expect(assertRetrieved('[ERROR] Required option missing: --query').retrieved).toBe(false); // exit 1
+  });
+
+  it('treats silence as absence — an empty output is not a retrieval', () => {
+    expect(assertRetrieved('').retrieved).toBe(false);
+    expect(assertRetrieved(undefined).retrieved).toBe(false);
+  });
+
+  it('derives its positive markers from the seed, so the two cannot drift', () => {
+    expect(PROJECT_B_MEMORY_KEY.startsWith(RETRIEVAL_EVIDENCE.positive[0])).toBe(true);
+    expect(PROJECT_B_MEMORY_VALUE.startsWith(RETRIEVAL_EVIDENCE.positive[1])).toBe(true);
+  });
+});
+
+describe('executeProducedCommand bounds its own blast radius', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-exec-')); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('does not execute a command with no ruflo invocation', () => {
+    const e = executeProducedCommand('ls -la', { cwd: dir, base: dir });
+    expect(e.ran).toBe(false);
+    expect(e.retrieved).toBe(false);
+  });
+
+  it('REFUSES a store path outside the fixture world, and refusal is never a retrieval', () => {
+    const e = executeProducedCommand('ruflo memory search -q "x" --path /Users/someone/real/.swarm/memory.db', { cwd: dir, base: dir });
+    expect(e.ran).toBe(false);
+    expect(e.retrieved).toBe(false);
+    expect(e.why).toMatch(/outside the fixture world/);
+  });
+
+  it('REFUSES a mutating subcommand — a write does not prove a read', () => {
+    for (const cmd of ['ruflo memory purge -n default', 'ruflo memory delete -k x', 'ruflo memory store -k x --value y']) {
+      const e = executeProducedCommand(cmd, { cwd: dir, base: dir });
+      expect(e.ran).toBe(false);
+      expect(e.retrieved).toBe(false);
+    }
+  });
+
+  it('does not let shell metacharacters reach a shell — the argv is the parsed one', () => {
+    // If this ever ran through a shell, the `; touch` would land a file. It must not.
+    const canary = path.join(dir, 'CANARY');
+    executeProducedCommand(`ruflo memory search -q "x" ; touch ${JSON.stringify(canary)}`, { cwd: dir, base: dir });
+    expect(fs.existsSync(canary)).toBe(false);
+  });
+});
+
+// The one test in this file that spends real seconds against the real CLI. It is here because the
+// entire execution gate rests on the claim that `ruflo memory recall -q` EXITS 0 — a claim that is
+// worthless if recalled rather than checked, and that silently rots if rUv changes the CLI.
+describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checked every run)', () => {
+  const haveRuflo = fs.existsSync(RUFLO_BIN);
+  const t = haveRuflo ? it : it.skip;
+  let dir, db;
+  beforeEach(() => {
+    if (!haveRuflo) return;
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-live-'));
+    fs.mkdirSync(path.join(dir, '.swarm'), { recursive: true });
+    db = path.join(dir, '.swarm', 'memory.db');
+    spawnSync(RUFLO_BIN, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', db], { encoding: 'utf8', timeout: 120_000, cwd: dir });
+  });
+  afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
+
+  t('the CORRECT command retrieves', () => {
+    const e = executeProducedCommand('ruflo memory search -q "caching strategy"', { cwd: dir, base: dir });
+    expect(e.ran).toBe(true);
+    expect(e.exit).toBe(0);
+    expect(e.retrieved).toBe(true);
+  }, 180_000);
+
+  t('`ruflo memory recall -q` EXITS 0 and retrieves NOTHING — the exact defect exit status cannot see', () => {
+    const e = executeProducedCommand('ruflo memory recall -q "caching strategy"', { cwd: dir, base: dir });
+    expect(e.ran).toBe(true);
+    expect(e.exit).toBe(0);          // <- an exit-status gate passes this
+    expect(e.retrieved).toBe(false); // <- the retrieval assertion does not
+  }, 180_000);
+
+  t('MUTANT 2 live — a perfect command against an EMPTY store exits 0 and retrieves nothing', () => {
+    fs.rmSync(db, { force: true });
+    const e = executeProducedCommand('ruflo memory search -q "caching strategy"', { cwd: dir, base: dir });
+    expect(e.exit).toBe(0);
+    expect(e.retrieved).toBe(false);
+  }, 180_000);
 });
 
 describe('DDD-0013 invariant 6 — a trap whose control also passes is INVALID', () => {

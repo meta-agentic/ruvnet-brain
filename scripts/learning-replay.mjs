@@ -31,7 +31,7 @@
  *   the caching strategy") that shares no content word with the lesson. String-matching the lesson
  *   text cannot be what carries it; only the flag can.
  *
- *   PASS requires all three:
+ *   PASS requires all of:
  *     (a) the lesson is in the transcript BEFORE the first tool call — measured as stream position,
  *         not asserted from the fact that UserPromptSubmit "happens first";
  *     (b) the treated arm's produced command carries the token where the BRAIN-OFF CONTROL's does not;
@@ -40,6 +40,8 @@
  *         pointer flipped, so the replay's hooks execute from a DIFFERENT code root than the record
  *         did, and `ruflo memory distill run` / `ruflo memory backup` (the two commands
  *         scripts/nightly-wrapper.sh actually runs nightly) are run against project A's store.
+ *     (d) the produced command NAMES THE REAL SUBCOMMAND, EXECUTES against the real fixture store,
+ *         EXITS 0, and ACTUALLY RETRIEVES the memory the task asked for. See "THE EXECUTION GATE".
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
  * THE INVALIDATION RULE — DDD-0013 invariant 6, and the whole point of the file.
@@ -56,6 +58,57 @@
  * (DDD-0013 invariant 6 words the invalid outcome as `UNKNOWN`; ADR-058 §D4 words it `INCONCLUSIVE`.
  * This file emits INCONCLUSIVE and treats it as strictly non-PASS, which satisfies both — the two
  * documents disagree on the LABEL, never on the consequence.)
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * THE EXECUTION GATE — added 2026-07-28, closing the largest single deduction in the D4 re-score.
+ *
+ * An independent grader (GPT-5.6-Sol) scored this dimension 44/100 and named the reason exactly:
+ *
+ *     "The recorded replay says PASS 3/3, yet all three treated commands have subcommandCorrect:
+ *      false … PASS depends on token use, control contrast and lesson delivery — not successful
+ *      command execution or successful retrieval. The suite currently certifies unusable learned
+ *      behavior."
+ *
+ * It was right, and the block that used to sit here — arguing the subcommand is REPORTED and not
+ * GATED because the lesson only taught the flag — was a defensible claim about the LESSON and an
+ * indefensible one about the CLAIM. The trap's headline is "learning demonstrated". A command that
+ * would fail if anyone ran it demonstrates nothing, whatever it says about the flag.
+ *
+ * So the verdict now additionally requires, per run, that the treated arm's produced command:
+ *   1. names the real subcommand (`subcommandCorrect`) — no longer observed-only;
+ *   2. EXECUTES against the real fixture store and exits 0;
+ *   3. actually RETRIEVES the memory project B's task asked for — asserted on RETURNED CONTENT.
+ *
+ * Point 3 is not redundant with point 2, and this is the whole reason exit status alone is not
+ * admissible. Measured live on this machine, 2026-07-28, against the real global binary:
+ *
+ *     ruflo memory search -q "caching strategy" --path <db>  → EXIT 0 · "Found 1 results"
+ *     ruflo memory recall -q "caching strategy" --path <db>  → EXIT 0 · prints the `memory` HELP
+ *     ruflo recall        -q "caching strategy"              → EXIT 1 · "Unknown command: recall"
+ *     ruflo memory search    "caching strategy" --path <db>  → EXIT 1 · "Required option missing: --query"
+ *     ruflo memory search -q "<absent phrase>"  --path <db>  → EXIT 0 · "[WARN] No results found"
+ *
+ * `ruflo memory recall -q` — the exact command two of the three certified runs produced — EXITS 0.
+ * An exit-status gate would have passed it. Only an assertion on returned content catches it. (Line
+ * 5 is the same lesson from the other side: a perfectly-formed search that finds nothing also exits
+ * 0. Retrieval is the claim; exit status is not.)
+ *
+ * WHAT THE FIXTURE HAD TO CHANGE FOR THIS TO BE MEASURABLE, stated rather than finessed: project B's
+ * prompt already asserted "earlier in this project someone recorded a note about the caching
+ * strategy", and that was FALSE of the fixture world — project B's store was empty. So the harness
+ * now seeds that note into project B's own `.swarm/memory.db` (`seedProjectBMemory`). This is a fix
+ * to the FIXTURE, not to the lesson: the seeded note says nothing about `-q`, no arm ever sees its
+ * text (the recorder blocks every command before it runs), and the lesson text is untouched. Without
+ * it, even a flawless `ruflo memory search -q "caching strategy"` would retrieve nothing and the new
+ * gate would be measuring a harness bug — Rule 22 check (d).
+ *
+ * SAFETY. The recorder BLOCKS the agent's command on purpose (a fixture agent must not run anything
+ * on a real machine, and must not learn the answer from a CLI's own `--help` mid-run). That is kept.
+ * Execution happens OUT OF BAND, after the arm is over, in the harness — and never through a shell:
+ * `executeProducedCommand()` runs the argv `findInvocations()` already parsed, so pipes, redirects,
+ * substitutions and metacharacters are structurally absent. It also refuses to run a mutating
+ * subcommand, and refuses any `--path`/`--db` pointing outside the fixture world. Both refusals mark
+ * the run NOT-RETRIEVED, so every one of them can only LOWER the rate.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
  * A RATE, NEVER A VERDICT. N runs, PASS at >= 2/3 of them, transcripts archived. One run of a
@@ -82,7 +135,7 @@
  *   node scripts/learning-replay.mjs --n 1           # one run
  *   node scripts/learning-replay.mjs --check         # NO tokens: gate on the committed artifact
  *   node scripts/learning-replay.mjs --dry-run       # NO tokens: build fixtures, prove the wire, UNKNOWN
- *   node scripts/learning-replay.mjs --mutant <name> # delete-lesson | brain-off-treated | seed-control
+ *   node scripts/learning-replay.mjs --mutant <name> # see MUTANTS below
  * Exit: 0 = PASS. 1 = FAIL. 3 = INCONCLUSIVE. 4 = UNKNOWN. (Only 0 is a pass, by construction.)
  */
 
@@ -147,22 +200,29 @@ export const LOAD_BEARING = Object.freeze([
  * consequence is faced rather than tuned away — a control arm that reaches `--query` on its own
  * INVALIDATES the trap, which is invariant 6 doing its job.
  *
- * ── WHY THE SUBCOMMAND IS *REPORTED* AND NOT *GATED* (corrected 2026-07-27 by running it) ────────
- * The first shipped oracle additionally required the invocation to be `ruflo memory search`. The
- * first real N=3 run measured: treated 3/3 carried `-q` and control 0/3 did — a clean, total
- * separation — and the oracle scored it 0/3 FAIL, because the treated arm spelled the subcommand
- * `ruflo recall -q …` / `ruflo memory recall -q …`.
+ * ── THE SUBCOMMAND: REPORTED (2026-07-27) → GATED (2026-07-28) ───────────────────────────────────
+ * The first shipped oracle also required `ruflo memory search`; the first real N=3 measured treated
+ * 3/3 carrying `-q` against control 0/3 — a clean separation — and scored it 0/3 FAIL, because the
+ * treated arm spelled it `ruflo recall -q …` / `ruflo memory recall -q …`. That was read as a
+ * harness error (the lesson taught the flag and said nothing about the subcommand) and the gate was
+ * relaxed to observed-only.
  *
- * The lesson recorded in project A says the QUERY GOES BEHIND `-q`. It says nothing about which
- * subcommand to use. So the old oracle failed the treatment on a dimension the treatment never
- * carried — measuring the model's prior knowledge of rUv's command tree, not whether the lesson
- * travelled. That is exactly the harness error Rule 22 check (d) exists to catch, and the fix is to
- * the HARNESS, never to the lesson: tuning the lesson to name the subcommand after seeing the
- * result would be fitting the fixture to the answer.
+ * That relaxation is REVERSED, and the reversal is the point of the whole change. Both readings of
+ * the 2026-07-27 evidence are true at once, and only one of them is about the CLAIM:
+ *   · about the LESSON — right. The lesson carries the flag; failing the treatment on a subcommand
+ *     it never mentioned measures the model's priors about rUv's command tree.
+ *   · about the CLAIM — wrong, and the grader caught it. The invariant's headline is that LEARNING
+ *     WAS DEMONSTRATED. `ruflo recall -q "x"` exits 1. `ruflo memory recall -q "x"` exits 0 and
+ *     prints the help. Certifying "learning demonstrated" on a command that retrieves nothing is
+ *     the L4 defect rebuilt one file to the left — proof that something was SAID, not that anything
+ *     WORKED.
  *
- * `subcommandCorrect()` still records whether the invocation was the real `memory search`, and it
- * lands in the artifact for every arm — observed, never gating. Reporting a measurement you do not
- * gate on is how the next reader can disagree with this call using the same data.
+ * The honest resolution is to keep the token oracle exactly as narrow as it was (so nothing is
+ * credited to the lesson that the control reaches unaided) and to add the gate the claim actually
+ * needs: the command has to WORK. `subcommandCorrect` is now one of the conditions, and
+ * `aggregate()` carries an assertion making `subcommandCorrect: false` structurally unable to
+ * coexist with a PASS verdict — the same shape as the invariant-6 guard beside it. If the rate
+ * falls as a result, the rate was wrong before; the lesson text is NOT tuned to recover it.
  */
 export function classifyCommand(cmd) {
   const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
@@ -193,7 +253,7 @@ export function classifyCommand(cmd) {
   return sawPositional ? 'positional' : 'other';
 }
 
-/** Observed, never gating: was the invocation the REAL `ruflo memory search`? */
+/** GATING since 2026-07-28: was the invocation the REAL `ruflo memory search`? */
 export function subcommandCorrect(cmd) {
   for (const inv of findInvocations(String(cmd || ''), ['ruflo', 'claude-flow'])) {
     const words = inv.args.filter((a) => a !== '' && !a.startsWith('-'));
@@ -206,12 +266,113 @@ export function subcommandCorrect(cmd) {
 /** The token test, isolated so every caller asks it the same way. */
 export const carriesToken = (cls) => cls === 'flagged';
 
+// ── THE EXECUTION GATE ──────────────────────────────────────────────────────────────────────────
+/**
+ * The note project B's prompt already claimed was there. Seeding it makes the FIXTURE match the
+ * TASK; it does not touch the lesson (nothing here mentions `-q`) and no arm ever reads it, because
+ * the recorder blocks every command the agent produces before it can run.
+ */
+export const PROJECT_B_MEMORY_KEY = 'note-caching-strategy';
+export const PROJECT_B_MEMORY_VALUE =
+  'The caching strategy for this project: responses are memoized in a two-tier LRU, '
+  + 'warm tier in memory and cold tier on disk, invalidated by content hash.';
+
+/**
+ * What "retrieved" looks like on the wire. Every one of these strings was READ OFF the real global
+ * binary's real output on 2026-07-28 (see the EXECUTION GATE note in the header), never guessed.
+ *
+ * The positive markers are chosen to survive the table truncation `ruflo memory search` applies:
+ * the real row prints as `| note-caching-stra... | 0.79 | default | The caching strategy for this
+ * pr... |`, so a 12-char key prefix and a 20-char value prefix are both intact. `memory retrieve -k`
+ * prints both in full.
+ */
+export const RETRIEVAL_EVIDENCE = Object.freeze({
+  positive: Object.freeze([PROJECT_B_MEMORY_KEY.slice(0, 12), PROJECT_B_MEMORY_VALUE.slice(0, 20)]),
+  negative: Object.freeze([
+    /No results found/i,            // memory search -q "<absent>"   → EXIT 0, and retrieved nothing
+    /Unknown command/i,             // ruflo recall -q "x"           → EXIT 1
+    /Required option missing/i,     // memory search "positional"    → EXIT 1
+    /Usage:\s*claude-flow memory/i, // memory recall -q "x"          → EXIT 0, prints the help
+    /\[ERROR\]/,
+  ]),
+});
+
+/**
+ * Did the command RETRIEVE, as opposed to merely exit 0? Asserted on returned content in both
+ * directions: any known failure shape is disqualifying even at exit 0, and silence is not evidence —
+ * the output must NAME the seeded memory.
+ */
+export function assertRetrieved(out) {
+  const s = String(out || '');
+  for (const re of RETRIEVAL_EVIDENCE.negative) {
+    if (re.test(s)) return { retrieved: false, why: `the command's own output matched a known FAILURE shape ${re}` };
+  }
+  const hit = RETRIEVAL_EVIDENCE.positive.find((p) => s.includes(p));
+  if (!hit) return { retrieved: false, why: 'the output names neither the seeded memory key nor its stored text — nothing was retrieved' };
+  return { retrieved: true, why: `the output carries the seeded memory (matched "${hit}")` };
+}
+
+/**
+ * Subcommands that WRITE. Checked only at subcommand position (the first two non-flag words), so a
+ * query that happens to contain one of these words is not mistaken for the verb.
+ */
+const MUTATING_SUBCOMMANDS = new Set(['store', 'delete', 'rm', 'purge', 'cleanup', 'compress', 'import', 'export', 'backup', 'init', 'configure']);
+
+/**
+ * RUN the produced command and report what actually happened.
+ *
+ * Never through a shell: the argv is the one `findInvocations()` already parsed out of the agent's
+ * string, so shell metacharacters cannot survive into execution. Two refusals bound the blast
+ * radius, and both report NOT-RETRIEVED, so neither can ever raise the rate.
+ */
+export function executeProducedCommand(cmd, { cwd, ruflo = RUFLO_BIN, base = null } = {}) {
+  const nope = (why, extra = {}) => ({ ran: false, argv: null, exit: null, exitOk: false, retrieved: false, why, output: '', ...extra });
+  const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
+  if (!invocations.length) return nope('no ruflo invocation in the produced command — there was nothing to execute');
+  const args = invocations[0].args.filter((a) => a !== '');
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--path' || a === '--db' || a.startsWith('--path=') || a.startsWith('--db=')) {
+      const raw = a.includes('=') ? a.slice(a.indexOf('=') + 1) : args[i + 1];
+      const abs = path.resolve(cwd, String(raw || ''));
+      if (!base || !(abs === path.resolve(base) || abs.startsWith(path.resolve(base) + path.sep))) {
+        return nope(`refused to execute: the produced command points its store at ${abs}, outside the fixture world`, { argv: ['ruflo', ...args] });
+      }
+    }
+  }
+  const verbs = args.filter((a) => !a.startsWith('-')).slice(0, 2);
+  const mutating = verbs.find((w) => MUTATING_SUBCOMMANDS.has(w));
+  if (mutating) return nope(`refused to execute a MUTATING ruflo subcommand ("${mutating}") — a retrieval claim is not proven by a write`, { argv: ['ruflo', ...args] });
+
+  const env = { ...process.env };
+  delete env.CLAUDE_FLOW_DB_PATH;
+  delete env.CLAUDE_FLOW_MEMORY_PATH;
+  const r = spawnSync(ruflo, args, { cwd, encoding: 'utf8', timeout: 120_000, env, maxBuffer: 8 * 1024 * 1024 });
+  if (r.error) return nope(`spawn failed: ${r.error.message}`, { argv: ['ruflo', ...args] });
+  const out = `${r.stdout || ''}${r.stderr || ''}`;
+  const { retrieved, why } = assertRetrieved(out);
+  return {
+    ran: true,
+    argv: ['ruflo', ...args],
+    exit: r.status,
+    exitOk: r.status === 0,
+    retrieved,
+    why: `exit ${r.status}; ${why}`,
+    output: out.slice(0, 1200),
+  };
+}
+
 /**
  * ONE run's verdict. Order of the branches IS the invariant: the control is judged BEFORE the
  * treated arm can be credited with anything.
  */
 export function verdictForRun(run) {
-  const { treatedClass, controlClass, lessonBeforeFirstToolCall, error } = run;
+  const {
+    treatedClass, controlClass, lessonBeforeFirstToolCall, error,
+    treatedSubcommandCorrect, treatedExecOk, treatedRetrieved, treatedExecWhy,
+    controlWorked,
+  } = run;
   if (error) return { verdict: VERDICT.UNKNOWN, why: `harness could not measure this run: ${error}` };
   // NO COMPARABLE CONTROL ARTIFACT IS NOT A WIN. If the control never invoked ruflo at all, there is
   // no counterfactual to difference against — the treated arm may have "changed" against nothing.
@@ -222,20 +383,37 @@ export function verdictForRun(run) {
   if (treatedClass === 'none') {
     return { verdict: VERDICT.FAIL, why: 'the treated arm produced no ruflo invocation at all' };
   }
-  // INVARIANT 6, FIRST AND UNCONDITIONALLY.
-  if (carriesToken(controlClass)) {
+  // INVARIANT 6, FIRST AND UNCONDITIONALLY. WIDENED 2026-07-28, never narrowed: carrying the token
+  // still invalidates on its own (that bar is unchanged, so nothing the control reaches unaided can
+  // start being credited to the lesson), and a control whose command WORKED — executed and retrieved
+  // — invalidates too, even by a route the classifier does not call `flagged`. An OR can only make
+  // more runs invalid; it can never turn an invalid run into a pass.
+  if (carriesToken(controlClass) || controlWorked === true) {
     return {
       verdict: VERDICT.INCONCLUSIVE,
-      why: `the CONTROL arm produced the token (${controlClass}) — the model would have got it right without the lesson, so this trap measured nothing`,
+      why: carriesToken(controlClass)
+        ? `the CONTROL arm produced the token (${controlClass}) — the model would have got it right without the lesson, so this trap measured nothing`
+        : `the CONTROL arm's command EXECUTED AND RETRIEVED (class "${controlClass}") — the model would have got it right without the lesson, so this trap measured nothing`,
     };
   }
   if (!carriesToken(treatedClass)) {
     return { verdict: VERDICT.FAIL, why: `treated arm produced "${treatedClass}", not the token` };
   }
+  // ── THE EXECUTION GATE (2026-07-28) ──
+  // Ordered cheapest-to-most-informative so the `why` names the FIRST thing that was wrong.
+  if (treatedSubcommandCorrect !== true) {
+    return { verdict: VERDICT.FAIL, why: 'treated arm carried the token on the WRONG SUBCOMMAND — a right flag on a command that is not `ruflo memory search` is not learned behavior, it is an unusable command' };
+  }
+  if (treatedExecOk !== true) {
+    return { verdict: VERDICT.FAIL, why: `treated arm's produced command did not execute successfully: ${treatedExecWhy || 'not executed'}` };
+  }
+  if (treatedRetrieved !== true) {
+    return { verdict: VERDICT.FAIL, why: `treated arm's command exited 0 but RETRIEVED NOTHING: ${treatedExecWhy || 'no retrieval evidence'}` };
+  }
   if (lessonBeforeFirstToolCall !== true) {
     return { verdict: VERDICT.FAIL, why: 'treated arm carried the token but the lesson was NOT observed in the transcript before the first tool call' };
   }
-  return { verdict: VERDICT.PASS, why: `treated "${treatedClass}" vs control "${controlClass}", lesson delivered before the first tool call` };
+  return { verdict: VERDICT.PASS, why: `treated "${treatedClass}" vs control "${controlClass}"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call` };
 }
 
 /**
@@ -252,18 +430,25 @@ export function aggregate(runs, { threshold = 2 / 3 } = {}) {
   const fails = perRun.filter((r) => r.verdict === VERDICT.FAIL).length;
   const unknowns = perRun.filter((r) => r.verdict === VERDICT.UNKNOWN).length;
   const controlTokenRuns = perRun.filter((r) => carriesToken(r.controlClass)).length;
+  const controlWorkedRuns = perRun.filter((r) => r.controlWorked === true).length;
   // The EFFECT SIZE, reported even when the verdict is INCONCLUSIVE. An invalid trap still measured
   // two real rates, and printing only `passes` throws away the more informative half: "treated 3/3,
   // control 1/3" says something a bare "2/3 below the bar" does not. This is a report, never an
   // input to the verdict — the verdict stays governed by invariant 6 above.
   const treatedTokenRuns = perRun.filter((r) => carriesToken(r.treatedClass)).length;
+  // The execution gate's own rates, reported whatever the verdict. "treated 3/3 carried the token,
+  // 0/3 of them worked" is the sentence the old artifact could not say, and it is the sentence the
+  // grader had to reconstruct by hand from `subcommandCorrect: false`.
+  const treatedSubcommandRuns = perRun.filter((r) => r.treatedSubcommandCorrect === true).length;
+  const treatedExecutedRuns = perRun.filter((r) => r.treatedExecOk === true).length;
+  const treatedRetrievedRuns = perRun.filter((r) => r.treatedRetrieved === true).length;
 
   let verdict, why;
   if (n === 0) {
     verdict = VERDICT.UNKNOWN; why = 'zero runs executed — an empty run is not a pass';
-  } else if (controlTokenRuns > 0) {
+  } else if (controlTokenRuns > 0 || controlWorkedRuns > 0) {
     verdict = VERDICT.INCONCLUSIVE;
-    why = `${controlTokenRuns}/${n} CONTROL run(s) produced the token — DDD-0013 invariant 6: the trap is INVALID, not passed`;
+    why = `${controlTokenRuns}/${n} CONTROL run(s) produced the token and ${controlWorkedRuns}/${n} executed+retrieved — DDD-0013 invariant 6: the trap is INVALID, not passed`;
   } else if (passes / n >= threshold) {
     verdict = VERDICT.PASS;
     why = `${passes}/${n} runs passed (bar ${Math.ceil(threshold * n)}/${n})`;
@@ -275,12 +460,24 @@ export function aggregate(runs, { threshold = 2 / 3 } = {}) {
     why = `${passes}/${n} runs passed — below the ${Math.ceil(threshold * n)}/${n} bar`;
   }
 
-  // The guard that makes invariant 6 code rather than prose. If this ever throws, the branch order
-  // above was edited and the trap is unsafe — that is a stop-the-line event, not a warning.
-  if (verdict === VERDICT.PASS && controlTokenRuns > 0) {
-    throw new Error('LEARNING-REPLAY: refusing to report PASS while a control arm produced the token (DDD-0013 invariant 6)');
+  // The guards that make the two invariants CODE rather than prose. If either throws, the branch
+  // order above was edited and the trap is unsafe — a stop-the-line event, not a warning.
+  if (verdict === VERDICT.PASS && (controlTokenRuns > 0 || controlWorkedRuns > 0)) {
+    throw new Error('LEARNING-REPLAY: refusing to report PASS while a control arm produced the token or a working command (DDD-0013 invariant 6)');
   }
-  return { verdict, why, n, passes, fails, unknowns, controlTokenRuns, treatedTokenRuns, rate: n ? +(passes / n).toFixed(4) : 0, runs: perRun };
+  // The grader's finding, made structurally impossible: `subcommandCorrect: false` can no longer sit
+  // inside a PASS. Same for a command that did not execute or retrieved nothing.
+  const brokenPass = perRun.find((r) => r.verdict === VERDICT.PASS
+    && (r.treatedSubcommandCorrect !== true || r.treatedExecOk !== true || r.treatedRetrieved !== true));
+  if (brokenPass) {
+    throw new Error(`LEARNING-REPLAY: refusing to report a PASS run whose produced command was unusable (run ${brokenPass.i}: subcommandCorrect=${brokenPass.treatedSubcommandCorrect}, exitOk=${brokenPass.treatedExecOk}, retrieved=${brokenPass.treatedRetrieved})`);
+  }
+  return {
+    verdict, why, n, passes, fails, unknowns,
+    controlTokenRuns, controlWorkedRuns, treatedTokenRuns,
+    treatedSubcommandRuns, treatedExecutedRuns, treatedRetrievedRuns,
+    rate: n ? +(passes / n).toFixed(4) : 0, runs: perRun,
+  };
 }
 
 // ── the real CLI's real interface, re-verified at run time ──────────────────────────────────────
@@ -415,6 +612,26 @@ export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
 }
 
 /**
+ * SEED PROJECT B — make the fixture world true.
+ *
+ * REPLAY_PROMPT tells the agent "earlier in this project someone recorded a note about the caching
+ * strategy". Until 2026-07-28 that was false: project B's store was empty, so no command the agent
+ * could possibly write would retrieve anything, and the execution gate would be measuring the
+ * harness. The note is written with the real CLI into project B's own `.swarm/memory.db` — the
+ * default path a bare `ruflo memory search` resolves from cwd.
+ *
+ * It cannot leak the lesson: the note's text says nothing about `-q`, and neither arm ever sees it
+ * (the recorder blocks every produced command before it runs). It is read only by the harness,
+ * out of band, after the arm is finished.
+ */
+export function seedProjectBMemory(dirs, { ruflo = RUFLO_BIN } = {}) {
+  const dbB = path.join(dirs.projectB, '.swarm', 'memory.db');
+  const r = sh(ruflo, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', dbB],
+    { cwd: dirs.projectB });
+  return { db: dbB, key: PROJECT_B_MEMORY_KEY, storeExit: r.status, ok: r.status === 0 && fs.existsSync(dbB) };
+}
+
+/**
  * THE NIGHTLY REFRESH, run BETWEEN record and replay. PASS-condition (c).
  *
  * Two real things, not a sleep:
@@ -485,7 +702,7 @@ function writeSettings(file, { dirs, stateDir, attemptsFile }) {
  * IN ORDER in one array. `lessonIndex` and `firstToolIndex` are positions in that array — condition
  * (a) is a measured ordering, not an argument from how hooks are supposed to work.
  */
-export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, tag }) {
+export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, tag, forceCommand = null }) {
   const attempts = path.join(dirs.transcripts, `${tag}.attempts.jsonl`);
   const settings = writeSettings(path.join(dirs.base, `settings-${tag}.json`), { dirs, stateDir, attemptsFile: attempts });
   const streamFile = path.join(dirs.transcripts, `${tag}.stream.jsonl`);
@@ -528,9 +745,14 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
   // THE ARTIFACT is the FIRST command the agent produced — not its best one. A second attempt after
   // the sandbox refusal is a repair, and crediting a repair would let the agent learn the answer
   // from the harness instead of from the lesson.
-  const firstCommand = attemptLines.length ? attemptLines[0].command : '';
+  // MUTANT force-*: substitute the artifact the oracle sees, leaving the real run untouched. This is
+  // how mutant 1 ("right flag, wrong subcommand") is proven end-to-end without waiting for a
+  // stochastic model to happen to emit it.
+  const firstCommand = forceCommand != null ? forceCommand : (attemptLines.length ? attemptLines[0].command : '');
   const cls = classifyCommand(firstCommand);
   const subOk = subcommandCorrect(firstCommand);
+  // THE EXECUTION GATE. Out of band, after the arm is over, never through a shell — see the header.
+  const exec = executeProducedCommand(firstCommand, { cwd: dirs.projectB, base: dirs.base });
 
   const result = events.find((e) => e.type === 'result');
   return {
@@ -538,7 +760,9 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
     tag,
     class: cls,
     subcommandCorrect: subOk,
+    exec,
     command: firstCommand,
+    forcedCommand: forceCommand != null,
     attempts: attemptLines.map((a) => a.command),
     lessonDelivered,
     lessonIndex,
@@ -559,10 +783,16 @@ const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 
+/** The command mutant `wrong-subcommand` substitutes: the grader's exact defect, right flag on a wrong verb. */
+export const WRONG_SUBCOMMAND_COMMAND = 'ruflo recall -q "caching strategy"';
+
 export const MUTANTS = Object.freeze({
   'delete-lesson': 'delete the recorded lesson from the fixture store after the refresh — the treated arm must go red',
   'brain-off-treated': 'run the TREATED arm with the brain disabled — it must produce the control artifact and go red',
   'seed-control': "pre-seed the CONTROL arm's context with the lesson — the harness must report INCONCLUSIVE, never PASS",
+  // ── the execution gate's own mutants (2026-07-28) ──
+  'wrong-subcommand': `substitute the treated arm's artifact with \`${WRONG_SUBCOMMAND_COMMAND}\` — right flag, wrong verb: the exact command the grader found being certified. Must go red.`,
+  'empty-store': "empty project B's seeded memory before the gate runs — a perfect command that retrieves nothing must go red on RETRIEVAL, not pass on exit status",
 });
 
 function headSha() {
@@ -638,6 +868,8 @@ async function main() {
   const dirs = buildFixtures(base);
   const rec = recordInProjectA(dirs);
   console.log(`  record  (fixture-project-A): memory row ${rec.storeExit === 0 ? 'stored' : `store exit ${rec.storeExit}`}, lesson ${rec.ok ? 'derived + ratified' : 'NOT recorded'}`);
+  const seed = seedProjectBMemory(dirs);
+  console.log(`  seed    (fixture-project-B): note "${seed.key}" ${seed.ok ? 'stored — the task\'s premise is now TRUE of the fixture' : `NOT stored (exit ${seed.storeExit})`}`);
   const refresh = nightlyRefresh(dirs);
   console.log(`  refresh (nightly):           spine generation ${refresh.generation} installed + active; distill exit ${refresh.distillExit}, backup exit ${refresh.backupExit}; lesson survived: ${refresh.lessonSurvived}`);
 
@@ -645,6 +877,14 @@ async function main() {
     saveLessons([], dirs.lessons);
     try { fs.rmSync(path.join(dirs.projectA, '.swarm', 'memory.db'), { force: true }); } catch { /* already gone */ }
     console.log(`  MUTANT delete-lesson: lesson store emptied (${loadLessons(dirs.lessons).length} lessons) and project A's memory.db removed`);
+  }
+
+  if (mutant === 'empty-store') {
+    // Remove the seeded note. Every arm still runs for real; the produced command still executes for
+    // real; it simply has nothing to find. The gate must key on RETRIEVAL, not on exit status —
+    // `ruflo memory search -q "<absent>"` exits 0.
+    try { fs.rmSync(path.join(dirs.projectB, '.swarm', 'memory.db'), { force: true }); } catch { /* already gone */ }
+    console.log(`  MUTANT empty-store: project B's seeded memory removed (exists: ${fs.existsSync(path.join(dirs.projectB, '.swarm', 'memory.db'))})`);
   }
 
   if (dryRun) {
@@ -670,7 +910,7 @@ async function main() {
     writeArtifact(outFile, {
       verdict: VERDICT.UNKNOWN, why: `--dry-run: no model was called, so nothing was measured (wire probe: treated ${onBytes}B, control ${offBytes}B)`,
       n: 0, passes: 0, fails: 0, unknowns: 0, controlTokenRuns: 0, rate: 0, runs: [],
-    }, { model, mutant, record: rec, refresh });
+    }, { model, mutant, record: rec, seed, refresh });
     console.log(`  → UNKNOWN (a dry run is never a pass). artifact: ${path.relative(ROOT, outFile)}`);
     if (!keep) rmrf(base);
     process.exit(EXIT.UNKNOWN);
@@ -679,7 +919,10 @@ async function main() {
   const runs = [];
   for (let i = 1; i <= n; i++) {
     const treatedState = mutant === 'brain-off-treated' ? dirs.stateOff : dirs.stateOn;
-    const treated = runArm({ dirs, arm: 'treated', stateDir: treatedState, model, tag: `run${i}-treated` });
+    const treated = runArm({
+      dirs, arm: 'treated', stateDir: treatedState, model, tag: `run${i}-treated`,
+      forceCommand: mutant === 'wrong-subcommand' ? WRONG_SUBCOMMAND_COMMAND : null,
+    });
     const control = runArm({
       dirs, arm: 'control', stateDir: dirs.stateOff, model, tag: `run${i}-control`,
       // MUTANT seed-control: the control is handed the lesson through a channel the brain does not
@@ -692,6 +935,12 @@ async function main() {
       controlClass: control.class,
       lessonBeforeFirstToolCall: treated.lessonBeforeFirstToolCall,
       controlLessonDelivered: control.lessonDelivered,
+      // ── the execution gate's inputs, flattened so verdictForRun stays a pure function ──
+      treatedSubcommandCorrect: treated.subcommandCorrect,
+      treatedExecOk: treated.exec?.exitOk === true,
+      treatedRetrieved: treated.exec?.retrieved === true,
+      treatedExecWhy: treated.exec?.why || null,
+      controlWorked: control.exec?.exitOk === true && control.exec?.retrieved === true,
       treated,
       control,
       error: treated.spawnError || control.spawnError || null,
@@ -699,6 +948,8 @@ async function main() {
     const v = verdictForRun(run);
     console.log(`  run ${i}: treated="${treated.class}" (${treated.command || '—'})`);
     console.log(`         control="${control.class}" (${control.command || '—'})`);
+    console.log(`         EXECUTED treated: subcommand=${treated.subcommandCorrect} exit=${treated.exec?.exit ?? '—'} retrieved=${treated.exec?.retrieved} · ${treated.exec?.why || 'not run'}`);
+    console.log(`         EXECUTED control: exit=${control.exec?.exit ?? '—'} retrieved=${control.exec?.retrieved}`);
     console.log(`         lesson before first tool call: ${treated.lessonBeforeFirstToolCall} (lesson@${treated.lessonIndex}, tool@${treated.firstToolIndex}) · control got ${control.lessonDelivered ? 'THE LESSON (leak!)' : 'zero brain bytes'}`);
     console.log(`         → ${v.verdict}: ${v.why}`);
     runs.push(run);
@@ -707,9 +958,10 @@ async function main() {
   const agg = aggregate(runs);
   const costUsd = runs.reduce((s, r) => s + (r.treated.costUsd || 0) + (r.control.costUsd || 0), 0);
   const wallMs = runs.reduce((s, r) => s + (r.treated.wallMs || 0) + (r.control.wallMs || 0), 0);
-  writeArtifact(outFile, agg, { model, mutant, record: rec, refresh, flag, costUsd, wallMs });
+  writeArtifact(outFile, agg, { model, mutant, record: rec, seed, refresh, flag, costUsd, wallMs });
 
   console.log(`\n  RATE ${agg.passes}/${agg.n} · token carried by treated ${agg.treatedTokenRuns}/${agg.n} vs control ${agg.controlTokenRuns}/${agg.n}`);
+  console.log(`  EXECUTION GATE: treated named the real subcommand ${agg.treatedSubcommandRuns}/${agg.n} · exited 0 ${agg.treatedExecutedRuns}/${agg.n} · RETRIEVED ${agg.treatedRetrievedRuns}/${agg.n} · control worked ${agg.controlWorkedRuns}/${agg.n}`);
   console.log(`  ${INVARIANT}: ${agg.verdict} — ${agg.why}`);
   if (!keep) pruneArchive(dirs);
   console.log(`  cost $${costUsd.toFixed(4)} · ${(wallMs / 1000).toFixed(1)}s wall · transcripts: ${path.relative(ROOT, dirs.transcripts)}`);
@@ -744,6 +996,16 @@ function pruneArchive(dirs) {
   } catch { /* nothing to prune */ }
 }
 
+/**
+ * The execution record as it lands in the COMMITTED artifact. The first 400 bytes of the command's
+ * real output are kept verbatim: a retrieval claim whose evidence nobody can read is an assertion,
+ * and the whole deduction being closed here was a number nobody could check against its own arm.
+ */
+function execRecord(e) {
+  if (!e) return null;
+  return { ran: e.ran, argv: e.argv, exit: e.exit, exitOk: e.exitOk, retrieved: e.retrieved, why: e.why, output: String(e.output || '').slice(0, 400) };
+}
+
 /** The machine-readable result. A verdict with no SHA is a verdict about nothing. */
 function writeArtifact(file, agg, meta = {}) {
   const artifact = {
@@ -762,20 +1024,30 @@ function writeArtifact(file, agg, meta = {}) {
     fails: agg.fails,
     unknowns: agg.unknowns,
     controlTokenRuns: agg.controlTokenRuns,
+    controlWorkedRuns: agg.controlWorkedRuns ?? null,
     treatedTokenRuns: agg.treatedTokenRuns ?? null,
+    // THE EXECUTION GATE's own rates. The old artifact could report `treatedTokenRuns: 3` beside
+    // three `subcommandCorrect: false` and call it PASS; these three numbers are what makes that
+    // combination impossible to state without also stating that nothing worked.
+    executionGate: {
+      treatedSubcommandRuns: agg.treatedSubcommandRuns ?? null,
+      treatedExecutedRuns: agg.treatedExecutedRuns ?? null,
+      treatedRetrievedRuns: agg.treatedRetrievedRuns ?? null,
+    },
     rate: agg.rate,
     threshold: '>=2/3',
     costUsd: meta.costUsd != null ? +meta.costUsd.toFixed(4) : null,
     wallSeconds: meta.wallMs != null ? +(meta.wallMs / 1000).toFixed(1) : null,
     premise: meta.flag ? { verified: meta.flag.ok, evidence: meta.flag.evidence } : null,
     record: meta.record ? { key: meta.record.key, storeExit: meta.record.storeExit, readBackExit: meta.record.readBackExit, ok: meta.record.ok } : null,
+    seed: meta.seed ? { key: meta.seed.key, storeExit: meta.seed.storeExit, ok: meta.seed.ok } : null,
     refresh: meta.refresh || null,
     runs: (agg.runs || []).map((r) => ({
       i: r.i,
       verdict: r.verdict,
       why: r.why,
-      treated: { class: r.treated?.class, subcommandCorrect: r.treated?.subcommandCorrect, command: r.treated?.command, lessonIndex: r.treated?.lessonIndex, firstToolIndex: r.treated?.firstToolIndex, lessonBeforeFirstToolCall: r.treated?.lessonBeforeFirstToolCall, model: r.treated?.modelUsed, transcript: r.treated?.transcript },
-      control: { class: r.control?.class, subcommandCorrect: r.control?.subcommandCorrect, command: r.control?.command, lessonDelivered: r.control?.lessonDelivered, model: r.control?.modelUsed, transcript: r.control?.transcript },
+      treated: { class: r.treated?.class, subcommandCorrect: r.treated?.subcommandCorrect, command: r.treated?.command, forcedCommand: r.treated?.forcedCommand || false, exec: execRecord(r.treated?.exec), lessonIndex: r.treated?.lessonIndex, firstToolIndex: r.treated?.firstToolIndex, lessonBeforeFirstToolCall: r.treated?.lessonBeforeFirstToolCall, model: r.treated?.modelUsed, transcript: r.treated?.transcript },
+      control: { class: r.control?.class, subcommandCorrect: r.control?.subcommandCorrect, command: r.control?.command, exec: execRecord(r.control?.exec), lessonDelivered: r.control?.lessonDelivered, model: r.control?.modelUsed, transcript: r.control?.transcript },
     })),
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });
