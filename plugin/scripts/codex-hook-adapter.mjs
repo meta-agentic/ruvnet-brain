@@ -10,6 +10,31 @@ try { input = raw ? JSON.parse(raw) : {}; } catch { /* the shared hook bodies al
 
 const hookId = process.argv[2] || '';
 const event = String(input.hook_event_name || '');
+let adapted = false;
+
+// Codex names these two tools differently from the shared Claude hook contracts. Normalize at the
+// host boundary once so every existing safety/learning body sees the same typed event.
+if (String(input.tool_name).toLowerCase() === 'apply_patch') {
+  const patch = typeof input.tool_input?.command === 'string' ? input.tool_input.command : '';
+  const filePath = patch.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]?.trim() || '';
+  input.tool_name = 'Edit';
+  input.tool_input = {
+    ...(input.tool_input || {}),
+    ...(filePath ? { file_path: filePath } : {}),
+    new_string: patch,
+  };
+  adapted = true;
+} else if (String(input.tool_name).toLowerCase() === 'spawn_agent') {
+  input.tool_name = 'Agent';
+  input.tool_input = {
+    ...(input.tool_input || {}),
+    description: input.tool_input?.description || input.tool_input?.message || '',
+    subagent_type: input.tool_input?.subagent_type || input.tool_input?.agent_type || 'default',
+  };
+  adapted = true;
+}
+
+const hookInput = adapted ? JSON.stringify(input) : raw;
 const shim = path.join(path.dirname(fileURLToPath(import.meta.url)), 'hook-shim.mjs');
 const env = {
   ...process.env,
@@ -19,7 +44,7 @@ const env = {
   RUVNET_HOOK_HOST: 'codex',
 };
 const result = spawnSync(process.execPath, [shim, hookId, ...process.argv.slice(3)], {
-  input: raw,
+  input: hookInput,
   encoding: 'utf8',
   env,
 });

@@ -86,6 +86,7 @@ const TABLE = {
   'ground-ruvnet':    { file: 'ground-ruvnet.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
   'hijack-ruvnet':    { file: 'hijack-ruvnet.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
   'route-dispatch':   { file: 'route-dispatch.sh',   interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  'ground-before-write': { file: 'ground-before-write.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   'verify-interface': { file: 'verify-interface.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   'design-wall':      { file: 'design-wall.sh',      interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   // The consent guard (ADR-054 §3): it protects the OFF state itself, so it is the one hook that

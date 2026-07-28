@@ -52,6 +52,7 @@ describe('Codex lifecycle hook packaging', () => {
     expect(projectHooks._note).toBeUndefined();
     expect(hooks.hooks.SessionStart).toBeTruthy();
     expect(hooks.hooks.Stop).toBeTruthy();
+    expect(JSON.stringify(hooks.hooks.PreToolUse)).toContain('ground-before-write');
   });
 
   it('uses one generation-independent entrypoint for every Codex hook', () => {
@@ -169,6 +170,59 @@ describe('Codex lifecycle adapter', () => {
         additionalContext: '[RuvNet Brain grounding] use RVF',
       },
     });
+  });
+
+  it('normalizes apply_patch into the shared Edit contract without losing patch bytes', () => {
+    const { home, brain } = fixture();
+    installGeneration(
+      brain,
+      'v1',
+      'let raw=""; process.stdin.on("data",c=>raw+=c); process.stdin.on("end",()=>process.stdout.write(raw));',
+    );
+    const patch = '*** Begin Patch\n*** Update File: /tmp/project/src/rvf.ts\n@@\n-old\n+new\n*** End Patch\n';
+
+    const result = fire(home, 'ground-before-write', {
+      session_id: 'codex-patch',
+      turn_id: 'turn-patch',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'apply_patch',
+      tool_input: { command: patch },
+      cwd: '/tmp/project',
+    });
+    const normalized = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(normalized.tool_name).toBe('Edit');
+    expect(normalized.tool_input.file_path).toBe('/tmp/project/src/rvf.ts');
+    expect(normalized.tool_input.new_string).toBe(patch);
+  });
+
+  it('normalizes spawn_agent into the shared Agent routing contract', () => {
+    const { home, brain } = fixture();
+    installGeneration(
+      brain,
+      'v1',
+      'let raw=""; process.stdin.on("data",c=>raw+=c); process.stdin.on("end",()=>process.stdout.write(raw));',
+    );
+
+    const result = fire(home, 'route-dispatch', {
+      session_id: 'codex-agent',
+      turn_id: 'turn-agent',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'spawn_agent',
+      tool_input: {
+        message: 'Review the storage boundary',
+        agent_type: 'system-architect',
+        task_name: 'storage_review',
+      },
+      cwd: ROOT,
+    });
+    const normalized = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(normalized.tool_name).toBe('Agent');
+    expect(normalized.tool_input.description).toBe('Review the storage boundary');
+    expect(normalized.tool_input.subagent_type).toBe('system-architect');
   });
 
   it('resolves the active generation on every invocation after the old one is removed', () => {

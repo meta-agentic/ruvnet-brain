@@ -55,6 +55,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" ground-before-write",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" protect-state",
             "timeout": 5
           },
