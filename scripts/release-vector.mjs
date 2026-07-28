@@ -107,7 +107,10 @@ export const INVARIANTS = [
       catch { return { state: 'UNKNOWN', why: 'counterfactual replay harness absent' }; }
       let r;
       try { r = mod.checkArtifact(); } catch (e) { return { state: 'UNKNOWN', why: `replay artifact unreadable: ${e.message}` }; }
-      const v = String(r?.verdict || 'UNKNOWN').toUpperCase();
+      // `.status` is the field checkArtifact() actually returns — read, not assumed. Reaching for
+      // `.verdict` (the name used INSIDE the nested artifact) silently yielded undefined and made a
+      // real PASS read UNKNOWN: the delegation "worked" while reporting the opposite of the truth.
+      const v = String(r?.status ?? r?.verdict ?? 'UNKNOWN').toUpperCase();
       // INCONCLUSIVE never rounds up (DDD-0013 invariant 6): a trap whose CONTROL arm also produced
       // the token measured nothing about the brain, and measuring nothing is not passing.
       if (v === 'INCONCLUSIVE' || v === 'SKIP') return { state: 'UNKNOWN', why: r?.why || 'trap invalid — control also succeeded' };
