@@ -156,6 +156,68 @@ test('`--doctor` on a COMPLETE brain dir returns the healthy verdict (exit 0) �
   }
 });
 
+// ── ADR-058 §D8: the PERSISTED grounding verdict gates `--doctor` even when everything else is
+// healthy. bin/install.mjs is the only writer (right after its own real install run) — a plain
+// `--doctor` invocation never re-writes this file, it only reads it back. Same complete-brain-dir
+// fixture as the healthy test above (repos/reader/mcp all present); the ONLY variable across these
+// three cases is what install-state.json says, proving the gate is real and not a side effect of
+// some other signal.
+function completeBrainFixture() {
+  const brainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-doctor-grounding-'));
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-doctor-grounding-cache-'));
+  fs.writeFileSync(path.join(brainDir, 'forge-mcp-all.mjs'), '// stub for install-smoke — never executed\n');
+  fs.writeFileSync(path.join(brainDir, 'ruvector.rvf'), 'not a real store — presence is what gatherInstallState counts\n');
+  const xen = path.join(brainDir, 'node_modules', '@xenova', 'transformers');
+  fs.mkdirSync(xen, { recursive: true });
+  fs.writeFileSync(path.join(xen, 'package.json'), '{"name":"@xenova/transformers","version":"0.0.0-fixture"}\n');
+  fs.mkdirSync(path.join(brainDir, 'node_modules', '@ruvector'), { recursive: true });
+  return { brainDir, cacheDir };
+}
+
+test('`--doctor` FAILS (exit 1) on an otherwise-COMPLETE brain dir when the persisted verdict says grounding is unproven', () => {
+  const { brainDir, cacheDir } = completeBrainFixture();
+  try {
+    const stateDir = path.join(cacheDir, 'ruvnet-brain');
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(path.join(stateDir, 'install-state.json'), JSON.stringify({ grounding: 'unproven', reason: 'no-answer' }));
+    const r = runInstaller(['--doctor'], { RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir });
+    assertVerdict(r, 1, '--doctor (complete brain dir, but grounding persisted as unproven)');
+    assert.match(r.stdout || '', /Grounding UNPROVEN/, 'doctor must name the persisted verdict as the reason it failed');
+  } finally {
+    fs.rmSync(brainDir, { recursive: true, force: true });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('`--doctor` PASSES (exit 0) on the same complete brain dir when the persisted verdict says grounding is proven', () => {
+  const { brainDir, cacheDir } = completeBrainFixture();
+  try {
+    const stateDir = path.join(cacheDir, 'ruvnet-brain');
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(path.join(stateDir, 'install-state.json'), JSON.stringify({ grounding: 'proven', clearedBy: 'search_ruvnet' }));
+    const r = runInstaller(['--doctor'], { RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir });
+    assertVerdict(r, 0, '--doctor (complete brain dir, grounding persisted as proven)');
+    assert.doesNotMatch(r.stdout || '', /Grounding UNPROVEN/, 'a proven verdict must never print the unproven line');
+  } finally {
+    fs.rmSync(brainDir, { recursive: true, force: true });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('`--doctor` PASSES (exit 0) on the same complete brain dir when NO verdict was ever recorded (unknown ≠ fail)', () => {
+  // No install-state.json written at all under this cacheDir — the pre-ADR-058 state of the world,
+  // and the common case for any machine that installed before this feature shipped.
+  const { brainDir, cacheDir } = completeBrainFixture();
+  try {
+    const r = runInstaller(['--doctor'], { RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: cacheDir });
+    assertVerdict(r, 0, '--doctor (complete brain dir, no persisted verdict at all)');
+    assert.doesNotMatch(r.stdout || '', /Grounding UNPROVEN/, 'absence of a verdict must never read as a failure');
+  } finally {
+    fs.rmSync(brainDir, { recursive: true, force: true });
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
 test('`--help` lists the freshness flags: --update, --enable-nightly, --disable-nightly', () => {
   const r = runInstaller(['--help']);
   assertClean(r, '--help (freshness flags)');
@@ -529,3 +591,63 @@ test('installer parses and still inlines the Ed25519 signing pubkey + verifyBund
   assert.match(src, /-----BEGIN PUBLIC KEY-----/, 'the inlined Ed25519 public key block must remain');
   assert.match(src, /function\s+verifyBundle\s*\(/, 'the verifyBundle definition must remain');
 });
+
+// ── M-D8c (ADR-058 §D8): a hook that sleeps past its declared timeout, registered in a PACKED
+// hooks.json, makes the `--doctor --hooks` battery cell go RED end-to-end. tests/unit/selfcheck-
+// battery.test.mjs already proves fireHook()'s watchdog catches this at the unit level (a synthetic
+// "surface"); this proves the SAME thing through the real CLI entry point a stranger actually runs,
+// against a marketplace-clone-shaped surface laid out the way resolveInstalledSurface() expects —
+// the stranger-matrix workflow mutates the INSTALLED hooks.json the same way, so this is the fast,
+// local rehearsal of that exact CI cell.
+test('`--doctor --hooks` goes RED when a registered hook sleeps past its declared timeout', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-hook-timeout-'));
+  const brainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-hook-timeout-kb-'));
+  try {
+    // A healthy, otherwise-complete install (so the ONLY red comes from the hook, never from the
+    // install-state checks) — same minimal fixture install-smoke's own "COMPLETE brain dir" test uses.
+    fs.writeFileSync(path.join(brainDir, 'forge-mcp-all.mjs'), '// stub for install-smoke — never executed\n');
+    fs.writeFileSync(path.join(brainDir, 'ruvector.rvf'), 'not a real store — presence is what gatherInstallState counts\n');
+    const xen = path.join(brainDir, 'node_modules', '@xenova', 'transformers');
+    fs.mkdirSync(xen, { recursive: true });
+    fs.writeFileSync(path.join(xen, 'package.json'), '{"name":"@xenova/transformers","version":"0.0.0-fixture"}\n');
+    fs.mkdirSync(path.join(brainDir, 'node_modules', '@ruvector'), { recursive: true });
+
+    // The marketplace-clone-shaped plugin surface resolveInstalledSurface() looks for, seeded with
+    // ONE registration: the REAL hang.mjs fixture (synchronous stdin read — freezes the event loop,
+    // so only an EXTERNAL watchdog can catch it), timeout set short so the battery finishes fast.
+    const pluginRoot = path.join(home, '.claude', 'plugins', 'marketplaces', 'ruvnet-brain', 'plugin');
+    fs.mkdirSync(path.join(pluginRoot, 'hooks'), { recursive: true });
+    fs.mkdirSync(path.join(pluginRoot, 'scripts'), { recursive: true });
+    const hangFixture = path.join(ROOT, 'tests', 'fixtures', 'selfcheck-hooks', 'hang.mjs');
+    fs.copyFileSync(hangFixture, path.join(pluginRoot, 'scripts', 'hang.mjs'));
+    fs.writeFileSync(path.join(pluginRoot, 'scripts', 'hook-shim.mjs'), [
+      "const TABLE = { 'sleepy': { file: 'hang.mjs', interpreter: 'node', mode: 'advisory', offBehavior: 'run' } };",
+      "import path from 'node:path';",
+      "import { spawnSync } from 'node:child_process';",
+      "import { fileURLToPath } from 'node:url';",
+      'const entry = TABLE[process.argv[2]];',
+      'if (!entry) process.exit(0);',
+      "const here = path.dirname(fileURLToPath(import.meta.url));",
+      'const r = spawnSync(process.execPath, [path.join(here, entry.file)], { stdio: "inherit" });',
+      'process.exit(0);',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(pluginRoot, 'hooks', 'hooks.json'), JSON.stringify({
+      hooks: {
+        UserPromptSubmit: [{
+          matcher: '*',
+          hooks: [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs" sleepy', timeout: 1 }],
+        }],
+      },
+    }, null, 2));
+
+    const r = runInstaller(['--doctor', '--hooks'], { RUVNET_BRAIN_KB: brainDir, XDG_CACHE_HOME: path.join(home, '.cache'), HOME: home, USERPROFILE: home });
+    assertVerdict(r, 1, '--doctor --hooks (a sleeping hook must fail the battery)');
+    const out = r.stdout || '';
+    assert.match(out, /hang/, `battery must report a hang violation; got:\n${out}`);
+    assert.match(out, /Self-check FAILED/, 'the mechanical verdict must say FAILED, not just print a warning');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(brainDir, { recursive: true, force: true });
+  }
+}, { timeout: 30000 });

@@ -592,6 +592,44 @@ if [ "$BRAIN_OFF" != "1" ] && [ -f "$ASCII_DRIFT" ]; then
   node "$ASCII_DRIFT" --quiet 2>/dev/null || true
 fi
 
+# ── Grounding-unproven surfacer (ADR-058 §D8, closes the "-15 nothing exercises a hook fire /
+# verdict evaporates" findings). bin/install.mjs writes ~/.cache/ruvnet-brain/install-state.json
+# with grounding:"unproven" when its own one-shot smoke query at install time could not verify a
+# real, resolvable citation — DELIBERATELY non-fatal there (a first-run model download or an
+# air-gapped machine is not a broken install; see the comment right above that write in
+# bin/install.mjs). What this banner fixes is the verdict EVAPORATING the moment that process
+# exited: it surfaces here, at every session start, until kb/forge-mcp-all.mjs clears it the
+# instant a real search_ruvnet returns a real cited answer.
+#
+# Same shape as the open-issue surfacer just above (a node -e reader, a tab-delimited marker line,
+# a case statement) and, unlike the console/router/star-ask "advertising" blocks, it is NOT gated on
+# BRAIN_OFF — this is a health fact about the install itself, in the same "keeps running while off"
+# category as the GONG health alarm and the open-issue banner (see this file's header note on the
+# OFF split). Best-effort and fail-silent: a missing file, a missing `node`, or a malformed JSON all
+# emit nothing rather than break the session.
+GROUNDING_STATE="$HOME/.cache/ruvnet-brain/install-state.json"
+if [ -f "$GROUNDING_STATE" ] && command -v node >/dev/null 2>&1; then
+  GROUNDING_LINE=$(node -e '
+    try {
+      const fs=require("fs");
+      const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      if (s.grounding && s.grounding !== "proven") {
+        const when = s.at ? new Date(s.at).toISOString().slice(0,16).replace("T"," ") : "an earlier run";
+        console.log(`UNPROVEN\t${when} (${s.reason || "no reason recorded"})`);
+      }
+    } catch { /* fail-silent — a malformed file must never break the session */ }
+  ' "$GROUNDING_STATE" 2>/dev/null)
+  case "$GROUNDING_LINE" in
+    UNPROVEN*)
+      echo "[RuvNet Brain — grounding not yet PROVEN on this machine (mention once, calmly, near the top)]"
+      echo "The last install/health check (${GROUNDING_LINE#UNPROVEN	}) could not verify a real, resolvable"
+      echo "citation. Often just a first-run model download or an offline machine — not necessarily a broken"
+      echo "install. Mention it once, plainly: the next real RuvNet question through search_ruvnet will"
+      echo "confirm or clear this automatically; \`npx ruvnet-brain --doctor\` shows the current verdict any time."
+      ;;
+  esac
+fi
+
 #
 # Everything from here down is the confidence banner, the capability announcement and THE PLAYBOOK:
 # ~2,000 tokens of the brain talking about itself. All of it is advertising, all of it dies when the
