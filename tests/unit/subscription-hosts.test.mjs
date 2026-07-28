@@ -61,7 +61,7 @@ describe('public subscription probes', () => {
 
   it('accepts only Codex ChatGPT login, never an API-key login', () => {
     expect(probeCodexSubscription({
-      run: () => result(0, 'Logged in using ChatGPT\n'),
+      run: () => result(0, '', 'Logged in using ChatGPT\n'),
     })).toMatchObject({
       host: 'codex',
       eligible: true,

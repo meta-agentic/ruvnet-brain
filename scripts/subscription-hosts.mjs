@@ -81,8 +81,8 @@ export function probeCodexSubscription({ run = spawnSync } = {}) {
   }
   if (result?.status !== 0) return unavailable('codex');
 
-  const status = String(result.stdout ?? '').trim();
-  if (/^Logged in using ChatGPT$/i.test(status)) {
+  const status = `${String(result.stdout ?? '')}\n${String(result.stderr ?? '')}`.trim();
+  if (/(?:^|\n)Logged in using ChatGPT(?:\n|$)/i.test(status)) {
     return {
       host: 'codex',
       eligible: true,
