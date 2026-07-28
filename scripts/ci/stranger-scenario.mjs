@@ -142,7 +142,29 @@ if (SCENARIO === 'healthy') {
   const doctor = runInstaller(['--doctor', '--hooks']);
   console.log(doctor.stdout);
   if (doctor.stderr) console.error(doctor.stderr);
-  if (doctor.status !== 0) fail(`expected --doctor --hooks to pass on the same healthy install, got exit ${doctor.status}`);
+
+  // TWO REQUIREMENTS OF D8 CONTRADICTED EACH OTHER HERE, and the contradiction is worth stating
+  // rather than papering over.
+  //
+  //   · The hook battery must pass on a healthy image — that is this cell's whole purpose.
+  //   · `--doctor` DELIBERATELY exits non-zero when grounding is unproven. That is the D8 decision:
+  //     the install-time smoke stays non-fatal (an air-gapped machine is not a broken install), but
+  //     the verdict must stop EVAPORATING — it persists to install-state.json and --doctor gates on
+  //     it until a real cited answer clears it.
+  //
+  // Every CI image is offline with no model weights, so grounding is ALWAYS unproven here and
+  // `--doctor` will ALWAYS exit 1. Asserting exit 0 asserted that D8's own design does not work.
+  //
+  // So the assertion binds to the SUBSTANCE: the battery must report zero contract violations, and
+  // any non-zero exit must be attributable ONLY to the grounding verdict. A doctor that fails for a
+  // hook violation still fails this cell — which is the property that was actually wanted.
+  const out = `${doctor.stdout || ''}${doctor.stderr || ''}`;
+  const batteryClean = /Self-check passed/.test(out);
+  const onlyGrounding = /Grounding UNPROVEN/.test(out) && !/contract violation/.test(out);
+  if (doctor.status !== 0 && !(batteryClean && onlyGrounding)) {
+    fail(`--doctor --hooks exited ${doctor.status} for a reason other than unproven grounding on a healthy install`);
+  }
+  if (!batteryClean) fail('--doctor --hooks did not report a clean hook battery on a healthy install');
   const firingsMatch = /registrations from marketplace-clone,\s*\d+\s*stdin regimes each\s*\((\d+)\s*firings\)/.exec(doctor.stdout || '');
   if (!firingsMatch) fail('--doctor --hooks output did not name the marketplace-clone registration/firing count at all');
   const firings = Number(firingsMatch[1]);
