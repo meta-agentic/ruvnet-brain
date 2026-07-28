@@ -1,0 +1,15 @@
+{
+  "_description": "Latency budget for kb/card-lane.mjs's decision lane (ADR-058 D6). This is the ONLY checked-in source of these numbers — scripts/qe/card-lane-gate.mjs reads them at runtime and enforces them as a HARD gate inside scripts/qe/ux-suite.mjs. docs/adr/0058-the-95-contract.md `governs:` this file, so a threshold edit here that is not accompanied by a currency-log entry on that ADR shows up as governed-set drift under `node scripts/doc-currency.mjs --check` — a silent raise is itself a gate failure, not a free edit.",
+  "sampleSize": 100,
+  "p95BudgetMs": 250,
+  "absoluteFailMs": 1000,
+  "measuredBaseline": {
+    "warmMs": 0.1158,
+    "coldModuleLoadMs": 10,
+    "measuredOn": "2026-07-27",
+    "note": "Hand-measured before this gate existed (see ADR-058's scoreboard row 'Fast lane'). The gate itself re-measures p50/p95/max on every run rather than trusting these — this block is provenance, never an input to pass/fail."
+  },
+  "justification": "absoluteFailMs=1000 is ~8,600x the measured 0.1158ms warm baseline, so a breach there is a correctness event (something is genuinely blocking, e.g. a stray await/sleep or a hung fs call), not scheduler jitter — which is exactly why hard-gating it does not violate scripts/qe/ux-suite.mjs's own anti-flake rule for the environment-sensitive timings. The number itself is not arbitrary: every hook in plugin/hooks/hooks.json carries a 5s timeout, and those hooks order the model to consult search_ruvnet before writing — a product may not order a consultation it prices above its own intervention budget. p95BudgetMs=250 is the everyday target with ~2,159x headroom over the measured baseline; breaching only the 250ms budget (without crossing 1000ms) is still a hard FAIL under this gate, since D6 promotes the whole deterministic decision lane to a hard gate rather than leaving it advisory.",
+  "measurementMethod": "IN-PROCESS function calls only (no subprocess per firing) — see scripts/qe/card-lane-gate.mjs header. A GitHub ubuntu CI runner has 2 vCPU vs this dev machine's 16; subprocess-per-firing measurement has already produced starved, empty-looking output on that runner twice. Measuring in-process means the number reflects kb/card-lane.mjs itself, not the OS scheduler.",
+  "governedBy": "docs/adr/0058-the-95-contract.md#D6"
+}

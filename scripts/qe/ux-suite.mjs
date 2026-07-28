@@ -1,15 +1,25 @@
 // ux-suite.mjs — the UX-experience QE suite runner (owner request 2026-07-24).
 //
-// Runs the deterministic UX probes, prints a table of MEASURED numbers, and exits non-zero ONLY on a
-// HARD failure: a missing completion signal, or a probe that could not run at all. Timing-threshold
-// breaches WARN with the measured number — a flaky timing gate must never block a ship, and a
-// threshold nobody measured is a guess (spec §"Measurements & thresholds").
+// Runs the deterministic UX probes, prints a table of MEASURED numbers, and exits non-zero on a HARD
+// failure. Two tiers of "hard failure", deliberately not conflated (ADR-058 D6):
+//  1. Environment-sensitive timings (server-ready, console/tips paint, command→explanation, dead-air)
+//     stay ADVISORY — WARN only. These are subject to real machine noise (cold node boot, first-paint,
+//     disk cache state) that has nothing to do with correctness, and a flaky gate trains people to
+//     override it. A missing completion signal or a probe that could not run at all is still a hard
+//     failure regardless of tier — silence is not success.
+//  2. kb/card-lane.mjs's decision lane is MODEL-FREE, ML-FREE keyword overlap with a measured warm
+//     baseline of 0.1158ms. Its budget (kb/card-lane-budget.json, p95 <= 250ms / absolute fail
+//     >1000ms — ~2,159x / ~8,600x the baseline) has so much headroom that a breach cannot be
+//     scheduler jitter — it can only be a correctness regression. THIS is a genuine hard gate: a
+//     breach here fails the suite, not warns it. See scripts/qe/card-lane-gate.mjs for the full
+//     reasoning and the in-process (no subprocess per firing) measurement method.
 //
 // HONESTY (same rules as the product):
 //  • Every number is measured on THIS run. Nothing is asserted from memory.
 //  • A probe that could not execute is reported "not run" and HARD-fails — silence is not success.
-//  • The probes are MODEL-FREE (render + PTY-style timing). They call no LLM, use no API key, touch no
-//    account — the cleanest satisfaction of the owner's "no API keys, run on our account" rule.
+//  • The probes are MODEL-FREE (render + PTY-style timing, plus the in-process card-lane firings).
+//    They call no LLM, use no API key, touch no account — the cleanest satisfaction of the owner's
+//    "no API keys, run on our account" rule.
 //  • aqe orchestration: we OPTIONALLY register this run as an `aqe task` for visibility in
 //    `aqe status`, but the MEASUREMENT is a plain deterministic probe, NOT aqe-internal. Verified live
 //    2026-07-24: `aqe domain` supports only list/health (not create), so inventing an "onboarding-ux"
@@ -19,6 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runRenderProbe } from '../../tests/ux/render-probe.mjs';
 import { runCommandProbe } from '../../tests/ux/command-probe.mjs';
+import { runCardLaneGate } from './card-lane-gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +104,24 @@ async function main() {
   if (cmd.commandToExplanationMs == null) hardFailures.push('command→explanation: NOT RUN (no explanatory line seen)');
   if (!cmd.completionSignalPresent) hardFailures.push('completion signal MISSING — the "it\'s live, take a look at your page" line never printed');
 
+  // ── Probe 4: decision-lane latency — HARD GATE, not advisory (ADR-058 D6) ───────────────────
+  // Deliberately NOT reusing line()'s warnAt/"(proposed)" formatting above: that phrasing is correct
+  // for the advisory timings but would misreport a HARD budget breach as merely "proposed".
+  console.log('\n  ── decision-lane latency (kb/card-lane.mjs) — HARD GATE, deterministic, model-free ──');
+  try {
+    const laneResult = await runCardLaneGate();
+    const b = laneResult.budget;
+    const tag = (ok) => (ok ? '✓' : '✗ HARD FAIL');
+    console.log(`  ${'card-lane p50'.padEnd(30)} ${laneResult.p50.toFixed(4).padStart(10)}ms  (reported, not gated)`);
+    console.log(`  ${'card-lane p95'.padEnd(30)} ${laneResult.p95.toFixed(4).padStart(10)}ms  budget ${b.p95BudgetMs}ms  ${tag(laneResult.p95 <= b.p95BudgetMs)}`);
+    console.log(`  ${'card-lane max'.padEnd(30)} ${laneResult.max.toFixed(4).padStart(10)}ms  absolute-fail ${b.absoluteFailMs}ms  ${tag(laneResult.max <= b.absoluteFailMs)}`);
+    console.log(`  firings: ${laneResult.n} in-process (no subprocess per firing — see card-lane-gate.mjs)`);
+    if (!laneResult.pass) for (const r of laneResult.reasons) hardFailures.push(`card-lane latency: ${r}`);
+  } catch (e) {
+    console.log(`  ! could not run the card-lane latency gate: ${e.message}`);
+    hardFailures.push(`card-lane latency gate: could not run — ${e.message}`);
+  }
+
   // ── Not run on this host (stated, never faked) ──────────────────────────────────────────────
   console.log('\n  ── not run here (stated, not faked) ──');
   console.log('    Linux / Windows  — execute in CI runners (macOS cannot run them); add to .github/workflows matrix');
@@ -101,7 +130,7 @@ async function main() {
   // ── Verdict ─────────────────────────────────────────────────────────────────────────────────
   console.log('\n  ── verdict ──');
   if (hardFailures.length === 0) {
-    console.log('  PASS — every probe ran; completion signal present. Timing WARNs (if any) are advisory.\n');
+    console.log('  PASS — every probe ran; completion signal present; decision-lane latency inside its HARD budget. Env-timing WARNs (if any) are advisory.\n');
     process.exit(0);
   }
   console.log('  FAIL (hard):');

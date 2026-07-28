@@ -19,6 +19,8 @@ governs:
   - scripts/no-silent-substitution.mjs
   - scripts/qe/ux-suite.mjs
   - scripts/claims-verify.mjs
+  - kb/card-lane-budget.json
+  - scripts/qe/card-lane-gate.mjs
 ---
 
 # ADR-058: The 95 contract
@@ -73,6 +75,7 @@ Verified first-hand at file:line, not relayed:
 | D1 −8 `REQUIRE_BRAIN` | **Open** — grep confirms **0** workflow files set it | §D1 |
 | Vacuous-pass guard | **Closed** — `--levels L5` exits 2 | Nothing |
 | Fast lane | **Closed** — `kb/card-lane.mjs` at 0.1158ms warm, 19/19 | Feeds D6's budget |
+| D6 −22 "latency breaches only warn" | **Closed.** `kb/card-lane-budget.json` (checked-in manifest) + `scripts/qe/card-lane-gate.mjs` (in-process p50/p95/max over 100 firings) wired into `scripts/qe/ux-suite.mjs` as a genuine hard gate; env-sensitive timings unchanged (still advisory) | Nothing — both mutants proven (1,100ms sleep → real FAIL; silent manifest raise → `doc-currency` `presumed-stale` BLOCK once drift accumulates, see build report) |
 
 Everything else in both graders' lists is fully open.
 
@@ -277,3 +280,4 @@ correct: **the strong claim was the defect.**
 | Date | What changed | Why (with referents) |
 |---|---|---|
 | 2026-07-27 | Initial draft, two-sided duel | Owner: *"get every single one of these numbers to be 95 or better… I want Fable 5 and GPT-5.6 to pull it together into an ADR and a DDD."* Both designs converged on tri-state per-invariant verdicts, vector-minimum release, and mandatory mutants; GPT's `PASS/FAIL/UNKNOWN` naming adopted. GPT's `gh auth` claim checked and found FALSE. Already-narrowed deductions verified first-hand at `install.mjs:3240-3248` and `verify-interface.sh:173` |
+| 2026-07-27 | D6 built: `kb/card-lane-budget.json` + `scripts/qe/card-lane-gate.mjs`, wired into `scripts/qe/ux-suite.mjs` | Both `governs:`-listed files above; §D6 mutants proven (1,100ms sleep → real `ux-suite.mjs` FAIL, not warn; a silent, undocumented manifest-threshold raise across ≥2 commits shows as `presumed-stale` under `node scripts/doc-currency.mjs --check`, per this document's own drift rule). Measured on this machine: p50 0.0245ms / p95 0.0481ms / max 0.0768ms over 100 in-process firings — well inside the 250ms/1000ms budget in `kb/card-lane-budget.json` |
