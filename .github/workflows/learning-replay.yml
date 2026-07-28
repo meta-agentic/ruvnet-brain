@@ -89,7 +89,7 @@ jobs:
             echo "to measure, and a skipped measurement is UNKNOWN — never a pass. Failing loudly."
             exit 4
           fi
-      - name: Install the ruflo global binary (Rule 21: the global one, never npx, never pinned)
+      - name: "Install the ruflo global binary (Rule 21: the global one, never npx, never pinned)"
         run: npm i -g ruflo@latest
       - name: Install the Claude Code CLI
         run: npm i -g @anthropic-ai/claude-code
