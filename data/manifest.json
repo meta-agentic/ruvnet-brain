@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-  "brainVersion": "3.9.119-dev",
-=======
-  "brainVersion": "3.9.114-dev",
->>>>>>> worktree-agent-a7e2b861b92aa888c
+  "brainVersion": "3.9.120-dev",
   "generated": "2026-07-24T20:09:02.443Z",
   "generatedHuman": "Fri, 24 Jul 2026 20:09:02 GMT",
   "coverage": {

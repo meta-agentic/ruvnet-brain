@@ -1,10 +1,6 @@
 {
   "name": "ruvnet-brain",
-<<<<<<< HEAD
-  "version": "3.9.119-dev",
-=======
-  "version": "3.9.114-dev",
->>>>>>> worktree-agent-a7e2b861b92aa888c
+  "version": "3.9.120-dev",
   "description": "One-command installer for RuvNet Brain — a portable, source-grounded brain over rUv's RuvNet building blocks, delivered as a Claude Code plugin so Claude uses the stack instead of fighting it.",
   "type": "module",
   "bin": {
