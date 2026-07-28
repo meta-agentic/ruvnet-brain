@@ -86,6 +86,15 @@ jobs:
         # classification, and pointing a scenario at a non-existent workflow job/file, must each make
         # the report exit non-zero — otherwise the gate above is decorative, not load-bearing.
         run: node --test tests/experience/report.test.mjs
+      - name: Interface-gate incident corpus (ADR-058 D7 — #12/#13/#41/#44 + the 07-27 heredoc bite)
+        # tests/mutation/*.test.mjs sat in vitest.config.mjs's include with no npm script and no CI
+        # step ever running it (see the "Mutation tests" step above) — a test nobody runs cannot fail,
+        # which is the exact ceremony D7 exists to replace for verify-interface.sh. This step is that
+        # lesson applied here: the corpus is listed in vitest's include (necessary) AND has its own
+        # script (test:regression) AND its own CI step (sufficient) from the day it lands. Fires the
+        # LITERAL REGISTERED COMMAND (`node hook-shim.mjs verify-interface`), never the .sh body
+        # directly (ADR-055 F16) — brain-independent, no network, ~2s.
+        run: npm run test:regression
       - name: Injection-guard unit test
         run: node kb/test-guard-injection.mjs
       - name: Injection-guard adversarial red-team (5 attack families)
