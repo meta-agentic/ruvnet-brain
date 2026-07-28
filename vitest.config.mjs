@@ -1,6 +1,13 @@
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
+    // This suite launches many real Git, shell, Codex, and Ruflo subprocesses. Unbounded file
+    // parallelism starves the very watchdogs and latency probes the tests are measuring: the same
+    // files pass alone, while the default full run produced ten timeout/latency failures. Five
+    // workers still pushed a held-open-stdin probe past its 5s contract; two workers still made the
+    // fourth-wall p95 exceed 2x its ceiling. Serialize files so the suite measures product work,
+    // not competition from another subprocess-heavy test file.
+    maxWorkers: 1,
     include: [
       'tests/unit/**/*.test.mjs', 'tests/integration/*.test.mjs', 'tests/mutation/*.test.mjs',
       // ADR-058 §D7: the interface-gate incident corpus. Listed here AND given its own npm script
