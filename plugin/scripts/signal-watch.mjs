@@ -59,7 +59,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseHookEvent, toolName, commandOf, findInvocations, rawToolResponse } from './hook-input.mjs';
+import { parseHookEvent, toolName, commandOf, findInvocations, rawToolResponse, readStdinBounded } from './hook-input.mjs';
 
 const MANAGED_TOOLS = ['gh', 'vercel', 'netlify', 'npm', 'git'];
 
@@ -170,13 +170,13 @@ export function evaluate(ev, { cwd = process.cwd(), file = pendingPath() } = {})
   return result;
 }
 
-function readHookInput() {
+async function readHookInput() {
   if (process.stdin.isTTY) return null; // never block on a TTY with nothing to give
-  try { return parseHookEvent(fs.readFileSync(0, 'utf8')); } catch { return null; }
+  try { return parseHookEvent((await readStdinBounded()).toString('utf8')); } catch { return null; }
 }
 
-function main() {
-  const ev = readHookInput();
+async function main() {
+  const ev = await readHookInput();
   if (!ev) return;
   const { lines } = evaluate(ev);
   for (const l of lines) console.log(l);
@@ -188,6 +188,6 @@ function isMain() {
 }
 
 if (isMain()) {
-  try { main(); } catch { /* fail open, always — see CONTRACT above */ }
+  try { await main(); } catch { /* fail open, always — see CONTRACT above */ }
   process.exit(0);
 }

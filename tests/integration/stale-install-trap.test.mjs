@@ -59,10 +59,13 @@ function seedBrain(tag) {
 function runInstaller({ breakLookup = false } = {}) {
   let script = INSTALLER;
   if (breakLookup) {
-    script = path.join(work, 'install.mjs');
+    script = path.join(work, 'bin', 'install.mjs');
+    fs.mkdirSync(path.dirname(script), { recursive: true });
+    fs.mkdirSync(path.join(work, 'kb'), { recursive: true });
     const src = fs.readFileSync(INSTALLER, 'utf8')
       .replace("const REPO = 'stuinfla/ruvnet-brain';", "const REPO = 'stuinfla/definitely-not-a-real-repo-xyz';");
     fs.writeFileSync(script, src);
+    fs.copyFileSync(path.join(ROOT, 'kb', 'brain-profile.mjs'), path.join(work, 'kb', 'brain-profile.mjs'));
   }
   const res = spawnSync(process.execPath, [script, '--no-verify'], {
     encoding: 'utf8',

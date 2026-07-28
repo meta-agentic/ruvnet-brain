@@ -161,10 +161,9 @@ async function main() {
     variants = [];
     if (fs.existsSync(path.join(dir, `${name}.rvf`))) variants.push('small');
     if (fs.existsSync(path.join(dir, `${name}.big.rvf`))) variants.push('big');
-    if (variants.length === 0) {
-      console.error(`No RVF store found for ${name} in ${dir}`);
-      process.exit(1);
-    }
+    // Preserve detailed diagnostics when nothing exists: checkStore() names every missing member
+    // of the trio, while an early generic exit erases the actionable failure contract.
+    if (variants.length === 0) variants.push('small');
   }
 
   let anyFail = false;

@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { readStdinBounded } from './hook-input.mjs';
 
 const HOME = os.homedir();
 
@@ -26,16 +27,16 @@ const HOME = os.homedir();
 // The read is bounded: SessionEnd hands us a small JSON object and closes, but an unbounded
 // readFileSync(0) on a stdin that never closes is a hang with no upper bound. A payload we cannot
 // read in time simply yields no id, which lands on the same fallback as no payload at all.
-function payloadSessionId() {
+async function payloadSessionId() {
   if (process.stdin.isTTY) return '';
   try {
-    const raw = fs.readFileSync(0, { encoding: 'utf8' }).slice(0, 65536);
+    const raw = (await readStdinBounded()).toString('utf8');
     const v = JSON.parse(raw)?.session_id;
     return typeof v === 'string' ? v : '';
   } catch { return ''; }
 }
 // A filename COMPONENT, never a path — the payload is untrusted input.
-const SID = (payloadSessionId() || process.env.CLAUDE_SESSION_ID || '').replace(/[^A-Za-z0-9_-]/g, '') || 'default';
+const SID = ((await payloadSessionId()) || process.env.CLAUDE_SESSION_ID || '').replace(/[^A-Za-z0-9_-]/g, '') || 'default';
 const QUEUE = process.env.LEARN_QUEUE || path.join(HOME, '.cache/ruvnet-brain/learn', `session-${SID}.jsonl`);
 const RUFLO = path.join(HOME, '.npm-global/bin/ruflo');
 const MAX_ACTIONS = 8; // bound the work so SessionEnd stays fast

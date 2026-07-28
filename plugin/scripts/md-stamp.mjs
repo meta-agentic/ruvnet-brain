@@ -31,7 +31,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseHookEvent, toolName, field } from './hook-input.mjs';
+import { parseHookEvent, toolName, field, readStdinBounded } from './hook-input.mjs';
 
 // ── date, from the system clock, formatted in the repo's standard timezone ─────────────────────────
 // Same idiom as scripts/self-update.mjs's README badge stamp: Intl.DateTimeFormat is a Node builtin
@@ -177,13 +177,13 @@ export function computeStampedContent(content, today = todayNY()) {
 }
 
 // ── the hook body ────────────────────────────────────────────────────────────────────────────────
-function readHookInput() {
+async function readHookInput() {
   // Never block waiting on stdin: a TTY (someone running this file by hand) has none to give.
   if (process.stdin.isTTY) return null;
-  try { return parseHookEvent(fs.readFileSync(0, 'utf8')); } catch { return null; }
+  try { return parseHookEvent((await readStdinBounded()).toString('utf8')); } catch { return null; }
 }
 
-function main() {
+async function main() {
   // THE OFF SWITCH. This hook writes to the user's own files, so it must be silenceable in one move
   // — the same "nothing without you" bar anticipate.sh's RUVNET_ANTICIPATE=0 meets. Set
   // RUVNET_MD_STAMP=0 (or =off) and it becomes a no-op. Absence = on (it only ever refreshes a stamp
@@ -191,7 +191,7 @@ function main() {
   const sw = String(process.env.RUVNET_MD_STAMP ?? '').trim().toLowerCase();
   if (sw === '0' || sw === 'off' || sw === 'false' || sw === 'no') return;
 
-  const ev = readHookInput();
+  const ev = await readHookInput();
   if (!['Write', 'Edit', 'MultiEdit'].includes(toolName(ev))) return; // wrong tool: do nothing
 
   const filePath = field(ev, 'tool_input.file_path');
@@ -214,6 +214,6 @@ function isMain() {
 }
 
 if (isMain()) {
-  try { main(); } catch { /* fail open, always — see CONTRACT above */ }
+  try { await main(); } catch { /* fail open, always — see CONTRACT above */ }
   process.exit(0);
 }

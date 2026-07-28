@@ -39,6 +39,63 @@ export function parseHookEvent(raw) {
   }
 }
 
+/**
+ * Read one hook envelope without requiring EOF.
+ *
+ * Claude Code normally closes stdin after writing one JSON object. A defensive hook must also
+ * survive a host/adapter that leaves the pipe open, especially on Windows where readFileSync(0)
+ * waits for EOF even after all envelope bytes are available.
+ */
+export function readStdinBounded({ maxBytes = 65536, idleMs = 50, emptyMs = 250 } = {}) {
+  if (process.stdin.isTTY) return Promise.resolve(Buffer.alloc(0));
+  return new Promise((resolve) => {
+    const chunks = [];
+    let bytes = 0;
+    let settled = false;
+    let idleTimer;
+    let emptyTimer;
+
+    const cleanup = () => {
+      clearTimeout(idleTimer);
+      clearTimeout(emptyTimer);
+      process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
+      process.stdin.off('error', onError);
+      process.stdin.pause();
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(Buffer.concat(chunks, bytes));
+    };
+    const armIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(finish, idleMs);
+    };
+    const onData = (chunk) => {
+      clearTimeout(emptyTimer);
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = maxBytes - bytes;
+      if (remaining > 0) {
+        const kept = buf.subarray(0, remaining);
+        chunks.push(kept);
+        bytes += kept.length;
+      }
+      if (bytes >= maxBytes) finish();
+      else armIdle();
+    };
+    const onEnd = () => finish();
+    const onError = () => finish();
+
+    process.stdin.on('data', onData);
+    process.stdin.once('end', onEnd);
+    process.stdin.once('error', onError);
+    emptyTimer = setTimeout(finish, emptyMs);
+    process.stdin.resume();
+  });
+}
+
 /** The tool being invoked ("Bash", "Write", …), or "" if absent. */
 export function toolName(ev) {
   return ev && typeof ev.tool_name === 'string' ? ev.tool_name : '';
@@ -486,22 +543,16 @@ function isMain() {
 
 if (isMain()) {
   const which = process.argv[2] || '';
-  let raw = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (d) => { raw += d; });
-  process.stdin.on('end', () => {
-    const ev = parseHookEvent(raw);
-    let out = '';
-    if (which === 'tool_name') out = toolName(ev);
-    else if (which === 'command') out = commandOf(ev);
-    else if (which === 'field') out = field(ev, process.argv[3] || '');
-    else if (which === 'invocations') out = invocationLines(commandOf(ev), process.argv[3] || '');
-    else if (which === 'payload') out = payloadOf(ev);
-    else if (which === 'emit') out = preToolUseEnvelope(process.argv[3], process.argv[4]);
-    process.stdout.write(out);
-    // ALWAYS exit 0: a parse miss is an empty string, never a crash the gate has to survive.
-    process.exit(0);
-  });
-  // Empty/again-fail-open: if stdin never sends 'end' with content, don't hang the shell forever.
-  process.stdin.on('error', () => { process.stdout.write(''); process.exit(0); });
+  const raw = (await readStdinBounded()).toString('utf8');
+  const ev = parseHookEvent(raw);
+  let out = '';
+  if (which === 'tool_name') out = toolName(ev);
+  else if (which === 'command') out = commandOf(ev);
+  else if (which === 'field') out = field(ev, process.argv[3] || '');
+  else if (which === 'invocations') out = invocationLines(commandOf(ev), process.argv[3] || '');
+  else if (which === 'payload') out = payloadOf(ev);
+  else if (which === 'emit') out = preToolUseEnvelope(process.argv[3], process.argv[4]);
+  process.stdout.write(out);
+  // ALWAYS exit 0: a parse miss is an empty string, never a crash the gate has to survive.
+  process.exit(0);
 }

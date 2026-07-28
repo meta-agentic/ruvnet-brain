@@ -75,6 +75,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readStdinBounded } from './hook-input.mjs';
 
 // <codeRoot>/plugin/scripts/unprompted-runtime.mjs → <codeRoot>. Resolved from THIS file's own
 // location so it is correct under the Stable Spine (an immutable versions/<gen> tree) and in a dev
@@ -150,7 +151,7 @@ function resolveProducers(event) {
 // so read only when fd 0 is a real pipe/file. A manual run with no redirect yields empty, not a hang.
 let payload = Buffer.alloc(0);
 if (!process.stdin.isTTY) {
-  try { payload = fs.readFileSync(0); } catch { payload = Buffer.alloc(0); }
+  try { payload = await readStdinBounded(); } catch { payload = Buffer.alloc(0); }
 }
 
 // AN UNPROMPTED UTTERANCE MUST BE OCCASIONED BY A REAL EVENT (fixed 2026-07-27).
