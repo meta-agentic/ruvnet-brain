@@ -2,7 +2,7 @@
 id: ADR-057
 title: 95 on both graders — closing a 38/53 against a self-reported 83, dimension by dimension
 status: Proposed
-date: 2026-07-28
+date: 2026-07-27
 updated: 2026-07-27
 impl: unbuilt
 governs:
@@ -20,7 +20,7 @@ relates: [ADR-028, ADR-052, ADR-053, ADR-055, ADR-056]
 # ADR-057: 95 on both graders
 
 **Status**: Proposed
-**Date**: 2026-07-28 · **Last updated**: 2026-07-28 · **Why**: initial draft
+**Date**: 2026-07-27 · **Last updated**: 2026-07-27 · **Why**: v2 — the 83-vs-38 framing was not sound; corrected
 **Implementation**: unbuilt · **Verified in sync**: never
 
 ## Context — the owner's sentence, which is the whole problem
@@ -30,8 +30,20 @@ relates: [ADR-028, ADR-052, ADR-053, ADR-055, ADR-056]
 > scores. Now I need the ADR plan for what it takes to get both of these up to 95s on all levels."*
 
 On 2026-07-27 two independent graders ran the owner's own 8-dimension rubric against this product's
-QE apparatus. **Fable 5: 53/100. GPT-5.6-Sol: 38/100.** The repo was simultaneously advertising
-"L1–L4 all pass" and an 83/100.
+**QE apparatus** — the tests, not the product. **Fable 5: 53/100. GPT-5.6-Sol: 38/100.**
+
+**A precision the owner caught in v1 of this ADR, corrected here.** v1 framed this as "83/100 versus
+38/100". That comparison is not sound and must not be repeated: README:263/298's **83** is a
+**self-score of the PRODUCT** across 8 dimensions from the 2.0 era ("55 → 83 in two days"), while
+53/38 are **independent grades of the TEST SUITE** on 2026-07-27. Different subject, different date,
+and one side is marking its own homework. Citing them as one number-versus-number is the flattery
+this ADR exists to end.
+
+**The real contradiction is narrower and worse**, because it is a direct falsification rather than a
+comparison. README:484 and README:526 state *"L1–L4 behavioral harness — **all pass** … the hook
+drives the full pipeline."* Verified today: L4 asserts only that the hook's own injected prose
+contains certain WORDS, and the harness printed `OVERALL: PASS` on a run of ZERO checks. "Behavioral,
+all pass" was never evidence of behaviour, on either count.
 
 | Dim | | Fable | GPT | worst |
 |---|---|---|---|---|
@@ -44,13 +56,13 @@ QE apparatus. **Fable 5: 53/100. GPT-5.6-Sol: 38/100.** The repo was simultaneou
 | D7 | Proper / clean / effective | 47 | 32 | 32 |
 | D8 | Works on a stranger's machine | 40 | 18 | **18** |
 
-### Why nobody noticed for weeks — three mechanisms, all verified first-hand 2026-07-28
+### Why nobody noticed for weeks — three mechanisms, all verified first-hand 2026-07-27
 
 1. **The harness certified empty runs.** `behavioral-l1-l4.mjs --levels L5` selected zero checks and
    printed `OVERALL: PASS`, exit 0. `allPass` initialised to `true` and the loop `continue`d over
    every empty level. *Fixed in this ADR's first commit; an unknown level and a zero-check run now
-   both exit 2.* **This is the load-bearing mechanism**: nothing could contradict 83/100 because the
-   thing meant to contradict it passed by running nothing.
+   both exit 2.* **This is the load-bearing mechanism**: nothing could contradict the repo's own
+   "all pass" claim, because the thing meant to contradict it passed by running nothing.
 2. **L4 "behavioral" matches strings, never behaviour.** Its assertion is literally
    `must: ['take the wheel','SPARC','DDD','ADR','swarm','QA gate','98',…]` against the hook's own
    injected prose. It proves the brain SPOKE. It cannot observe whether Claude LISTENED.
@@ -84,7 +96,7 @@ worthless without its predecessor**, which is why the order is not negotiable:
 | 2 | **Latency consultation survival** | T2 | 2 | YES — 19.6s warm is 19.6× the ceiling |
 | 3 | **Clean-machine / org hook integrity** | T5 | 3 | YES — the blocking gate is absent from plugin `hooks.json` |
 | 4 | **Proactive + learning outcome** | T7 | 4/6 | YES — ADR-028 L5 explicitly unbuilt |
-| 5 | **Claim-to-behaviour integrity** | T6 | 5 | YES — this is the 83-vs-38 contradiction itself |
+| 5 | **Claim-to-behaviour integrity** | T6 | 5 | YES — README:484 says "all pass" while L4 greps prose |
 
 ### What 95 requires, per dimension
 
@@ -111,7 +123,7 @@ shipping."* Required: the fast capability-selection lane at **p95 ≤ 250ms**, a
 and at 1,001ms the correctness test FAILS. Justification is the product's own constant: every hook in
 `hooks.json` is given 5s, and those hooks instruct the model to consult `search_ruvnet` before
 writing — a product may not order a tool that costs 4× the budget it grants its own interventions.
-*The card lane merged 2026-07-28 measures 0.1158ms warm (verified first-hand), so the budget is met
+*The card lane merged 2026-07-27 measures 0.1158ms warm (verified first-hand), so the budget is met
 on the selection path; the heavy path must be removed from the decision, not merely sped up.*
 
 **D5 — coexistence · 35 → 95.** GPT: *"the merged-registry lint found 63 findings across 42
@@ -142,8 +154,9 @@ the badge says 26%."* Required: the guarantee runs, unskipped, on at least one r
 **Health is a critical-invariant vector, never an average.** Substitution, latency, hook portability
 and proactive outcome must ALL be green on the exact candidate package SHA. Any red or inconclusive
 critical class forces README/status/release metadata to `DEGRADED` and blocks the words "healthy",
-"proven", "all pass", and any composite score. *An average is how 18/100 on a stranger's machine
-became 83/100 on the README.*
+"proven", "all pass", and any composite score. *An average is how 18/100 on a stranger's machine coexists on the
+same page with "all pass" — no single claim was false enough to trip anything, and the composite
+absorbed the worst one.*
 
 ### Deleted from the release verdict — by name
 
@@ -156,7 +169,7 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 
 ## Build order (red-first; each item ships with the mutant that must fail)
 
-1. **Vacuous-pass guard.** DONE 2026-07-28 — `--levels L5` now exits 2. *Prerequisite for trusting
+1. **Vacuous-pass guard.** DONE 2026-07-27 — `--levels L5` now exits 2. *Prerequisite for trusting
    any number below it.*
 2. **Cold clean-room WhitSentry replay** (the single test that would have caught it). Virgin HOME,
    released plugin only, the original prompt with NO trigger words. Oracle: no substitutable write
@@ -187,4 +200,5 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
-| 2026-07-28 | Initial draft | Owner's demand for a 95 plan after Fable 53/100 and GPT-5.6-Sol 38/100 (2026-07-27, `qe-grade-gpt.out:18503-18676`; `02567c43-….jsonl:2672`). Three concealment mechanisms verified first-hand: the vacuous `--levels L5` PASS (fixed here), L4's string-matching `must:` list, and `no-silent-substitution.mjs`'s `audit(root = ROOT)` scanning this repo instead of the user's |
+| 2026-07-27 | v2 — corrected the 83-vs-38 framing after the owner caught it: different subject (product self-score vs independent grade of the test suite), different date. Replaced with the falsifiable claim, README:484/526 "L1–L4 behavioral all pass" |
+| 2026-07-27 | Initial draft | Owner's demand for a 95 plan after Fable 53/100 and GPT-5.6-Sol 38/100 (2026-07-27, `qe-grade-gpt.out:18503-18676`; `02567c43-….jsonl:2672`). Three concealment mechanisms verified first-hand: the vacuous `--levels L5` PASS (fixed here), L4's string-matching `must:` list, and `no-silent-substitution.mjs`'s `audit(root = ROOT)` scanning this repo instead of the user's |

@@ -173,9 +173,10 @@ function runL4() {
   // over any level with no results, so `--levels L5` — a level that does not exist — ran ZERO checks
   // and printed OVERALL: PASS, exit 0. GPT-5.6-Sol reproduced it during the Gen-2 QE grading and I
   // reproduced it again here before fixing. A harness that certifies an empty run is worse than no
-  // harness: it is the mechanism by which this repo reported 83/100 while two independent graders
-  // measured 38/100 and 53/100 on the same product. Nothing could contradict the optimistic number,
-  // because the thing meant to contradict it passed by running nothing.
+  // harness: it is the mechanism by which README:484/526 could claim "L1-L4 behavioral harness -
+  // all pass" as evidence the hook "drives the full pipeline", while two independent graders scored
+  // the QE apparatus 38/100 and 53/100. Nothing could contradict the optimistic claim, because the
+  // thing meant to contradict it passed by running nothing.
   //
   // Two guards: an unknown level is an ERROR (not a silent no-op), and zero executed checks is a
   // FAIL. "I checked nothing and found no problems" is the sentence this exists to make impossible.
