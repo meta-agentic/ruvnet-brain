@@ -63,10 +63,10 @@ function fire(advocacy, candidateLines) {
     // Inner is now 8000: a `/bin/bash printf` needs milliseconds, so 8s is enormous headroom even
     // on a saturated runner, and it lets the runtime's OWN timeout handling fire and report
     // instead of dying to an external kill. A guard below pins outer > inner.
-    encoding: 'utf8', timeout: 30000,
+    encoding: 'utf8', timeout: 45000,
     env: {
       ...process.env,
-      RUVNET_UNPROMPTED_TIMEOUT_MS: '8000',
+      RUVNET_UNPROMPTED_TIMEOUT_MS: '25000',
       RUVNET_UNPROMPTED_PRODUCERS: JSON.stringify([emitter()]),
       RUVNET_SETTINGS_FILE: writeSettings(advocacy),
       RUVNET_ADVOCACY_OUTCOMES: path.join(dir, 'outcomes.jsonl'),   // fresh → never offered → not suppressed

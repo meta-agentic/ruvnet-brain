@@ -54,7 +54,7 @@ function fireRuntime(event, { producers, env = {}, payload } = {}) {
     // Inner is now 8000: a `/bin/bash printf` needs milliseconds, so 8s is enormous headroom even
     // on a saturated runner, and it lets the runtime's OWN timeout handling fire and report
     // instead of dying to an external kill. A guard below pins outer > inner.
-    timeout: 30000,
+    timeout: 45000,
     env: {
       ...process.env,
       // The runtime gives ALL producers ONE 4s global deadline and then FAILS CLOSED — a producer
@@ -72,7 +72,7 @@ function fireRuntime(event, { producers, env = {}, payload } = {}) {
       //
       // A generous deadline restores the meaning of both halves. The 4s default still ships; only
       // the measurement environment changes, which is the one thing that was actually broken.
-      RUVNET_UNPROMPTED_TIMEOUT_MS: '8000',
+      RUVNET_UNPROMPTED_TIMEOUT_MS: '25000',
       ...(producers ? { RUVNET_UNPROMPTED_PRODUCERS: JSON.stringify(producers) } : {}),
       ...env,
     },

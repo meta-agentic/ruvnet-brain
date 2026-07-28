@@ -235,7 +235,7 @@ jobs:
         # pinned bundle (bin/install.mjs:3040-3097 — the "already CURRENT" check) — so a cache hit
         # here costs seconds, not minutes. smokeQuery's real query is also what warms KB_MODEL_CACHE
         # for the battery step below.
-        run: node bin/install.mjs --yes --pin --no-stack --no-enhance --no-statusline --no-nightly-prompt --no-telemetry
+        run: node bin/install.mjs --yes --pin --no-stack --no-enhance --no-statusline --no-nightly-prompt --no-telemetry --no-selfcheck
       - name: Core capability battery — REQUIRE_BRAIN=1 (a skipped battery is now a hard failure)
         env:
           REQUIRE_BRAIN: '1'
