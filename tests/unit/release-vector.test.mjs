@@ -80,38 +80,38 @@ describe('every invariant carries a real incident and a real detector', () => {
 });
 
 describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () => {
-  it('MUTANT: unregister signal-watch from the shipped hooks.json → D3 goes FAIL', () => {
+  it('MUTANT: unregister signal-watch from the shipped hooks.json → D3 goes FAIL', async () => {
     // The F5 class: a capability that exists on disk and is never registered will never fire.
     // The detector must read the REGISTRATION, so this mutant edits the registration, not the file.
     const real = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
-    expect(real.detect().state).toBe('PASS');                       // control
+    expect((await real.detect()).state).toBe('PASS');                       // control
 
     const p = path.join(REPO, 'plugin/hooks/hooks.json');
     const before = fs.readFileSync(p, 'utf8');
     try {
       fs.writeFileSync(p, before.replaceAll('signal-watch', 'signal-watch-DISABLED-BY-MUTANT'));
-      const after = real.detect();
+      const after = await real.detect();
       expect(after.state).toBe('FAIL');
       expect(after.why).toMatch(/not registered/);
     } finally {
       fs.writeFileSync(p, before);
     }
     expect(fs.readFileSync(p, 'utf8')).toBe(before);                 // restored, byte-for-byte
-    expect(real.detect().state).toBe('PASS');                        // and green again
+    expect((await real.detect()).state).toBe('PASS');                        // and green again
   });
 
-  it('MUTANT: sever the selfcheck→exitCode wire → D8 goes FAIL even with the matrix present', () => {
+  it('MUTANT: sever the selfcheck→exitCode wire → D8 goes FAIL even with the matrix present', async () => {
     // This is the ACTUAL historical 40/100 defect: the workflow ran, the check ran, and the verdict
     // evaporated at process exit. The matrix file still exists in this mutant — proving the detector
     // binds to the substance (the exit wire) and not to the ceremony (a YAML file being present).
     const real = RV.INVARIANTS.find((i) => i.name === 'INSTALL-FAILS-LOUD');
-    expect(real.detect().state).toBe('PASS');
+    expect((await real.detect()).state).toBe('PASS');
 
     const p = path.join(REPO, 'bin/install.mjs');
     const before = fs.readFileSync(p, 'utf8');
     try {
       fs.writeFileSync(p, before.replace(/process\.exitCode\s*=\s*selfcheck/, 'void (selfcheck'));
-      const after = real.detect();
+      const after = await real.detect();
       expect(after.state).toBe('FAIL');
       expect(after.why).toMatch(/never reaches process\.exitCode/);
       expect(fs.existsSync(path.join(REPO, '.github/workflows/stranger-matrix.yml'))).toBe(true);
@@ -119,41 +119,44 @@ describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () 
       fs.writeFileSync(p, before);
     }
     expect(fs.readFileSync(p, 'utf8')).toBe(before);
-    expect(real.detect().state).toBe('PASS');
+    expect((await real.detect()).state).toBe('PASS');
   });
 
-  it('MUTANT: a stale replay artifact graded against another SHA reads UNKNOWN, not PASS', () => {
+  it('MUTANT: a stale replay artifact graded against another SHA reads UNKNOWN, not PASS', async () => {
     // Gate C++ v1 graded the PARENT commit and reported on the candidate. A verdict is only ever
     // about the SHA it was measured on; a mismatched one measured a different product.
     const real = RV.INVARIANTS.find((i) => i.name === 'LEARNING-REPLAY');
-    const p = path.join(REPO, 'evals/learning-replay.json');
+    const p = path.join(REPO, 'data/learning-replay-result.json');
     const existed = fs.existsSync(p);
     const before = existed ? fs.readFileSync(p, 'utf8') : null;
     try {
       fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, JSON.stringify({ sha: '0'.repeat(40), result: 'PASS', passed: 3, trials: 3 }));
-      const after = real.detect();
+      fs.writeFileSync(p, JSON.stringify({ invariant: 'LEARNING-REPLAY', verdict: 'PASS', sha: '0'.repeat(40), at: new Date().toISOString(), n: 3, passes: 3, why: 'fixture' }));
+      const after = await real.detect();
       expect(after.state).toBe('UNKNOWN');
-      expect(after.why).toMatch(/candidate is/);
+      expect(after.why).toMatch(/not an ancestor|different tree|stale/i);
     } finally {
       if (existed) fs.writeFileSync(p, before); else fs.rmSync(p, { force: true });
     }
   });
 
-  it('MUTANT: a replay whose CONTROL also succeeded reads UNKNOWN — an invalid trap is not a pass', () => {
+  it('MUTANT: a replay whose CONTROL also succeeded reads UNKNOWN — an invalid trap is not a pass', async () => {
     // DDD-0013 invariant 6, the exact inversion of L4: if the brain-off control produced the same
     // artifact, the trap measured nothing about the brain. INCONCLUSIVE must never round up.
     const real = RV.INVARIANTS.find((i) => i.name === 'LEARNING-REPLAY');
-    const p = path.join(REPO, 'evals/learning-replay.json');
+    const p = path.join(REPO, 'data/learning-replay-result.json');
     const existed = fs.existsSync(p);
     const before = existed ? fs.readFileSync(p, 'utf8') : null;
     const sha = RV.headSha();
     try {
       fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, JSON.stringify({ sha, result: 'INCONCLUSIVE', passed: 3, trials: 3 }));
-      const after = real.detect();
+      fs.writeFileSync(p, JSON.stringify({ invariant: 'LEARNING-REPLAY', verdict: 'INCONCLUSIVE', sha, at: new Date().toISOString(), n: 3, passes: 3, controlTokenRuns: 3, why: 'control arm also succeeded' }));
+      const after = await real.detect();
       expect(after.state).toBe('UNKNOWN');
-      expect(after.why).toMatch(/control arm also succeeded/);
+      // the fixture carries a FRESH `at`, so the age guard cannot fire and this really does exercise
+      // invariant 6 — an earlier version of this test passed for the wrong reason ("result is ? days
+      // old"), which is the adjacent-door mistake: green, but measuring a different guard entirely.
+      expect(after.why).toMatch(/control|inconclusive/i);
     } finally {
       if (existed) fs.writeFileSync(p, before); else fs.rmSync(p, { force: true });
     }
