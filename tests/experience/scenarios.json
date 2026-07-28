@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-07-27",
+  "updated": "2026-07-28",
   "note": "ADR-053 §1 / ADR-058 D2: a hand-written list of coherent scenarios grounded in how this product is ACTUALLY installed and used — never a Cartesian host x os x artifact matrix (ADR-053 §1 killed that structurally). Every 'ci'/'scheduled-live-probe' scenario's evidence field embeds a '<workflow>.yml#<job>' token that tests/experience/report.mjs verifies actually exists in .github/workflows/ — a scenario can never point at a fictional runner. 'manual' scenarios require a named owner and sit OUTSIDE the coverage denominator.",
   "scenarios": [
     {
@@ -244,6 +244,17 @@
       "classification": "manual",
       "evidence": "ADR-053 rollout item 10 (\"Hostile-home journeys — spaces/unicode/read-only/ENOSPC\") is explicitly unbuilt; grep across tests/ for these conditions returns zero hits. Verified manually by Stuart when reported by a user.",
       "owner": "Stuart Kerr"
+    },
+    {
+      "id": "S23",
+      "host": "both",
+      "os": "ubuntu",
+      "artifact": "THE PUBLISHED SURFACE — npm registry (`npx ruvnet-brain@latest`) + the real GitHub Release bundle",
+      "stage": "post-publish — the artifact a stranger actually receives, checked on a clock rather than on a push",
+      "user-state": "fresh-home",
+      "classification": "scheduled-live-probe",
+      "evidence": "published-surface-probe.yml#probe — nightly (cron '17 7 * * *', never on push) scripts/published-surface-probe.mjs: resolves the npm packument + dist-tags.latest, fetches a real byte range of the published tarball and asserts gzip magic, then INSTALLS AND EXECUTES `npx -y ruvnet-brain@latest --help` from the registry, and finally checks releases/latest carries ruvnet-brain.zip above a truncation floor, that its download URL serves the API-declared byte count, and that the .zip.sha256 sidecar is a well-formed 64-hex digest. RED when the package is unpublished, the tarball is not a gzip, the published CLI exits non-zero or prints someone else's help, the Release asset is missing/truncated/unfetchable, or the sidecar is malformed. A rate-limited or unreachable network is UNKNOWN (exit 4) and still red — never green-because-we-could-not-look. Every OTHER scenario in this list runs against the source checkout, which is a different artifact from the one a user receives; only a schedule can catch a surface that died without a commit.",
+      "owner": null
     }
   ]
 }

@@ -1,0 +1,61 @@
+name: published-surface-probe
+# ADR-058 §D2. The deduction this closes, verbatim from the grader:
+# "Zero `scheduled-live-probe` scenarios (I listed all 22: 19 ci, 3 manual). Nothing ever probes the
+# *published* surface (registry `npx`, real Release download) on a schedule — the exact 'dead on the
+# surface a real user touched' failure ADR-053 names."
+#
+# THE POINT, stated plainly. Every other workflow in this repo tests THE SOURCE CHECKOUT. A stranger
+# never receives the source checkout — they receive an npm tarball and an 800MB GitHub Release asset.
+# Those are different artifacts, and "CI is green" says nothing about them. The gap between the two
+# is opened by events that change ZERO bytes in this repo, so no push-triggered job can ever see it:
+# a `files:` array that omits a required file, a half-finished `npm publish`, a Release asset deleted
+# or re-uploaded truncated, a dependency unpublished upstream.
+#
+# Only a clock notices that class of failure. Hence: schedule, NOT push.
+#
+# WHAT MAKES THIS JOB RED (scripts/published-surface-probe.mjs states each check and its trigger):
+#   · `ruvnet-brain` is unpublished / has no dist-tags.latest / its tarball serves non-gzip bytes
+#   · `npx -y ruvnet-brain@latest --help` — a REAL registry install, executed — exits non-zero or
+#     prints something that is not this installer's help
+#   · releases/latest carries no ruvnet-brain.zip, or it is below the truncation floor, or its
+#     download URL does not serve the declared bytes, or the .sha256 sidecar is missing/malformed
+#
+# UNKNOWN IS NEVER PASS. A rate-limited or unreachable network cannot tell "healthy" from "gone", so
+# the probe exits 4 and this job goes red with UNKNOWN in the log — never green-because-we-could-not-look.
+# Same discipline as learning-replay.yml.
+#
+# NOTE ON WHAT IS DELIBERATELY NOT GATED: the npm version and the Release tag version are printed
+# side by side but never asserted equal. They are independent streams by design (README), and gating
+# them would produce red nights for a correct system — which is how a nightly gets ignored.
+on:
+  schedule:
+    # 03:17 America/New_York = 07:17 UTC. Off-the-hour on purpose (every scheduled workflow on GitHub
+    # piles onto :00), and after the release/publish window has settled.
+    - cron: '17 7 * * *'
+  # Deliberately NO `push:` trigger. A push cannot change the published surface, and running this on
+  # push would make it look covered while still never catching the failure it exists for.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-surface-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: The published surface a stranger actually touches
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Probe the registry, execute the published CLI, and check the Release bundle
+        env:
+          # Lifts the anonymous GitHub API rate limit, which is the main source of UNKNOWN here.
+          # Read-only, and absence is handled: the probe simply reports UNKNOWN instead of guessing.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/published-surface-probe.mjs
