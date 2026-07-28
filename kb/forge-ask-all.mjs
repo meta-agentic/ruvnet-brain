@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { searchKb } from './forge-ask.mjs';
-import { rerankPairs } from './forge-rerank.mjs';
+import { rerankPairs, cePrefilterScores } from './forge-rerank.mjs';
 import { tokenize, buildCorpusStats, bm25Score } from './forge-hybrid.mjs';
 
 // TRANSCRIPT/dialogue stores need LEXICAL (BM25) candidate generation, not dense alone. A fact spoken
@@ -131,6 +131,62 @@ export function capRerankPool(candidates, { limit }) {
     .map((c, i) => [Number.isFinite(c.bestDistance) ? c.bestDistance : Infinity, i])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   for (const [, i] of byDistance) {
+    if (keep.size >= limit) break;
+    keep.add(i);
+  }
+  const kept = candidates.filter((_, i) => keep.has(i));
+  return { kept, dropped: candidates.length - kept.length, capped: true };
+}
+
+// The shipped cascade survivor count. 0 disables the cascade. See ADR-058 for the measured curve.
+// Stage 1 reads every pooled pair at CE_CASCADE_TOKENS tokens; the survivors get the full read.
+export const CE_CASCADE_K_DEFAULT = 0;
+export const CE_CASCADE_TOKENS_DEFAULT = 192;
+
+// ── THE CASCADE'S SELECTOR ────────────────────────────────────────────────────────────────────
+//
+// Same contract as capRerankPool — take a pool and a budget, return the subset that gets the
+// expensive read — but the ordering signal is the stage-1 PREFIX cross-encoder score rather than
+// vector distance. That single substitution is the whole point of ADR-058: the flat cap of ADR-057
+// was not too aggressive, it was ordering by the wrong thing. On s-05 the winning document is
+// rank 593/608 by distance and rank 1/608 by the full cross-encoder, so no distance budget short
+// of "keep everything" could retain it.
+//
+// Two rules are inherited from capRerankPool deliberately, and one is dropped deliberately:
+//
+//   KEPT — THE RESCUE AND BM25 LANES ARE EXEMPT. #33 Part A exists because a boost cannot rescue
+//   what was never a candidate, and a transcript store's answer is BM25-only. Those lanes are in
+//   the pool for a reason that has nothing to do with how they score, so a score-ordered cut is
+//   not entitled to drop them either.
+//
+//   KEPT — THE BUDGET IS A BUDGET. Exempt lanes may exceed it (as before); nothing else may.
+//
+//   DROPPED — THE PER-STORE FLOOR. capRerankPool scores one passage per store unconditionally,
+//   because it had to choose before any score existed and "don't mute a whole store" was the only
+//   honest pre-score rule available. The cascade HAS a score for every candidate, from the same
+//   model that will make the final decision, so the floor no longer buys information — it spends
+//   69 of the budget's slots on passages stage 1 has already read and ranked. Measured on the
+//   frozen set (evals/runs/2026-07-27-cross-encoder-cascade.md): the floor variant is not better
+//   on any metric at any budget tested, and is worse on top-1 agreement at K<=128.
+export function cascadeRerankPool(candidates, { limit, s1 }) {
+  if (!(limit > 0) || candidates.length <= limit) return { kept: candidates, dropped: 0, capped: false };
+  if (!Array.isArray(s1) || s1.length !== candidates.length) {
+    // No usable stage-1 scores (the cross-encoder failed to load, say). Score everything rather
+    // than cut blind: a cascade whose selector is missing must degrade to the uncapped path, not
+    // to an arbitrary one. This is the same "never crash where the old path worked" rule the
+    // worker pool follows.
+    return { kept: candidates, dropped: 0, capped: false };
+  }
+  const keep = new Set();
+  const exempt = (c) => c._lane === 'rescue' || c._lane === 'bm25';
+  for (let i = 0; i < candidates.length; i++) if (exempt(candidates[i])) keep.add(i);
+  // (stage-1 score desc, original pool position asc) — stable, so two candidates that score
+  // identically are broken the same way on every run. The pool cap changes what gets scored, so a
+  // nondeterministic selector would make every answer nondeterministic.
+  const byScore = candidates
+    .map((c, i) => [Number.isFinite(s1[i]) ? s1[i] : -Infinity, i])
+    .sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (const [, i] of byScore) {
     if (keep.size >= limit) break;
     keep.add(i);
   }
@@ -449,17 +505,43 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   const capLimit = process.env.KB_CE_MAX_PAIRS !== undefined
     ? Math.max(0, parseInt(process.env.KB_CE_MAX_PAIRS, 10) || 0)
     : CE_MAX_PAIRS_DEFAULT;
-  const { kept: candidates, dropped: cappedOut } = capRerankPool(pooledAll, { limit: capLimit });
+  // THE CASCADE (ADR-058). Stage 1 reads every pooled pair at a truncated length and stage 2 gives
+  // the survivors the full read. Both stages are the SAME model on the SAME logit scale, which is
+  // what makes stage 1 a real approximation of stage 2 rather than a second opinion — the property
+  // vector distance was measured NOT to have. Off unless CE_CASCADE_K_DEFAULT or KB_CE_CASCADE_K
+  // says otherwise; when off, not one extra pair is scored and this path is byte-for-byte the old one.
+  const cascadeK = process.env.KB_CE_CASCADE_K !== undefined
+    ? Math.max(0, parseInt(process.env.KB_CE_CASCADE_K, 10) || 0)
+    : CE_CASCADE_K_DEFAULT;
+  const cascadeTokens = process.env.KB_CE_CASCADE_TOKENS !== undefined
+    ? Math.max(16, parseInt(process.env.KB_CE_CASCADE_TOKENS, 10) || CE_CASCADE_TOKENS_DEFAULT)
+    : CE_CASCADE_TOKENS_DEFAULT;
+  let s1 = null, prefilterMs = 0;
+  if (cascadeK > 0 && pooledAll.length > cascadeK) {
+    const t0 = Date.now();
+    s1 = await cePrefilterScores(query, pooledAll, { maxLength: cascadeTokens });
+    prefilterMs = Date.now() - t0;
+  }
+  const { kept: candidates, dropped: cappedOut } = s1
+    ? cascadeRerankPool(pooledAll, { limit: cascadeK, s1 })
+    : capRerankPool(pooledAll, { limit: capLimit });
   // ONE cross-encoder pass over the whole cross-repo pool → a single comparable relevance scale.
   const ranked = await rerankPairs(query, candidates);
   // Recording the SCORED pool (not the answer) is what makes a pool-policy change measurable: one
   // 605-pair run, then selectResults replayed against those exact scores for any candidate policy.
   if (process.env.KB_CE_TRACE) {
+    // s1 is indexed by POOL position, while `ranked` is sorted by full score — index the stage-1
+    // scores by _poolIdx so a replay can line them up again. A trace that lost that alignment
+    // would silently score every policy against the wrong candidate.
+    const s1By = new Map();
+    if (s1) for (let i = 0; i < pooledAll.length; i++) s1By.set(pooledAll[i]._poolIdx, s1[i]);
     fs.appendFileSync(process.env.KB_CE_TRACE, JSON.stringify({
       query, k, pooledAll: pooledAll.length, scored: candidates.length, capLimit,
+      cascadeK, cascadeTokens: s1 ? cascadeTokens : null, prefilterMs,
       cands: ranked.map((r) => ({
         repo: r.repo, path: r.path, title: r.title ?? null, lane: r._lane ?? 'dense',
         rank: r._srcRank ?? 0, poolIdx: r._poolIdx ?? 0, ce: r.ceScore, dist: r.bestDistance ?? null,
+        s1: s1By.has(r._poolIdx) ? s1By.get(r._poolIdx) : null,
         len: (r.fullText || r.text || '').length,
         gist: /GIST STATUS/.test(r.fullText || r.text || ''),
       })),
@@ -467,10 +549,18 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
   }
   const { results, adrCollision, evidence } = selectResults({ query, ranked, k });
 
-  // `pooled` stays the number of pairs the cross-encoder actually scored — that is what the count
+  // `pooled` stays the number of pairs the cross-encoder read IN FULL — that is what the count
   // has always meant to a reader. `pooledAll`/`cappedOut` report what the cap withheld, because a
   // count that silently changed meaning is the kind of quiet lie this repo gates against.
-  return { repos: list, perRepo, results, pooled: candidates.length, pooledAll: pooledAll.length, cappedOut, corpusAge, adrCollision, evidence };
+  // `prefiltered` is the cascade's own honesty clause: under a cascade the cross-encoder DID look
+  // at every pooled pair, just at `cascadeTokens` tokens instead of 512. Reporting only `pooled`
+  // would let a reader conclude 543 documents were never looked at, which is not what happened.
+  return {
+    repos: list, perRepo, results,
+    pooled: candidates.length, pooledAll: pooledAll.length, cappedOut,
+    prefiltered: s1 ? pooledAll.length : 0, prefilterTokens: s1 ? cascadeTokens : 0, prefilterMs,
+    corpusAge, adrCollision, evidence,
+  };
 }
 
 function parseArgs() {
@@ -488,7 +578,7 @@ function parseArgs() {
 async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
-  const { repos: used, perRepo, results, pooled, pooledAll, cappedOut, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
+  const { repos: used, perRepo, results, pooled, pooledAll, cappedOut, prefiltered, prefilterTokens, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
   // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
   // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
   // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
@@ -525,7 +615,14 @@ async function main() {
   if (evidence?.droppedIrrelevant > 0) {
     console.log(`  (${evidence.droppedIrrelevant} result(s) the reranker judged irrelevant were withheld rather than padded in)`);
   }
-  console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}${cappedOut ? ` (cross-encoded ${pooled} of ${pooledAll}; ${cappedOut} beyond the pair budget)` : ''}\n`);
+  // Under a cascade every pooled pair WAS read by the cross-encoder, at `prefilterTokens` tokens;
+  // only the full 512-token read was rationed. The pre-cascade wording ("N beyond the pair budget")
+  // would have a reader believe 544 documents were never looked at, which is not what happened —
+  // and this repo gates against counts that quietly change meaning.
+  const poolNote = prefiltered
+    ? ` (all ${pooledAll} read at ${prefilterTokens} tokens; the top ${pooled} re-read in full)`
+    : cappedOut ? ` (cross-encoded ${pooled} of ${pooledAll}; ${cappedOut} beyond the pair budget)` : '';
+  console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}${poolNote}\n`);
   results.forEach((r, i) => {
     console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}${r.statusLabel ? `  [${r.statusLabel}]` : ''}`);
     console.log(`path : ${r.repo}/${r.path}`);

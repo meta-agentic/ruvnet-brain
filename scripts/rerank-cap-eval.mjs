@@ -92,7 +92,15 @@ async function collect() {
       // questions with the cap actually engaged, which is the only way to check the replay against
       // reality: capping changes which pairs share a batch, and batch composition was MEASURED to
       // move scores by up to 0.26 logits, so a replayed cap is an approximation of a real one.
-      env: { ...process.env, KB_CE_TRACE: part, KB_CE_MAX_PAIRS: arg('--cap', '0') },
+      // --cascade K does the same for ADR-058's two-stage cascade. Both are collected FOR REAL for
+      // exactly that reason: the cascade re-batches its survivors too, so its scores are its own.
+      env: {
+        ...process.env,
+        KB_CE_TRACE: part,
+        KB_CE_MAX_PAIRS: arg('--cap', '0'),
+        KB_CE_CASCADE_K: arg('--cascade', '0'),
+        KB_CE_CASCADE_TOKENS: arg('--tokens', '192'),
+      },
     }, (err) => {
       const ms = Date.now() - t0;
       if (!err && fs.existsSync(part) && fs.statSync(part).size > 0) {
