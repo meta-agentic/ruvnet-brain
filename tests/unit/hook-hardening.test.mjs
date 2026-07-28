@@ -29,6 +29,13 @@ const REPO = path.resolve(import.meta.dirname, '../..');
 const SCRIPTS = path.join(REPO, 'plugin', 'scripts');
 const PLUGIN_ROOT = path.join(REPO, 'plugin');
 const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
+// `hasBash` answers 'is bash on PATH' — and GitHub's WINDOWS runner ships Git Bash, so it is TRUE
+// there. The two producer cases below do not use PATH bash; they hardcode the ABSOLUTE path
+// /bin/bash (and the seeded producer is a .sh driven the same way), which does not exist on
+// Windows. Guarding them with hasBash therefore did nothing and CI run 30316293282 stayed red on
+// exactly those two. The guard has to test the thing the test actually uses.
+const hasBinBash = fs.existsSync('/bin/bash');
+
 const bashOnly = !hasBash || process.platform === 'win32';
 
 let tmp;      // a throwaway project cwd
@@ -351,7 +358,7 @@ describe('unprompted speech requires an OCCASION — no payload, no bytes', () =
   // verdict — the behaviour under test is the payload gate, which the four byte-exact-silence cases
   // between them still prove on every OS. Faking a shell to keep a green tick would be worse than
   // an honest skip, and this repo's own rule is that a test which cannot fail is not a test.
-  it.skipIf(!hasBash)('CONTROL: the seeded producer really does speak when a real event occasions it', () => {
+  it.skipIf(!hasBinBash)('CONTROL: the seeded producer really does speak when a real event occasions it', () => {
     const r = runtime(JSON.stringify({
       prompt: 'give me a long status update about where the build actually is', session_id: 'occ-1',
     }));
@@ -378,7 +385,7 @@ describe('unprompted speech requires an OCCASION — no payload, no bytes', () =
     expect(r.stdout).toBe('');
   }, 60_000);
 
-  it.skipIf(!hasBash)('TEETH: a REAL payload still reaches the producers — the gate is not a mute button', () => {
+  it.skipIf(!hasBinBash)('TEETH: a REAL payload still reaches the producers — the gate is not a mute button', () => {
     // A trusted fake producer via the documented test seam, so this asserts the payload gate alone
     // and not any real detector's mood.
     const emit = path.join(tmp, 'emit.sh');
