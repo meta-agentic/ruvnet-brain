@@ -308,7 +308,9 @@ async function handle(msg) {
             // ran — and the one that forgot would be the one that mattered.
             structuredContent: {
               cardLane: { repo: cardHit.repo, path: cardHit.path, bodyOverlap: cardHit.bodyOverlap, coverage: cardHit.coverage, namedRepo: cardHit.namedRepo },
-              ...(cardReceipt ? { grounding: cardReceipt } : {}),
+              // A receipt with NO sources is not evidence of grounding — it is a receipt for
+              // nothing. Gate on sources, not on the receipt object being truthy.
+              ...(cardReceipt?.sources?.length ? { grounding: cardReceipt } : {}),
             },
           });
         }
@@ -414,7 +416,10 @@ async function handle(msg) {
           isError: false,
           // The typed receipt (ADR-055 §3.1). Compact on purpose — structuredContent is context the
           // user pays for; the full fact record lives in the ledger, not on the wire.
-          ...(receipt ? { structuredContent: { grounding: receipt } } : {}),
+          // Sources, not truthiness — see the card lane above. This read `receipt ?` and was
+          // GREEN only because the writer was dead: with recordAnswer never running, a
+          // zero-source receipt could not be produced to expose it.
+          ...(receipt?.sources?.length ? { structuredContent: { grounding: receipt } } : {}),
         });
       } catch (e) {
         const body = `search_ruvnet error: ${e.message}`;

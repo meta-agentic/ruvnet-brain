@@ -432,19 +432,50 @@ describe('T4 — a non-answer mints nothing (the ADR-054 §3 discipline, extende
     expect(fs.existsSync(evidenceFile)).toBe(false);
   });
 
-  it('the CALL SITE sits after all four non-answer returns — pinned at the source, not assumed', () => {
+  it('EVERY call site sits after the refusals that can reach it — pinned at the source, not assumed', () => {
     // The producer⇄consumer pinning brain-off.test.mjs established: assert the ORDER in the real
-    // file, so a future edit that hoists the capture above a refusal goes red here rather than
+    // file, so a future edit that hoists a capture above a refusal goes red here rather than
     // silently re-arming the write gate from an outage.
-    const src = fs.readFileSync(FORGE_MCP, 'utf8');
+    //
+    // THIS TEST USED TO ASSUME ONE CALL SITE and checked `src.indexOf(...)` — the FIRST one. When
+    // the card lane became a first responder and earned its own receipt, the first occurrence moved
+    // above three of the four refusals and this went red. The product was fine; the assumption was
+    // not. So it now checks EACH site against the refusals that can actually reach it, which is the
+    // property that was always meant — "a non-answer mints nothing", not "there is exactly one call".
+    const raw = fs.readFileSync(FORGE_MCP, 'utf8');
+    // COMMENTS ARE BLANKED, LENGTH-PRESERVING, so every offset below still indexes the real file.
+    // Without this the scan matched `evidence.recordAnswer(...)` inside a PROSE COMMENT explaining
+    // the shadowing bug, and reported a capture above the off switch that does not exist. Prose that
+    // quotes code is not code — the same substring-is-not-substance mistake this repo keeps paying
+    // for, this time inside the test that guards against it.
+    const src = raw.replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
     const at = (s) => { const i = src.indexOf(s); expect(i, `marker missing: ${s}`).toBeGreaterThan(-1); return i; };
-    const capture = at('evidence.recordAnswer');
-    expect(at('return disabledResult(id, k, offState)')).toBeLessThan(capture);   // switched off
-    expect(at('RUVNET BRAIN IS DOWN')).toBeLessThan(capture);                     // outage
-    expect(at('(no results — the search ran')).toBeLessThan(capture);             // empty
-    expect(at('search_ruvnet error:')).toBeGreaterThan(capture);                  // thrown: in the catch, below
-    // …and it is guarded, so a throw inside capture can never become a failed query.
-    expect(src).toMatch(/try \{ if \(evidence\) receipt = evidence\.recordAnswer/);
+    const sites = [...src.matchAll(/\.recordAnswer\(/g)].map((m) => m.index);
+    expect(sites.length, 'no capture call sites found — the writer is unwired').toBeGreaterThan(0);
+
+    const offSwitch = at('return disabledResult(id, k, offState)');
+    // THE OFF SWITCH OUTRANKS EVERY LANE. A switched-off brain must mint nothing, whichever lane
+    // would have answered — so this one applies to all sites without exception.
+    for (const s of sites) expect(offSwitch, 'a capture sits above the off switch').toBeLessThan(s);
+
+    // The outage and empty-result refusals belong to the HEAVY lane — they are states of searchAll,
+    // which the card lane returns before ever calling. So they are checked against the LAST site,
+    // the heavy one. The card lane cannot reach them: it mints only inside `if (cardHit.hit)`.
+    const heavy = sites[sites.length - 1];
+    expect(at('RUVNET BRAIN IS DOWN')).toBeLessThan(heavy);                      // outage
+    expect(at('(no results — the search ran')).toBeLessThan(heavy);              // empty
+    expect(at('search_ruvnet error:')).toBeGreaterThan(heavy);                   // thrown: in the catch, below
+    expect(src.slice(0, sites[0])).toMatch(/if \(cardHit\.hit\)/);               // card lane guarded by a HIT
+
+    // …and every capture is guarded, so a throw inside one can never become a failed query.
+    for (const s of sites) {
+      const before = src.slice(Math.max(0, s - 400), s);
+      expect(before, `capture at ${s} is not inside a try`).toMatch(/try \{/);
+    }
+    // A receipt with no sources is not grounding — neither lane may attach one.
+    // `\?(?!\.)` — the TRUTHINESS test `receipt ? {…}`, not optional chaining `receipt?.sources`.
+    // Without the lookahead this matched the correct code and failed on the fix itself.
+    expect(src).not.toMatch(/\.\.\.\(\s*(card)?[Rr]eceipt\s*\?(?!\.)/);
   });
 
   it('LIVE: a switched-off brain answers and writes NO evidence line', () => {

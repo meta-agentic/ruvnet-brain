@@ -1,13 +1,13 @@
 ---
-id: ADR-0060
+id: ADR-060
 title: The two-stage cross-encoder cascade — reading every passage, cheaply, before reading a few properly
 status: Accepted
 date: 2026-07-27
 updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, cascade, measurement]
-supersedes: [ADR-0059]
-relates: [ADR-057, ADR-0011, ADR-0025]
+supersedes: [ADR-059]
+relates: [ADR-057, ADR-011, ADR-025]
 governs:
   - kb/forge-rerank.mjs
   - kb/forge-ask-all.mjs
@@ -18,7 +18,7 @@ governs:
 Updated: 2026-07-27 | Version 1.0.0
 Created: 2026-07-27
 
-# ADR-0060 — The two-stage cross-encoder cascade
+# ADR-060 — The two-stage cross-encoder cascade
 
 **Status**: Accepted
 

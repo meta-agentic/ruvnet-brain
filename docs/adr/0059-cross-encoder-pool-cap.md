@@ -1,5 +1,6 @@
 ---
-id: ADR-0059
+| 2026-07-27 | Re-verified, and **superseded by ADR-060** | `capRerankPool` is still present and `CE_MAX_PAIRS_DEFAULT` is still 0 — every claim in this document still describes the code. What changed is that ADR-060's cascade achieves −59.3% where this achieved −30.4% **and keeps s-05**, by fixing the thing this document got wrong: the cut was not too deep, it was ordered by the wrong signal (s-05's answer is rank 593/608 by distance, 1/608 by cross-encoder). This document stays as the negative result that made that diagnosis possible. |
+id: ADR-059
 title: Bounding the cross-encoder pool — the measurement, and why the cap ships OFF
 status: Accepted
 date: 2026-07-27
@@ -7,14 +8,14 @@ updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, measurement, negative-result]
 supersedes: []
-relates: [ADR-0011, ADR-0025]
+relates: [ADR-011, ADR-025]
 governs:
   - kb/forge-ask-all.mjs
   - scripts/rerank-cap-eval.mjs
   - scripts/rerank-cap-warm-ab.mjs
 ---
 
-# ADR-0059 — Bounding the cross-encoder pool
+# ADR-059 — Bounding the cross-encoder pool
 
 **Status**: Accepted
 
