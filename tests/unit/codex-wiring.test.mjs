@@ -447,9 +447,8 @@ describe('no shipped file leaks a developer path', () => {
   it('.codex/hooks.json is valid JSON, carries no unrunnable hook, and explains itself', () => {
     const parsed = JSON.parse(fs.readFileSync(path.join(CODEX_DIR, 'hooks.json'), 'utf8'));
     expect(Object.keys(parsed.hooks)).toHaveLength(0);
-    // Assert on the STRUCTURE, not the prose: the _note legitimately discusses /bin/bash to explain
-    // why the entry is gone. What must be absent is a runnable command, and there are none.
+    // Assert on the STRUCTURE, not the prose. What must be absent is a duplicate runnable command.
     expect(JSON.stringify(parsed.hooks)).not.toMatch(/command|\/bin\//);
-    expect(parsed._note).toMatch(/installer-populated/i);
+    expect(parsed.description).toMatch(/plugin owns lifecycle integration/i);
   });
 });

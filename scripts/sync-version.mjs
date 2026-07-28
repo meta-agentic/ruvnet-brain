@@ -19,6 +19,11 @@ let drift = 0;
 
 // Each target: a file, a regex to find the version-bearing line, and the corrected line.
 const targets = [
+  { // Codex plugin manifest — same product, same release train as the Claude manifest
+    file: 'plugin/.codex-plugin/plugin.json',
+    get: (s) => (JSON.parse(s).version),
+    set: (s) => s.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${V}"`),
+  },
   { // npm installer package — inherits the product version (publish in lockstep)
     file: 'package.json',
     get: (s) => (JSON.parse(s).version),

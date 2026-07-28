@@ -605,6 +605,7 @@ const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
 const codexHomeDir = () => path.join(os.homedir(), '.codex');
 const codexConfigPath = () => path.join(codexHomeDir(), 'config.toml');
 const codexServerDir = () => path.join(os.homedir(), '.claude', 'ruvnet-brain', 'mcp');
+const codexHookWrapperPath = () => path.join(os.homedir(), '.cache', 'ruvnet-brain', 'codex-hook.mjs');
 
 // The exact bytes we own. Kept in one place so the writer and the doctor probe can never disagree.
 function codexManagedBlock(serverPath) {
@@ -685,6 +686,8 @@ export function wireCodexHost({
   configPath = path.join(codexDir, 'config.toml'),
   serverDir = codexServerDir(),
   source = path.join(__dirname, '..', 'plugin', 'mcp', 'server.mjs'),
+  hookWrapperSource = path.join(__dirname, '..', 'plugin', 'scripts', 'codex-hook-wrapper.mjs'),
+  hookWrapperPath = codexHookWrapperPath(),
   announce = true,
 } = {}) {
   let host = false;
@@ -705,6 +708,10 @@ export function wireCodexHost({
   // copy leaves a TORN server.mjs at the exact path a prior install's config already points at, so
   // Codex spawns half a file. rename() over the target is atomic; a failure leaves the old bytes.
   atomicReplace(serverPath, (tmp) => fs.copyFileSync(source, tmp));
+  if (fs.existsSync(hookWrapperSource)) {
+    fs.mkdirSync(path.dirname(hookWrapperPath), { recursive: true });
+    atomicReplace(hookWrapperPath, (tmp) => fs.copyFileSync(hookWrapperSource, tmp));
+  }
 
   let before = '';
   try { before = fs.readFileSync(configPath, 'utf8'); } catch { /* first run — no config yet */ }
@@ -714,7 +721,7 @@ export function wireCodexHost({
       ok('Codex already declares ruvnet-brain in your own config — left exactly as you wrote it');
       info(`  to hand it to us instead, delete that ${c.bold('[mcp_servers.ruvnet-brain]')} block and re-run this installer`);
     }
-    return { host: true, action, serverPath };
+    return { host: true, action, serverPath, hookWrapperPath };
   }
   if (text !== before) {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -725,7 +732,7 @@ export function wireCodexHost({
     info(`  server: ${serverPath} ${c.dim('(persistent copy — the npx dir vanishes)')}`);
     info(`  ${c.dim('only our marked block is written; every other section is byte-preserved')}`);
   }
-  return { host: true, action, serverPath, changed: text !== before };
+  return { host: true, action, serverPath, hookWrapperPath, changed: text !== before };
 }
 
 // ── step: verify the install is REAL (counts — never take "installed" on faith) ──────────────────

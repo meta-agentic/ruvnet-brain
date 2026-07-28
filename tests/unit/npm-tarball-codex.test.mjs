@@ -64,15 +64,18 @@ function isolatedHome() {
   return { home, codexDir, configPath: path.join(codexDir, 'config.toml'), serverDir: path.join(home, '.claude', 'ruvnet-brain', 'mcp') };
 }
 
-// ── the tarball manifest: the one file present, the rest of plugin/ still excluded ───────────────
-describe('the published artifact carries exactly the server, and no more of plugin/', () => {
+// ── the tarball manifest: only the two persistent Codex host files ship from plugin/ ─────────────
+describe('the published artifact carries the persistent Codex host files, and no more of plugin/', () => {
   it('plugin/mcp/server.mjs is in the tarball', () => {
     expect(packed.files.map((f) => f.path)).toContain('plugin/mcp/server.mjs');
   });
 
-  it('no OTHER plugin/ content leaks into the package (the fix is one file, not a tree)', () => {
+  it('ships only the MCP server and generation-independent hook wrapper from plugin/', () => {
     const pluginFiles = packed.files.map((f) => f.path).filter((p) => p.startsWith('plugin/'));
-    expect(pluginFiles).toEqual(['plugin/mcp/server.mjs']);
+    expect(pluginFiles).toEqual([
+      'plugin/mcp/server.mjs',
+      'plugin/scripts/codex-hook-wrapper.mjs',
+    ]);
   });
 
   it('the packed server is byte-identical to the source of truth', () => {

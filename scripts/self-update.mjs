@@ -469,7 +469,8 @@ if (has('--publish')) {
     wtDoc.version = next;
     fs.writeFileSync(wtPlugin, JSON.stringify(wtDoc, null, 2) + '\n');
     execFileSync(NODE, ['scripts/sync-version.mjs'], { cwd: wt, stdio: 'inherit' });
-    execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'package.json', 'kb/package.json',
+    execFileSync('git', ['add', 'README.md', 'plugin/.claude-plugin/plugin.json', 'plugin/.codex-plugin/plugin.json',
+      'package.json', 'kb/package.json',
       'data/manifest.json', 'primer/ruvnet-primer.md', 'explainer/index.html'], { cwd: wt, stdio: 'inherit' });
     execFileSync('git', ['commit', '-m', `Nightly brain refresh ${tag}: ${todo.map((p) => p.name).join(', ')}\n\nAutomated by scripts/self-update.mjs --publish (launchd com.ruvnet.brain-nightly).`], { cwd: wt, stdio: 'inherit' });
     execFileSync('git', ['push', 'origin', 'HEAD:main'], { cwd: wt, stdio: 'inherit' });

@@ -48,6 +48,7 @@
   "files": [
     "bin/install.mjs",
     "plugin/mcp/server.mjs",
+    "plugin/scripts/codex-hook-wrapper.mjs",
     "!plugin/README.md",
     "README.md",
     "LICENSE",

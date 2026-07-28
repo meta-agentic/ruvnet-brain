@@ -1,0 +1,145 @@
+{
+  "description": "RuvNet Brain lifecycle hooks for Codex. Every command enters through a generation-independent wrapper and adapts the shared Brain hook bodies to Codex contracts.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" session-start",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" ground-ruvnet",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" unprompted-speech UserPromptSubmit",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" hijack-ruvnet",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" route-dispatch",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" protect-state",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" unprompted-speech PreToolUse-write",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" verify-interface",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" design-wall",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" unprompted-speech PreToolUse-bash",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" learn-capture",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" md-stamp",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" signal-watch",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" learn-flush",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" continuation-gate",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
