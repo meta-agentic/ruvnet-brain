@@ -10,11 +10,13 @@ supersedes: []
 relates: [ADR-012, ADR-017, ADR-023, ADR-028, ADR-030, ADR-040, ADR-043, ADR-050, ADR-052, ADR-053, ADR-054]
 governs:
   - plugin/hooks/hooks.json
-  - plugin/scripts/
+  - plugin/scripts/*.mjs
+  - plugin/scripts/*.sh
   - kb/forge-mcp-all.mjs
   - kb/forge-evidence.mjs
-  - tests/mesh/
-  - tests/experience/
+  - tests/mesh/*.mjs
+  - tests/experience/*.json
+  - tests/experience/*.mjs
   - ~/.claude/settings.json (this machine's layer — census appendix A)
 ---
 
@@ -253,6 +255,33 @@ Each detector is proven load-bearing by disabling it and watching its own bad wr
    the only part allowed a dependency, and it fails open on a missing node or checker (both proven
    by breaking them, not by comment).
 
+### 3.9 A currency finding, not a decision (found 2026-07-27, re-verifying this ADR against later code)
+
+**The capability-card fast lane reopens the exact gap §3.1 closed, for the questions it answers.**
+`kb/card-lane.mjs` was wired into `kb/forge-mcp-all.mjs`'s `search_ruvnet` handler the same day
+(commit `2f9726d`, timestamped AFTER this ADR's last commit) as a first responder tried on EVERY
+query, BEFORE `searchAll()`. Read at `kb/forge-mcp-all.mjs`: a card-lane hit returns immediately
+with `structuredContent: { cardLane: {...} }` — the branch returns before the code that calls
+`evidence.recordAnswer()` (the line that emits the typed GroundingReceipt this section is about) is
+ever reached. `kb/card-lane.mjs` itself has no receipt/evidence code of its own (grepped: zero
+hits). So **a card-lane-answered query gets no GroundingReceipt at all**, and D1-D5 in
+`plugin/scripts/grounding-substance.mjs` have nothing to check a following write against for that
+query — permitted by §1.2's "malfunction ≠ decision" (no evidence reads as no contradiction), which
+is the correct rule for a genuinely absent receipt but was written assuming every success path
+produces one.
+
+This matters because card-lane's own stated purpose — "does rUv already ship X? which tool do I
+reach for?" — is the SAME question class as the founding incident (a question about whether
+`rvf-wasm` exists locally, answered correctly, then contradicted in the write with zero enforcement).
+The fast lane was built to make exactly that class of question fast; it was not built with the
+fourth wall in mind, and nothing in its own commit or `card-lane.mjs`'s header mentions evidence
+emission. This is not one of the four deliberate deviations in §3.8 — those describe scope not yet
+built; this is a regression risk in scope §3.1 already claims is complete. Not fixed here (out of
+scope for a doc-currency pass — this file records what the code does, it does not patch it): either
+`kb/card-lane.mjs`'s hit path needs its own call into `kb/forge-evidence.mjs`, or the D1-D5 gate
+needs to treat "answered via card lane, no receipt" as its own class rather than silently falling
+back to "permitted".
+
 ## §4 Learning that changes behavior — buildable vs ceremony, honestly split
 
 **Real today (measured):** 27 Tier-1 lessons load every session (global-memory sqlite, read
@@ -425,6 +454,15 @@ census/lint suite is born red** (appendix B) — which is the proof it works.
 
 ## Appendix A — Hook census (this machine, 2026-07-27, post-03:00 fixes; spine gen 22 = 3.9.85-dev)
 
+> **Known stale as of the 2026-07-27 re-verification, flagged rather than silently left wrong:**
+> `plugin/hooks/hooks.json` gained a 16th plugin-layer registration the same day, after this census
+> was written — `signal-watch` (PostToolUse, matcher `^Bash$`, advisory, silence, 5s; commit
+> `1978088`, ADR-058 §D3's external-signal watch plane). The counts below (15 plugin-layer / 42
+> total) are therefore off by at least one (16 / 43) and the per-event chain counts under
+> "Per-event chains" that include Bash/PostToolUse are undercounted by the same one hook. Not
+> re-measured or re-timed here — a full re-audit of this appendix is its own piece of work, not a
+> doc-currency fix — but the discrepancy is real and should not be read as current.
+
 **42 active handler registrations across six registries** (GPT-5.6 count, spot-verified):
 RuvNet Brain plugin 15 · user settings 11 · project settings 2 · security-guidance 9 ·
 vercel 4 · superpowers 1.
@@ -524,6 +562,20 @@ SessionStart worst-case is security-guidance's 180s; SessionEnd = 3 concurrent s
   posture cannot be a store-level verdict; policy file required (§3.2). This finding reshaped
   D1.
 
+**Post-authoring status (found 2026-07-27, re-verifying this ADR against later code — commit
+`95cf72e`, "the D9 hook-hardening pass"):** F20 (held-open-stdin hang, confirmed red in ADR-053 §2
+and named here as blocked on build item 3) and F11 (learn-flush's 48s-worst-case-inside-a-30s-
+timeout) are **both now fixed**, but NOT via item 3 (the four-plane dispatchers, which have not
+landed — hooks.json still carries the same per-entry table structure, no unified dispatcher) as
+this ADR's ranked build order predicted. They were closed directly, per-body, in a separate
+hardening pass: 11 hook bodies (`design-wall`, `verify-interface`, `protect-state`,
+`route-dispatch`, `version-bump-gate`, `learn-capture`, `ground-before-write`, `grounding-stamp`,
+`lesson-hooks`, `ground-ruvnet`, `hijack-ruvnet`) now return in 1.9-3.5s against held-open stdin
+(measured, per that commit's message); `learn-flush` is now deadline-aware (18s) with per-call
+timeout clamped to the remaining budget. The fix arrived out of the sequence this ADR's build
+order assumed, but the fixes themselves are real and measured — worth recording so the build
+order isn't read as still-blocking work that has, in fact, already landed.
+
 ## Adversarial duel record (2026-07-27, per the standing order)
 
 **Process failure, recorded because the record is the point:** the first GPT-5.6 run produced
@@ -567,3 +619,13 @@ consolidation depth — GPT's end-state via Fable's staging (§2); advisory LLM 
 past v1 (§3.7.1); override human-terminal requirement — Fable's refusal shipped with GPT's
 clause as the pre-agreed escalation (§3.5); Task-prompt scanning — Fable's refusal shipped,
 delegation drift goes to the interrupt tier (§3.7.9).
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-27 | `governs:` changed: `plugin/scripts/` → `plugin/scripts/*.mjs` + `plugin/scripts/*.sh`; `tests/experience/` → `tests/experience/*.json` + `tests/experience/*.mjs` | `doc-currency.mjs` flagged both as `governs-directory` (a directory's tree object mass-expires on any file changing anywhere under it). Both globs expand via `git ls-files` to the real tracked files in each directory today, preserving this ADR's actual governance scope (effectively the whole scripts directory plus the experience-QA fixtures) in a form the tool can diff per-blob |
+| 2026-07-27 | **DIVERGED, found and documented — §3.9 added.** `kb/card-lane.mjs`, wired as a first responder in `kb/forge-mcp-all.mjs` (`2f9726d`, after this ADR's last commit `b73176a`), returns a cited answer WITHOUT calling `evidence.recordAnswer()` — no GroundingReceipt is emitted for a card-lane hit, reopening the gap §3.1 was written to close, for the same class of question (capability/package existence) the founding esm.sh incident was about. Not fixed here — this pass records what the code does | Re-verification found this by reading `kb/forge-mcp-all.mjs`'s diff at `2f9726d` line-by-line against §3.1's "emits ... on the success path" claim: the card-lane branch returns before `evidence.recordAnswer()` is ever reached, and `kb/card-lane.mjs` has no evidence code of its own (grepped) |
+| 2026-07-27 | Appendix A flagged stale (not re-measured) — `signal-watch` is a 16th plugin-layer hook (`1978088`) added after the census was written; the 15/42 counts are undercounts | Same re-verification pass; a full appendix re-audit is separate work, so the discrepancy is recorded rather than silently left to read as current |
+| 2026-07-27 | Re-checked `kb/forge-evidence.mjs` (no commits since this ADR's last commit) and `plugin/hooks/hooks.json`'s other changes (D8 grounding-unproven surfacer, `987590a`/`a285fcd`) — additive, unrelated to §3's receipt contract | Completes the presumed-stale re-read across all 3 non-glob governed paths |
+| 2026-07-27 | `governs:` changed again: `tests/mesh/` → `tests/mesh/*.mjs`. Appendix B gained the "Post-authoring status" F20/F11 note (fixed, out of the predicted sequence) | Between this re-read's earlier passes and this one, `tests/mesh/coexistence.test.mjs` was committed (`314be33`, ADR-058 D5) — `tests/mesh` flipped from untracked-on-disk to a real git tree, so the directory-glob fix applied to `tests/experience/` and `plugin/scripts/` earlier needed to be applied here too. Re-walked the full broadened `plugin/scripts/*` commit range (`3aa228b`, `61f9f9d`, `95cf72e`, `ecb317c`) and found `95cf72e` ("D9 hook-hardening pass") measurably fixes F20 and F11, both previously "recorded, not fixed" in this document's own build order — recorded here rather than left silently stale |

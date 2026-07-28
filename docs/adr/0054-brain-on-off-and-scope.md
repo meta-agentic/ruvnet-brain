@@ -3,7 +3,7 @@ id: ADR-054
 title: Brain on/off and per-part scope — a user-controlled brain that can never silently lie about being off
 status: Implemented
 date: 2026-07-26
-updated: 2026-07-26
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [settings, console, scope, retrieval, hooks, honesty]
 supersedes: []
@@ -156,3 +156,9 @@ never tell the model the re-enable mechanism); uninstall preserving settings boo
 reinstall. GPT-5.6: cross-session authority leakage and per-operation state snapshots;
 RUVNET_SETTINGS_FILE env splits; telemetry must never count disabled soft-answers as success or
 failure. v1 draft's Decision + risks register superseded above; Context stands.
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 10 commits (1d) after this document's last commit (`3501ef4`), across all 5 governed files. Checked each: (1) `scripts/user-settings.mjs` — `61f9f9d` (the ADR-052 1-5 advocacy dial) only rewrites the `advocacy` schema entry; grepped `brainEnabled` — the key, its sentinel-authority comment, and the sentinel-wins-on-disagreement rule are untouched, and the enum-migration code it adds doesn't reach the boolean branch `brainEnabled` uses. (2) `kb/forge-ask-all.mjs` — `71b0be2` (symlink main-entry fix) and `a44899b`/`1a6b54d` (cross-encoder pool cap, shipped OFF by default) are unrelated to the on/off contract; grepped `disabled` — no hits in this file (the `disabled:true` soft-answer this ADR describes lives in `kb/forge-mcp-all.mjs`, governed separately). (3) `plugin/mcp/server.mjs` — `879d88e` fixes a timeout-outage health-reporting bug, does not touch the boot-frozen tool-description claim in §4. (4) `plugin/scripts/hook-shim.mjs` — `920f9ba` (mesh census) adds new table entries but the `offBehavior: silence\|run\|partial` contract and the existing 11 entries' values are byte-identical. (5) `scripts/onboarding-console.mjs` — `408b01c` moved the on/off switch from a collapsed checkbox to its own always-open card FIRST on the page (commit message: "ADR-054's on/off switch was rendered... below the things it governs, behind a chevron. It is now its own always-open card FIRST"); this is a UI relocation, not a contract change — the three redundant state channels, consent-gated OFF with downside copy, off-since-date, maintenance disclosure, and sentinel-vs-mirror disagreement line this ADR requires are all still present, just promoted to the top of the page |

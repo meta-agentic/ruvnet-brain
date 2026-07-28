@@ -8,7 +8,7 @@ impl: unbuilt
 governs:
   - scripts/behavioral-l1-l4.mjs
   - scripts/no-silent-substitution.mjs
-  - tests/mesh/
+  - tests/mesh/*.mjs
   - bin/install.mjs
   - plugin/hooks/hooks.json
 authors: [Stuart Kerr, Claude Code]
@@ -183,6 +183,27 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 7. **Claim-to-behaviour release gate** (the vector, not the average).
 8. **`verify-interface` parser** replacing the regex.
 
+> **STATUS 2026-07-27 (re-verification, not a rescore) — most of this list has since shipped, mostly
+> via ADR-058, which extends this ADR's build order explicitly.** Checked each item against the
+> live artifact rather than trusting either ADR's prose:
+>
+> | # | Item | State | Checked |
+> |---|---|---|---|
+> | 1 | Vacuous-pass guard | **DONE** (already noted above) | `--levels L5` exits 2 |
+> | 2 | Cold clean-room WhitSentry replay | **Not done** | no `WhitSentry`/clean-room test file exists under `tests/` |
+> | 3 | D8 install-blocks-on-failure + 5-image matrix | **DONE**, via ADR-058 | `.github/workflows/stranger-matrix.yml` exists (5 images incl. a hostile no-jq/no-gh cell); `bin/install.mjs` consumes `runSelfCheck()`'s exit code |
+> | 4 | Latency budget as a correctness gate | **DONE**, via ADR-058 D6 | `kb/card-lane-budget.json` (p95≤250ms, absoluteFail>1000ms) wired as a real `hardFailures` entry in `scripts/qe/ux-suite.mjs` via `scripts/qe/card-lane-gate.mjs`, not merely reported |
+> | 5 | Substitution audit re-pointed at the user's project | **Not done** | `scripts/no-silent-substitution.mjs:121` is still `audit(root = ROOT)` — no `--project` flag |
+> | 6 | D4 counterfactual learning replay | **Not done** | no counterfactual-replay fixture exists |
+> | 7 | Claim-to-behaviour release gate (vector, not average) | **Not done** | `scripts/claims-verify.mjs` carries no `PASS\|FAIL\|UNKNOWN` vector-minimum gate yet (ADR-058, which owns this build item, is itself still `impl: unbuilt`) |
+> | 8 | `verify-interface` parser replacing the regex | **DONE** (the parser half) | `plugin/scripts/verify-interface.sh:173`: "MATCH_RE is gone, not demoted" — replaced by the structural `commandNodes()` classifier (`:100`) via `4dfb867`, issue #44. The D7 corpus-with-both-mutant-polarities half of "95 on D7" is separate and still open |
+>
+> Net: 3 of 8 items fully done, 1 half done, 4 still open. This does not change this ADR's own
+> `impl: unbuilt` (a plan doc doesn't get to self-certify as built by proxy through a sibling ADR),
+> but the specific "required" language in the per-dimension sections above (D8, D6, D7-parser) is
+> now describing work already landed rather than a gap — read those sections as historical rationale
+> for what ADR-058 then built, not as an open ask.
+
 ## Consequences
 
 - **The score will get worse before it gets better**, and that is the intended signal: Gen-2 classes
@@ -202,3 +223,5 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 |---|---|---|
 | 2026-07-27 | v2 — corrected the 83-vs-38 framing after the owner caught it: different subject (product self-score vs independent grade of the test suite), different date. Replaced with the falsifiable claim, README:484/526 "L1–L4 behavioral all pass" |
 | 2026-07-27 | Initial draft | Owner's demand for a 95 plan after Fable 53/100 and GPT-5.6-Sol 38/100 (2026-07-27, `qe-grade-gpt.out:18503-18676`; `02567c43-….jsonl:2672`). Three concealment mechanisms verified first-hand: the vacuous `--levels L5` PASS (fixed here), L4's string-matching `must:` list, and `no-silent-substitution.mjs`'s `audit(root = ROOT)` scanning this repo instead of the user's |
+| 2026-07-27 | **Re-read against the governed code; build-order status table added — no prose claim was wrong, but 3-4 of 8 build items had shipped since this ADR was written and the document didn't say so.** | Flagged `presumed-stale`: 5 commits (0d) after this document's last commit (`0cefecc`), across `scripts/behavioral-l1-l4.mjs`, `scripts/no-silent-substitution.mjs`, `bin/install.mjs`, `plugin/hooks/hooks.json`. Checked each governed path and cross-referenced ADR-058 (which explicitly "extends ADR-057's build order" and ships the same day): `.github/workflows/stranger-matrix.yml` now exists (item 3), `kb/card-lane-budget.json`/`scripts/qe/card-lane-gate.mjs` wire a real hard latency gate (item 4), `verify-interface.sh:173` confirms `MATCH_RE` replaced by `commandNodes()` (item 8's parser half); `no-silent-substitution.mjs:121` still reads `audit(root = ROOT)` with no `--project` flag (item 5 still open), no WhitSentry/clean-room fixture exists (item 2 still open), `scripts/claims-verify.mjs` has no vector-minimum gate yet (item 7 still open, ADR-058 itself still `impl: unbuilt`) |
+| 2026-07-27 | `governs:` changed: `tests/mesh/` → `tests/mesh/*.mjs` | `doc-currency.mjs` flagged `governs-directory` once `tests/mesh/coexistence.test.mjs` (`314be33`, ADR-058 D5) was committed, flipping the directory from untracked-on-disk to a real git tree. Re-checked `behavioral-l1-l4.mjs`/`no-silent-substitution.mjs` against the fuller post-D5/D8 commit range — still unchanged, build-order table above still accurate |

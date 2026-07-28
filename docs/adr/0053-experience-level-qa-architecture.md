@@ -9,7 +9,8 @@ tags: [qa, testing, experience, cross-platform, codex, agentic-qe, ci]
 supersedes: []
 relates: [ADR-028, ADR-050, ADR-051]
 governs:
-  - tests/experience/
+  - tests/experience/*.json
+  - tests/experience/*.mjs
   - .github/workflows/ci.yml
   - scripts/qe/*.mjs
 ---
@@ -196,3 +197,10 @@ GitHub rate-limit on the unauthenticated gate; GPT-5.6 — candidate-dist-tag pr
 process-group watchdog over in-process timers, p95/p99 latency canary. Where they differed on
 budgets (500ms vs 1s prompt-path), the stricter number won. v1's matrix section is superseded by
 §1 above; everything else in v1 stands.
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-27 | `governs:` changed from the directory `tests/experience/` to two globs, `tests/experience/*.json` and `tests/experience/*.mjs` | `doc-currency.mjs` flagged `governs-directory`: a directory's tree object changes when ANY file under it changes, mass-expiring unrelated verifications. Checked what actually exists under `tests/experience/` (`report.mjs`, `report.test.mjs`, `scenarios.json`) before choosing the glob, per the tool's own guidance — both patterns match exactly those 3 tracked files, no more |
+| 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 7 commits (0d) after this document's last commit, touching `.github/workflows/ci.yml`, `scripts/qe/card-lane-gate.mjs`, `scripts/qe/ux-suite.mjs`. All 7 are ADR-058 work (D1/D2/D5/D6/D7 — `ce72282`, `987160e`, `8b4cb04`, `83e590e`, `30c8018`, `495922a`, `9f8421c`, `314be33`, `aa8c090`), building OUT rollout items this ADR already named (item 6 MCP round trip, the REQUIRE_BRAIN lane, the 22-scenario `scenarios.json` this ADR's §1 specified) — additive, not contradicting. `scripts/qe/card-lane-gate.mjs` and the `ux-suite.mjs` changes are governed by ADR-058 (its own frontmatter names them), not discussed by name in this document's prose; nothing here asserts anything about those two files specifically. The §2 STATUS callout (self-check items shipped, F20/F3 recorded not fixed) and the "not yet built: 3/4/6/9" list were re-checked against current `scripts/selfcheck.mjs` and `tests/unit/selfcheck-battery.test.mjs` — still accurate, item 3 (four-plane dispatchers) still not landed |

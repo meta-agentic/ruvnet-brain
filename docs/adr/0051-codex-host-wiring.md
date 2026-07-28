@@ -186,6 +186,12 @@ the development machine.
   with a measurement.
 - Revisit `brain-score` / `brain-build` / `brain-prompt` if a dispatchable entrypoint ever exists.
 
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 6 commits (0d) after this document's last commit. All 6 (`aa8c090`, `314be33`, `a285fcd`, `987590a`, `2b4e24d`, `720a4bf`) touch only `bin/install.mjs`; `.codex/config.toml`, `.codex/hooks.json` and `.codex/skills/*` are untouched since `969b1ed`/`7ccaf1f`. Read `git show aa8c090 -- bin/install.mjs`: ADR-058 D5's coexistence suite adds three `export` keywords to existing private functions so `wireCodexHost`/`mergeCodexConfig` are testable — commit message states "Zero logic changed", confirmed by reading the diff. The model-cache fix (`2b4e24d`) and D8 stranger-matrix work (`987590a`/`a285fcd`) do not touch Codex code at all (`git show <sha> -- bin/install.mjs \| grep -i codex` empty for both). Compared this ADR's §1-6 claims against current code: the managed-block merge markers, `wireCodexHost()`'s atomic write + symlink-resolve, the three doctor lines (`grep -n "Codex: wired\|Codex: host detected\|Codex: no host"`), and both `.codex/skills/*.toml` manifests all still match verbatim |
+
 ## Addendum (2026-07-26) — issue #43: the wiring was dead on every npm install
 
 Henrik Pettersen proved the registration this ADR shipped could never fire on its primary path: the
