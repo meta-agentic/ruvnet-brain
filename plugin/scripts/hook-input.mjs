@@ -55,6 +55,21 @@ export function commandOf(ev) {
   return typeof c === 'string' ? c : '';
 }
 
+/**
+ * The raw tool_response value from a PostToolUse event, untouched — a plain string for most MCP
+ * tools, an object for Bash. Verified live 2026-07-28 (ADR-058 §D3 VERIFY-FIRST clause) that the
+ * real Bash shape is `{ stdout, stderr, interrupted, isImage, noOutputExpected }` — see
+ * tests/fixtures/signal-watch/bash-posttooluse-envelopes.json for the captured envelopes and their
+ * provenance. Returns null when the field is absent, so a caller can tell "no response" from "empty
+ * string". This is the ONE place PostToolUse consumers read the field from, per the anti-corruption
+ * boundary in docs/ddd/0013-verdict-and-signal-context.md ("envelope field access ... never appear
+ * outside it") — callers convert this into their own small typed shape; this function invents none.
+ */
+export function rawToolResponse(ev) {
+  if (!ev || typeof ev !== 'object' || !('tool_response' in ev)) return null;
+  return ev.tool_response;
+}
+
 /** Arbitrary dotted-path lookup (e.g. "tool_input.file_path"); "" if any segment is missing. */
 export function field(ev, dottedPath) {
   if (!ev || !dottedPath) return '';

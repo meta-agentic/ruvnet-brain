@@ -1,0 +1,62 @@
+{
+  "_note": "ADR-058 §D3 VERIFY-FIRST CLAUSE. These are the real, recorded PostToolUse envelopes Claude Code sends on stdin for a Bash tool call — captured live on 2026-07-27/28 by registering a temporary debug hook (matcher Bash, PostToolUse) in a scratch .claude/settings.local.json and driving three headless `claude -p` sessions that each ran a real Bash command. Fields verified real, not guessed: tool_name, tool_input.{command,description}, tool_response.{stdout,stderr,interrupted,isImage,noOutputExpected}, tool_use_id, duration_ms, session_id, transcript_path, cwd, prompt_id, permission_mode, hook_event_name. This satisfies the ADR's mandate that the shape be captured from three real envelopes before any parser is written.",
+  "_uncaptured_failure_case": "REPEATED, VERIFIED FINDING (5 independent attempts: plain `false`, `false` mid-sequence between two successful calls, a stderr+exit-1 compound command, and `ls` on a nonexistent path — twice, once with a bounded stdin read and an invocation marker written BEFORE reading stdin at all): a Bash tool call that exits NON-ZERO never invoked our PostToolUse hook process at all (the invocation marker file never appeared) when driven via `claude -p` (sdk-cli entrypoint), Claude Code v2.1.220. A parallel PreToolUse debug hook fired reliably for the exact same failing command, proving hook loading/dispatch works in general and the gap is specific to PostToolUse-after-a-Bash-error in this entrypoint. This is reported as a measurement, not a verdict (Rule 22/23): it may be specific to headless/-p/sdk-cli sessions rather than true interactive usage, and is NOT asserted to hold in a normal Claude Code session. Consequence for this design: the git-push SUCCESS path (which the whole feature depends on) is unaffected, since success-exit Bash calls fired PostToolUse reliably in every one of the 3 captures below. The 'catch a failing gh/vercel/netlify/npm-publish command directly via the observer' behavior is therefore built defensively and treated as best-effort/advisory ONLY — never the source of truth for a CI verdict, which is always scripts/signal-watch.mjs's poller (gh run list), matching the ADR's own 'advisory, never blocking' framing for W1.",
+  "envelopes": [
+    {
+      "_provenance": "REAL — captured 2026-07-28T01:32:05Z, session 3c4d2329-ae58-46a7-8b35-7d800ba25c08, model claude-haiku-4-5, permission_mode default",
+      "session_id": "3c4d2329-ae58-46a7-8b35-7d800ba25c08",
+      "transcript_path": "/Users/stuartkerr/.claude/projects/-Users-stuartkerr-Code-ruvnet-brain--claude-worktrees-agent-a7e2b861b92aa888c/3c4d2329-ae58-46a7-8b35-7d800ba25c08.jsonl",
+      "cwd": "/Users/stuartkerr/Code/ruvnet-brain/.claude/worktrees/agent-a7e2b861b92aa888c",
+      "prompt_id": "1eabebf6-4b21-49ef-b568-7107a7a3d707",
+      "permission_mode": "default",
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "echo signal-watch-capture-ok", "description": "Run first command" },
+      "tool_response": { "stdout": "signal-watch-capture-ok", "stderr": "", "interrupted": false, "isImage": false, "noOutputExpected": false },
+      "tool_use_id": "toolu_01YF8i39URAHJsyj4JFxPt1f",
+      "duration_ms": 833
+    },
+    {
+      "_provenance": "REAL — captured 2026-07-28T01:42:22Z, session 540e3d60-5003-4915-8db6-9ed1a067716f, model claude-sonnet-5, permission_mode auto",
+      "session_id": "540e3d60-5003-4915-8db6-9ed1a067716f",
+      "transcript_path": "/Users/stuartkerr/.claude/projects/-Users-stuartkerr-Code-ruvnet-brain--claude-worktrees-agent-a7e2b861b92aa888c/540e3d60-5003-4915-8db6-9ed1a067716f.jsonl",
+      "cwd": "/Users/stuartkerr/Code/ruvnet-brain/.claude/worktrees/agent-a7e2b861b92aa888c",
+      "prompt_id": "1a0d5863-996f-4608-95d3-1970e83ea288",
+      "permission_mode": "auto",
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "echo cap-ok-A", "description": "Echo a success marker string" },
+      "tool_response": { "stdout": "cap-ok-A", "stderr": "", "interrupted": false, "isImage": false, "noOutputExpected": false },
+      "tool_use_id": "toolu_01VuZChdTGJFhA6gVf1X3Pe2",
+      "duration_ms": 737
+    },
+    {
+      "_provenance": "REAL — captured 2026-07-28T01:42:28Z, session 540e3d60-5003-4915-8db6-9ed1a067716f (same session, third of three sequential Bash calls), model claude-sonnet-5, permission_mode auto",
+      "session_id": "540e3d60-5003-4915-8db6-9ed1a067716f",
+      "transcript_path": "/Users/stuartkerr/.claude/projects/-Users-stuartkerr-Code-ruvnet-brain--claude-worktrees-agent-a7e2b861b92aa888c/540e3d60-5003-4915-8db6-9ed1a067716f.jsonl",
+      "cwd": "/Users/stuartkerr/Code/ruvnet-brain/.claude/worktrees/agent-a7e2b861b92aa888c",
+      "prompt_id": "1a0d5863-996f-4608-95d3-1970e83ea288",
+      "permission_mode": "auto",
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "gh --version", "description": "Print installed gh CLI version" },
+      "tool_response": { "stdout": "gh version 2.95.0 (2026-06-17)\nhttps://github.com/cli/cli/releases/tag/v2.95.0", "stderr": "", "interrupted": false, "isImage": false, "noOutputExpected": false },
+      "tool_use_id": "toolu_015Awg3brxd9Qvm3djmyGYU3",
+      "duration_ms": 48
+    },
+    {
+      "_provenance": "CONSTRUCTED, NOT RECORDED — same verified field shape as the three real envelopes above (stdout/stderr/interrupted/isImage/noOutputExpected), content extended by analogy to a failing `vercel deploy` because five separate live-capture attempts for a non-zero-exit Bash PostToolUse envelope produced no invocation at all (see _uncaptured_failure_case). Used only by the M-W4 mutant test, which is explicitly about proving the PARSER classifies this shape correctly if/when it is delivered — never used to claim live delivery is proven.",
+      "session_id": "constructed-fixture",
+      "transcript_path": "",
+      "cwd": "/Users/stuartkerr/Code/ruvnet-brain",
+      "prompt_id": "constructed-fixture",
+      "permission_mode": "default",
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "vercel deploy --prod", "description": "Deploy to production" },
+      "tool_response": { "stdout": "Deploying...\n", "stderr": "Error: build step failed with exit code 1\n", "interrupted": false, "isImage": false, "noOutputExpected": false },
+      "tool_use_id": "toolu_constructed_vercel_exit1",
+      "duration_ms": 4200
+    }
+  ]
+}

@@ -94,6 +94,15 @@ const TABLE = {
   'learn-capture':    { file: 'learn-capture.sh',    interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
   'learn-flush':      { file: 'learn-flush.mjs',     interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
   'md-stamp':         { file: 'md-stamp.mjs',        interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
+  // THE EXTERNAL-SIGNAL WATCH PLANE, W1 OBSERVED (ADR-058 §D3; DDD-0013 Context 2). PostToolUse,
+  // matcher ^Bash$ (anchored — an unanchored matcher is F3/F4). Classifies gh/vercel/netlify/npm
+  // publish/git push in EXECUTABLE POSITION (hook-input.mjs's findInvocations(), never a grep) and,
+  // on a successful `git push`, opens a pending CI-verdict debt that scripts/signal-watch.mjs (a
+  // SEPARATE process, SEPARATE cadence) resolves later via `gh run list`. offBehavior 'silence' per
+  // the ADR's explicit instruction: this plane observes and advises, it never guards money or
+  // honesty on its own — the git-push debt it opens is only ever SURFACED (never gated) by
+  // session-start.sh, and that surfacing already lives under session-start's own 'partial' contract.
+  'signal-watch':     { file: 'signal-watch.mjs',    interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
   // The unprompted-speech chokepoint (ADR-040 / DDD-0004). ONE runtime is the sole writer of
   // user-facing bytes for every unprompted hook: it spawns the real producers (anticipate, lesson)
   // in candidate mode, applies the per-channel policy, and writes the final envelope itself. `channel`
