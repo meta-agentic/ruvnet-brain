@@ -169,6 +169,30 @@ function runL4() {
   if (LEVELS.has('L3')) await runL3();
   if (LEVELS.has('L4')) runL4();
 
+  // VACUOUS TRUTH IS NOT A PASS (2026-07-28). `allPass` started true and the loop below `continue`s
+  // over any level with no results, so `--levels L5` — a level that does not exist — ran ZERO checks
+  // and printed OVERALL: PASS, exit 0. GPT-5.6-Sol reproduced it during the Gen-2 QE grading and I
+  // reproduced it again here before fixing. A harness that certifies an empty run is worse than no
+  // harness: it is the mechanism by which this repo reported 83/100 while two independent graders
+  // measured 38/100 and 53/100 on the same product. Nothing could contradict the optimistic number,
+  // because the thing meant to contradict it passed by running nothing.
+  //
+  // Two guards: an unknown level is an ERROR (not a silent no-op), and zero executed checks is a
+  // FAIL. "I checked nothing and found no problems" is the sentence this exists to make impossible.
+  const KNOWN = ['L1', 'L2', 'L3', 'L4'];
+  const unknown = [...LEVELS].filter((l) => !KNOWN.includes(l));
+  if (unknown.length) {
+    console.log(`${R('ERROR')}  unknown level(s): ${unknown.join(', ')} — known: ${KNOWN.join(', ')}`);
+    console.log(`=== OVERALL: ${R('FAIL')} (nothing was verified) ===\n`);
+    process.exit(2);
+  }
+  const executed = KNOWN.reduce((n, l) => n + (results[l]?.length || 0), 0);
+  if (executed === 0) {
+    console.log(`${R('ERROR')}  ZERO checks executed — an empty run is not a pass.`);
+    console.log(`=== OVERALL: ${R('FAIL')} (nothing was verified) ===\n`);
+    process.exit(2);
+  }
+
   let allPass = true;
   const titles = { L1: 'ROUTE', L2: 'DEEP-RECALL', L3: 'IMPLEMENT', L4: 'ORCHESTRATE' };
   for (const lvl of ['L1', 'L2', 'L3', 'L4']) {
