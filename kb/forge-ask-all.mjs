@@ -78,7 +78,7 @@ export function scopedNamesIn(query) {
 
 // The shipped pair budget. 0 disables the cap — and 0 IS the shipped default, because no budget
 // that meaningfully cuts wall time was measured to leave the answers alone. The full curve, the
-// method, and the reason this ships OFF are in docs/adr/0057-cross-encoder-pool-cap.md; the raw
+// method, and the reason this ships OFF are in docs/adr/0059-cross-encoder-pool-cap.md; the raw
 // per-question numbers are in evals/runs/2026-07-27-cross-encoder-pool-cap.md. Operators who want
 // the trade can take it with KB_CE_MAX_PAIRS — the number is theirs to choose, with the curve in
 // front of them, which is not the same thing as choosing it for everyone by default.

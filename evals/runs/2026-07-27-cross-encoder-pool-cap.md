@@ -1,6 +1,6 @@
 # Cross-encoder pool cap — before/after, latency AND answer quality (2026-07-27)
 
-Decision record: [ADR-057](../../docs/adr/0057-cross-encoder-pool-cap.md). **Verdict: do not ship
+Decision record: [ADR-057](../../docs/adr/0059-cross-encoder-pool-cap.md). **Verdict: do not ship
 the cap on by default.** The mechanism ships; `CE_MAX_PAIRS_DEFAULT = 0`.
 
 Corpus: the frozen 120-question held-out set (`evals/held-out.json`), graded by

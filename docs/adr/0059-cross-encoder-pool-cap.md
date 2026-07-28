@@ -1,5 +1,5 @@
 ---
-id: ADR-057
+id: ADR-0059
 title: Bounding the cross-encoder pool — the measurement, and why the cap ships OFF
 status: Accepted
 date: 2026-07-27
@@ -14,7 +14,7 @@ governs:
   - scripts/rerank-cap-warm-ab.mjs
 ---
 
-# ADR-057 — Bounding the cross-encoder pool
+# ADR-0059 — Bounding the cross-encoder pool
 
 **Status**: Accepted
 
