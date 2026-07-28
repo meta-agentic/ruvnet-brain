@@ -434,7 +434,10 @@ export function nightlyRefresh(dirs, { ruflo = RUFLO_BIN } = {}) {
   const backup = sh(ruflo, ['memory', 'backup', '--db', dbA, '--keep', '2'], { cwd: dirs.projectA });
 
   const survived = loadLessons(dirs.lessons).length === 1;
-  return { generation: gen, codeRoot: versionDir, distillExit: distill.status, backupExit: backup.status, lessonSurvived: survived };
+  // Repo-relative, never absolute: this artifact is COMMITTED, and an absolute path publishes the
+  // maintainer's directory layout to every reader. The same disclosure was already found and fixed
+  // once in session-start.sh; one bug, found once, must not be left everywhere else.
+  return { generation: gen, codeRoot: path.relative(ROOT, versionDir), distillExit: distill.status, backupExit: backup.status, lessonSurvived: survived };
 }
 
 /** The fixture settings file — the REAL hook registration from plugin/hooks/hooks.json, plus the tap. */
@@ -717,6 +720,9 @@ function writeArtifact(file, agg, meta = {}) {
     sha: headSha(),
     at: new Date().toISOString(),
     model: meta.model || null,
+    // The alias asked for ("haiku") is not the model that answered. Record the id the session
+    // actually reported, so a result can never be attributed to a model that never ran.
+    modelResolved: (agg.runs || []).map((r) => r.treated?.modelUsed).find(Boolean) || null,
     mutant: meta.mutant || null,
     n: agg.n,
     passes: agg.passes,
