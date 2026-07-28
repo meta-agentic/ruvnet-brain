@@ -336,6 +336,7 @@ describe('the three PASS conditions are each load-bearing', () => {
 
   it('a harness error is UNKNOWN and UNKNOWN is never PASS', () => {
     expect(verdictForRun(run({ error: 'spawn failed' })).verdict).toBe(VERDICT.UNKNOWN);
+    expect(aggregate([run({ error: 'HTTP 429: weekly limit' })]).why).toContain('HTTP 429: weekly limit');
     expect(EXIT[VERDICT.UNKNOWN]).not.toBe(0);
     expect(EXIT[VERDICT.INCONCLUSIVE]).not.toBe(0);
     expect(EXIT[VERDICT.FAIL]).not.toBe(0);

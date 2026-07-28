@@ -454,7 +454,10 @@ export function aggregate(runs, { threshold = 2 / 3 } = {}) {
     why = `${passes}/${n} runs passed (bar ${Math.ceil(threshold * n)}/${n})`;
   } else if (unknowns > 0 && passes + fails < n) {
     verdict = VERDICT.UNKNOWN;
-    why = `${unknowns}/${n} run(s) could not be measured; ${passes}/${n} passed — below the bar with the reason unknown`;
+    const executorError = perRun.map((r) => r.error).find(Boolean);
+    why = executorError
+      ? `${unknowns}/${n} run(s) could not be measured; executor error: ${executorError}`
+      : `${unknowns}/${n} run(s) could not be measured; ${passes}/${n} passed — below the bar with the reason unknown`;
   } else {
     verdict = VERDICT.FAIL;
     why = `${passes}/${n} runs passed — below the ${Math.ceil(threshold * n)}/${n} bar`;
