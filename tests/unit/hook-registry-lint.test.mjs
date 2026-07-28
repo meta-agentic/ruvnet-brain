@@ -137,14 +137,25 @@ describe('the merged census — six registries, not one', () => {
   });
 
   it('counts the code-copy MIRRORS separately from the mesh — they are one registration, not two', () => {
-    // The installed plugin cache and the marketplace clone are the same 15 registrations delivered
-    // to different directories. Folding them into the mesh would invent 30 phantom duplicates and
-    // make M1 fire on itself; dropping them entirely would erase the axis F3 is about.
+    // The installed plugin cache and the marketplace clone are the same registrations delivered to
+    // different directories. Folding them into the mesh would invent phantom duplicates and make M1
+    // fire on itself; dropping them entirely would erase the axis F3 is about. (The count is read
+    // from the plugin registry, never hardcoded — an earlier comment here said "15" and was wrong
+    // within a day of signal-watch landing as the 16th.)
     const c = census(fullReg);
+    const repoCount = c.rows.find((r) => r.layer === 'plugin').count;
     for (const row of c.rows.filter((r) => !r.inMesh && r.present)) {
-      expect(row.count, `${row.layer} should mirror the plugin registry`).toBe(
-        c.rows.find((r) => r.layer === 'plugin').count,
-      );
+      // A DRIFT reading, not a defect reading. A mirror BEHIND the repo is the expected state
+      // between a registration landing here and the installed copy being refreshed — so the message
+      // has to name which direction it drifted and what closes it, or the next person reads
+      // "expected 15 to be 16" as broken code and goes looking in the wrong file.
+      expect(
+        row.count,
+        `${row.layer} mirror has ${row.count} registration(s); the repo declares ${repoCount}. `
+          + `${row.count < repoCount
+            ? 'The installed copy is BEHIND — publish + restart Claude Code to refresh it.'
+            : 'The installed copy is AHEAD of this checkout — you are on an older branch.'}`,
+      ).toBe(repoCount);
     }
     expect(c.mesh + c.mirrors).toBe(c.total);
   });

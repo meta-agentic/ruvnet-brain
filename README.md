@@ -481,7 +481,8 @@ node plugin/test/run-tests.mjs                    # full plugin QA over real JSO
 | **Named / specific routing** | **47 / 48 (98%)** | name the tool → right repo |
 | **Described-need routing** | **26 / 28 (93%)** | describe the need, no name → right repo (was 33% before capability cards) |
 | **Context-scenario routing** | **7 / 8 (88%)** | full-scenario prompts route correctly |
-| **L1–L4 behavioral harness** | **all pass** | route · deep-recall (returns _code_) · implement (cites the API) · orchestrate (the hook drives the full pipeline) |
+| **L1–L3 behavioral harness** | **all pass** | route · deep-recall (returns _code_) · implement (cites the API) — each graded on a retrieval outcome |
+| **L4 "orchestrate"** | **downgraded — measures speech, not obedience** | L4 asserts the hook's own injected prose contains required words (`must: ['take the wheel','SPARC','swarm',…]`). That proves **the brain spoke**. It cannot fail when the advice is read and ignored — which is the failure this product exists to prevent. Counterfactual replay against a brain-off control (ADR-058 §D4) is what will earn this row back |
 | **Plugin QA** | **26 / 26** | manifests, hook firing, MCP `initialize`/`tools/list`, capability battery |
 | **Clean-room install** | **3 / 3** | download the published bundle fresh → unzip → query → grounded, cited answers |
 | **Unit tests** | **1,832 passing, 169 todo** · 28% of ALL source covered | `npm run test:cov` regenerates both — the coverage floor fails CI if it slips (`claims:verify` re-derives the %, it is not a hand-typed badge). 28% is the honest number over every shipped file; the previous "75%" measured a hand-picked 8-file subset |
@@ -523,7 +524,7 @@ This project versions in the open (see the live badge up top for the exact plugi
 
 - ✅ **The grounding brain is real and proven** — 62 public stores · 150,161 public source chunks (69 built stores incl. private), dual embeddings, cross-encoder rerank, plugin (MCP tool + enforcement hook + skill), all re-runnable.
 - ✅ **Code-level depth** — the code-rich repos are indexed to full function bodies; “how is it implemented?” returns the implementation. Verified in the shipped bundle (clean-room 3/3).
-- ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L4 all pass; private stores fenced out of the public bundle (zero-leak verified).
+- ✅ **Routing holds** — named 47/48, described 26/28, scenario 7/8; behavioral L1–L3 all pass (**L4 downgraded — it measures that the brain spoke, not that anything listened**); private stores fenced out of the public bundle (zero-leak verified).
 - ⚠️ **Two routing residuals** (above) — surfaced, not hidden.
 - ✅ **Published on npm** — `npx ruvnet-brain` (short form); `npx github:stuinfla/ruvnet-brain` always tracks the latest commit if you want it even fresher.
 - ✅ **Every automatic hook is documented** — [SECURITY.md](SECURITY.md#what-runs-automatically-and-when) lists each one, what it reads, and whether it can block a turn. Most are advisory; the gates that *can* block are opt-in (model-router profile) or scoped to this repo, and all fail open.
