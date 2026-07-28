@@ -91,6 +91,54 @@ export function planLegacyRekey({ passages, chunks, idmap }) {
   return { ok: true, idmap: next };
 }
 
+export function planLegacyDelta({ passages, chunks, idmap }) {
+  if (!Array.isArray(passages) || !idmap?.idToLabel) {
+    return { ok: false, reason: 'legacy-artifacts-invalid' };
+  }
+  const available = new Map();
+  for (const chunk of chunks) {
+    const key = JSON.stringify([chunk.path, chunk.title, chunk.text]);
+    if (!available.has(key)) available.set(key, []);
+    available.get(key).push(String(chunk.id));
+  }
+  const matches = [];
+  const deleteIds = [];
+  const matchedNew = new Set();
+  for (const old of passages) {
+    const key = JSON.stringify([old.path, old.title, old.text]);
+    const next = available.get(key)?.shift();
+    if (next && Number.isInteger(idmap.idToLabel[String(old.id)])) {
+      matches.push({ oldId: String(old.id), newId: next });
+      matchedNew.add(next);
+    } else {
+      deleteIds.push(String(old.id));
+    }
+  }
+  return {
+    ok: true,
+    matches,
+    deleteIds,
+    insertIds: chunks.map(({ id }) => String(id)).filter((id) => !matchedNew.has(id)),
+  };
+}
+
+export function rekeyStagedIdmap({ staged, matches, insertedIds }) {
+  const next = { idToLabel: {}, labelToId: {}, nextLabel: staged.nextLabel };
+  for (const { oldId, newId } of matches) {
+    const label = staged.idToLabel[oldId];
+    if (!Number.isInteger(label)) throw new Error(`staged idmap lost label for ${oldId}`);
+    next.idToLabel[newId] = label;
+    next.labelToId[String(label)] = newId;
+  }
+  for (const id of insertedIds) {
+    const label = staged.idToLabel[id];
+    if (!Number.isInteger(label)) throw new Error(`staged idmap lost inserted label for ${id}`);
+    next.idToLabel[id] = label;
+    next.labelToId[String(label)] = id;
+  }
+  return next;
+}
+
 const hasLegacyIds = (files) => Object.values(files || {}).some(({ chunkIds } = {}) =>
   Array.isArray(chunkIds) && chunkIds.some((id) => typeof id === 'number' || /^\d+$/.test(String(id))),
 );

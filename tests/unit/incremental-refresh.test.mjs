@@ -16,9 +16,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCorpusLedger,
   chunkDelta,
+  planLegacyDelta,
   planLegacyRekey,
   planIncrementalRefresh,
   promoteArtifactSet,
+  rekeyStagedIdmap,
   stageRvfDelta,
   stableChunkId,
 } from '../../kb/incremental-refresh.mjs';
@@ -54,6 +56,35 @@ describe('legacy BGE zero-embed migration', () => {
       idmap: { idToLabel: { 1: 1 }, labelToId: { 1: '1' }, nextLabel: 2 },
     });
     expect(result).toMatchObject({ ok: false, reason: 'corpus-mismatch-at:0:a.md' });
+  });
+
+  it('maps unchanged legacy rows and isolates only entering/departing chunks', () => {
+    const result = planLegacyDelta({
+      passages: [
+        { id: 1, path: 'keep.md', title: 'Keep', text: 'same' },
+        { id: 2, path: 'gone.md', title: 'Gone', text: 'old' },
+      ],
+      chunks: [
+        { id: 'chunk:keep', path: 'keep.md', title: 'Keep', text: 'same' },
+        { id: 'chunk:new', path: 'new.md', title: 'New', text: 'new' },
+      ],
+      idmap: { idToLabel: { 1: 7, 2: 8 } },
+    });
+    expect(result).toEqual({
+      ok: true,
+      matches: [{ oldId: '1', newId: 'chunk:keep' }],
+      deleteIds: ['2'],
+      insertIds: ['chunk:new'],
+    });
+    expect(rekeyStagedIdmap({
+      staged: { idToLabel: { 1: 7, 'chunk:new': 9 }, nextLabel: 10 },
+      matches: result.matches,
+      insertedIds: result.insertIds,
+    })).toEqual({
+      idToLabel: { 'chunk:keep': 7, 'chunk:new': 9 },
+      labelToId: { 7: 'chunk:keep', 9: 'chunk:new' },
+      nextLabel: 10,
+    });
   });
 });
 

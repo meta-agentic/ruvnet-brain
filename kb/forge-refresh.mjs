@@ -15,9 +15,11 @@ import { buildCorpus, FORGE_BUILD_FINGERPRINT } from './forge-corpus.mjs';
 import {
   buildCorpusLedger,
   chunkDelta,
+  planLegacyDelta,
   planLegacyRekey,
   planIncrementalRefresh,
   promoteArtifactSet,
+  rekeyStagedIdmap,
   stageRvfDelta,
 } from './incremental-refresh.mjs';
 import { chooseModelCache, loadRvf, loadTransformers } from './resolve-deps.mjs';
@@ -301,14 +303,40 @@ async function migrateLegacyStore(corpus, previousMeta, currentLedger) {
     chunks: corpus.chunks,
     idmap: JSON.parse(fs.readFileSync(idmapFile, 'utf8')),
   });
-  if (!rekey.ok) return { migrated: false, reason: rekey.reason };
-
-  console.log(`[refresh] zero-embed migration: re-keying ${corpus.chunks.length} existing BGE vectors`);
-  fs.copyFileSync(rvf, path.join(candidate, `${NAME}.big.rvf`));
-  fs.writeFileSync(
-    path.join(candidate, `${NAME}.big.rvf.idmap.json`),
-    `${JSON.stringify(rekey.idmap)}\n`,
-  );
+  if (rekey.ok) {
+    console.log(`[refresh] zero-embed migration: re-keying ${corpus.chunks.length} existing BGE vectors`);
+    fs.copyFileSync(rvf, path.join(candidate, `${NAME}.big.rvf`));
+    fs.writeFileSync(
+      path.join(candidate, `${NAME}.big.rvf.idmap.json`),
+      `${JSON.stringify(rekey.idmap)}\n`,
+    );
+  } else {
+    const passages = readJsonl(legacyPassages);
+    const legacyMap = JSON.parse(fs.readFileSync(idmapFile, 'utf8'));
+    const delta = planLegacyDelta({ passages, chunks: corpus.chunks, idmap: legacyMap });
+    if (!delta.ok) return { migrated: false, reason: delta.reason };
+    const insertSet = new Set(delta.insertIds);
+    const inserts = corpus.chunks.filter(({ id }) => insertSet.has(String(id)));
+    console.log(`[refresh] legacy incremental migration: keep=${delta.matches.length}, add=${inserts.length}, delete=${delta.deleteIds.length}`);
+    const { mod: rvfMod } = loadRvf();
+    const vectors = await embedChunks(inserts, BGE);
+    const result = await stageRvfDelta({
+      sourcePath: rvf,
+      stagePath: path.join(candidate, `${NAME}.big.rvf`),
+      deleteIds: delta.deleteIds,
+      inserts: vectors,
+      RvfDatabase: rvfMod.RvfDatabase,
+    });
+    validateDeltaResult('legacy-big', result, corpus.chunks.length);
+    const stageMapFile = path.join(candidate, `${NAME}.big.rvf.idmap.json`);
+    const staged = JSON.parse(fs.readFileSync(stageMapFile, 'utf8'));
+    const stableMap = rekeyStagedIdmap({
+      staged,
+      matches: delta.matches,
+      insertedIds: delta.insertIds,
+    });
+    fs.writeFileSync(stageMapFile, `${JSON.stringify(stableMap)}\n`);
+  }
   fs.copyFileSync(embedFile, path.join(candidate, `${NAME}.big.rvf.embed.json`));
   writeCandidateSidecars(corpus.chunks, corpus, currentLedger, previousMeta);
   stampCandidateGeneration();
