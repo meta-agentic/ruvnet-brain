@@ -1045,7 +1045,19 @@ async function doctor() {
   // pull used to hang FOREVER. Diagnose the condition here, explicitly and in 3 seconds flat: if the
   // model host is unreachable AND no local model cache exists, the first query needs the network and
   // will fail loud (bounded by RUVNET_BRAIN_FETCH_TIMEOUT_MS) — tell the user BEFORE they hit it.
-  const modelCacheDir = process.env.KB_MODEL_CACHE || path.join(cacheDir, 'models-cache');
+  // ONE CACHE, NOT TWO (2026-07-27). This defaulted to `<cacheDir>/models-cache` — and cacheDir is
+  // `~/.cache/ruvnet-brain/KB` (note the /kb) — while the RUNTIME
+  // reads `<BRAIN_HOME>/models` (plugin/mcp/server.mjs:99, mirrored by plugin/test/model-cache.mjs:36).
+  // So the installer verified — and warmed — a directory the product never opens.
+  //
+  // MEASURED ON THIS MACHINE, which is how it was found: `<cacheDir>/models-cache` DID NOT EXIST at
+  // all, while `<BRAIN_HOME>/models` held 23MB containing ONLY the ms-marco reranker — the bge-base
+  // EMBEDDER, the model every query needs first, was absent (0 files). That is the 53s cold start:
+  // every cold query re-fetches the embedder because install warmed the wrong path, and it is why
+  // search_ruvnet timed out twice in one session. A smoke test that passes against a cache the
+  // runtime never reads proves nothing about the runtime — the D8 deduction, in one line of path.
+  const brainHome = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
+  const modelCacheDir = process.env.KB_MODEL_CACHE || path.join(brainHome, 'models');
   const haveLocalModel = fs.existsSync(path.join(modelCacheDir, 'Xenova', 'all-MiniLM-L6-v2'))
     || fs.existsSync(path.join(modelCacheDir, 'Xenova/all-MiniLM-L6-v2'));
   try {

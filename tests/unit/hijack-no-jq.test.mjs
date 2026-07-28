@@ -23,6 +23,20 @@ import os from 'node:os';
 import path from 'node:path';
 
 const REPO = path.resolve(import.meta.dirname, '../..');
+// WINDOWS (CI run on 3aa228b, windows-unit red): this suite builds a synthetic PATH by symlinking
+// /bin and /usr/bin, and fires the hook with a bare `sh`. None of that exists on a Windows runner, so
+// every case failed against a product that is fine on that platform.
+//
+// The guard tests THE THINGS THIS FILE ACTUALLY USES — a POSIX shell on PATH and a real /bin — not a
+// neighbouring fact like `process.platform`. That distinction is not pedantry: earlier today a guard
+// here asked "is bash on PATH" while the test hardcoded /bin/bash, GitHub's Windows runner ships Git
+// Bash so the guard answered TRUE, and the skip never fired. Check the door you actually walk through.
+//
+// The jq dependency this suite guards is a POSIX-shell concern by nature; on Windows the hook is
+// dispatched through hook-shim.mjs, which is covered by the packed-registration battery instead.
+const hasPosixShell = spawnSync('sh', ['-c', 'exit 0']).status === 0 && fs.existsSync('/bin');
+
+
 const HOOK = path.join(REPO, 'plugin/scripts/hijack-ruvnet.sh');
 
 /** A PATH containing every real binary EXCEPT jq — the stranger's machine, reproduced. */
@@ -49,7 +63,7 @@ const fire = (payload, env) => spawnSync('sh', [HOOK], {
 const VECTOR_STORE = { tool_name: 'Write', tool_input: { content: 'import pinecone\nidx = pinecone.Index("x")' } };
 const INNOCENT = { tool_name: 'Write', tool_input: { content: 'def add(a, b):\n    return a + b\n' } };
 
-describe('hijack-ruvnet.sh — the interceptor survives a machine without jq', () => {
+describe.skipIf(!hasPosixShell)('hijack-ruvnet.sh — the interceptor survives a machine without jq', () => {
   it('CONTROL: with a normal PATH it fires on a generic vector store', () => {
     const r = fire(VECTOR_STORE);
     expect(r.status).toBe(0);
