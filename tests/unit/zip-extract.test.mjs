@@ -32,6 +32,53 @@ const CAN_ZIP = hasTool('zip') && hasTool('unzip');
 let tmp;
 let goodZip;
 
+/**
+ * Minimal stored ZIP fixture with the directory shape emitted by PowerShell Compress-Archive:
+ * directory entries carry the DOS directory bit but do not necessarily end in "/".
+ * The values are hand-built from the ZIP headers so this test does not depend on PowerShell.
+ */
+function windowsDirectoryZip() {
+  const entries = [
+    { name: 'ruvnet-brain/vendor', data: Buffer.alloc(0), crc: 0, externalAttrs: 0x10 },
+    { name: 'ruvnet-brain/vendor/package.json', data: Buffer.from('ok\n'), crc: 0xda160e7d, externalAttrs: 0 },
+  ];
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(entry.crc, 14);
+    local.writeUInt32LE(entry.data.length, 18);
+    local.writeUInt32LE(entry.data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    locals.push(local, name, entry.data);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(entry.crc, 16);
+    central.writeUInt32LE(entry.data.length, 20);
+    central.writeUInt32LE(entry.data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(entry.externalAttrs, 38);
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, name);
+    offset += local.length + name.length + entry.data.length;
+  }
+  const centralBytes = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBytes.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, centralBytes, eocd]);
+}
+
 beforeAll(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rb-zipx-'));
   if (!CAN_ZIP) return;
@@ -156,5 +203,18 @@ describe('the extractor refuses, by name, what it does not implement', () => {
     const empty = path.join(tmp, 'empty.zip');
     fs.writeFileSync(empty, Buffer.alloc(0));
     await expect(extractZip(empty, path.join(tmp, 'out-empty'))).rejects.toThrow(/empty\.zip: archive is empty/);
+  });
+});
+
+describe('Windows archive directory metadata', () => {
+  it('extracts a DOS-directory entry without a trailing slash as a directory, not a zero-byte file', async () => {
+    const archive = path.join(tmp, 'powershell-directory.zip');
+    const dest = path.join(tmp, 'out-powershell-directory');
+    fs.writeFileSync(archive, windowsDirectoryZip());
+
+    await extractZip(archive, dest);
+
+    expect(fs.statSync(path.join(dest, 'ruvnet-brain', 'vendor')).isDirectory()).toBe(true);
+    expect(fs.readFileSync(path.join(dest, 'ruvnet-brain', 'vendor', 'package.json'), 'utf8')).toBe('ok\n');
   });
 });

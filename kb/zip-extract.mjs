@@ -195,7 +195,23 @@ export async function extractZip(zipPath, destDir) {
       const target = safeJoin(destDir, e.name);
       if (target === null) throw new Error(`entry "${e.name}" would escape the destination directory — refusing to extract (possible zip-slip)`);
 
-      if (e.name.endsWith('/')) { fs.mkdirSync(target, { recursive: true }); continue; }
+      // PowerShell Compress-Archive can encode directories without a trailing slash and marks them
+      // only with the DOS directory attribute. Treating such an entry as a zero-byte file poisons
+      // the next nested entry (`vendor` file, then `vendor/package.json` → ENOTDIR) and also poisons
+      // the PowerShell fallback because -Force cannot replace that file with a directory.
+      const unixType = (e.externalAttrs >>> 16) & 0xf000;
+      const isDirectory = e.name.endsWith('/')
+        || (e.externalAttrs & 0x10) !== 0
+        || ((e.versionMadeBy >> 8) === 3 && unixType === 0x4000);
+      if (isDirectory) {
+        try {
+          if (fs.existsSync(target) && !fs.lstatSync(target).isDirectory()) {
+            fs.rmSync(target, { recursive: true, force: true });
+          }
+        } catch { /* mkdir below reports any unrecoverable collision with the exact path */ }
+        fs.mkdirSync(target, { recursive: true });
+        continue;
+      }
       fs.mkdirSync(path.dirname(target), { recursive: true });
 
       // Sizes/offsets come from the CENTRAL directory, never the local header: with a data

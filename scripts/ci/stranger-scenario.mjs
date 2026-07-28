@@ -36,6 +36,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { selfCheckOuterTimeoutMs } from './stranger-timeout.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const argv = process.argv.slice(2);
@@ -49,6 +50,9 @@ if (!SCENARIO || !INSTALLED || !HOME_DIR || !PLUGIN_SRC) {
   console.error('usage: node stranger-scenario.mjs --scenario <healthy|seeded-broken|strict-ungrounded> --installed <dir> --home <dir> --plugin-src <dir>');
   process.exit(2);
 }
+
+const hooksDoc = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, 'hooks', 'hooks.json'), 'utf8'));
+const INSTALL_TIMEOUT_MS = selfCheckOuterTimeoutMs(hooksDoc);
 
 function log(msg) { console.log(`[stranger-scenario:${SCENARIO}] ${msg}`); }
 function fail(msg) { console.error(`[stranger-scenario:${SCENARIO}] FAIL: ${msg}`); process.exit(1); }
@@ -149,7 +153,11 @@ function runInstaller(args, extraEnv = {}) {
     },
     input: '',
     encoding: 'utf8',
-    timeout: 120_000,
+    // This outer watchdog encloses the installer's post-install selfcheck. On Windows, 68 real
+    // shell/process fires can legitimately exceed the old fixed 120s even while every individual
+    // hook remains inside its own declared watchdog. Derive the ceiling from those inner budgets so
+    // the matrix receives the named selfcheck verdict instead of killing the healthy installer first.
+    timeout: INSTALL_TIMEOUT_MS,
     // spawnSync's default maxBuffer is 1MB, and BLOWING IT KILLS THE CHILD and yields status null —
     // indistinguishable, in the old reporting, from a hang or a missing binary. The installer prints
     // a full narrated plan plus a self-check battery, so 1MB is not a comfortable margin. Raised so
