@@ -66,6 +66,26 @@ jobs:
         # contact). Runs the REAL installer in its safe, offline, non-mutating modes (--help,
         # --doctor read-only, node --check + signing-wiring guard). Brain-independent — no 512MB bundle.
         run: node --test tests/integration/install-smoke.mjs
+      - name: REQUIRE_BRAIN lane wiring (ADR-058 D1 mutant — an empty brain dir must convert to a hard failure)
+        # This IS the ADR's named mutant, made permanent: points RUVNET_BRAIN_KB at a fresh EMPTY
+        # directory and proves BOTH halves — unset, the skip stays loud but non-fatal (exit 0, the
+        # fast lane above); with REQUIRE_BRAIN=1, the same empty dir goes red. Brain-independent —
+        # no download, no bundle. Proves the conversion in run-tests.mjs (~193-229) is load-bearing,
+        # separately from the "warm-brain" job below actually setting REQUIRE_BRAIN=1 against a real
+        # bundle.
+        run: node --test tests/integration/require-brain-lane.mjs
+      - name: Experience-level scenario coverage (ADR-053 §1 / ADR-058 D2)
+        # tests/experience/scenarios.json is the hand-written ~20-scenario list (never a Cartesian
+        # matrix). The report fails on any scenario left unclassified, on `manual` exceeding 20% of
+        # the list, and — the load-bearing part — on any `ci`/`scheduled-live-probe` scenario whose
+        # named workflow job does not actually exist in .github/workflows/ (a machine-checkable join,
+        # so a scenario can never point at a fictional runner). Brain-independent, no network.
+        run: node tests/experience/report.mjs
+      - name: Experience-report mutant proof (both ADR-058 D2 mutants must go red)
+        # Runs the report against MUTATED COPIES of scenarios.json in fresh subprocesses: deleting a
+        # classification, and pointing a scenario at a non-existent workflow job/file, must each make
+        # the report exit non-zero — otherwise the gate above is decorative, not load-bearing.
+        run: node --test tests/experience/report.test.mjs
       - name: Injection-guard unit test
         run: node kb/test-guard-injection.mjs
       - name: Injection-guard adversarial red-team (5 attack families)
@@ -154,3 +174,69 @@ jobs:
             echo "  gap, not a test artifact. The honest-null itself IS asserted on Windows; only the leak"
             echo "  detection is missing. POSIX coverage comes from the ubuntu + macos jobs."
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  warm-brain:
+    # ADR-058 D1: the REQUIRE_BRAIN lane (50 -> 95). plugin/test/run-tests.mjs (~193-229) ALREADY
+    # converts a SKIPPED core-capability battery into a FAILURE when REQUIRE_BRAIN=1 (both when the
+    # brain bundle is absent and when the embedder model cache is cold) — but until this job, `grep
+    # -r REQUIRE_BRAIN .github/workflows/` returned ZERO matches, so that conversion was dead code no
+    # CI run had ever exercised. This job is the lane: warm a REAL brain (the same ~736MB Release
+    # download + npm-installed reader a stranger's machine uses — bin/install.mjs, --pin so this
+    # lane targets a fixed, reproducible bundle version rather than a moving "latest"), cache it
+    # keyed by commit SHA, then run the battery with REQUIRE_BRAIN=1 so a skip here is a hard,
+    # visible failure instead of the fast `check` job's loud-but-non-fatal skip.
+    #
+    # Not yet wired as a required branch-protection check — that is ADR-058's ranked build order
+    # item 10 ("Release-gate flip"), explicitly LAST, after D2/D7/D6/D5/D4/D3/D8 exist. This job
+    # exists and can go red starting now; making it BLOCK merges is a separate repo-settings step.
+    #
+    # ubuntu only for now (cost judgment call, said out loud): GitHub bills macOS runners at a
+    # documented ~10x multiplier, and this job would duplicate the ~736MB download plus a native
+    # module (npm ci) install on every push/PR for no coverage this repo does not already get
+    # elsewhere. Add macos-latest here if/when that cost is worth paying.
+    runs-on: ubuntu-latest
+    env:
+      # Explicit, FIXED paths — not the HOME-relative defaults — so the warm step, the battery step,
+      # and forge-mcp-all.mjs's own child process (spawned by plugin/mcp/server.mjs:99) all resolve
+      # the SAME embedder cache. Verified by reading the source: bin/install.mjs's own smokeQuery()
+      # defaults KB_MODEL_CACHE to `<RUVNET_BRAIN_KB>/models-cache` (bin/install.mjs:1048) while
+      # plugin/test/model-cache.mjs — what run-tests.mjs's battery actually reads — defaults to
+      # `<RUVNET_BRAIN_HOME>/models` (model-cache.mjs:35-38). Two DIFFERENT paths. Setting
+      # KB_MODEL_CACHE here explicitly is what makes every reader of it agree.
+      RUVNET_BRAIN_KB: ${{ github.workspace }}/.brain-cache/kb
+      KB_MODEL_CACHE: ${{ github.workspace }}/.brain-cache/models
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: libvips (sharp's native dep — @xenova/transformers pulls sharp in as a hard dependency)
+        # Same finding as the "Dependency audit" step's comment above, for the identical dependency
+        # tree: a bare `npm ci` compiling sharp from source on this exact runner dies on `fatal
+        # error: vips/vips8` without this. Cheap, idempotent insurance (a few seconds).
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libvips-dev
+      - name: Cache the knowledge bundle + embedder model (keyed by commit SHA)
+        id: brain-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.brain-cache
+          key: brain-kb-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            brain-kb-${{ runner.os }}-
+      - name: Warm the brain (real installer download path — --pin for a reproducible CI bundle)
+        # Non-interactive; --pin fetches the fixed known-good Release rather than whatever is
+        # currently "latest", so this lane's pass/fail is never at the mercy of an unrelated Release
+        # cut landing mid-PR. Declines every optional onboarding offer (toolkit / CLAUDE.md /
+        # statusline / nightly / telemetry) — this job exists to populate RUVNET_BRAIN_KB, not to
+        # configure a Claude/Codex host that does not exist on this runner (wirePlugin/wireCodexHost
+        # both no-op safely when `claude`/`~/.codex` are absent, non-fatal by design either way).
+        # installReader()'s npm ci + verifyInstall()/smokeQuery() (bin/install.mjs:3140-3159) run
+        # every time, but skip the ~736MB download itself once the cache already holds a current,
+        # pinned bundle (bin/install.mjs:3040-3097 — the "already CURRENT" check) — so a cache hit
+        # here costs seconds, not minutes. smokeQuery's real query is also what warms KB_MODEL_CACHE
+        # for the battery step below.
+        run: node bin/install.mjs --yes --pin --no-stack --no-enhance --no-statusline --no-nightly-prompt --no-telemetry
+      - name: Core capability battery — REQUIRE_BRAIN=1 (a skipped battery is now a hard failure)
+        env:
+          REQUIRE_BRAIN: '1'
+        run: npm test

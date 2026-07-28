@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "updated": "2026-07-27",
+  "note": "ADR-053 §1 / ADR-058 D2: a hand-written list of coherent scenarios grounded in how this product is ACTUALLY installed and used — never a Cartesian host x os x artifact matrix (ADR-053 §1 killed that structurally). Every 'ci'/'scheduled-live-probe' scenario's evidence field embeds a '<workflow>.yml#<job>' token that tests/experience/report.mjs verifies actually exists in .github/workflows/ — a scenario can never point at a fictional runner. 'manual' scenarios require a named owner and sit OUTSIDE the coverage denominator.",
+  "scenarios": [
+    {
+      "id": "S01",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "npm (npx ruvnet-brain)",
+      "stage": "install — doctor on an absent/empty brain",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/integration/install-smoke.mjs: `--doctor` against an empty RUVNET_BRAIN_KB reports the diagnostic honestly (brain not found) and never crashes; read-only, the pinned dir is untouched afterward.",
+      "owner": null
+    },
+    {
+      "id": "S02",
+      "host": "both",
+      "os": "ubuntu",
+      "artifact": "kb bundle (installed brain on disk)",
+      "stage": "doctor on a COMPLETE brain — the healthy verdict must be derived, not hardwired",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/integration/install-smoke.mjs: `--doctor` on a complete brain dir (real stores + reader deps + mcp entrypoint present) returns exit 0, computed from those real files.",
+      "owner": null
+    },
+    {
+      "id": "S03",
+      "host": "claude-code",
+      "os": "ubuntu+windows",
+      "artifact": "npm (npx ruvnet-brain)",
+      "stage": "update — `--update` against a missing brain must fail LOUD, never silently no-op",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/integration/install-smoke.mjs: `--update` against an empty KB dir exits non-zero with the re-run-installer message.",
+      "owner": null
+    },
+    {
+      "id": "S04",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "npm/github (re-run of the installer against an OLD installed brain)",
+      "stage": "update — the stale-install trap: a June-era brain must be detected as stale and re-fetched, and a newer-than-latest install must never be downgraded",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "integration-linux.yml#integration — tests/integration/stale-install-trap.test.mjs: an installed OLD tag triggers a real re-download; a rate-limited/offline latest-check (source != 'latest') must not report a fabricated 'out of date' and downgrade an ahead-of-latest install.",
+      "owner": null
+    },
+    {
+      "id": "S05",
+      "host": "codex",
+      "os": "ubuntu+windows",
+      "artifact": "codex config.toml wiring",
+      "stage": "install — Codex host present, no config.toml yet (issue #42 regression)",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: wireCodexHost() creates config.toml and registers [mcp_servers.ruvnet-brain] with a resolved absolute server path when ~/.codex exists but has no config yet.",
+      "owner": null
+    },
+    {
+      "id": "S06",
+      "host": "codex",
+      "os": "ubuntu+windows",
+      "artifact": "codex config.toml wiring",
+      "stage": "install — the user's OWN pre-existing config.toml (other [mcp_servers.*] entries, comments, content after our block) must survive byte-for-byte",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: mergeCodexConfig preserves every pre-existing section byte-for-byte, leaves a user's own ruvnet-brain declaration alone, and preserves content the user added after our block.",
+      "owner": null
+    },
+    {
+      "id": "S07",
+      "host": "codex",
+      "os": "ubuntu+windows",
+      "artifact": "codex config.toml wiring",
+      "stage": "update — reinstall/update must be idempotent (byte-identical on 2nd/3rd run) and must never widen the config file's permission mode",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: a second/third install run reproduces config.toml byte-for-byte, and a chmod-600 config never comes back world-readable.",
+      "owner": null
+    },
+    {
+      "id": "S08",
+      "host": "codex",
+      "os": "ubuntu",
+      "artifact": "codex config.toml wiring",
+      "stage": "install — a dotfiles-managed config.toml that is a SYMLINK must keep its identity",
+      "user-state": "hostile-path",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs: a symlinked config keeps its identity — the write goes THROUGH the link, never replacing it with a plain file.",
+      "owner": null
+    },
+    {
+      "id": "S09",
+      "host": "codex",
+      "os": "ubuntu",
+      "artifact": "codex config.toml wiring",
+      "stage": "install — an interrupted config write or server copy must leave the PRIOR bytes intact, never a torn file",
+      "user-state": "hostile-path",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs (failure-injection cases): a config-write or server-copy failure leaves the prior registration byte-intact (write-beside-then-rename), demonstrated to fail against the pre-fix plain copyFileSync/writeFileSync.",
+      "owner": null
+    },
+    {
+      "id": "S10",
+      "host": "both",
+      "os": "ubuntu+windows",
+      "artifact": "npm tarball (packed, not the source checkout)",
+      "stage": "install — the published npm artifact must actually carry plugin/mcp/server.mjs (issue #43 regression: 20 files shipped, the Codex server was not one of them)",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/npm-tarball-codex.test.mjs: `npm pack` + unpack proves plugin/mcp/server.mjs is IN the tarball, byte-identical to source, and no other plugin/ content leaks in.",
+      "owner": null
+    },
+    {
+      "id": "S11",
+      "host": "codex",
+      "os": "ubuntu",
+      "artifact": "npm tarball (packed)",
+      "stage": "first-query — the server installed FROM THE UNPACKED TARBALL (not the source tree) completes an MCP round trip and serves search_ruvnet",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/npm-tarball-codex.test.mjs: initialize + tools/list succeed against the server copied from the real unpacked tarball, with the documented search_ruvnet schema (required string query, optional integer k).",
+      "owner": null
+    },
+    {
+      "id": "S12",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "plugin (grounding hook)",
+      "stage": "hook-fire — the UserPromptSubmit grounding hook across on-topic/off-topic/malformed/empty/200KB/unicode/JSON-escaped/canary-injection prompts",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/hook-battery.test.mjs: the 15-case ground-ruvnet.sh gate battery (playbook/grounding/hijack triggers, malformed & empty stdin, a 200KB prompt, unicode/emoji, JSON-escaped quotes, canary command substitutions) — every case exits 0.",
+      "owner": null
+    },
+    {
+      "id": "S13",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "plugin (session-start hook)",
+      "stage": "recurring use — the session-start greeting must fire every session; the one-time star-ask must fire AT MOST once ever, across repeated sessions on the same HOME",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/hook-battery.test.mjs: session-start.sh run twice with the same HOME — a sane greeting both times, star-ask appearing on the first eligible run and never again.",
+      "owner": null
+    },
+    {
+      "id": "S14",
+      "host": "claude-code",
+      "os": "ubuntu+windows",
+      "artifact": "plugin (hooks.json, every registered hook)",
+      "stage": "hook-fire under stress — four stdin regimes (valid JSON, empty EOF, 1MB garbage, held-open stdin past the declared timeout) under an external process-group watchdog",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/selfcheck-battery.test.mjs: every hooks.json registration is driven through the real shim under all four stdin regimes; a genuinely hung hook is caught and killed by the process-group watchdog (an in-process timer cannot catch it).",
+      "owner": null
+    },
+    {
+      "id": "S15",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "plugin + a user's own unrelated hooks",
+      "stage": "coexistence — our hooks must run alongside a stranger's own hooks (slow/failing/garbage-printing, before AND after ours) without ever executing theirs or altering their config",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/selfcheck-battery.test.mjs coexistence suite: foreign hook registrations are enumerated and never executed.",
+      "owner": null
+    },
+    {
+      "id": "S16",
+      "host": "both",
+      "os": "ubuntu",
+      "artifact": "kb bundle (a REAL ~736MB downloaded + npm-installed brain, not a stub)",
+      "stage": "first-query — the core-capability battery must run for real, and a skip (absent brain, or cold embedder model) must become a HARD FAILURE, never a silent green",
+      "user-state": "fresh-home (fresh CI runner)",
+      "classification": "ci",
+      "evidence": "ci.yml#warm-brain — plugin/test/run-tests.mjs's capability battery, run with REQUIRE_BRAIN=1 against a real installed brain (ADR-058 D1); the SAME lane's mutant proof lives at ci.yml#check (tests/integration/require-brain-lane.mjs), which points RUVNET_BRAIN_KB at a deliberately empty dir.",
+      "owner": null
+    },
+    {
+      "id": "S17",
+      "host": "claude-code",
+      "os": "ubuntu",
+      "artifact": "plugin (structure/hook/guard only, brain genuinely absent)",
+      "stage": "install — the fast PR lane's non-fatal counterpart to S16: a fresh runner with no brain bundle must SKIP loudly, never silently, and must stay exit 0",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — npm test (plugin/test/run-tests.mjs): the core-capability battery prints \"CORE CAPABILITY BATTERY SKIPPED\" and stays exit 0 when REQUIRE_BRAIN is unset, the honest counterpart to S16's hard failure.",
+      "owner": null
+    },
+    {
+      "id": "S18",
+      "host": "codex",
+      "os": "ubuntu",
+      "artifact": "codex skill manifests (.codex/skills/*/skill.toml)",
+      "stage": "install — every shipped skill manifest must dispatch to a target that actually exists, and no shipped file may leak a developer's real home-directory path (the second defect ADR-051 found alongside issue #42)",
+      "user-state": "fresh-home",
+      "classification": "ci",
+      "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs: each .codex/skills/*/skill.toml dispatches to a target the server actually declares (search_ruvnet), unmanifested skills are a documented decision not an oversight, and zero shipped files under .codex/ or plugin/ contain a real /Users/<account>/ path.",
+      "owner": null
+    },
+    {
+      "id": "S19",
+      "host": "claude-code",
+      "os": "ubuntu+windows",
+      "artifact": "plugin + kb bundle",
+      "stage": "uninstall — `--uninstall` must reverse every footprint it left (plugin wiring, codex registration, brain cache, launchd/nightly state), never leaving orphaned config",
+      "user-state": "populated-home",
+      "classification": "ci",
+      "evidence": "integration-linux.yml#integration — tests/integration/uninstall-footprint.test.mjs exercises the real --uninstall path and its footprint.",
+      "owner": null
+    },
+    {
+      "id": "S20",
+      "host": "both",
+      "os": "macos",
+      "artifact": "npm (npx ruvnet-brain) / codex config.toml",
+      "stage": "install — the full install + Codex/Claude-Code wiring journey on macOS",
+      "user-state": "fresh-home",
+      "classification": "manual",
+      "evidence": "No macOS CI job exists today: ci.yml has only the ubuntu `check`/`warm-brain` jobs and `windows-unit`; integration-linux.yml is ubuntu-only. ADR-053 itself names this gap directly: \"macOS gets a mechanical verdict via the release-qualification lane rather than trusting one developer laptop\" — that lane is not yet built (ADR-053 rollout item 6, unbuilt).",
+      "owner": "Stuart Kerr"
+    },
+    {
+      "id": "S21",
+      "host": "both",
+      "os": "all",
+      "artifact": "local clone (`node bin/install.mjs --local`, dist/ruvnet-brain.zip)",
+      "stage": "install — the from-a-repo-clone path a contributor building the bundle locally takes",
+      "user-state": "fresh-home",
+      "classification": "manual",
+      "evidence": "Grep confirms zero references to `--local` or FLAG_LOCAL anywhere under tests/ — this path is entirely untested today. Verified manually by Stuart before cutting a local bundle build.",
+      "owner": "Stuart Kerr"
+    },
+    {
+      "id": "S22",
+      "host": "both",
+      "os": "all",
+      "artifact": "brain cache directory (RUVNET_BRAIN_KB / XDG_CACHE_HOME)",
+      "stage": "install — a real hostile HOME: a path containing spaces or unicode, a read-only cache directory, or a near-full disk",
+      "user-state": "hostile-path",
+      "classification": "manual",
+      "evidence": "ADR-053 rollout item 10 (\"Hostile-home journeys — spaces/unicode/read-only/ENOSPC\") is explicitly unbuilt; grep across tests/ for these conditions returns zero hits. Verified manually by Stuart when reported by a user.",
+      "owner": "Stuart Kerr"
+    }
+  ]
+}
