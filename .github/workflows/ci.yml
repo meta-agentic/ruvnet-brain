@@ -236,6 +236,28 @@ jobs:
         # here costs seconds, not minutes. smokeQuery's real query is also what warms KB_MODEL_CACHE
         # for the battery step below.
         run: node bin/install.mjs --yes --pin --no-stack --no-enhance --no-statusline --no-nightly-prompt --no-telemetry --no-selfcheck
+      - name: Warm the EMBEDDER explicitly (smokeQuery is best-effort by design and cannot be relied on)
+        # WHY A SEPARATE STEP (2026-07-27): the install step above says smokeQuery "warms
+        # KB_MODEL_CACHE for the battery below". It does — WHEN IT SUCCEEDS. But smokeQuery is
+        # deliberately "best-effort, never fatal" (bin/install.mjs) — that non-fatality IS the D8 -20
+        # deduction — so a failed warm prints a reassuring warning and the install exits 0 with a COLD
+        # cache. The battery then correctly reports "cold model cache but REQUIRE_BRAIN=1" and the
+        # lane goes red for a reason that has nothing to do with the product.
+        #
+        # Depending on a best-effort side effect for a hard gate's precondition is the same class of
+        # error as the gate it feeds. This forces the ~90MB embedder download and FAILS LOUDLY if it
+        # cannot, so a cold cache is reported as an infrastructure fault here rather than a product
+        # failure one step later.
+        run: |
+          set -e
+          node -e "
+            const { pipeline } = await import('@xenova/transformers');
+            process.env.TRANSFORMERS_CACHE = process.env.KB_MODEL_CACHE;
+          " 2>/dev/null || true
+          node kb/forge-ask-all.mjs --dir "$RUVNET_BRAIN_KB" --q "does ruvector use hnsw" --k 1 > /tmp/warm.log 2>&1 || {
+            echo "::error::embedder warm FAILED — the battery below cannot pass with a cold cache"; tail -20 /tmp/warm.log; exit 1; }
+          test -d "$KB_MODEL_CACHE" || { echo "::error::KB_MODEL_CACHE still absent after a successful query: $KB_MODEL_CACHE"; exit 1; }
+          echo "warmed: $(du -sh "$KB_MODEL_CACHE" | cut -f1) in $KB_MODEL_CACHE"
       - name: Core capability battery — REQUIRE_BRAIN=1 (a skipped battery is now a hard failure)
         env:
           REQUIRE_BRAIN: '1'
