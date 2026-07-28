@@ -66,112 +66,88 @@ export function discoverRepos(dir) {
   return [...names].sort();
 }
 
-// Query every repo, pool, rerank on a common scale, return global top-k labeled by repo.
-export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
-  const list = (repos && repos.length) ? repos : discoverRepos(dir);
-  const perRepo = {};
-  // CORPUS AGE (issue #31, Jan Lafko): the brain is a periodic snapshot, and a model quoting a
-  // version from it had NO signal that the fact might trail live reality. Derive the queried
-  // stores' ages from the store files' own mtimes (always present, no extra plumbing) so every
-  // response can carry an honest staleness caveat instead of implying liveness.
-  const corpusAge = (() => {
-    let oldest = null, newest = null;
-    for (const name of list) {
-      for (const cand of [`${name}.big.rvf`, `${name}.rvf`]) {
-        const p = path.join(dir, cand);
-        if (!fs.existsSync(p)) continue;
-        const t = fs.statSync(p).mtimeMs;
-        if (oldest === null || t < oldest.t) oldest = { t, name };
-        if (newest === null || t > newest.t) newest = { t, name };
-        break;
-      }
-    }
-    if (!oldest) return null;
-    const days = (t) => (Date.now() - t) / 86400000;
-    return { oldestDays: +days(oldest.t).toFixed(1), oldestRepo: oldest.name, newestDays: +days(newest.t).toFixed(1) };
-  })();
-  // Fan out across repos concurrently — but BOUNDED (issue #30, found+fixed by Jan Lafko). The
-  // unbounded Promise.all here was a real OOM bomb: each repo's searchKb() spins up its own store
-  // handles, and an unscoped query fanned ~53+ repos at once — measured 513MB peak for ONE repo,
-  // extrapolating past his container's 17GB (dmesg: oom-kill, anon-rss 17.2GB, MCP server dead).
-  // His bounded batch (default 5, KB_CONCURRENCY to tune) cut peak RSS to ~2.4GB with identical
-  // results. Implemented as a SLIDING WINDOW rather than chunk barriers — at most KB_CONCURRENCY
-  // repos in flight, and a finishing repo immediately admits the next, so big-memory machines keep
-  // most of the parallel wall-clock win while small containers keep the same hard memory bound.
-  // Each repo's error stays isolated to its own perRepo entry.
-  const CONCURRENCY = Math.max(1, parseInt(process.env.KB_CONCURRENCY || '5', 10) || 5);
-
-  // EXACT-NAME RESCUE (issue #33 Part A, Jan Lafko / @lafinak).
-  // The scoped names the query explicitly contains. Hoisted ABOVE the per-repo pool cutoff because
-  // of the bug Jan found: #31's exact-name boost runs after reranking, but each repo only contributes
-  // its top-`pool` passages by RAW relevance, so `@ruvector/rvf`'s own manifest was discarded before
-  // the boost could ever see it — in a large repo the exact artifact simply never reached the pool.
-  // A boost cannot rescue what was never a candidate. (#31's own verification missed this because it
-  // used a target that was already pool-competitive, so it never exercised the exclusion path.)
-  const queriedNames = new Set(
+// The scoped `@scope/name` tokens a query explicitly contains. ONE definition, because two places
+// need it — the pre-rerank rescue in searchAll and the exact-artifact boost in selectResults — and
+// two copies of this regex would be free to drift apart, silently rescuing candidates that the
+// boost then would not recognise (or the reverse).
+export function scopedNamesIn(query) {
+  return new Set(
     [...String(query).matchAll(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/gi)].map((m) => m[0].toLowerCase()),
   );
-  // Searching deeper costs real time, so it happens ONLY when the query names an artifact exactly —
-  // the deeper hits are then discarded except for exact title matches, which are force-kept. Ordinary
-  // prose questions retrieve exactly as before.
-  const RESCUE_DEPTH = Math.max(64, pool);
+}
 
-  const searchOne = async (name) => {
-    try {
-      // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
-      // single source repo — otherwise the queried repo's own primer is crowded out by the other 18 before
-      // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
-      // Transcript stores get a deeper dense pool (24) AND BM25 candidates; concepts gets 24; others 8.
-      const repoPool = (name === 'concepts' || isTranscriptStore(name)) ? Math.max(pool, 24) : pool;
-      // Deepen ONLY for exact-name queries (#33 Part A), and only in repos that could PLAUSIBLY hold
-      // the named artifact. The first version deepened every one of ~69 repos to depth 64 whenever a
-      // query contained any @scope/name token — an 8x HNSW cost across the entire corpus to rescue an
-      // artifact that, by definition, lives in one or two of them. Scope it by name overlap: a query
-      // for @ruvector/rvf deepens ruvector-ish stores, not agentic-robotics.
-      // The trade is deliberate and bounded: a package whose manifest sits in an unrelated repo is
-      // still found by the normal pool + boost, it just doesn't get the deep rescue. Paying 8x on 67
-      // irrelevant repos to cover that case is the wrong bargain.
-      const plausibleForName = queriedNames.size > 0 && [...queriedNames].some((n) => {
-        const [scope, pkg] = n.replace(/^@/, '').split('/');
-        const lower = name.toLowerCase();
-        return (scope && (lower.includes(scope) || scope.includes(lower)))
-            || (pkg && (lower.includes(pkg) || pkg.includes(lower)));
-      });
-      const depth = plausibleForName ? Math.max(repoPool, RESCUE_DEPTH) : repoPool;
-      const hits = await searchKb({ dir, name, query, k: depth, n: depth });
-      let cands = hits;
-      if (queriedNames.size && hits.length > repoPool) {
-        const top = hits.slice(0, repoPool);
-        const keptPaths = new Set(top.map((h) => h.path));
-        // Force-keep any deeper hit whose TITLE is exactly a name the query asked for. This is the
-        // whole fix: the artifact now REACHES the pool, so #31's boost can act on it.
-        const rescued = hits
-          .slice(repoPool)
-          .filter((h) => h.title && queriedNames.has(String(h.title).toLowerCase()) && !keptPaths.has(h.path));
-        cands = rescued.length ? top.concat(rescued) : top;
-      }
-      if (isTranscriptStore(name)) {
-        const seen = new Set(hits.map((h) => h.path));
-        const bm = meetingBm25Candidates(dir, name, query, 40).filter((c) => !seen.has(c.path));
-        cands = hits.concat(bm); // the global cross-encoder (rerankPairs below) then promotes the real answer
-      }
-      perRepo[name] = cands.length;
-      return cands.map((h) => ({ ...h, repo: name }));
-    } catch (e) {
-      perRepo[name] = `ERR: ${e.message}`;
-      return [];
-    }
-  };
-  const perRepoHits = new Array(list.length);
-  let nextIdx = 0;
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, async () => {
-    for (let i = nextIdx++; i < list.length; i = nextIdx++) {
-      perRepoHits[i] = await searchOne(list[i]);
-    }
-  }));
-  const candidates = perRepoHits.flat();
-  // ONE cross-encoder pass over the whole cross-repo pool → a single comparable relevance scale.
-  const ranked = await rerankPairs(query, candidates);
+// The shipped pair budget. 0 disables the cap — and 0 IS the shipped default, because no budget
+// that meaningfully cuts wall time was measured to leave the answers alone. The full curve, the
+// method, and the reason this ships OFF are in docs/adr/0057-cross-encoder-pool-cap.md; the raw
+// per-question numbers are in evals/runs/2026-07-27-cross-encoder-pool-cap.md. Operators who want
+// the trade can take it with KB_CE_MAX_PAIRS — the number is theirs to choose, with the curve in
+// front of them, which is not the same thing as choosing it for everyone by default.
+export const CE_MAX_PAIRS_DEFAULT = 0;
+
+// ── THE CROSS-ENCODER POOL CAP ────────────────────────────────────────────────────────────────
+//
+// Measured 2026-07-27 over the frozen 120-question held-out set: 607 (query, passage) pairs
+// cross-encoded per question at the median (min 574, max 615), and the cross-encoder is 84.7% of a
+// warm query's wall (HNSW is 3.0% — the vector search is NOT the cost). 607 comes from the per-repo
+// `pool` (8) times ~69 stores, not from k: asking for k=3 documents still reads 607 whole documents
+// through a 512-token model.
+//
+// This function bounds that pair count. Three rules, each of them measured rather than reasoned:
+//
+//   1. FLOOR FIRST, THEN VECTOR DISTANCE. Every store's own best passage is scored (so no store is
+//      silently muted), and the rest of the budget goes to the globally closest passages.
+//      An earlier version of this file dealt PURELY by depth and stated as fact that distances from
+//      different stores "are not comparable". That was asserted, never measured, and the measurement
+//      says otherwise: across all 69 stores the rank-0 distances span 0.916-1.196 — one scale, not
+//      69 — and distance-ordered selection beats depth-ordered selection at EVERY budget tested
+//      (top-1 agreement at B=272: 85.8% vs 77.5%; at B=69: 59.2% vs 43.3%). Depth loses because it
+//      spends the budget evenly on 69 stores when the answer lives in one of them.
+//   2. THE RESCUE AND BM25 LANES ARE EXEMPT, and may exceed the budget. #33 Part A exists because a
+//      boost cannot rescue what was never a candidate; a transcript store's answer is BM25-only and
+//      dense buries it past rank 40. Dropping either here would rebuild those bugs one layer down.
+//   3. THE FLOOR IS CONDITIONAL ON FITTING. If the budget is smaller than the store count the floor
+//      is skipped rather than blowing through the budget — a "cap" that quietly spends more than it
+//      was given is not a cap. On the real corpus (69 stores) any usable budget clears this easily.
+//
+// WHAT THIS FUNCTION CANNOT DO, stated here because the measurement was surprising: dropping pairs
+// also changes the SURVIVORS' scores. The cross-encoder is byte-for-byte deterministic for a fixed
+// batch (verified: 64/64 identical on a same-order rerun) but NOT invariant to batch composition —
+// re-batching the same 64 passages by length moved scores by up to 0.26 logits. So a capped run is
+// never merely "the uncapped run minus some rows", and any offline replay of a cap is an
+// approximation, not an identity.
+export function capRerankPool(candidates, { limit }) {
+  if (!(limit > 0) || candidates.length <= limit) return { kept: candidates, dropped: 0, capped: false };
+  const keep = new Set();
+  const exempt = (c) => c._lane === 'rescue' || c._lane === 'bm25';
+  for (let i = 0; i < candidates.length; i++) if (exempt(candidates[i])) keep.add(i);
+  // The floor: one passage per store, taken only if the whole floor fits in what is left.
+  const floor = [];
+  for (let i = 0; i < candidates.length; i++) if (!exempt(candidates[i]) && (candidates[i]._srcRank ?? 0) === 0) floor.push(i);
+  if (keep.size + floor.length <= limit) for (const i of floor) keep.add(i);
+  // (distance, original position) — stable, so a tie between two stores at the same distance is
+  // broken the same way on every run. Determinism matters here: the pool cap changes what gets
+  // scored, so a nondeterministic cap would make every answer nondeterministic.
+  const byDistance = candidates
+    .map((c, i) => [Number.isFinite(c.bestDistance) ? c.bestDistance : Infinity, i])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  for (const [, i] of byDistance) {
+    if (keep.size >= limit) break;
+    keep.add(i);
+  }
+  const kept = candidates.filter((_, i) => keep.has(i));
+  return { kept, dropped: candidates.length - kept.length, capped: true };
+}
+
+// Everything that happens AFTER the cross-encoder has spoken: the name / package / exact-artifact
+// boosts, the ADR-collision disclosure, the irrelevance filter and the evidence grade. Lifted out
+// of searchAll verbatim as a PURE function of (query, scored candidates, k) so it can be REPLAYED
+// against a recorded pool without re-running the cross-encoder. That is what makes measuring a
+// pool cap's effect on ANSWERS affordable: score the full 605-pair pool once, then replay every
+// candidate policy against those exact scores — exactly, not approximately. Works on shallow
+// copies because the boosts mutate ceScore, and a replay must not poison the next replay's input.
+export function selectResults({ query, ranked, k = 6 }) {
+  ranked = ranked.map((r) => ({ ...r }));
+  const queriedNames = scopedNamesIn(query);
   // Repo-name affinity: when the question explicitly NAMES a repo ("Does QuDAG…", "what can SAFLA do",
   // "can ruflo orchestrate…"), that repo should win ties/near-ties over a sibling that merely mentions it.
   // Capability questions almost always name their repo; without this the larger/prose-richer sibling wins
@@ -348,7 +324,153 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
       : null,
   };
 
-  return { repos: list, perRepo, results, pooled: candidates.length, corpusAge, adrCollision, evidence };
+  return { results, adrCollision, evidence };
+}
+
+// Query every repo, pool, rerank on a common scale, return global top-k labeled by repo.
+export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
+  const list = (repos && repos.length) ? repos : discoverRepos(dir);
+  const perRepo = {};
+  // CORPUS AGE (issue #31, Jan Lafko): the brain is a periodic snapshot, and a model quoting a
+  // version from it had NO signal that the fact might trail live reality. Derive the queried
+  // stores' ages from the store files' own mtimes (always present, no extra plumbing) so every
+  // response can carry an honest staleness caveat instead of implying liveness.
+  const corpusAge = (() => {
+    let oldest = null, newest = null;
+    for (const name of list) {
+      for (const cand of [`${name}.big.rvf`, `${name}.rvf`]) {
+        const p = path.join(dir, cand);
+        if (!fs.existsSync(p)) continue;
+        const t = fs.statSync(p).mtimeMs;
+        if (oldest === null || t < oldest.t) oldest = { t, name };
+        if (newest === null || t > newest.t) newest = { t, name };
+        break;
+      }
+    }
+    if (!oldest) return null;
+    const days = (t) => (Date.now() - t) / 86400000;
+    return { oldestDays: +days(oldest.t).toFixed(1), oldestRepo: oldest.name, newestDays: +days(newest.t).toFixed(1) };
+  })();
+  // Fan out across repos concurrently — but BOUNDED (issue #30, found+fixed by Jan Lafko). The
+  // unbounded Promise.all here was a real OOM bomb: each repo's searchKb() spins up its own store
+  // handles, and an unscoped query fanned ~53+ repos at once — measured 513MB peak for ONE repo,
+  // extrapolating past his container's 17GB (dmesg: oom-kill, anon-rss 17.2GB, MCP server dead).
+  // His bounded batch (default 5, KB_CONCURRENCY to tune) cut peak RSS to ~2.4GB with identical
+  // results. Implemented as a SLIDING WINDOW rather than chunk barriers — at most KB_CONCURRENCY
+  // repos in flight, and a finishing repo immediately admits the next, so big-memory machines keep
+  // most of the parallel wall-clock win while small containers keep the same hard memory bound.
+  // Each repo's error stays isolated to its own perRepo entry.
+  const CONCURRENCY = Math.max(1, parseInt(process.env.KB_CONCURRENCY || '5', 10) || 5);
+
+  // EXACT-NAME RESCUE (issue #33 Part A, Jan Lafko / @lafinak).
+  // The scoped names the query explicitly contains. Hoisted ABOVE the per-repo pool cutoff because
+  // of the bug Jan found: #31's exact-name boost runs after reranking, but each repo only contributes
+  // its top-`pool` passages by RAW relevance, so `@ruvector/rvf`'s own manifest was discarded before
+  // the boost could ever see it — in a large repo the exact artifact simply never reached the pool.
+  // A boost cannot rescue what was never a candidate. (#31's own verification missed this because it
+  // used a target that was already pool-competitive, so it never exercised the exclusion path.)
+  const queriedNames = scopedNamesIn(query);
+  // Searching deeper costs real time, so it happens ONLY when the query names an artifact exactly —
+  // the deeper hits are then discarded except for exact title matches, which are force-kept. Ordinary
+  // prose questions retrieve exactly as before.
+  const RESCUE_DEPTH = Math.max(64, pool);
+
+  const searchOne = async (name) => {
+    try {
+      // The concepts store holds ALL repos' prose primers in one place, so it needs a deeper pool than a
+      // single source repo — otherwise the queried repo's own primer is crowded out by the other 18 before
+      // the cross-encoder ever scores it (the dilution that buried ruflo's primer and lost safla).
+      // Transcript stores get a deeper dense pool (24) AND BM25 candidates; concepts gets 24; others 8.
+      const repoPool = (name === 'concepts' || isTranscriptStore(name)) ? Math.max(pool, 24) : pool;
+      // Deepen ONLY for exact-name queries (#33 Part A), and only in repos that could PLAUSIBLY hold
+      // the named artifact. The first version deepened every one of ~69 repos to depth 64 whenever a
+      // query contained any @scope/name token — an 8x HNSW cost across the entire corpus to rescue an
+      // artifact that, by definition, lives in one or two of them. Scope it by name overlap: a query
+      // for @ruvector/rvf deepens ruvector-ish stores, not agentic-robotics.
+      // The trade is deliberate and bounded: a package whose manifest sits in an unrelated repo is
+      // still found by the normal pool + boost, it just doesn't get the deep rescue. Paying 8x on 67
+      // irrelevant repos to cover that case is the wrong bargain.
+      const plausibleForName = queriedNames.size > 0 && [...queriedNames].some((n) => {
+        const [scope, pkg] = n.replace(/^@/, '').split('/');
+        const lower = name.toLowerCase();
+        return (scope && (lower.includes(scope) || scope.includes(lower)))
+            || (pkg && (lower.includes(pkg) || pkg.includes(lower)));
+      });
+      const depth = plausibleForName ? Math.max(repoPool, RESCUE_DEPTH) : repoPool;
+      const hits = await searchKb({ dir, name, query, k: depth, n: depth });
+      let cands = hits;
+      if (queriedNames.size && hits.length > repoPool) {
+        const top = hits.slice(0, repoPool);
+        const keptPaths = new Set(top.map((h) => h.path));
+        // Force-keep any deeper hit whose TITLE is exactly a name the query asked for. This is the
+        // whole fix: the artifact now REACHES the pool, so #31's boost can act on it.
+        const rescued = hits
+          .slice(repoPool)
+          .filter((h) => h.title && queriedNames.has(String(h.title).toLowerCase()) && !keptPaths.has(h.path));
+        for (const h of rescued) h._lane = 'rescue';
+        cands = rescued.length ? top.concat(rescued) : top;
+      }
+      if (isTranscriptStore(name)) {
+        const seen = new Set(hits.map((h) => h.path));
+        const bm = meetingBm25Candidates(dir, name, query, 40).filter((c) => !seen.has(c.path));
+        cands = hits.concat(bm); // the global cross-encoder (rerankPairs below) then promotes the real answer
+        for (let i = 0; i < bm.length; i++) bm[i]._lane = 'bm25';
+      }
+      // Every candidate carries WHY it is in the pool and HOW deep it sat in that lane. Nothing
+      // downstream of the cross-encoder needs this — the reranker's job is to forget where a
+      // candidate came from — but the pool CAP (capRerankPool) has to decide what to drop before
+      // any score exists, and per-lane depth is the only honest pre-score signal available: vector
+      // distance is not comparable across stores that use different embedders and dimensions.
+      let dense = 0, bm25 = 0, rescue = 0;
+      for (const c of cands) {
+        if (c._lane === 'bm25') c._srcRank = bm25++;
+        else if (c._lane === 'rescue') c._srcRank = rescue++;
+        else { c._lane = 'dense'; c._srcRank = dense++; }
+      }
+      perRepo[name] = cands.length;
+      return cands.map((h) => ({ ...h, repo: name }));
+    } catch (e) {
+      perRepo[name] = `ERR: ${e.message}`;
+      return [];
+    }
+  };
+  const perRepoHits = new Array(list.length);
+  let nextIdx = 0;
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, async () => {
+    for (let i = nextIdx++; i < list.length; i = nextIdx++) {
+      perRepoHits[i] = await searchOne(list[i]);
+    }
+  }));
+  const pooledAll = perRepoHits.flat();
+  // The pool's own order is the cap's tie-break, so it has to survive into any recorded trace —
+  // otherwise a replay would break ties differently from production and quietly measure a
+  // different policy than the one being shipped.
+  for (let i = 0; i < pooledAll.length; i++) pooledAll[i]._poolIdx = i;
+  const capLimit = process.env.KB_CE_MAX_PAIRS !== undefined
+    ? Math.max(0, parseInt(process.env.KB_CE_MAX_PAIRS, 10) || 0)
+    : CE_MAX_PAIRS_DEFAULT;
+  const { kept: candidates, dropped: cappedOut } = capRerankPool(pooledAll, { limit: capLimit });
+  // ONE cross-encoder pass over the whole cross-repo pool → a single comparable relevance scale.
+  const ranked = await rerankPairs(query, candidates);
+  // Recording the SCORED pool (not the answer) is what makes a pool-policy change measurable: one
+  // 605-pair run, then selectResults replayed against those exact scores for any candidate policy.
+  if (process.env.KB_CE_TRACE) {
+    fs.appendFileSync(process.env.KB_CE_TRACE, JSON.stringify({
+      query, k, pooledAll: pooledAll.length, scored: candidates.length, capLimit,
+      cands: ranked.map((r) => ({
+        repo: r.repo, path: r.path, title: r.title ?? null, lane: r._lane ?? 'dense',
+        rank: r._srcRank ?? 0, poolIdx: r._poolIdx ?? 0, ce: r.ceScore, dist: r.bestDistance ?? null,
+        len: (r.fullText || r.text || '').length,
+        gist: /GIST STATUS/.test(r.fullText || r.text || ''),
+      })),
+    }) + '\n');
+  }
+  const { results, adrCollision, evidence } = selectResults({ query, ranked, k });
+
+  // `pooled` stays the number of pairs the cross-encoder actually scored — that is what the count
+  // has always meant to a reader. `pooledAll`/`cappedOut` report what the cap withheld, because a
+  // count that silently changed meaning is the kind of quiet lie this repo gates against.
+  return { repos: list, perRepo, results, pooled: candidates.length, pooledAll: pooledAll.length, cappedOut, corpusAge, adrCollision, evidence };
 }
 
 function parseArgs() {
@@ -366,7 +488,7 @@ function parseArgs() {
 async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
-  const { repos: used, perRepo, results, pooled, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
+  const { repos: used, perRepo, results, pooled, pooledAll, cappedOut, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
   // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
   // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
   // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
@@ -403,7 +525,7 @@ async function main() {
   if (evidence?.droppedIrrelevant > 0) {
     console.log(`  (${evidence.droppedIrrelevant} result(s) the reranker judged irrelevant were withheld rather than padded in)`);
   }
-  console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}\n`);
+  console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}${cappedOut ? ` (cross-encoded ${pooled} of ${pooledAll}; ${cappedOut} beyond the pair budget)` : ''}\n`);
   results.forEach((r, i) => {
     console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}${r.statusLabel ? `  [${r.statusLabel}]` : ''}`);
     console.log(`path : ${r.repo}/${r.path}`);

@@ -86,6 +86,16 @@ const STANDALONE = [
   ['brain-stamp', 'invoked by self-update.mjs:249, the nightly launchd driver (com.ruvnet.brain-nightly)'],
   ['lesson-promote', 'human-run CLI — promotion is manual (--apply); no scheduler yet (automation is ADR-029 #4, open)'],
   ['behavioral-l1-l4', 'behavioural harness invoked by its own test file — not a product path'],
+  // A measurement harness, not a product path: it answers "would bounding the cross-encoder pool
+  // change the answers?" and its --collect phase costs one full uncapped all-repos query per
+  // held-out question (~2-8 min each, ~120 questions). Nothing may schedule that. Run by a human
+  // whenever the retrieval pool policy is touched; `npm run cap:report` replays the recorded scores.
+  ['rerank-cap-eval', 'human-run measurement harness — --collect is hours of cross-encoder time; never scheduled'],
+  // The other half of the same measurement (ADR-057): --collect/--report replays a cap offline,
+  // this one runs the real thing warm and paired, because batch composition moves cross-encoder
+  // scores and a replayed cap is therefore an approximation of a real one. ~35 minutes of ONNX
+  // inference for 24 questions; human-run, never scheduled.
+  ['rerank-cap-warm-ab', 'human-run measurement harness — the real warm A/B behind ADR-057; never scheduled'],
 
   // ADDED 2026-07-23 (P7 sweep, ADR-037 honesty bar — each reason verified against reality below,
   // not written blind. See PROGRESS.md / the wiring report for the per-item evidence.)
