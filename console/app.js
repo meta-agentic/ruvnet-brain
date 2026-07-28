@@ -2801,8 +2801,102 @@ function renderBrainPower(bp) {
       'The switch is a file — ', el('span', { class: 'fn-path' }, bp.switchPath),
       ' — so it survives updates, and every part of the product reads the same one.'));
   }
+  if (bp.profile) main.push(bpProfileControl(bp.profile));
   main.push(bpParts(bp));
   body.replaceChildren(...main);
+}
+
+let bpProfileBusy = false;
+const bpSize = (bytes) => {
+  if (!Number.isFinite(bytes)) return 'size measured after install';
+  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.round(bytes / 1e6)} MB`;
+};
+
+function bpProfileControl(profile) {
+  const current = profile.values?.brainProfile;
+  const result = el('div', { class: 'bp-profile-result' });
+  const apply = el('button', { class: 'btn btn-apply', type: 'button', disabled: true }, 'Apply selection');
+  const options = [
+    {
+      value: 'complete',
+      title: 'Complete Brain',
+      copy: 'Every public rUv repository in the release. Best for cross-repository answers and supporting evidence.',
+    },
+    {
+      value: 'ruvector',
+      title: 'RuVector Only',
+      copy: 'Keeps the shared reader and RuVector RVF only. Smallest footprint, but no evidence from Ruflo, AgentDB, RuView, or the other repositories.',
+    },
+  ];
+  const radios = [];
+  const cards = options.map((option) => {
+    const choice = profile.choices?.[option.value] || {};
+    const input = el('input', {
+      type: 'radio',
+      name: 'brain-profile',
+      value: option.value,
+      disabled: choice.available === false || null,
+      onchange: () => { apply.disabled = bpProfileBusy || input.value === current; },
+    });
+    input.checked = option.value === current;
+    radios.push(input);
+    return el('label', { class: `bp-profile-choice${input.disabled ? ' unavailable' : ''}` },
+      input,
+      el('span', { class: 'bp-profile-copy' },
+        el('span', { class: 'bp-profile-title' }, option.title,
+          option.value === current ? chip('active', 'green') : null),
+        el('span', { class: 'bp-profile-meta' },
+          `${choice.storeCount || (option.value === 'ruvector' ? 1 : '—')} ${choice.storeCount === 1 ? 'store' : 'stores'} · ${bpSize(choice.bytes)}`),
+        el('span', { class: 'bp-profile-desc' }, option.copy),
+        choice.available === false
+          ? el('span', { class: 'bp-profile-desc bp-warn' }, 'The complete release bundle is not available on this machine; run the Brain update first.')
+          : null));
+  });
+
+  apply.onclick = async () => {
+    const selected = radios.find((radio) => radio.checked)?.value;
+    if (!selected || selected === current || bpProfileBusy) return;
+    if (selected === 'ruvector' && !window.confirm(
+      'Switch to RuVector Only? This removes the other public repository RVFs from this machine. You can restore them from the complete signed bundle later.',
+    )) return;
+    bpProfileBusy = true;
+    apply.disabled = true;
+    apply.textContent = selected === 'complete' ? 'Restoring…' : 'Removing unselected stores…';
+    result.replaceChildren();
+    try {
+      const response = await postJSON('/api/save-brain-profile', { values: { brainProfile: selected } });
+      const data = response?.data || {};
+      if (!response.ok || !data.ok) {
+        result.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+          response?.status === 403 ? TOKEN_MSG : `The profile did not change — ${data.log || 'the console could not apply it.'}`));
+      } else {
+        result.replaceChildren(el('div', { class: 'form-note n-ok', role: 'status' },
+          el('div', { class: 'fn-body' }, el('b', {}, data.profile === 'ruvector' ? 'RuVector Only is active.' : 'Complete Brain is active.'),
+            ` ${data.log}.`,
+            data.bytesFreed ? ` ${bpSize(data.bytesFreed)} released.` : '')));
+        announce(data.log || 'Brain profile changed.');
+      }
+    } catch (error) {
+      result.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+        `Couldn’t reach the console server: ${error.message || error}. Nothing was changed.`));
+    } finally {
+      bpProfileBusy = false;
+      await loadState();
+    }
+  };
+
+  return el('section', { class: 'bp-profile', 'aria-labelledby': 'bp-profile-h' },
+    el('div', { class: 'bp-profile-head' },
+      el('h3', { id: 'bp-profile-h' }, 'How much of the brain is installed'),
+      el('span', { class: 'bp-parts-hint' }, profile.path || 'installed brain')),
+    el('p', { class: 'bp-profile-lead' },
+      'This changes the RVF files on disk, not just a preference. Nightly updates preserve the selection.'),
+    el('div', { class: 'bp-profile-grid', role: 'radiogroup', 'aria-labelledby': 'bp-profile-h' }, ...cards),
+    profile.disagreement
+      ? el('p', { class: 'fineprint bp-warn' }, 'The stored preference did not match the RVFs on disk. The console is showing the files that actually exist.')
+      : null,
+    el('div', { class: 'bp-profile-actions' }, apply),
+    result);
 }
 
 /* The consent step, shown only for OFF. The downside text is the schema's own. */
@@ -2889,13 +2983,14 @@ function bpParts(bp) {
       el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => jumpToSetting('nightly') }, 'Nightly brain refresh'),
       ' switch in Settings.'),
 
-    part('Per-repo scoping', 'measured — shipping as smart-scope', 'amber',
-      'Whether the brain should answer only from the repo you are in. Measured 2026-07-26 over 16 ',
-      'questions, scoped against full: hard scoping helped questions that live entirely inside one ',
-      'repo, and made cross-repo answers confidently WRONG in 4 of the 4 cross-repo cases — a filter ',
-      'cannot know what it just hid. So it ships as smart-scope: the repo you are in biases the ',
-      'ranking, and anything from outside it arrives labelled as such, rather than being deleted from ',
-      'the answer. When that lands, its controls live in this block.'),
+    part('Installed knowledge',
+      bp.profile?.values?.brainProfile === 'ruvector'
+        ? 'RuVector Only'
+        : bp.profile?.values?.brainProfile === 'complete' ? 'Complete Brain' : 'not measured',
+      'cyan',
+      'The two-box selector above physically keeps or restores repository RVFs. Complete Brain is ',
+      'best for cross-repository reasoning; RuVector Only is the compact choice for people who only ',
+      'need the RuVector source. Nightly updates preserve whichever profile is selected.'),
 
     el('p', { class: 'fineprint' },
       'There are three more switches in the settings file — what it learns from, whether it may act ',
@@ -3659,6 +3754,9 @@ async function mockPost(url, body) {
   if (url === '/api/refresh') return { status: 200, ok: true, data: { ok: true, refreshing: true, started: true } };
   if (url === '/api/save-brain-power') {
     return { status: 200, ok: true, data: { ok: true, off: !!(body.values || {}).off, log: 'mock: the switch moved and was read back from disk' } };
+  }
+  if (url === '/api/save-brain-profile') {
+    return { status: 200, ok: true, data: { ok: true, profile: body.values?.brainProfile, bytesFreed: 640_000_000, log: 'mock: profile applied' } };
   }
   if (url === '/api/apply') {
     return { status: 200, ok: true, data: { results: (body.ids || []).map((id) => ({

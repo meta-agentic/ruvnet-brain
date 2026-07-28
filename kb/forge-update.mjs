@@ -26,12 +26,14 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { extractZip } from './zip-extract.mjs';
+import { applyBrainProfile, readBrainProfile } from './brain-profile.mjs';
 
 const KB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.join(KB_DIR, 'SOURCE.json');
 
 const argv = process.argv.slice(2);
 const APPLY = argv.includes('--apply');
+const RESTORE_COMPLETE = argv.includes('--restore-complete');
 const ONLY = argv.find((a) => !a.startsWith('--'));
 
 function die(msg, code = 1) { console.error(`\n[forge-update] ERROR: ${msg}`); process.exit(code); }
@@ -154,7 +156,12 @@ function dirSize(dir) {
  *
  * @returns {{removed: string[], kept: [string, string][], freed: number}}
  */
-export function reclaimBackups({ kbDir, backupsMade = [], env = process.env }) {
+export function reclaimBackups({
+  kbDir,
+  backupsMade = [],
+  env = process.env,
+  intentionallyRemovedStores = [],
+}) {
   const parent = path.dirname(kbDir);
   const prefix = `${path.basename(kbDir)}.bak-`;
   let stranded = [];
@@ -164,11 +171,15 @@ export function reclaimBackups({ kbDir, backupsMade = [], env = process.env }) {
   const all = [...new Set([...backupsMade, ...stranded])];
   const removed = []; const kept = []; let freed = 0;
   const liveStores = rvfNames(kbDir);
+  const allowedMissing = new Set(intentionallyRemovedStores.flatMap((store) => [
+    `${store}.rvf`,
+    `${store}.big.rvf`,
+  ]));
 
   for (const b of all) {
     if (!fs.existsSync(b)) continue;
     if (env.RUVNET_KEEP_BACKUP === '1') { kept.push([b, 'RUVNET_KEEP_BACKUP=1 is set']); continue; }
-    const lost = [...rvfNames(b)].filter((n) => !liveStores.has(n));
+    const lost = [...rvfNames(b)].filter((n) => !liveStores.has(n) && !allowedMissing.has(n));
     if (lost.length) {
       kept.push([b, `it holds ${lost.length} store(s) the new copy does NOT have: ${lost.slice(0, 3).join(', ')}${lost.length > 3 ? '…' : ''}`]);
       continue;
@@ -338,7 +349,14 @@ export function verifyLanded({ kbDir, kbName, before, expectedDigest = null, dow
 
 async function main() {
   const canon = await fetchJson(manifestUrl);
-  const targets = ONLY ? stores.filter((s) => s.kbName === ONLY) : stores;
+  const activeProfile = RESTORE_COMPLETE ? 'complete' : readBrainProfile();
+  const profileStores = activeProfile === 'ruvector'
+    ? stores.filter((s) => s.kbName === 'ruvector')
+    : stores;
+  if (activeProfile === 'ruvector' && profileStores.length === 0) {
+    die(`SOURCE.json has no ruvector store, so the selected RuVector Only profile cannot update safely.`);
+  }
+  const targets = ONLY ? profileStores.filter((s) => s.kbName === ONLY) : profileStores;
   if (ONLY && targets.length === 0) die(`SOURCE.json has no store named "${ONLY}". Known: ${stores.map((s) => s.kbName).join(', ')}`);
 
   const canonLabel = canon.tag_name
@@ -353,7 +371,7 @@ async function main() {
   const backupsMade = [];
   for (const local of targets) {
     const c = canonicalFor(canon, local.kbName);
-    const behind = isBehind(local, c);
+    const behind = RESTORE_COMPLETE || isBehind(local, c);
     anyBehind = anyBehind || behind;
     if (behind) {
       behindStores.push({ local });
@@ -461,6 +479,13 @@ async function main() {
     console.log(`\n(no forge-guard.mjs found to re-verify — skipped)`);
   }
 
+  let intentionallyRemovedStores = [];
+  if (activeProfile !== 'complete') {
+    const scoped = applyBrainProfile(KB_DIR, activeProfile);
+    intentionallyRemovedStores = scoped.removedStores;
+    console.log(`\nprofile ${activeProfile}: kept ${scoped.stores.join(', ')}; removed ${scoped.removed.length} unselected artifact(s).`);
+  }
+
   // ── RECLAIM THE ROLLBACK COPY (issue #35, Dr. Mark Allen) ──────────────────────────────────────
   // The rollback copy exists to survive the SWAP, not to live on disk forever. Every update used to
   // leave a full ~2.5 GB copy behind and never remove it; Mark accumulated SEVEN (~14 GB) before
@@ -474,7 +499,11 @@ async function main() {
   // forge-guard would still pass, because it verifies the store it was asked about, not whatever went
   // missing. Deleting there would destroy the only copy of a user's private data. So: compare store
   // inventories first, and keep any backup holding something the new copy lost.
-  const { removed, kept, freed } = reclaimBackups({ kbDir: KB_DIR, backupsMade });
+  const { removed, kept, freed } = reclaimBackups({
+    kbDir: KB_DIR,
+    backupsMade,
+    intentionallyRemovedStores,
+  });
   if (removed.length) {
     console.log(`\nreleased ${removed.length} rollback ${removed.length === 1 ? 'copy' : 'copies'} — ${(freed / 1e9).toFixed(2)} GB reclaimed`);
     console.log(`  (the new copy verified; this exact build is re-downloadable at any time)`);

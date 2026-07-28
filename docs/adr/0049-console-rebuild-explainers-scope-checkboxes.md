@@ -3,7 +3,7 @@ id: ADR-049
 title: The console rebuild — explain every section, scope every suggestion, and make the safe ones checkable
 status: Accepted
 date: 2026-07-24
-updated: 2026-07-27
+updated: 2026-07-28
 authors: [Stuart Kerr, Claude Code]
 tags: [onboarding, ux, console, advocacy, capability, cache, honesty]
 supersedes: []
@@ -91,7 +91,9 @@ project the data is about. A cross-project isolation test proves it, mutation-ch
 - The checkbox's honesty rule (present only with a server-vouched recId + proven undo) means the
   control surface grows only as capabilities earn verified undos — one today. That is the intended
   rate: a checkbox is a promise that the inverse exists.
-- **Still open, and owner-reserved:** the granular install checklist (item 4 above) — designed, with
+- **Partially resolved 2026-07-28:** the console now offers the owner-approved coarse install
+  profile — **Complete Brain** or **RuVector Only** — and physically applies it to the installed RVF
+  families. The broader granular install checklist (item 4 above) is still open — designed, with
   a static mockup (`console/install-mockup.html`) built from real `bin/install.mjs` items and their
   line-cited implications, awaiting the owner's approval before installer code is written. The
   grouped-sections recommendation layout is likewise deferred pending his call on group structure.
@@ -109,4 +111,5 @@ project the data is about. A cross-project isolation test proves it, mutation-ch
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Recorded the implemented two-profile console selector; kept the broader granular checklist open | The 2026-07-28 owner request approved exactly Complete Brain and RuVector Only; `console/app.js` now exposes that two-choice physical RVF profile. Arbitrary per-capability install checkboxes remain deferred. |
 | 2026-07-27 | **Re-read against the governed code; one stale claim corrected.** Verification said *"Not yet merged to main — staged for the owner's review"*; it merged (`b13cab1`, `3e766f6`, both ancestors of `origin/main`). The rest of the document still describes the code | Flagged `presumed-stale` by `doc-currency`: `console/app.js` (+25) and `scripts/onboarding-console.mjs` (+180) moved 3 commits / 2 days after this document's last commit (`9665c12`, 2026-07-24). Those additions are ADR-054's master switch — **additive and conforming**: the new section renders through the shared `buildSettingsForm` widget this ADR specifies rather than a bespoke control, and is placed first *because* it is the switch every other setting is conditional on. No claim here is contradicted by them |

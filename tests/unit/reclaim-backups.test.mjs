@@ -50,6 +50,30 @@ describe('reclaimBackups (issue #35)', () => {
     expect(kept[0][1]).toMatch(/cognitum-seed\.rvf/);
   });
 
+  it('reclaims public stores intentionally removed by a selected profile but still keeps private stores', () => {
+    const kb = mk(path.join(root, 'kb'), { 'ruvector.rvf': 64 });
+    const publicOnly = mk(path.join(root, 'kb.bak-2026-07-01'), {
+      'ruvector.rvf': 64,
+      'ruflo.rvf': 1024,
+    });
+    const withPrivate = mk(path.join(root, 'kb.bak-2026-07-02'), {
+      'ruvector.rvf': 64,
+      'ruflo.rvf': 1024,
+      'private-research.rvf': 4096,
+    });
+
+    const { removed, kept } = reclaimBackups({
+      kbDir: kb,
+      backupsMade: [publicOnly, withPrivate],
+      env: {},
+      intentionallyRemovedStores: ['ruflo'],
+    });
+
+    expect(removed).toEqual([publicOnly]);
+    expect(fs.existsSync(withPrivate)).toBe(true);
+    expect(kept[0][1]).toMatch(/private-research\.rvf/);
+  });
+
   it('sweeps copies stranded by EARLIER runs, not just this one (Mark had seven)', () => {
     const kb = mk(path.join(root, 'kb'), { 'a.rvf': 64 });
     const old1 = mk(path.join(root, 'kb.bak-2026-06-29'), { 'a.rvf': 1024 });

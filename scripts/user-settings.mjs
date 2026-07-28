@@ -105,6 +105,18 @@ export const SETTINGS_SCHEMA = Object.freeze([
   }),
 
   Object.freeze({
+    key: 'brainProfile',
+    label: 'How much of the brain is installed',
+    type: 'enum',
+    options: Object.freeze(['complete', 'ruvector']),
+    default: 'complete',
+    escalates: Object.freeze([]),
+    help: 'Complete Brain searches every installed public rUv repository. RuVector Only keeps and searches only RuVector.',
+    whyItMatters: 'RuVector Only uses substantially less disk and searches a much smaller corpus. Complete Brain can answer cross-repository questions and find supporting evidence outside RuVector.',
+    downside: 'RuVector Only deliberately removes the other repository stores, so answers cannot cite supporting evidence that lives in Ruflo, AgentDB, RuView, meeting notes, or another rUv repository. Switching back restores them from the complete bundle.',
+  }),
+
+  Object.freeze({
     key: 'learningScope',
     label: 'What it learns from',
     type: 'enum',

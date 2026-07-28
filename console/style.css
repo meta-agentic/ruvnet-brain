@@ -2085,6 +2085,32 @@ details.sub .sub-body > *:first-child { margin-top: 4px; }
 .bp-notes li::before { content: "·"; position: absolute; left: 6px; color: var(--faint); font-weight: 700; }
 .bp-warn { color: var(--amber-text); }
 
+.bp-profile {
+  margin: 20px 0 0; padding: 16px; border: 1px solid var(--hair-strong);
+  border-radius: 14px; background: color-mix(in srgb, var(--fill) 72%, transparent);
+}
+.bp-profile-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.bp-profile-head h3 { margin: 0; font-size: var(--fs-1); }
+.bp-profile-lead { margin: 6px 0 14px; color: var(--muted); font-size: 13.5px; }
+.bp-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.bp-profile-choice {
+  display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 14px;
+  border: 1px solid var(--hair-strong); border-radius: 12px; cursor: pointer; background: var(--panel);
+}
+.bp-profile-choice:has(input:checked) {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--hair-strong));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent);
+}
+.bp-profile-choice.unavailable { opacity: 0.58; cursor: not-allowed; }
+.bp-profile-choice input { margin-top: 4px; accent-color: var(--green); }
+.bp-profile-copy { display: grid; gap: 5px; min-width: 0; }
+.bp-profile-title { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.bp-profile-meta { font: 12px var(--mono); color: var(--faint); }
+.bp-profile-desc { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.bp-profile-actions { display: flex; margin-top: 14px; }
+.bp-profile-result { margin-top: 10px; }
+@media (max-width: 700px) { .bp-profile-grid { grid-template-columns: 1fr; } }
+
 /* "Parts of the brain" — the sub-piece control surface, stated honestly while most of it is still
    one switch. It is INSIDE this card on purpose: the answer to "where are the per-piece controls?"
    has to be in the same place as the question. */

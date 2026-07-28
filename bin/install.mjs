@@ -19,6 +19,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
+import { applyBrainProfile, readBrainProfile } from '../kb/brain-profile.mjs';
 
 // SEC-0010 #6 — the Ed25519 PUBLIC key is EMBEDDED here (not a separate file) so the installer's
 // trust root travels with the installer code itself: an attacker who swaps the downloaded bundle
@@ -3483,6 +3484,11 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       }
     }
     await unzipInto(zipPath, cacheDir);
+    const brainProfile = readBrainProfile();
+    if (brainProfile !== 'complete') {
+      const scoped = applyBrainProfile(cacheDir, brainProfile);
+      ok(`${brainProfile} profile preserved (${scoped.stores.join(', ')} kept; ${scoped.removed.length} unselected artifact(s) removed)`);
+    }
     if (downloaded && tmpDir) {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* leave temp behind, not fatal */ }
     }

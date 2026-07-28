@@ -434,8 +434,11 @@ store currently records one lesson you have had to give **6 times across 1 proje
 
 ## 8 · The nightly refresh
 
-**What it is.** A launchd job (`com.ruvnet.brain-nightly`) running `scripts/nightly-wrapper.sh`,
-which rebuilds the corpus from upstream.
+**What it is.** A macOS LaunchAgent (`com.ruvnet.brain-nightly`) running
+`scripts/nightly-wrapper.sh` at 03:15. It is launchd, not cron. It compares upstream commits,
+keeps unchanged chunks/vectors, and embeds only additions and modifications before publishing a
+staged, gated release. The separate optional end-user LaunchAgent
+(`com.ruvnet.brain-update`, 03:47) only downloads the newest signed release.
 
 **What it gives you.** A corpus that doesn't rot. rUv ships fast — Ruflo went 3.26 → 3.28 inside an
 18-hour window.
@@ -443,17 +446,22 @@ which rebuilds the corpus from upstream.
 **Its operating discipline** (the owner's standing order, 2026-07-12): no noise for success or a
 no-op. Run once → on failure wait and retry **once** (the only class a blind retry can fix) → on a
 second failure, a loud phone alert **plus a durable marker file** that `session-start.sh` surfaces
-unprompted at the top of the very next session. A single-instance lock guards against a rebuild that
-can run for hours (verified: 2 h 29 m and still embedding) still being alive at the next 3:15 am fire.
+unprompted at the top of the very next session. A single-instance lock prevents a very large change,
+slow model, or stalled gate from overlapping the next 03:15 fire.
 Exit 75 is reserved for "skipped, previous run still going" so a skip is never recorded as a failure.
 
-**What it costs.** A launchd plist — a real machine mutation, which is why the installer asks for it
-behind its own flag and `-y` cannot silently accept it. Hours of CPU on rebuild nights. Network.
+**What it costs.** A LaunchAgent plist — a real machine mutation, which is why the installer asks
+for the end-user updater behind its own flag and `-y` cannot silently accept it. Normal no-op nights
+do not embed the corpus; changed repositories consume local CPU, disk I/O, and network proportional
+to their changed chunks.
 
 **What you lose without it.** Corpus freshness, degrading continuously. The in-band staleness line on
 every `search_ruvnet` response tells you how bad it has become (`newest store Nd old, oldest Nd`), so
 this degrades *visibly* — which is the design. You can also refresh by hand:
 `node ~/.cache/ruvnet-brain/kb/forge-update.mjs`.
+
+The full runbook and the rationale for keeping the publisher on a trusted build machine rather than
+a public-repo self-hosted runner are in [Nightly refresh and publish](NIGHTLY-REFRESH.md).
 
 ---
 

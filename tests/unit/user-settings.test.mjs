@@ -42,7 +42,7 @@ afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 describe('low — schema completeness', () => {
   // The four the product promises. Named explicitly so deleting one is a test failure rather than a
   // silently smaller feature.
-  it.each(['learningScope', 'advocacy', 'autoApply', 'newProjectDefaults'])('defines %s', (key) => {
+  it.each(['brainEnabled', 'brainProfile', 'learningScope', 'advocacy', 'autoApply', 'newProjectDefaults'])('defines %s', (key) => {
     expect(SETTINGS_SCHEMA.map((s) => s.key)).toContain(key);
   });
 
@@ -90,7 +90,7 @@ describe('low — validation refuses rather than guesses', () => {
     // FULLY specified means every key in SETTINGS_SCHEMA — `brainEnabled` joined it with ADR-054,
     // and advocacy is the 1-5 dial (ADR-052 WIP). Deep equality against the complete values object,
     // so a new key must be added here rather than the assertion loosened.
-    const input = { brainEnabled: false, learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
+    const input = { brainEnabled: false, brainProfile: 'ruvector', learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
     const r = validate(input);
     expect(r.ok).toBe(true);
     expect(r.values).toEqual(input);
@@ -108,6 +108,7 @@ describe('low — validation refuses rather than guesses', () => {
   it.each([
     ['learningScope', 'global'],        // plausible-sounding, not an option
     ['learningScope', true],
+    ['brainProfile', 'tiny'],
     ['advocacy', 'IMPORTANT-ONLY'],     // case matters — we do not silently normalise
     ['autoApply', 'true'],              // the string, not the boolean
     ['autoApply', 1],
@@ -192,7 +193,7 @@ describe('medium — round trip through a real file', () => {
     // MIRROR key survives a real save/load, which is the only thing settings.json is responsible for
     // under ADR-054. (Writing the mirror never touches the sentinel — the switch is flipped only by
     // brain-state.mjs, via the console. See brain-off.test.mjs for that half.)
-    const chosen = { brainEnabled: false, learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
+    const chosen = { brainEnabled: false, brainProfile: 'ruvector', learningScope: 'user', advocacy: 4, autoApply: true, newProjectDefaults: true };
     const saved = saveSettings(chosen, { file });
     expect(saved.ok).toBe(true);
 

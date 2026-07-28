@@ -3,7 +3,7 @@ id: ADR-054
 title: Brain on/off and per-part scope — a user-controlled brain that can never silently lie about being off
 status: Implemented
 date: 2026-07-26
-updated: 2026-07-27
+updated: 2026-07-28
 authors: [Stuart Kerr, Claude Code]
 tags: [settings, console, scope, retrieval, hooks, honesty]
 supersedes: []
@@ -14,11 +14,14 @@ governs:
   - plugin/mcp/server.mjs
   - plugin/scripts/hook-shim.mjs
   - scripts/onboarding-console.mjs
+  - kb/brain-profile.mjs
+  - kb/forge-update.mjs
+  - bin/install.mjs
 ---
 
 # ADR-054: Brain on/off and per-part scope
 
-**Status**: Implemented (v1 = on/off only, shipped v3.9.84-dev — duel-verified 2026-07-26; record below)
+**Status**: Implemented (master switch plus Complete Brain / RuVector Only storage profiles)
 **Date**: 2026-07-26
 **Related**: ADR-052 (proactivity-you-control), ADR-053 (experience QA), ADR-023 (stable spine)
 
@@ -118,6 +121,21 @@ Default ON, all scope — zero change for existing users. Uninstall REMOVES the 
 reinstall must never boot silently dead — the duel's inherited-invisible-OFF find). `--update`
 and the nightly never touch the sentinel.
 
+### 6. Storage profile: Complete Brain or RuVector Only
+
+The 2026-07-28 profile selector is a disk-footprint control, not the hard query-scope mechanism
+rejected in §1 and not a claim that hiding cross-repository evidence improves answer quality.
+`kb/brain-profile.mjs` derives the real state from installed RVF families. **Complete Brain** keeps
+every public per-repository RVF in the signed release. **RuVector Only** keeps the shared reader plus
+the RuVector RVF family, removes the other public families, and filters the capability-card and
+generation-ledger indexes so they do not advertise stores that are absent.
+
+The console changes the files first and saves the preference second; if the mirror write fails, it
+reports the half-failure and the on-disk RVFs remain authoritative. Complete restore copies from the
+full release bundle. Fresh installs and `forge-update.mjs` reapply the durable selection after
+verified extraction. The rollback reclaimer may ignore stores intentionally removed by the selected
+public profile, but it still keeps any backup containing an unknown private/local RVF.
+
 ## Risks register — superseded by the duel record
 
 The v1 register (R1-R10) stands as history; the duel produced 27 (Fable) + 42 (GPT-5.6) findings
@@ -161,5 +179,6 @@ failure. v1 draft's Decision + risks register superseded above; Context stands.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Added the Complete Brain / RuVector Only storage profile to the console and installer/update paths | The 2026-07-28 owner request is implemented in `kb/brain-profile.mjs`; it uses ADR-006's per-repo RVF boundary and does not revive the rejected claim that hard query scoping is a relevance improvement. |
 | 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 10 commits (1d) after this document's last commit (`3501ef4`), across all 5 governed files. Checked each: (1) `scripts/user-settings.mjs` — `61f9f9d` (the ADR-052 1-5 advocacy dial) only rewrites the `advocacy` schema entry; grepped `brainEnabled` — the key, its sentinel-authority comment, and the sentinel-wins-on-disagreement rule are untouched, and the enum-migration code it adds doesn't reach the boolean branch `brainEnabled` uses. (2) `kb/forge-ask-all.mjs` — `71b0be2` (symlink main-entry fix) and `a44899b`/`1a6b54d` (cross-encoder pool cap, shipped OFF by default) are unrelated to the on/off contract; grepped `disabled` — no hits in this file (the `disabled:true` soft-answer this ADR describes lives in `kb/forge-mcp-all.mjs`, governed separately). (3) `plugin/mcp/server.mjs` — `879d88e` fixes a timeout-outage health-reporting bug, does not touch the boot-frozen tool-description claim in §4. (4) `plugin/scripts/hook-shim.mjs` — `920f9ba` (mesh census) adds new table entries but the `offBehavior: silence\|run\|partial` contract and the existing 11 entries' values are byte-identical. (5) `scripts/onboarding-console.mjs` — `408b01c` moved the on/off switch from a collapsed checkbox to its own always-open card FIRST on the page (commit message: "ADR-054's on/off switch was rendered... below the things it governs, behind a chevron. It is now its own always-open card FIRST"); this is a UI relocation, not a contract change — the three redundant state channels, consent-gated OFF with downside copy, off-since-date, maintenance disclosure, and sentinel-vs-mirror disagreement line this ADR requires are all still present, just promoted to the top of the page |
 | 2026-07-27 | Re-verified against `kb/forge-ask-all.mjs`, which moved under the two-stage cascade | The cascade adds `cascadeRerankPool` and two env-read defaults; it touches **zero** brain-off lines — measured, not assumed (`git diff` over the governed path, filtered for brain-off/sentinel/offState/disabled: 0 changed lines). The off switch, the per-call read and the sentinel authority are untouched. |

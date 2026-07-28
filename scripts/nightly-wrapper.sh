@@ -23,10 +23,10 @@ LOG=logs/nightly.log
 MARKER=.ruvnet-brain/nightly-failure.json
 LOCK=.ruvnet-brain/nightly.lock
 
-# Single-instance guard (2026-07-12): the plist has no built-in one, and a full corpus rebuild can run
-# for HOURS (verified live: 2h29m and still embedding one repo at ~1.5/s) — long enough to still be
-# running when the NEXT scheduled 3:15am fire happens, which would start a second instance on top of
-# it with no protection. A stale lock from a crashed run (PID no longer alive) is treated as no lock.
+# Single-instance guard (2026-07-12): the plist has no built-in one. The updater is incremental now,
+# but a very large upstream change, a slow model, or a stalled gate can still outlive the window and
+# overlap the NEXT scheduled 3:15am fire. A stale lock from a crashed run (PID no longer alive) is
+# treated as no lock.
 if [ -f "$LOCK" ]; then
   OLD_PID=$(cat "$LOCK" 2>/dev/null)
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then

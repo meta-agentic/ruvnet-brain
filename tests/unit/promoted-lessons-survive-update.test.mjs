@@ -67,7 +67,7 @@ function fixtureRepo() {
   execFileSync('git', ['config', 'user.name', 't'], { cwd: dir });
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
-  for (const f of ['self-update.mjs', 'full-hints.mjs']) {
+  for (const f of ['self-update.mjs', 'full-hints.mjs', 'git-clone-refresh.mjs']) {
     fs.copyFileSync(path.join(REPO_ROOT, 'scripts', f), path.join(dir, 'scripts', f));
   }
   fs.writeFileSync(path.join(dir, 'data/registry.tiers.json'),

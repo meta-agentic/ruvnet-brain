@@ -49,6 +49,14 @@ import { withLock, writeAtomic, LOCK_WAIT_MS, loadSettings, saveSettings, SETTIN
 // only a mirror. The console is the ONE surface allowed to flip it — protect-brain-state.sh walls
 // the file off from agent edits — so both halves of the write live here, in saveBrainPower().
 import { isBrainOff, readOffState, setBrainOff, setBrainOn, disagreement } from './brain-state.mjs';
+import {
+  PROFILE_COMPLETE,
+  PROFILE_RUVECTOR,
+  applyBrainProfile,
+  discoverStoreFamilies,
+  measureBrainProfile,
+  restoreCompleteProfile,
+} from '../kb/brain-profile.mjs';
 // Lessons: read model + the two user verbs. Every mutation goes through lesson-store's own
 // updateLessons/ratify/demote/restore — this file adds a SURFACE, never a second writer.
 import { loadLessons, updateLessons, ratify, demote, restore, pending, weightOf, TRIGGERS, ENFORCEMENT, ORIGIN, STATUS } from './lesson-store.mjs';
@@ -61,6 +69,10 @@ const NPM_PREFIX = path.join(HOME, '.npm-global');
 const CONFIG_DIR = path.join(HOME, '.claude/ruvnet-brain');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const UNDO_JOURNAL = path.join(HOME, '.cache/ruvnet-brain/console-undo.jsonl');
+const INSTALLED_KB = process.env.RUVNET_BRAIN_KB
+  || path.join(HOME, '.cache', 'ruvnet-brain', 'kb');
+const COMPLETE_BRAIN_SOURCE = process.env.RUVNET_BRAIN_COMPLETE_SOURCE
+  || path.join(REPO, 'dist', 'ruvnet-brain');
 const TOKEN = crypto.randomBytes(24).toString('hex');
 
 const NPX_RUV = /npx\s+(?:-y\s+|--yes\s+)?(?:@claude-flow\/[\w-]+|claude-flow|ruflo|ruvector|ruv-swarm|flow-nexus|metaharness|@metaharness\/[\w-]+|agentic-qe|aqe)(?:@[\w.-]+)?/;
@@ -476,6 +488,43 @@ function saveAdvocacy(values) {
  * through the shared buildSettingsForm), just a different endpoint and a different store semantics.
  */
 const BRAIN_FIELD = USER_SETTINGS_SCHEMA.find((s) => s.key === 'brainEnabled');
+const BRAIN_PROFILE_FIELD = USER_SETTINGS_SCHEMA.find((s) => s.key === 'brainProfile');
+
+function gatherBrainProfile() {
+  const settings = loadSettings();
+  const installed = measureBrainProfile(INSTALLED_KB);
+  const actual = !installed.stores.includes(PROFILE_RUVECTOR)
+    ? null
+    : installed.stores.length === 1
+      ? PROFILE_RUVECTOR
+      : PROFILE_COMPLETE;
+  const source = measureBrainProfile(COMPLETE_BRAIN_SOURCE);
+  const updaterAvailable = fs.existsSync(path.join(INSTALLED_KB, 'forge-update.mjs'));
+  return {
+    path: INSTALLED_KB.replace(HOME, '~'),
+    values: { brainProfile: actual },
+    stored: settings.values.brainProfile,
+    disagreement: settings.values.brainProfile !== actual,
+    defaults: { brainProfile: BRAIN_PROFILE_FIELD.default },
+    schema: [BRAIN_PROFILE_FIELD],
+    installed,
+    choices: {
+      complete: {
+        available: (source.stores.includes(PROFILE_RUVECTOR) && source.storeCount > 1)
+          || updaterAvailable,
+        storeCount: source.storeCount,
+        bytes: source.bytes,
+      },
+      ruvector: {
+        available: installed.stores.includes(PROFILE_RUVECTOR)
+          || source.stores.includes(PROFILE_RUVECTOR),
+        storeCount: 1,
+        bytes: installed.byStore.ruvector ?? source.byStore.ruvector ?? null,
+      },
+    },
+    restoreSource: COMPLETE_BRAIN_SOURCE.replace(HOME, '~'),
+  };
+}
 
 function gatherBrainPower() {
   const state = readOffState();
@@ -489,6 +538,7 @@ function gatherBrainPower() {
     values: { brainEnabled: !state.off },
     defaults: { brainEnabled: BRAIN_FIELD.default },
     schema: [BRAIN_FIELD],
+    profile: gatherBrainProfile(),
     disagreement: disagreement(settings.values.brainEnabled),
     // Stated on the surface, not buried in a doc. Every line here is a thing that KEEPS HAPPENING
     // while the brain is off; if one of them ever stops being true, this list is what has to change.
@@ -502,6 +552,75 @@ function gatherBrainPower() {
         'While the brain is on it retrieves from rUv\'s real source before answering, and its hooks watch your write path.',
         'Switching it off stops retrieval, the grounding gate, everything it volunteers, and learning — updates and health alarms keep running, and you can pause those separately.',
       ],
+  };
+}
+
+function saveBrainProfile(values) {
+  const profile = values && typeof values === 'object' ? values.brainProfile : undefined;
+  if (![PROFILE_COMPLETE, PROFILE_RUVECTOR].includes(profile)) {
+    const reason = `expected complete or ruvector, got ${JSON.stringify(profile)}`;
+    return { ok: false, rejected: [{ key: 'brainProfile', reason }], log: `nothing was changed — ${reason}` };
+  }
+  const before = measureBrainProfile(INSTALLED_KB);
+  if (!before.stores.includes(PROFILE_RUVECTOR)) {
+    return { ok: false, log: `nothing was changed — no RuVector RVF store exists in ${INSTALLED_KB}` };
+  }
+
+  let changed;
+  try {
+    if (profile === PROFILE_RUVECTOR) {
+      changed = applyBrainProfile(INSTALLED_KB, profile);
+    } else {
+      const localComplete = measureBrainProfile(COMPLETE_BRAIN_SOURCE);
+      if (localComplete.storeCount > 1) {
+        changed = restoreCompleteProfile(INSTALLED_KB, COMPLETE_BRAIN_SOURCE);
+      } else {
+        const updater = path.join(INSTALLED_KB, 'forge-update.mjs');
+        if (!fs.existsSync(updater)) {
+          throw new Error('the complete release is not cached here and forge-update.mjs is unavailable');
+        }
+        const restored = spawnSync(process.execPath, [
+          updater,
+          '--apply',
+          '--restore-complete',
+          PROFILE_RUVECTOR,
+        ], {
+          cwd: INSTALLED_KB,
+          env: process.env,
+          encoding: 'utf8',
+          timeout: 30 * 60 * 1000,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        if (restored.status !== 0) {
+          const detail = String(restored.stderr || restored.stdout || `exit ${restored.status}`).trim().slice(-1200);
+          throw new Error(`signed complete-bundle restore failed: ${detail}`);
+        }
+        changed = { profile: PROFILE_COMPLETE, stores: discoverStoreFamilies(INSTALLED_KB) };
+        if (changed.stores.length < 2) {
+          throw new Error('the signed updater completed but the complete repository stores did not land');
+        }
+      }
+    }
+  } catch (error) {
+    return { ok: false, log: `nothing was changed — ${error.message}` };
+  }
+
+  const mirrored = saveSettings({ brainProfile: profile });
+  publishBrainPowerToCache();
+  return {
+    ok: true,
+    profile,
+    values: { brainProfile: profile },
+    stores: changed.stores,
+    removed: changed.removed || [],
+    bytesFreed: changed.bytesFreed || 0,
+    mirrored: mirrored.ok,
+    backup: mirrored.backup ? mirrored.backup.replace(HOME, '~') : null,
+    log: mirrored.ok
+      ? (profile === PROFILE_RUVECTOR
+        ? `RuVector Only is active — ${changed.removed.length} unselected artifact(s) removed`
+        : `Complete Brain is active — ${changed.stores.length} repository stores available`)
+      : `${profile === PROFILE_RUVECTOR ? 'RuVector Only' : 'Complete Brain'} is active on disk, but the settings mirror could not be updated (${mirrored.log})`,
   };
 }
 
@@ -2245,6 +2364,7 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
         // ADR-054 — a distinct endpoint because it writes a distinct thing (the sentinel + the
         // mirror), never routed through save-advocacy/save-config.
         if (url === '/api/save-brain-power') return sendJSON(res, 200, saveBrainPower(body.values || {}));
+        if (url === '/api/save-brain-profile') return sendJSON(res, 200, saveBrainProfile(body.values || {}));
         if (url === '/api/refresh') {
           // THE ONE REFRESH STORY (owner directive 2026-07-26; RVBC-INSTANT-SPEC #8). The page opens
           // instantly on the last measurement, SAYS how old it is, and this is the button that takes
@@ -2405,7 +2525,22 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
   else { console.log(`\n  onboarding-console — the RuvNet Brain configure page\n\n    --serve [--open]   start the local server (and open your browser)\n    --print-state      print the read-only state JSON and exit (for tests)\n    --print-stack      print the stack audit JSON and exit\n`); }
 }
 
-export { gatherState, gatherStack, gatherTrust, wiringSurvey, probeMemory, apply, saveConfig, undo, gatherAdvocacy, saveAdvocacy, gatherBrainPower, saveBrainPower };
+export {
+  gatherState,
+  gatherStack,
+  gatherTrust,
+  wiringSurvey,
+  probeMemory,
+  apply,
+  saveConfig,
+  undo,
+  gatherAdvocacy,
+  saveAdvocacy,
+  gatherBrainPower,
+  saveBrainPower,
+  gatherBrainProfile,
+  saveBrainProfile,
+};
 // Exported for the cross-project cache-isolation test (console-cache-scope.test.mjs). serveCached's
 // scopeKey is the guard that stops one project's cached state being served for another.
 export { serveCached, writeCache, kickRefresh };

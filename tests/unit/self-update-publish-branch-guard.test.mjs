@@ -29,6 +29,7 @@ import path from 'node:path';
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const SELF_UPDATE_SRC = path.join(REPO_ROOT, 'scripts/self-update.mjs');
 const FULL_HINTS_SRC = path.join(REPO_ROOT, 'scripts/full-hints.mjs');
+const GIT_CLONE_REFRESH_SRC = path.join(REPO_ROOT, 'scripts/git-clone-refresh.mjs');
 
 const hasGit = spawnSync('git', ['--version']).status === 0;
 
@@ -47,7 +48,9 @@ function fixtureRepo() {
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
   fs.copyFileSync(SELF_UPDATE_SRC, path.join(dir, 'scripts/self-update.mjs'));
-  fs.copyFileSync(FULL_HINTS_SRC, path.join(dir, 'scripts/full-hints.mjs'));
+  for (const source of [FULL_HINTS_SRC, GIT_CLONE_REFRESH_SRC]) {
+    fs.copyFileSync(source, path.join(dir, 'scripts', path.basename(source)));
+  }
   fs.writeFileSync(path.join(dir, 'data/registry.tiers.json'),
     JSON.stringify({ tiers: { T0: { repos: [] }, T1: { repos: [] }, T2: { repos: [] }, T3: { repos: [] } } }));
   git(dir, 'add', '-A');
