@@ -121,9 +121,12 @@ jobs:
   # Windows runners and by cmd.exe mangling quoted arguments (scripts/selfcheck.mjs's own
   # shellInvocation() header). `shell: bash` here resolves to Git for Windows' bash (the same shell
   # Claude Code uses for hooks on a real Windows machine when the user has Git Bash configured),
-  # never /bin/bash. The zip/unzip mechanics are still native PowerShell underneath — that branch
-  # lives in scripts/ci/stranger-scenario.mjs itself (keyed on process.platform, not on which shell
-  # launched node), so it is identical regardless of which of these two Windows jobs is running.
+  # never /bin/bash. Only the FIXTURE-BUILDING zip step is native PowerShell — that branch lives in
+  # scripts/ci/stranger-scenario.mjs itself (keyed on process.platform, not on which shell launched
+  # node), so it is identical regardless of which of these two Windows jobs is running. EXTRACTION is
+  # no longer shelled out at all: this is the exact cell that caught `unzip -q -o D:\a\...` exiting 1
+  # under Git Bash (MSYS2 unzip receiving native backslash paths through cmd.exe), and the product
+  # now extracts in-process with node:zlib via kb/zip-extract.mjs.
   windows-gitbash:
     runs-on: windows-latest
     defaults:

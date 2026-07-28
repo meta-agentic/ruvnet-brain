@@ -25,6 +25,7 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { extractZip } from './zip-extract.mjs';
 
 const KB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = path.join(KB_DIR, 'SOURCE.json');
@@ -417,8 +418,14 @@ async function main() {
       console.log(`  ⚠ this brain predates signed auto-apply — applying UNVERIFIED once to install the verifier; every auto-update after this is signature-checked.`);
     }
     console.log(`  extracting...`);
-    try { execFileSync('unzip', ['-q', '-o', zipPath, '-d', extractDir], { stdio: 'inherit' }); }
-    catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] unzip failed: ${e.message} — local files untouched.`); }
+    // In-process extraction (node:zlib) — never a shelled-out `unzip`. This self-updater runs on
+    // whatever machine installed the brain, and on Windows `unzip` is either absent entirely
+    // (PowerShell) or present-but-broken by backslash paths reaching an MSYS2 build via cmd.exe.
+    // Both were measured on the stranger-machine matrix. Same module the installer uses, so there
+    // is exactly one extraction implementation in the product. Failures still name the archive and
+    // the offending entry, and NOTHING local is touched before this succeeds.
+    try { await extractZip(zipPath, extractDir); }
+    catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); die(`[${local.kbName}] extraction failed: ${e.message} — local files untouched.`); }
     const backupPath = path.join(path.dirname(KB_DIR), `${path.basename(KB_DIR)}.bak-${stamp()}`);
     console.log(`  backing up current copy -> ${backupPath}`);
     console.log(`  (temporary — released automatically once the new copy verifies)`);

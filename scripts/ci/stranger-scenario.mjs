@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 // scripts/ci/stranger-scenario.mjs — the shared driver behind .github/workflows/stranger-matrix.yml
 // (ADR-058 §D8). ONE portable script so all five images (ubuntu, windows Git-Bash, windows
-// PowerShell, macos, hostile container) run the IDENTICAL scenario logic — only the zip/unzip
-// mechanics are OS-native (shelled out to per-platform below), matching the reasoning
-// scripts/selfcheck.mjs's own header states for shellInvocation(): the platform-specific step is
-// isolated to one small, explicit branch rather than duplicated across five YAML files.
+// PowerShell, macos, hostile container) run the IDENTICAL scenario logic — only the FIXTURE-BUILDING
+// zip step is OS-native (zipDir() below), matching the reasoning scripts/selfcheck.mjs's own header
+// states for shellInvocation(): the platform-specific step is isolated to one small, explicit branch
+// rather than duplicated across five YAML files.
+// NOTE: UNZIPPING is no longer platform-specific anywhere. The product extracts in-process with
+// node:zlib (kb/zip-extract.mjs) precisely because shelling to `unzip` is what broke both Windows
+// cells of this matrix. Only the zip-CREATION side below still shells out, because these fixtures
+// must be built by a tool OTHER than the one under test — an extractor validated against archives
+// its own writer produced would be validating nothing.
 //
 // Runs against the PACKED, INSTALLED copy — the caller is expected to have already run
 // `npm pack` + `npm install <tarball>` and pass --installed pointing at
@@ -100,6 +105,38 @@ function seedPluginSurface() {
   return dest;
 }
 
+/**
+ * `spawnSync().status` is null in THREE completely different situations, and reporting all three as
+ * the string "null" is how windows-powershell produced the least useful failure line in the matrix:
+ *
+ *     [stranger-scenario:healthy] FAIL: expected exit 0 on a healthy install, got null
+ *
+ * null is not an exit code — it means no exit code was ever produced. Which of these it was decides
+ * what you go fix, and they have nothing to do with each other:
+ *   · r.error set, code ENOENT     -> the binary was never launched (wrong path / missing tool)
+ *   · r.error set, code ETIMEDOUT  -> the child ran and was KILLED at the timeout (a hang)
+ *   · r.error set, code ENOBUFS    -> the child was KILLED because it out-printed maxBuffer
+ *   · r.signal set, no error       -> something else killed it (OOM killer, SIGKILL)
+ * So describe the outcome from error.code / signal, never from `status` alone.
+ */
+function describeExit(r) {
+  if (r.error) {
+    const code = r.error.code || r.error.name || 'unknown';
+    const sig = r.signal ? `, signal ${r.signal}` : '';
+    const why = code === 'ENOENT' ? ' — the process was never launched (binary not found)'
+      : code === 'ETIMEDOUT' ? ' — the process HUNG and was killed at the timeout, it did not exit'
+        : code === 'ENOBUFS' ? ' — the process was killed for exceeding maxBuffer on stdout/stderr, it did not exit'
+          : '';
+    return `NO EXIT CODE: spawn error ${code}${sig}${why} (${r.error.message})`;
+  }
+  if (r.status === null) {
+    return r.signal
+      ? `NO EXIT CODE: killed by signal ${r.signal} (nothing was returned by the process itself)`
+      : 'NO EXIT CODE and no signal — spawnSync returned neither, which should be impossible; treat as a harness bug';
+  }
+  return `exit code ${r.status}`;
+}
+
 function runInstaller(args, extraEnv = {}) {
   return spawnSync(process.execPath, [path.join(INSTALLED, 'bin', 'install.mjs'), ...args], {
     env: {
@@ -113,6 +150,12 @@ function runInstaller(args, extraEnv = {}) {
     input: '',
     encoding: 'utf8',
     timeout: 120_000,
+    // spawnSync's default maxBuffer is 1MB, and BLOWING IT KILLS THE CHILD and yields status null —
+    // indistinguishable, in the old reporting, from a hang or a missing binary. The installer prints
+    // a full narrated plan plus a self-check battery, so 1MB is not a comfortable margin. Raised so
+    // that a chatty-but-correct install cannot be mistaken for a broken one; describeExit() still
+    // names ENOBUFS explicitly if it is ever hit again.
+    maxBuffer: 64 * 1024 * 1024,
   });
 }
 
@@ -132,14 +175,15 @@ const install = runInstaller(
   ['--local', '--no-stack', '--no-enhance', '--no-statusline', '--no-telemetry', '--no-nightly-prompt'],
   strictEnv,
 );
-log(`install exit code: ${install.status}`);
+log(`install result: ${describeExit(install)}`);
 console.log(install.stdout);
 if (install.stderr) console.error(install.stderr);
 
 if (SCENARIO === 'healthy') {
-  if (install.status !== 0) fail(`expected exit 0 on a healthy install, got ${install.status}`);
+  if (install.status !== 0) fail(`expected exit 0 on a healthy install, got ${describeExit(install)}`);
 
   const doctor = runInstaller(['--doctor', '--hooks']);
+  log(`--doctor --hooks result: ${describeExit(doctor)}`);
   console.log(doctor.stdout);
   if (doctor.stderr) console.error(doctor.stderr);
 
@@ -162,7 +206,7 @@ if (SCENARIO === 'healthy') {
   const batteryClean = /Self-check passed/.test(out);
   const onlyGrounding = /Grounding UNPROVEN/.test(out) && !/contract violation/.test(out);
   if (doctor.status !== 0 && !(batteryClean && onlyGrounding)) {
-    fail(`--doctor --hooks exited ${doctor.status} for a reason other than unproven grounding on a healthy install`);
+    fail(`--doctor --hooks ended with ${describeExit(doctor)} for a reason other than unproven grounding on a healthy install`);
   }
   if (!batteryClean) fail('--doctor --hooks did not report a clean hook battery on a healthy install');
   const firingsMatch = /registrations from marketplace-clone,\s*\d+\s*stdin regimes each\s*\((\d+)\s*firings\)/.exec(doctor.stdout || '');
@@ -175,6 +219,14 @@ if (SCENARIO === 'healthy') {
   log('OK — no author-local ~/.claude/settings.json in this virgin image');
 } else {
   // seeded-broken / strict-ungrounded: the whole point is a non-zero exit.
+  //
+  // "not zero" was too weak an assertion, and weak in the direction that hides breakage: a hang, an
+  // ENOENT, or an ENOBUFS kill all leave status === null, which is not 0, so this cell reported PASS
+  // for a run in which the installer never even executed. A test that a crashed harness satisfies is
+  // not a test. Demand a REAL exit code the installer itself produced, and that it be non-zero.
+  if (install.status === null) {
+    fail(`scenario "${SCENARIO}" requires the installer to EXIT non-zero, but it never exited at all: ${describeExit(install)}`);
+  }
   if (install.status === 0) fail(`expected a NON-ZERO exit for scenario "${SCENARIO}", got 0`);
   log(`OK — exited non-zero (${install.status}) as required for scenario "${SCENARIO}"`);
 }

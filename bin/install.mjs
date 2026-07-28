@@ -372,50 +372,83 @@ async function obtainBundle(release) {
 }
 
 // ── step: unzip into the cache dir (flattening the top-level ruvnet-brain/ folder) ───────────────
-function unzipInto(zipPath, cacheDir) {
+//
+// EXTRACTION IS NO LONGER GATED ON AN EXTERNAL BINARY (stranger-matrix, windows cells).
+// The old code shelled to `unzip`, with PowerShell's Expand-Archive only as a fallback when `unzip`
+// was ABSENT. That has two measured failure modes on a stranger's Windows machine:
+//   · windows-powershell: no `unzip` exists at all — the fallback carried the whole install.
+//   · windows-gitbash:    `unzip` IS on PATH (MSYS2 build), so the fallback never engaged, and the
+//                         call died — `unzip -q -o D:\a\_temp\...\ruvnet-brain.zip -d D:\a\...`
+//                         exited 1. Windows spawns go through `shell: true` here (mandatory, for
+//                         .cmd shims), so native backslash paths reach a POSIX-ish tool that treats
+//                         `\` as an escape. A path handed to a shell must be correct for THAT shell.
+// The fix is to stop involving a shell: kb/zip-extract.mjs reads the archive in-process with
+// node:zlib. Measured on macOS against a real `zip -r -y` archive, its output is byte-for-byte
+// identical to `unzip -q -o` (same tree, sizes, 0755/0644 modes, symlinks preserved).
+//
+// ORDER IS DELIBERATE, and the non-Windows default is UNCHANGED:
+//   non-win32 -> `unzip` first (byte-identical to every previous release), node:zlib as fallback
+//                so a slim container without unzip now installs instead of dying.
+//   win32     -> node:zlib first (no PATH lookup, no shell, no quoting), PowerShell second.
+// Every attempt is recorded and, if all of them fail, ALL are printed with the exact command and
+// exit code. The old message's best property — it named the precise failing command — is kept.
+async function unzipInto(zipPath, cacheDir) {
   step(
     'Unpacking the brain into place',
     'so the plugin finds forge-mcp-all.mjs and the vector stores right where it looks',
   );
 
-  const hasUnzip = have('unzip');
-  // Windows fallback: PowerShell's Expand-Archive is available on all modern Windows systems.
-  const psExe = !hasUnzip ? (['pwsh', 'powershell'].find(have) || null) : null;
+  const nodeExtract = async () => {
+    const { extractZip } = await import(new URL('../kb/zip-extract.mjs', import.meta.url).href);
+    const r = await extractZip(zipPath, cacheDir);
+    return `node:zlib — ${r.files} files, ${(r.bytes / 1e6).toFixed(1)}MB${r.crcChecked ? ', CRC verified' : ''}`;
+  };
+  const unzipExtract = async () => {
+    if (!have('unzip')) throw new Error('`unzip` is not on PATH');
+    run('unzip', ['-q', '-o', zipPath, '-d', cacheDir]);
+    return 'unzip';
+  };
+  const psExtract = async () => {
+    // PowerShell's Expand-Archive handles .zip natively with -Force for overwrite.
+    // shell:false here (pwsh/powershell are real .exe files, not .cmd shims) — routing this
+    // through cmd.exe would re-tokenize the already-quoted -Command string and break it.
+    // -ExecutionPolicy Bypass: Expand-Archive ships as a script module (.psm1); on a locked-down
+    // machine (Restricted/AllSigned policy — common in sandboxes) importing it fails with
+    // "running scripts is disabled on this system" even though the exe itself runs fine. Bypass
+    // only affects this one child process, not any persistent machine setting.
+    const psExe = ['pwsh', 'powershell'].find(have);
+    if (!psExe) throw new Error('neither `pwsh` nor `powershell` is on PATH');
+    run(psExe, [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+      `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${cacheDir}" -Force`,
+    ], { shell: false });
+    return `${psExe} Expand-Archive`;
+  };
 
-  if (!hasUnzip && !psExe) {
+  const strategies = IS_WIN
+    ? [['node:zlib (built-in)', nodeExtract], ['PowerShell Expand-Archive', psExtract]]
+    : [['unzip', unzipExtract], ['node:zlib (built-in)', nodeExtract]];
+
+  // The zip extracts to a top-level `ruvnet-brain/` folder. Extract into the cache dir, then lift
+  // its CONTENTS up one level so that cacheDir/forge-mcp-all.mjs exists (idempotent: overwrites).
+  const failures = [];
+  let extractedBy = null;
+  for (const [label, attempt] of strategies) {
+    try { extractedBy = await attempt(); break; }
+    catch (e) { failures.push(`  • ${label}: ${(e && e.message) || e}`); }
+  }
+  if (!extractedBy) {
     die(
-      `no zip extraction tool is available on this machine.`,
+      `extraction failed — every available method was tried and each one is reported below.\n${failures.join('\n')}`,
       [
-        `Install one and re-run:`,
-        `  • macOS:  \`unzip\` is already built in — check your PATH`,
-        `  • Debian/Ubuntu:  ${c.bold('sudo apt-get install -y unzip')}`,
-        `  • Fedora/RHEL:  ${c.bold('sudo dnf install -y unzip')}`,
-        `  • Windows:  open a PowerShell window and re-run (Expand-Archive is built in)`,
+        `The archive may be incomplete or corrupt — re-run to download a fresh copy.`,
+        `If it keeps failing, one of these gives the same job to a tool you control:`,
+        `  • macOS/Linux:  ${c.bold(`unzip -o "${zipPath}" -d "${cacheDir}"`)}`,
+        `  • Windows:  ${c.bold(`Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${cacheDir}" -Force`)}`,
       ].join('\n'),
     );
   }
-
-  // The zip extracts to a top-level `ruvnet-brain/` folder. Extract into the cache dir, then lift
-  // its CONTENTS up one level so that cacheDir/forge-mcp-all.mjs exists (idempotent: -o overwrites).
-  try {
-    if (hasUnzip) {
-      run('unzip', ['-q', '-o', zipPath, '-d', cacheDir]);
-    } else {
-      // Windows: PowerShell's Expand-Archive handles .zip natively with -Force for overwrite.
-      // shell:false here (pwsh/powershell are real .exe files, not .cmd shims) — routing this
-      // through cmd.exe would re-tokenize the already-quoted -Command string and break it.
-      // -ExecutionPolicy Bypass: Expand-Archive ships as a script module (.psm1); on a locked-down
-      // machine (Restricted/AllSigned policy — common in sandboxes) importing it fails with
-      // "running scripts is disabled on this system" even though the exe itself runs fine. Bypass
-      // only affects this one child process, not any persistent machine setting.
-      run(psExe, [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
-        `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${cacheDir}" -Force`,
-      ], { shell: false });
-    }
-  } catch (e) {
-    die(`extraction failed (${e.message}).`, `The archive may be incomplete — re-run to download a fresh copy.`);
-  }
+  if (failures.length) warn(`extracted via ${extractedBy} after ${failures.length} method(s) failed:\n${failures.join('\n')}`);
 
   const nested = path.join(cacheDir, 'ruvnet-brain');
   if (fs.existsSync(path.join(nested, 'forge-mcp-all.mjs'))) {
@@ -1027,9 +1060,17 @@ async function doctor() {
   // Two independent version streams (KB bundle vs plugin wrapper) — see checkVersionDrift()'s
   // header comment for the full story. Silent unless they've genuinely diverged.
   reportVersionDrift(cacheDir);
-  have('unzip') || have('pwsh') || have('powershell')
-    ? ok('zip extraction available (unzip or PowerShell Expand-Archive)')
-    : warn('no zip tool found — unzip or PowerShell needed for re-install');
+  // Extraction no longer needs an external binary at all — kb/zip-extract.mjs does it with node:zlib
+  // (see unzipInto()). So this reports the file's PRESENCE, not a PATH lookup: if it is missing from
+  // the install, extraction on Windows silently loses its primary method, which is exactly the class
+  // of "shipped, never actually there" gap tests/unit/installer-sibling-imports-packaged.test.mjs
+  // exists to catch. Naming the external tools too, because they are still the fallback/primary
+  // depending on platform.
+  fs.existsSync(fileURLToPath(new URL('../kb/zip-extract.mjs', import.meta.url)))
+    ? ok(`zip extraction available (built-in node:zlib${have('unzip') ? ' + unzip' : ''}${have('pwsh') || have('powershell') ? ' + PowerShell Expand-Archive' : ''})`)
+    : (have('unzip') || have('pwsh') || have('powershell')
+      ? warn('built-in extractor kb/zip-extract.mjs is MISSING from this install — falling back to an external tool')
+      : warn('no zip extraction available: kb/zip-extract.mjs missing AND no unzip/PowerShell on PATH'));
   have('git')
     ? ok('git present (not required by this installer, but handy)')
     : info('git not found — that\'s fine, this installer never needs it');
@@ -3174,7 +3215,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
         ok(reason);
       }
     }
-    unzipInto(zipPath, cacheDir);
+    await unzipInto(zipPath, cacheDir);
     if (downloaded && tmpDir) {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* leave temp behind, not fatal */ }
     }

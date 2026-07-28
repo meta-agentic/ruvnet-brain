@@ -16,7 +16,7 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const KB_DIR = path.dirname(__filename);
@@ -116,16 +116,23 @@ export async function loadTransformers() {
   // 1. node_modules — resolve the package entry, import via file:// URL.
   try {
     const resolved = localRequire.resolve('@xenova/transformers');
-    const T = await import('file://' + resolved);
+    // pathToFileURL, NOT 'file://' + path. On Windows the concatenation yields
+    // `file://C:\Users\...\transformers.js` — a malformed URL (backslashes, host = "C:") that Node
+    // rejects, and the rejection is swallowed by the catch below, so the reader falls through and
+    // reports "Cannot resolve '@xenova/transformers'" on a machine where it IS installed. Exactly
+    // the class of bug this repo already fixed once for raw C:\ ESM specifiers.
+    const T = await import(pathToFileURL(resolved).href);
     return { T, modelCache: chooseModelCache(), via: 'project node_modules' };
   } catch { /* fall through */ }
 
   // 2. explicit env override — may be a transformers.js file path or a package dir.
   const envPath = process.env.XENOVA_PATH;
   if (envPath) {
+    // Same reason as above: a user-supplied XENOVA_PATH on Windows is `C:\...`, and concatenating it
+    // onto 'file://' produces a URL Node cannot load.
     const url = envPath.startsWith('file://') ? envPath
-      : envPath.endsWith('.js') ? 'file://' + path.resolve(envPath)
-      : 'file://' + path.join(path.resolve(envPath), 'src/transformers.js');
+      : envPath.endsWith('.js') ? pathToFileURL(path.resolve(envPath)).href
+      : pathToFileURL(path.join(path.resolve(envPath), 'src/transformers.js')).href;
     try {
       const T = await import(url);
       return { T, modelCache: chooseModelCache(), via: `XENOVA_PATH (${envPath})` };
