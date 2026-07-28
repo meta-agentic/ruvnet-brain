@@ -46,6 +46,16 @@ function runOrDie(label, cmd, args, opts = {}) {
 
 console.log(`\n${c.b('RuvNet Brain — release / definition-of-done')} ${c.dim('· ' + (PUBLISH ? 'PUBLISH' : 'check-only') + ' · shipping ' + V())}\n`);
 
+// A verdict is only about the exact committed candidate. Check-only used to permit a dirty tree
+// while publish checked cleanliness much later, so preflight could certify bytes that would never
+// ship. Both modes now bind to the same committed tree before any expensive gate runs.
+const initialDirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
+if (initialDirty) {
+  console.error(`\n${c.r('✗ GATE FAILED: working tree not clean')} ${c.dim('— preflight and publish both certify committed bytes only.')}`);
+  console.error(initialDirty.split('\n').slice(0, 10).map((l) => '    ' + l).join('\n'));
+  process.exit(1);
+}
+
 // A. version single source of truth
 step('A', 'version single-source-of-truth agrees across every surface');
 runOrDie('version sync', process.execPath, ['scripts/sync-version.mjs', '--check']);
@@ -138,12 +148,6 @@ if (PUBLISH) {
   }
 
   step('C+', 'push to origin/main — safe now that A–C passed');
-  const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
-  if (dirty) {
-    console.error(`\n${c.r('✗ GATE FAILED: working tree not clean')} ${c.dim('— commit (or stash) everything before publishing; we ship exactly what is committed + pushed.')}`);
-    console.error(dirty.split('\n').slice(0, 10).map((l) => '    ' + l).join('\n'));
-    process.exit(1);
-  }
   let ahead = '0';
   try { ahead = execFileSync('git', ['-C', ROOT, 'rev-list', '--count', 'origin/main..HEAD'], { encoding: 'utf8' }).trim(); } catch { /* origin/main ref missing — push will resolve */ ahead = '?'; }
   if (ahead === '0') console.log(c.dim('  nothing to push — HEAD already on origin/main'));
@@ -217,4 +221,8 @@ step('D+', 'deploy-surface sweep — what GitHub and Vercel think about what we 
 step('E', 'verify-channels — the live walk of every user path');
 runOrDie('verify-channels', process.execPath, ['scripts/verify-channels.mjs']);
 
-console.log(`\n${c.g(c.b('✓✓✓ SHIPPED'))} — every gate passed and every live channel is current. ${c.dim('A user on any path (npm, npx, explainer, --update) gets the working, current build.')}\n`);
+if (PUBLISH) {
+  console.log(`\n${c.g(c.b('✓✓✓ SHIPPED'))} — every gate passed and every live channel is current. ${c.dim('A user on any path (npm, npx, explainer, --update) gets the working, current build.')}\n`);
+} else {
+  console.log(`\n${c.g(c.b('✓✓✓ PREFLIGHT PASS — NOT PUBLISHED'))} — the committed candidate passed every check-only gate.\n`);
+}

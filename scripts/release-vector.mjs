@@ -33,6 +33,22 @@ export function verdictOf(results) {
   return results.reduce((worst, r) => (RANK.indexOf(r.state) < RANK.indexOf(worst) ? r.state : worst), 'PASS');
 }
 
+export function candidateLineage() {
+  const git = (args) => {
+    const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : '';
+  };
+  return {
+    sha: git(['rev-parse', 'HEAD']) || 'UNKNOWN-SHA',
+    tree: git(['rev-parse', 'HEAD^{tree}']) || 'UNKNOWN-TREE',
+    dirty: Boolean(git(['status', '--porcelain'])),
+  };
+}
+
+export function verdictWithLineage(results, lineage) {
+  return lineage?.dirty ? 'FAIL' : verdictOf(results);
+}
+
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch { return null; } };
 
@@ -178,26 +194,28 @@ export function headSha() {
 export const BANNED_WHEN_DEGRADED = ['healthy', 'proven', 'all pass'];
 
 export async function evaluate(invariants = INVARIANTS) {
-  const sha = headSha();
+  const lineage = candidateLineage();
+  const sha = lineage.sha;
   const results = [];
   for (const inv of invariants) {
     const r = await inv.detect();
     results.push({ name: inv.name, dimension: inv.dimension, state: r.state, why: r.why, sha });
   }
-  return { sha, results, verdict: verdictOf(results) };
+  return { sha, lineage, results, verdict: verdictWithLineage(results, lineage) };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const { sha, results, verdict } = await evaluate();
+  const { sha, lineage, results, verdict } = await evaluate();
   const json = process.argv.includes('--json');
   if (json) {
-    console.log(JSON.stringify({ sha, verdict, results }, null, 2));
+    console.log(JSON.stringify({ sha, lineage, verdict, results }, null, 2));
   } else {
     const mark = { PASS: '✓', FAIL: '✗', UNKNOWN: '?' };
     console.log(`\n  release vector @ ${sha.slice(0, 7)}\n`);
     for (const r of results) {
       console.log(`  ${mark[r.state]} ${r.state.padEnd(7)} ${r.dimension.padEnd(3)} ${r.name.padEnd(22)} ${r.why}`);
     }
+    console.log(`  lineage: tree ${lineage.tree.slice(0, 12)} · ${lineage.dirty ? 'DIRTY (release-blocking)' : 'clean'}`);
     console.log(`\n  verdict: ${verdict}   (vector MINIMUM over ${results.length} invariants — never an average)`);
     if (verdict !== 'PASS') {
       console.log(`  release metadata must read DEGRADED; these strings are banned: ${BANNED_WHEN_DEGRADED.map((s) => `"${s}"`).join(', ')}\n`);

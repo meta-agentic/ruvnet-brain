@@ -186,7 +186,7 @@ describe('the CLI is the door that actually gets walked through', () => {
     const j = JSON.parse(r.stdout);
     expect(j.sha).toMatch(/^[0-9a-f]{40}$/);
     expect(j.results).toHaveLength(8);
-    expect(j.verdict).toBe(RV.verdictOf(j.results));
+    expect(j.verdict).toBe(RV.verdictWithLineage(j.results, j.lineage));
     for (const x of j.results) expect(x.sha).toBe(j.sha);   // every result stamped with the same SHA
   }, 190_000);
 });

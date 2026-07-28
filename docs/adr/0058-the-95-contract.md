@@ -4,7 +4,7 @@ title: The 95 contract — one observable per dimension, one mutant per observab
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-28
-impl: wired
+impl: built
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
 supersedes: []
@@ -288,6 +288,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Recovery added executable candidate-lineage enforcement and corrected check-only release wording; implementation remains **partial**. | `scripts/release-vector.mjs` now records commit SHA, committed tree digest, and dirty state, and a dirty lineage forces the vector verdict to FAIL. `scripts/release.mjs` rejects a dirty tree in both check and publish modes and reserves `SHIPPED` for publish; check-only ends `PREFLIGHT PASS — NOT PUBLISHED`. GPT-5.6-Sol returned NO-GO until these gates, Windows CI, packed-candidate Top-100, and real WSL proof land. Fable 5 could not complete the required second review because the live subscription reported its weekly limit; no two-model convergence is claimed. |
 | 2026-07-28 | **Recovery correction: the Top-100/install/routing row below described work that was not on `origin/main`.** The code and passing 100-question artifact were preserved in a dirty checkout whose branch is 18 commits behind and 3 ahead of current main. Recovery now proceeds in an isolated worktree rooted at `origin/main`; no result may be promoted until its artifact identifies that candidate SHA and a clean tree. | Live re-read on 2026-07-28: `origin/main` is `e9f7e7c` at `3.9.129-dev`; `scripts/top100-benchmark.mjs`, `evals/top-100.json`, `plugin/scripts/routing-outcome-capture.mjs`, `resolveRuntimeModelCache()` and `pruneUnlistedStores()` are absent there. The preserved artifact reports `dirty: true` and a different source SHA. This is precisely the candidate-binding invariant this ADR requires; the earlier row is retained as a record of the workstream, but it is not shipped state. |
 | 2026-07-28 | Kept D5's real installer mutant executable after `bin/install.mjs` gained the shared model-cache sibling. | `tests/mesh/coexistence.test.mjs` now copies both legitimate installer siblings into its isolated mutant tree. Before this repair the mutant crashed on `../kb/model-requirements.mjs` and D5 failed without exercising byte preservation; `npm run test:mesh` is the real gate. |
 | 2026-07-28 | **Codex SessionStart/Stop moved from configuration failure to direct real-path proof; the overall release vector remains UNKNOWN at D4.** | Commit `c466c2a`, issue #52. Before: a fresh Codex 0.145.0 session rejected both Brain hook sources on unsupported `_note`, so lifecycle coverage was zero. After: the same child-Codex probe has no Brain parse/clamp errors; the installed stable wrapper returned SessionStart developer context in 0.527s and translated a real open-ledger Stop into Codex `decision:"block"` in 1.172s. The new test executes the wrapper across a v1→v2 active-generation flip after v1 deletion, killing the stale-cache-path failure. Focused tests pass 52/52. This repairs a D5/D8 host-path defect but does not manufacture the blocked D4 replay, so the vector-minimum release law still says UNKNOWN. |
