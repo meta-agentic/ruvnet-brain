@@ -30,10 +30,10 @@ function installGeneration(brain, version, shimSource) {
   }));
 }
 
-function fire(home, id, payload) {
+function fire(home, id, payload, extraEnv = {}) {
   return spawnSync(process.execPath, [WRAPPER, id], {
     cwd: ROOT,
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, ...extraEnv },
     input: JSON.stringify(payload),
     encoding: 'utf8',
     timeout: 4_000,
@@ -103,6 +103,26 @@ describe('Codex lifecycle adapter', () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toBe('[RuvNet Brain start]');
+  });
+
+  it('maps Codex PLUGIN_ROOT to the Claude-compatible variable used by shared hooks', () => {
+    const { home, brain } = fixture();
+    installGeneration(
+      brain,
+      'v1',
+      'process.stdin.resume(); process.stdin.on("end",()=>process.stdout.write(process.env.CLAUDE_PLUGIN_ROOT || "missing"));',
+    );
+    const pluginRoot = path.join(home, '.codex', 'plugins', 'ruvnet-brain');
+
+    const result = fire(home, 'session-start', {
+      session_id: 'codex-plugin-root',
+      hook_event_name: 'SessionStart',
+      source: 'startup',
+      cwd: ROOT,
+    }, { PLUGIN_ROOT: pluginRoot });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(pluginRoot);
   });
 
   it('translates the Claude Stop continuation envelope into Codex block plus reason', () => {

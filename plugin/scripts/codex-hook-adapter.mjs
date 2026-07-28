@@ -14,6 +14,8 @@ const shim = path.join(path.dirname(fileURLToPath(import.meta.url)), 'hook-shim.
 const env = {
   ...process.env,
   CLAUDE_SESSION_ID: String(input.session_id || process.env.CLAUDE_SESSION_ID || ''),
+  CLAUDE_PLUGIN_ROOT: String(process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT || ''),
+  CLAUDE_PROJECT_DIR: String(input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd()),
   RUVNET_HOOK_HOST: 'codex',
 };
 const result = spawnSync(process.execPath, [shim, hookId, ...process.argv.slice(3)], {
