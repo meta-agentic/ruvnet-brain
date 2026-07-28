@@ -103,6 +103,7 @@
   "author": "Stuart Kerr",
   "devDependencies": {
     "@metaharness/darwin": "~0.8.0",
+    "@ruvector/rvf": "^0.3.4",
     "@vitest/coverage-v8": "^4.1.10",
     "vitest": "^4.1.10"
   },
