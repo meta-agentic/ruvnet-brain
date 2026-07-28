@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getVersion } from './version.mjs';
+import { getVersionTag } from './version.mjs';
+import { verifyRvfGenerations } from './rvf-generation.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CHECK = process.argv.includes('--check');
@@ -67,6 +69,35 @@ for (const t of targets) {
   if (cur === V) continue;
   if (CHECK) { console.error(`[version] DRIFT: ${t.file} = ${cur}, expected ${V}`); drift++; }
   else { fs.writeFileSync(p, t.set(s)); console.log(`[version] ${t.file}: ${cur} -> ${V}`); }
+}
+
+// The installed knowledge bundle and the checksum-bound RVF generation ledger are release
+// surfaces too. They are generated artifacts, so tolerate absence in a source-only checkout; when
+// present they must carry the same bare field and v-prefixed tag as npm/GitHub.
+for (const rel of ['kb/RVF-GENERATIONS.json']) {
+  const p = path.join(ROOT, rel);
+  if (!fs.existsSync(p)) continue;
+  const doc = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const expectedTag = getVersionTag();
+  const bad = doc.brainVersion !== V || doc.releaseTag !== expectedTag;
+  if (!bad) continue;
+  if (CHECK) {
+    console.error(`[version] DRIFT: ${rel} = ${doc.brainVersion}/${doc.releaseTag}, expected ${V}/${expectedTag}`);
+    drift++;
+  } else {
+    doc.brainVersion = V;
+    doc.releaseTag = expectedTag;
+    fs.writeFileSync(p, `${JSON.stringify(doc, null, 2)}\n`);
+    console.log(`[version] ${rel}: -> ${V}/${expectedTag}`);
+  }
+}
+
+if (CHECK && fs.existsSync(path.join(ROOT, 'kb/RVF-GENERATIONS.json'))) {
+  const { failures } = verifyRvfGenerations(path.join(ROOT, 'kb'));
+  for (const failure of failures) {
+    console.error(`[version] RVF GENERATION DRIFT: ${failure}`);
+    drift++;
+  }
 }
 
 // README: the heading badge encodes the product version twice — the human-readable alt text

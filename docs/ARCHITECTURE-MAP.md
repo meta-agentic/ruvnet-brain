@@ -46,8 +46,8 @@ node -e "console.log(JSON.parse(require('fs').readFileSync('data/manifest.json')
 
 # corpus: stores on disk, passages, bytes
 ls ~/.cache/ruvnet-brain/kb/*.big.rvf | wc -l          # big (768-dim) stores
-ls ~/.cache/ruvnet-brain/kb/*.rvf | wc -l              # both variants
-cat ~/.cache/ruvnet-brain/kb/*.big.passages.jsonl | wc -l
+ls ~/.cache/ruvnet-brain/kb/*.rvf | wc -l              # canonical stores plus any legacy files pending cleanup
+cat ~/.cache/ruvnet-brain/kb/*.passages.jsonl | wc -l
 du -sh ~/.cache/ruvnet-brain
 
 # hooks: what actually fires, and what each invocation runs

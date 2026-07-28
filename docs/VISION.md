@@ -56,12 +56,13 @@ itself ~30. **We are at base camp with a proven base; the climb (ADR-0008) is ne
 ## 5. What is DONE and PROVEN (Phase 1 — the brain)
 - **`dist/ruvnet-brain.zip`** (SHA-stamped, acceptance-tested as a real consumer: unzip → npm i → ask).
 - **Building-block repos loaded** — the reusable pieces of rUv's stack, each deep-walked into per-repo
-  `.rvf` + `.big.rvf` stores, plus a **concepts store** (L2 + primers). For the exact repos, their
+  one canonical `.big.rvf` store, plus a **concepts store** (L2 + primers). For the exact repos, their
   per-repo commit SHAs, and current coverage + chunk counts, see the live stamp in `data/manifest.json`
   (hardcoded totals here go stale). The rest of the ~248-repo org is roadmap;
   `scripts/self-update.mjs --include-new` deep-walks any on demand, and `scripts/ingest-repo.mjs` pulls
   one in on the spot.
-- Both embedding variants (MiniLM-384 + bge-768), all reconcile + pass the anti-regression guard.
+- One canonical computer-class embedding store per repository (currently bge-768); every store
+  reconciles and passes the anti-regression guard.
 - **3-vendor ground-truth grade** (the **graded core of 5** — ruflo, ruvector, agentdb, rulake, ruview):
   REAL-USE 63–85, **0 hallucinated citations** on tuned AND held-out sets. Primers now exist for all 19, so
   capability claims are grounded across the full covered set (the other 14 are *covered*, not yet *graded*).

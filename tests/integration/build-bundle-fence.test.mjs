@@ -82,8 +82,8 @@ describe('build-bundle.mjs — private-store fence (fail-closed)', () => {
   it('excludes a named private store from discovery and never surfaces it in the manifest/README', () => {
     fs.writeFileSync(path.join(tmp, 'kb/PRIVATE-STORES.json'), JSON.stringify({ privateStores: ['cognitum-seed'] }));
     // Placeholder store files — discoverBuilt() matches by filename only, never opens them.
-    fs.writeFileSync(path.join(tmp, 'kb/cognitum-seed.rvf'), '');
-    fs.writeFileSync(path.join(tmp, 'kb/public-repo.rvf'), '');
+    fs.writeFileSync(path.join(tmp, 'kb/cognitum-seed.big.rvf'), '');
+    fs.writeFileSync(path.join(tmp, 'kb/public-repo.big.rvf'), '');
     const r = runBuildBundle();
     expect(r.stdout).toMatch(/EXCLUDED 1 PRIVATE store\(s\): cognitum-seed/);
     const manifest = JSON.parse(fs.readFileSync(path.join(tmp, 'dist/ruvnet-brain/manifest.json'), 'utf8'));

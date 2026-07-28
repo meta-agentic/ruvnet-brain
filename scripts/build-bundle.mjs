@@ -72,15 +72,14 @@ function loadPrivateStores() {
 }
 const PRIVATE_STORES = loadPrivateStores();
 
-// ---- discover BUILT repos (those with <name>.rvf in kb/) ----------------------------------------
+// ---- discover BUILT repos (those with <name>.big.rvf in kb/) ------------------------------------
 function discoverBuilt() {
   const names = new Set();
   const excludedPrivate = [];
   for (const f of fs.readdirSync(KB)) {
-    const m = f.match(/^(.+?)\.rvf$/);                       // base store only (skip .big.rvf via the .big match below)
+    const m = f.match(/^(.+?)\.big\.rvf$/);
     if (!m) continue;
     if (/\.(idmap|embed)\b/.test(f)) continue;
-    if (m[1].endsWith('.big')) continue;
     if (PRIVATE_STORES.has(m[1].toLowerCase())) { excludedPrivate.push(m[1]); continue; }
     names.add(m[1]);
   }
@@ -145,20 +144,14 @@ fs.mkdirSync(OUT, { recursive: true });
 const built = discoverBuilt();
 const builtRepos = [];
 for (const name of built) {
-  // per-repo stores + sidecars (base required; big optional)
-  cp(`${name}.rvf`, OUT, { required: true });
-  cp(`${name}.rvf.idmap.json`, OUT);
-  cp(`${name}.rvf.embed.json`, OUT, { required: true });
+  // One canonical computer-focused vector store per repository. The unsuffixed passages/meta
+  // sidecars are shared with the .big RVF so source text and metadata are packaged once.
+  cp(`${name}.big.rvf`, OUT, { required: true });
+  cp(`${name}.big.rvf.idmap.json`, OUT, { required: true });
+  cp(`${name}.big.rvf.embed.json`, OUT, { required: true });
   cp(`${name}.passages.jsonl`, OUT, { required: true });
   cp(`${name}.meta.json`, OUT, { required: true });
   const hasSymbols = cp(`${name}.symbols.json`, OUT);
-  const hasBig = fs.existsSync(path.join(KB, `${name}.big.rvf`));
-  if (hasBig) {
-    // Ship .big.passages.jsonl — the big (768) variant's retrieval opens it BY NAME. It looks like a
-    // byte-dup of <name>.passages.jsonl, but dropping it (a "dedup" in v2.8.0) shipped a broken big
-    // variant: forge-ask/corpus-qa hard-fail with "passages sidecar not found". It is required.
-    for (const suf of ['.big.rvf', '.big.rvf.idmap.json', '.big.rvf.embed.json', '.big.passages.jsonl', '.big.meta.json']) cp(`${name}${suf}`, OUT);
-  }
   const hasPrimer = cp(`${name}-primer.md`, OUT);
   // metadata
   let chunks = null, model = null, dims = null;
@@ -168,13 +161,14 @@ for (const name of built) {
   builtRepos.push({
     name, tier: reg.tier || '?', stars: reg.stars ?? null,
     chunks, baseModel: model, baseDims: dims,
-    variants: ['small'].concat(hasBig ? ['big'] : []),
-    hasSymbols, hasPrimer, hasBig,
+    variants: ['big'],
+    hasSymbols, hasPrimer, hasBig: true,
     gradeRealUse: grade ? grade.realUse : null,
     builtFromSha: priorSha[name.toLowerCase()] || 'unknown',
     status: 'built',
   });
 }
+cp('RVF-GENERATIONS.json', OUT, { required: true });
 
 // L2 articles (whole dir, fencing out private repos' raw .md) + master primer dir (the master
 // ruvnet-primer overview — not per-repo, so nothing private to fence there).
@@ -408,8 +402,8 @@ node forge-ask.mjs --dir . --name ruvector --variant big --q "what is the RVF co
 \`\`\`
 
 ## Notes
-- Each repo ships a \`small\` (MiniLM-384, edge-compatible) store; \`big\` (bge-768) when present is
-  sharper and auto-selected.
+- Each repo ships one canonical \`big\` store (bge-base-en-v1.5, 768 dimensions) plus one shared
+  passages/meta sidecar set. \`RVF-GENERATIONS.json\` binds the exact RVF bytes to this release.
 - ADR results surface shipped-vs-proposed **status** — a "Proposed" ADR is design intent, not shipped.
 - Everything runs locally; no network calls at query time. DO NOT use @ruvector/rvf-mcp-server (stub).
 - See \`manifest.json\` for per-repo chunk counts, variants, grades, and pinned source SHAs.

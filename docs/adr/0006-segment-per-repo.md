@@ -1,13 +1,13 @@
 ---
 id: ADR-006
-status: Accepted
+status: Implemented
 date: 2026-06-27
-updated: 2026-07-27
-updated_source: derived-from-git
+updated: 2026-07-28
+updated_source: incremental-nightly-single-store
 ---
 # ADR-0006: Segment-per-repo indexing + cross-segment normalization
 
-**Status**: Accepted (2026-06-27)
+**Status**: Implemented (2026-07-28)
 **Date**: 2026-06-27
 
 **Red-team origin:** Arch-H3
@@ -23,6 +23,11 @@ Index **one segment per repo**. Queries **fan out across segments** with an expl
 normalization** step (so a ruvector hit and a ruflo hit are comparable). Incremental rebuild touches only
 changed segments; the global ranking layer is rebuilt when needed. "Cheap incremental" is **deleted** from
 claims — the real rebuild cost is stated and measured at P1.
+
+Implementation: `kb/forge-refresh.mjs` computes stable content-addressed chunk IDs, copies the live
+per-repo RVF into a candidate generation, deletes departed IDs, embeds only entering IDs, runs corpus
+QA, and promotes the complete artifact set under a reader-visible lock. A chunker/model fingerprint
+change deliberately forces a full rebuild.
 
 ## Consequences
 - Modular, parallel, independently evergreen per repo.

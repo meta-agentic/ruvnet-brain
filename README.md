@@ -32,7 +32,7 @@
 [![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
 [![coverage](https://img.shields.io/badge/coverage-28%25%20of%20ALL%20source%20·%20honest-b58900?style=flat-square)](#testing--proof)
 
-> **Three independent things version separately here — by design, not drift. Headline claims are regenerated and checked by the claims ledger (`scripts/claims-verify.mjs`); other numbers below are hand-stamped and dated:**
+> **One Brain generation everywhere.** npm, the GitHub tag/release, bundle manifests, source metadata, and checksum-bound RVF generations must share the same product version. Headline claims are regenerated and checked by the claims ledger (`scripts/claims-verify.mjs`); other numbers below are hand-stamped and dated:
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
 > - **`installer (npm)`** (badge above) — the `npx ruvnet-brain` setup script. Read live from the [npm registry](https://www.npmjs.com/package/ruvnet-brain). Only moves when the installer script itself changes — rare.
 > - **Brain Release** (the downloadable knowledge bundle, linked from the "download" badge above) — always resolves to [`releases/latest`](https://github.com/stuinfla/ruvnet-brain/releases/latest) (the nightly publishes fresh bundles as the corpus grows). Only moves when the underlying knowledge base is rebuilt — separate again from the two above.
@@ -270,7 +270,7 @@ So 2.5.1 makes it a **wall, not advice**: a `PreToolUse` gate that **blocks any 
 |---|---|---|
 | **Corpus** | 24 repos built | **69 repos** built (of 248 in the org), each verified by a live retrieval query |
 | **Depth** (flagship `ruvector`) | 18,491 passages · **0** full source bodies | **28,018 passages · 2,996 full bodies** — depth also restored to `agent-harness-generator` (8,896/715), `ruview` (7,434/765), `open-claude-code` (195/69) |
-| **Corpus QA gate** | none | every store must prove *embeds correctly + reads correctly* — vector count == passage count, depth floors, a 3-passage self-retrieval round-trip per store — **72/72 store-variants PASS**, wired fail-closed into the nightly publish |
+| **Corpus QA gate** | none | every canonical store must prove *embeds correctly + reads correctly* — vector count == passage count, depth floors, and a deterministic self-retrieval round trip — wired fail-closed into nightly promotion |
 | **Retrieval eval** | 12 frozen questions | **120 frozen, hash-pinned questions** across 5 strata; promotion gated on Wilson lower bounds, fail-closed — it blocked a real release this morning, which is the feature working |
 | **Token cost** | 6,183 bytes injected per hook turn · zero self-measurement | **684 bytes (~90% cut)** with an eval-PASS proving zero quality loss · a live token meter measuring real bytes/tokens per prompt class · ~27% faster repeat queries via the KB cache |
 | **rUv's gists** | not indexed | **444 gists** indexed with per-chunk freshness/provenance banners, refreshed nightly with cost-disciplined skip |
@@ -286,7 +286,7 @@ The depth jump wasn't tuning — it was two pipeline root-causes fixed for good:
 | Dimension | v1 (2026-07-09) | v2.0 (2026-07-10) | Δ | What moved it |
 |---|---:|---:|---:|---|
 | End-user experience | 54 | 83 | +29 | One-command install now offers nightly self-updates (default yes); the page lives on isovision.ai; publishing renews itself |
-| Knowledge corpus | 71 | 88 | +17 | 24→69 verified repos; a 72/72 embeds-and-reads QA gate; full source depth restored — flagship went 0→2,996 source bodies |
+| Knowledge corpus | 71 | 88 | +17 | 24→69 verified repos; an embeds-and-reads QA gate; full source depth restored — flagship went 0→2,996 source bodies |
 | Effectiveness (eval-proven retrieval) | 58 | 88 | +30 | 120-question Wilson-bound gate — it blocked a bad release, then passed the fix *above* the old baseline |
 | Acting like rUv | 38 | 72 | +34 | Memory layer root-caused and fixed with proofs; 6 exact patches queued upstream; real multi-agent swarm operations |
 | Developer smarter | 62 | 84 | +22 | `/brain-score` runs this same scorecard on any repo; honest tool announcements; per-answer source receipts |
@@ -411,12 +411,12 @@ Plus: the **“take the wheel” behavioral pipeline** (below), a **4-level beha
 
 ## How it works
 
-The expensive work happens **once, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into **two** vector variants (MiniLM-384 for edge/portability, bge-768 for depth) stored on-disk in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. That's **150,163 source chunks**. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
+The expensive work happens **once per changed source chunk, at build time**: every covered repo is deep-walked (whole files, full function bodies, plus a symbol index), embedded into one canonical computer-class **bge-768** store in **RVF / HNSW**, and distilled into a concepts + capability layer of per-repo primers and cards. Stable content-addressed chunk IDs let the nightly keep unchanged vectors, delete departed chunks, and embed only additions. At **query time**, `search_ruvnet` searches every repo's store at once, pools the hits, and runs them through **one cross-encoder rerank** on a common scale — so the truly relevant file wins regardless of which repo it lives in — then returns whole source files, each labeled by repo and path.
 
 ![RuvNet Brain architecture pipeline](assets/diagrams/architecture-pipeline.svg)
 
 - **Per-repo RVF stores** — each repo gets its own HNSW graph; the tool queries across them and normalizes.
-- **Dual embeddings + cross-encoder** — MiniLM-384 for edge/portability, bge-768 for depth; a single cross-encoder rerank puts every candidate on one comparable scale. (The cross-encoder — a third model reading query+passage together — is the real quality lever, not a fusion of the two embedders.)
+- **One canonical embedding + cross-encoder** — bge-base-en-v1.5 at 768 dimensions for the computer-class Brain; a single cross-encoder rerank puts every candidate on one comparable scale. A frozen bake-off, not dimension alone, governs any future model change.
 - **Concepts / capability layer** — per-repo primers and capability cards let the model ground _capability_ claims and route a described need to the right repo, not just do file lookups.
 
 ---
@@ -445,7 +445,7 @@ The brain answers **both** kinds of questions. **Name the repo or ask something 
 
 ## What it covers
 
-69 of rUv's repos in the [ruvnet](https://github.com/ruvnet) org — the reusable **building blocks** you'd actually compose into a system — each deep-walked and embedded in both variants. The core blocks below also carry symbol indexes and capability cards (the 8 newest repos are findable by name; their capability cards are coming).
+69 of rUv's repos in the [ruvnet](https://github.com/ruvnet) org — the reusable **building blocks** you'd actually compose into a system — each deep-walked into its own canonical RVF segment. The core blocks below also carry symbol indexes and capability cards (the 8 newest repos are findable by name; their capability cards are coming).
 
 ![The RuvNet stack the brain covers](primer/assets/diagrams/ruvnet-stack.svg)
 

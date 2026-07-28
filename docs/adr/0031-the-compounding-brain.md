@@ -3,7 +3,7 @@ id: ADR-031
 title: The compounding brain — rUv's corpus + the user's working knowledge + accumulated experience, made operative
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-23
+updated: 2026-07-28
 authors: [Stuart Kerr, Claude Code]
 tags: [learning, darwin, policy-surfaces, compounding, north-star, 4.0]
 supersedes: []
@@ -102,7 +102,7 @@ agent operating it.** The product waits to be asked; the agent only asks when bl
 
 | Corpus | Home | Contents | Refresh |
 |---|---|---|---|
-| **rUv** | `~/.cache/ruvnet-brain/kb` (bundle) | 69 repos, source-grounded | nightly, replaced wholesale |
+| **rUv** | `~/.cache/ruvnet-brain/kb` (bundle) | 69 repos, source-grounded | nightly, changed repository segments refreshed; verified bundle promoted as one snapshot |
 | **User** | `~/.config/ruvnet-brain/` (user data) | how this person works; promoted lessons | never destroyed by an update |
 | **Experience** | AgentDB + `.metaharness/` archive | what was tried, what scored, what was promoted | append-only |
 

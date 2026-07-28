@@ -69,6 +69,18 @@ describeRvf('corpus-qa — structural gate', () => {
     expect(r.roundtrip).toBe('skipped');
   });
 
+  it('PASSes a canonical big-only store with one unsuffixed passages sidecar', async () => {
+    await mkStore('zzz-qa-canonical.big', { rows: [row(1), row(2)] });
+    fs.renameSync(
+      path.join(tmp, 'zzz-qa-canonical.big.passages.jsonl'),
+      path.join(tmp, 'zzz-qa-canonical.passages.jsonl'),
+    );
+    const r = await qaStore(tmp, 'zzz-qa-canonical', 'big', { roundtrip: false });
+    expect(r.fails).toEqual([]);
+    expect(r.passages).toBe(2);
+    expect(r.vectors).toBe(2);
+  });
+
   it('FAILs (S2) a store that FULL_HINTS marks for full-body indexing but which has 0 full bodies — the exact 2026-07-10 silent-depth-loss class', async () => {
     // 'ruflo' has a real FULL_HINTS entry; a fixture named ruflo with zero '(full body):' passages
     // reproduces the shipped failure (18,491 passages / 0 full bodies) in miniature.

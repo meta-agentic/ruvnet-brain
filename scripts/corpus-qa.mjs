@@ -3,8 +3,9 @@
 // correctly." Born from the 2026-07-10 depth-restore failure, where a rebuilt ruvector store had
 // 18,491 passages and 0 full bodies and nothing noticed until a human grepped for '(full body):'.
 //
-// For EVERY .rvf store in the kb dir (both variants — small MiniLM-384 and .big bge-768 — plus
-// single-variant stores like concepts.big / ruv-gists.big):
+// For EVERY .rvf store in the kb dir. Canonical repository stores are .big bge-768; legacy
+// MiniLM-384 stores remain discoverable during migration, and big-only stores may share the
+// canonical unsuffixed passages sidecar to avoid storing the same source text twice.
 //
 //   STRUCTURAL (cheap, always):
 //     S1  <name>.passages.jsonl exists and has > 0 rows
@@ -106,7 +107,11 @@ function getPipeline(model) {
 export async function qaStore(dir, store, variant, { roundtrip = true, samples = 3 } = {}) {
   const base = variant === 'big' ? `${store}.big` : store;
   const rvfPath = path.join(dir, `${base}.rvf`);
-  const passagesPath = path.join(dir, `${base}.passages.jsonl`);
+  const variantPassages = path.join(dir, `${base}.passages.jsonl`);
+  const canonicalPassages = path.join(dir, `${store}.passages.jsonl`);
+  const passagesPath = variant === 'big' && !fs.existsSync(variantPassages)
+    ? canonicalPassages
+    : variantPassages;
   const embedPath = `${rvfPath}.embed.json`;
   const res = { store, variant, passages: 0, fullBodies: 0, vectors: null, roundtrip: 'skipped', fails: [], notes: [] };
 

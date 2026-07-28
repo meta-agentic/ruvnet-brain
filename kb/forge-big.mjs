@@ -1,11 +1,7 @@
 #!/usr/bin/env node
-// forge-big.mjs — build the BIG (768-dim) variant of a forged KB by RE-EMBEDDING the existing
-// passages with a stronger model. NO repo re-walk: the big variant indexes the EXACT SAME text
-// as the small (default) build, so the two can never drift in content — only the embedder (and
-// answer sharpness) differs. Run AFTER forge-build.mjs.
+// forge-big.mjs — build the canonical computer-class 768-dim RVF from existing passages.
 //
-//   small (forge-build.mjs):  Xenova/all-MiniLM-L6-v2  · 384-dim · edge/Seed-compatible · symmetric
-//   big   (this script):      Xenova/bge-base-en-v1.5  · 768-dim · Mac/PC, sharper retrieval
+//   canonical: Xenova/bge-base-en-v1.5 · 768-dim · Mac/PC
 //
 // bge-base-en-v1.5 is ASYMMETRIC: PASSAGES embedded with NO prefix (here); QUERIES get an
 // instruction prefix at query time (forge-ask reads it from <name>.big.rvf.embed.json). Pool = CLS.
@@ -17,8 +13,9 @@
 //   node forge-big.mjs --smoke --dir <d> --name <n>                       # model sanity check
 //
 // Sharding: run N `embed` processes in parallel (shard 0..N-1), each writes one atomic
-// <name>.big.vecs.<i>-<N>.jsonl; then ONE `ingest` assembles them into <name>.big.rvf and copies
-// passages + meta verbatim + writes the query-side embed.json. Shards are cleaned on success.
+// <name>.big.vecs.<i>-<N>.jsonl; then ONE `ingest` assembles them into <name>.big.rvf and writes
+// the query-side embed.json. Canonical passages/meta keep their unsuffixed names and are not
+// duplicated. Readers retain a fallback for legacy bundles. Shards are cleaned on success.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,7 +42,6 @@ const SMOKE = argv.includes('--smoke');
 if (!DIR || !NAME) { console.error('Usage: forge-big.mjs <embed|ingest|both|--smoke> --dir <d> --name <n> [--shard i --of n]'); process.exit(2); }
 
 const passagesFile = path.join(DIR, `${NAME}.passages.jsonl`);
-const metaFile = [path.join(DIR, `${NAME}.meta.json`), path.join(DIR, `${NAME}.ids.json`)].find((f) => fs.existsSync(f));
 const vecShardPath = (i, n) => path.join(DIR, `${NAME}.big.vecs.${i}-${n}.jsonl`);
 
 const { mod: rvfMod } = loadRvf();
@@ -130,9 +126,6 @@ async function ingestStore() {
   const status = await db.status();
   await db.close();
 
-  // copy passages + metadata verbatim (big indexes the SAME text/metadata as small)
-  fs.copyFileSync(passagesFile, path.join(DIR, `${NAME}.big.passages.jsonl`));
-  if (metaFile) fs.copyFileSync(metaFile, path.join(DIR, `${NAME}.big.meta.json`));
   // query-side embedder config (how forge-ask embeds a query for THIS .rvf — asymmetric bge)
   fs.writeFileSync(OUT_RVF + '.embed.json', JSON.stringify({
     model: MODEL, dimensions: DIM, metric: 'cosine', pooling: POOLING, normalize: true,
@@ -145,7 +138,7 @@ async function ingestStore() {
   console.log(`[ingest] vectors=${status.totalVectors} passages=${totalPassages} accepted=${accepted} rejected=${rejected} dupes=${dupes} MATCH=${ok}`);
   if (!ok) { console.error('[ingest] RECONCILE FAILED — vectors != passages. NOT cleaning shards.'); process.exit(1); }
   for (const sf of shardFiles) fs.unlinkSync(sf); // clean shards only on success
-  console.log(`[ingest] OK — wrote ${NAME}.big.rvf (+passages,meta,embed.json); shards cleaned. Run forge-guard --variant big next.`);
+  console.log(`[ingest] OK — wrote ${NAME}.big.rvf (+embed.json); canonical passages/meta retained; shards cleaned. Run forge-guard --variant big next.`);
 }
 
 async function smoke() {

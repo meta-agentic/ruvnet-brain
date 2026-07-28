@@ -36,15 +36,10 @@ function getRvfDatabase() {
   return _rvf.RvfDatabase;
 }
 
-// ---------- TWO-VARIANT store resolution (mirrors Cognitum ask-kb resolveConf/variantPaths) ----------
-// A forged KB may ship TWO builds from the SAME passages (identical content, different embedder):
-//   small (384-dim MiniLM)  — the default; edge/Seed-compatible; files: <name>.rvf
-//   big   (768-dim bge)     — sharper, Mac/PC;                    files: <name>.big.rvf
-// One tool serves both: the embedder for a query is read from the <rvf>.embed.json sidecar the
-// build wrote next to each .rvf, so a query is ALWAYS embedded with the SAME model the corpus was.
-// Absent that sidecar we fall back to MiniLM (the small build). Variant defaults to 'big' when a
-// big build is present (best answers), else 'small' — so a small-only checkout still works and a
-// Mac bundle auto-uses the sharp one.
+// ---------- Store resolution ----------
+// Canonical Brain repository stores are bge-768 at <name>.big.rvf. The full-text corpus is stored
+// once at <name>.passages.jsonl; legacy bundles may still carry <name>.big.passages.jsonl, so the
+// reader accepts both while preferring the variant-specific file when present.
 const MINILM_CFG = { model: 'Xenova/all-MiniLM-L6-v2', pooling: 'mean', normalize: true, queryPrefix: '' };
 
 // ---------- MODEL-WEIGHT PIN (supply-chain / reproducibility) ----------
@@ -68,9 +63,13 @@ const PINNED_REVISIONS = {
 function variantPaths(dir, name, variant) {
   const tag = variant === 'big' ? '.big' : '';
   const rvf = path.join(dir, `${name}${tag}.rvf`);
+  const variantPassages = path.join(dir, `${name}${tag}.passages.jsonl`);
+  const canonicalPassages = path.join(dir, `${name}.passages.jsonl`);
   return {
     rvf,
-    passages: path.join(dir, `${name}${tag}.passages.jsonl`),
+    passages: variant === 'big' && !fs.existsSync(variantPassages)
+      ? canonicalPassages
+      : variantPassages,
     embedCfgPath: `${rvf}.embed.json`,
   };
 }
@@ -233,25 +232,28 @@ async function embedUncached(text, cfg = MINILM_CFG) {
 }
 
 // ---------- passages sidecar loader ----------
-// byId  : Map id(str) -> { id(num), text, path, title }
-// byPath: Map path     -> [records] sorted by numeric id (== document chunk order)
+// byId  : Map id(str) -> { id(str), text, path, title, order }
+// byPath: Map path     -> [records] in passage-file order (== document chunk order). Stable
+// content-addressed chunk IDs are intentionally non-numeric, so numeric sorting would collapse
+// every id to NaN and make document assembly order engine-dependent.
 function loadPassages(file) {
   return new Promise((resolve, reject) => {
     const byId = new Map();
     const byPath = new Map();
+    let order = 0;
     if (!fs.existsSync(file)) return reject(new Error(`passages sidecar not found: ${file}`));
     const rl = readline.createInterface({ input: fs.createReadStream(file, 'utf8'), crlfDelay: Infinity });
     rl.on('line', (line) => {
       if (!line.trim()) return;
       try {
         const o = JSON.parse(line);
-        const rec = { id: Number(o.id), text: o.text || '', path: o.path || '(unknown path)', title: o.title || '(unknown title)' };
+        const rec = { id: String(o.id), order: order++, text: o.text || '', path: o.path || '(unknown path)', title: o.title || '(unknown title)' };
         byId.set(String(o.id), rec);
         if (!byPath.has(rec.path)) byPath.set(rec.path, []);
         byPath.get(rec.path).push(rec);
       } catch { /* skip malformed line */ }
     });
-    rl.on('close', () => { for (const arr of byPath.values()) arr.sort((a, b) => a.id - b.id); resolve({ byId, byPath }); });
+    rl.on('close', () => { for (const arr of byPath.values()) arr.sort((a, b) => a.order - b.order); resolve({ byId, byPath }); });
     rl.on('error', reject);
   });
 }
@@ -297,14 +299,13 @@ const SOURCE_KINDS = new Set(['source', 'crate-src', 'example']);
 function isSourceKind(kind) { return SOURCE_KINDS.has(kind); }
 
 // ---------- per-KB cache (passages, kind metadata, crate tokens, the open HNSW handle) ----------
-// The KB on disk is immutable for the life of a long-lived MCP server process, but searchKb() re-read
-// + re-parsed the passages/meta sidecars AND reopened the .rvf on every single call. Cached PER
-// `dir|name|variant` (same keying style as _feCache/_symCache above) so a hot KB is loaded once and
-// every subsequent query in this process reuses it. The db handle is intentionally left open for the
-// life of the process (never closed) — same lifetime assumption as the embedder cache above.
+// Refresh promotes a complete artifact generation atomically. Keying the cache by RVF mtime+size
+// makes long-lived MCP processes observe that new generation on the next query instead of holding
+// an old file handle forever.
 const _kbCache = new Map();
 function getKb(dir, name, conf) {
-  const key = `${dir}|${name}|${conf.variant}`;
+  const stat = fs.statSync(conf.rvf);
+  const key = `${dir}|${name}|${conf.variant}|${stat.mtimeMs}|${stat.size}`;
   if (_kbCache.has(key)) return _kbCache.get(key);
   const entry = (async () => {
     const [{ byId, byPath }, db] = await Promise.all([
@@ -318,6 +319,17 @@ function getKb(dir, name, conf) {
   entry.catch(() => _kbCache.delete(key)); // don't let a failed load poison the cache permanently
   _kbCache.set(key, entry);
   return entry;
+}
+
+async function waitForPromotion(dir, timeoutMs = 30_000) {
+  const lock = path.join(dir, '.promotion.lock');
+  const deadline = Date.now() + timeoutMs;
+  while (fs.existsSync(lock)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`knowledge-base promotion remained locked for ${timeoutMs}ms: ${lock}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 // ===================================================================================
@@ -747,6 +759,7 @@ function assembleDocument(chunks, matchedId) {
 // Each result: { path, title, fullText, bestDistance, effDistance, chunksJoined, truncated,
 //                distance (alias of bestDistance), text (alias of fullText) }.
 export async function searchKb({ dir, name, query, k = 6, n, variant }) {
+  await waitForPromotion(dir);
   const conf = resolveConf(dir, name, variant);
   if (!fs.existsSync(conf.rvf)) throw new Error(`rvf not found: ${conf.rvf} (variant=${conf.variant}; build it, or copy the bundle in)`);
   const topN = Math.max(1, n || 5);

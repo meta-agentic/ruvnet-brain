@@ -1,5 +1,5 @@
 // tests/integration/ingest-repo.test.mjs — scripts/ingest-repo.mjs is the on-demand "load a new
-// RuvNet repo into the brain" pipeline (clone -> MiniLM embed -> bge-768 sharp embed -> symbol
+// RuvNet repo into the brain" pipeline (clone -> transactional bge-768 refresh -> symbol
 // index). It has never had a test: prior coverage-gap passes (2026-07-07/08, memory
 // `test-coverage-gaps-2026-07-07`) explicitly deferred it as "best suited to a subprocess
 // integration test" and left it untouched. This is that test.
@@ -115,69 +115,53 @@ onPosix('ingest-repo.mjs — clone vs. update branch selection', () => {
   });
 });
 
-onPosix('ingest-repo.mjs — embed pipeline invocation order + cwd', () => {
-  it('runs forge-build.mjs (MiniLM-384) before forge-big.mjs (bge-768 sharp), both from the kb/ cwd', () => {
+onPosix('ingest-repo.mjs — refresh pipeline invocation + cwd', () => {
+  it('runs one transactional forge-refresh.mjs call from the kb/ cwd', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
     const nodeCalls = r.calls.filter((c) => c.startsWith('node '));
-    expect(nodeCalls[0]).toMatch(/forge-build\.mjs --repo .* --out \. --name zzz-fixture --canonical-url/);
-    expect(nodeCalls[1]).toMatch(/forge-big\.mjs both --dir \. --name zzz-fixture/);
-    expect(r.stdout).toMatch(/\[embed MiniLM-384\] zzz-fixture[\s\S]*\[embed bge-768 sharp\] zzz-fixture/);
+    expect(nodeCalls[0]).toMatch(/forge-refresh\.mjs --repo .* --out \. --name zzz-fixture --canonical-url/);
+    expect(nodeCalls.filter((c) => /forge-(build|big)\.mjs/.test(c))).toEqual([]);
+    expect(r.stdout).toMatch(/\[refresh bge-768\] zzz-fixture/);
   });
 });
 
-onPosix('ingest-repo.mjs — depth config (--full/--keep) forwarding into forge-build.mjs', () => {
+onPosix('ingest-repo.mjs — depth config (--full/--keep) forwarding into forge-refresh.mjs', () => {
   // Before this (2026-07-10), ingest-repo.mjs never passed --full at all: any repo rebuilt through
   // this entrypoint silently lost its full-body source indexing. 'ruview' is a real FULL_HINTS AND
   // KEEP_DIRS entry in the shared scripts/full-hints.mjs map, so one name exercises both lookups.
   it('forwards the shared FULL_HINTS/KEEP_DIRS lookup for a name present in the map', () => {
     const r = runIngest(['--name', 'ruview']);
-    const buildCall = r.calls.find((c) => c.includes('forge-build.mjs'));
+    const buildCall = r.calls.find((c) => c.includes('forge-refresh.mjs'));
     expect(buildCall).toMatch(/--full firmware\/esp32-csi-node,firmware\/esp32-hello-world,v2\/crates/);
     expect(buildCall).toMatch(/--keep v2/);
   });
 
   it('an explicit --full/--keep CLI arg overrides the shared-map lookup', () => {
     const r = runIngest(['--name', 'ruview', '--full', 'custom/prefix', '--keep', 'legacy']);
-    const buildCall = r.calls.find((c) => c.includes('forge-build.mjs'));
+    const buildCall = r.calls.find((c) => c.includes('forge-refresh.mjs'));
     expect(buildCall).toMatch(/--full custom\/prefix/);
     expect(buildCall).toMatch(/--keep legacy/);
   });
 
   it('omits --full/--keep entirely for a name absent from both maps and with no CLI override', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
-    const buildCall = r.calls.find((c) => c.includes('forge-build.mjs'));
+    const buildCall = r.calls.find((c) => c.includes('forge-refresh.mjs'));
     expect(buildCall).not.toMatch(/--full|--keep/);
   });
 });
 
-onPosix('ingest-repo.mjs — RUVNET_BIG_SHARDS parallel embed', () => {
-  it('defaults to a single "forge-big.mjs both" call when RUVNET_BIG_SHARDS is unset', () => {
+onPosix('ingest-repo.mjs — shard configuration belongs to transactional refresh', () => {
+  it('always invokes one refresh command and never shells out to forge-big directly', () => {
     const r = runIngest(['--name', 'zzz-fixture']);
-    const bigCalls = r.calls.filter((c) => c.includes('forge-big.mjs'));
-    expect(bigCalls).toHaveLength(1);
-    expect(bigCalls[0]).toMatch(/forge-big\.mjs both --dir \. --name zzz-fixture/);
+    expect(r.calls.filter((c) => c.includes('forge-refresh.mjs'))).toHaveLength(1);
+    expect(r.calls.filter((c) => c.includes('forge-big.mjs'))).toEqual([]);
   });
 
-  it('RUVNET_BIG_SHARDS=3 fans out 3 "embed --shard N --of 3" calls, then exactly one "ingest" call, never "both"', () => {
+  it('RUVNET_BIG_SHARDS=3 still invokes one refresh; the refresh owns its internal shards', () => {
     const r = runIngest(['--name', 'zzz-fixture'], { RUVNET_BIG_SHARDS: '3' });
-    // Reaches the final store-existence check (same [FAIL] as the sibling "final store-existence
-    // check" tests below — the stub never writes real .rvf files) rather than crashing mid-shard.
     expect(r.stdout).toMatch(/\[FAIL\] zzz-fixture: expected stores missing after build\./);
-    const bigCalls = r.calls.filter((c) => c.includes('forge-big.mjs'));
-    expect(bigCalls.some((c) => c.includes(' both '))).toBe(false);
-    for (let i = 0; i < 3; i++) {
-      expect(bigCalls.some((c) => c.includes(`--shard ${i} --of 3`))).toBe(true);
-    }
-    expect(bigCalls.filter((c) => c.includes(' ingest '))).toHaveLength(1);
-  });
-
-  it('a failing embed shard aborts the pipeline non-zero instead of silently proceeding to the final ingest', () => {
-    // Same "success that measured nothing" bug class this suite has flagged 4x elsewhere
-    // (brain-grade-groundtruth.mjs, eval-brain.mjs, behavioral-l1-l4.mjs, nightly-gists.sh) — this
-    // proves the NEW sharded path does NOT join that list.
-    const r = runIngest(['--name', 'zzz-fixture'], { RUVNET_BIG_SHARDS: '3', FAIL_SHARD: '1' });
-    expect(r.code).not.toBe(0);
-    expect(r.calls.some((c) => c.includes('forge-big.mjs ingest'))).toBe(false);
+    expect(r.calls.filter((c) => c.includes('forge-refresh.mjs'))).toHaveLength(1);
+    expect(r.calls.filter((c) => c.includes('forge-big.mjs'))).toEqual([]);
   });
 });
 
@@ -192,12 +176,12 @@ onPosix('ingest-repo.mjs — build-symbols.mjs failure is swallowed, not fatal',
 
 onPosix('ingest-repo.mjs — final store-existence check', () => {
   it('exits 1 and reports FAIL when the stub pipeline never actually produced the .rvf files', () => {
-    // node is stubbed to a no-op, so <name>.rvf / <name>.big.rvf never actually get written —
+    // node is stubbed to a no-op, so the canonical <name>.big.rvf never gets written —
     // this exercises the "trust but verify your own pipeline's output" check on line 56.
     const r = runIngest(['--name', 'zzz-fixture']);
     expect(r.code).toBe(1);
     expect(r.stdout).toMatch(/\[FAIL\] zzz-fixture: expected stores missing after build\./);
   });
 
-  it.todo('exits 0 and reports success when both <name>.rvf and <name>.big.rvf exist in kb/ after the pipeline runs (requires letting the node stub touch the two files, or running the real embed pipeline against a tiny fixture repo)');
+  it.todo('exits 0 and reports success when <name>.big.rvf plus canonical sidecars exist after refresh (covered by the real tiny-repo refresh proof)');
 });

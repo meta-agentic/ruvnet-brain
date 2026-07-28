@@ -80,7 +80,11 @@ async function checkStore({ dir, name, query, variant }) {
   // The big build copies passages+meta verbatim, so the SAME parity/truncation checks apply.
   const tag = variant === 'big' ? '.big' : '';
   const rvf = path.join(dir, `${name}${tag}.rvf`);
-  const passages = path.join(dir, `${name}${tag}.passages.jsonl`);
+  const variantPassages = path.join(dir, `${name}${tag}.passages.jsonl`);
+  const canonicalPassages = path.join(dir, `${name}.passages.jsonl`);
+  const passages = variant === 'big' && !fs.existsSync(variantPassages)
+    ? canonicalPassages
+    : variantPassages;
   const metaCands = [path.join(dir, `${name}${tag}.meta.json`), path.join(dir, `${name}${tag}.ids.json`),
     path.join(dir, `${name}.meta.json`), path.join(dir, `${name}.ids.json`)];
   const meta = metaCands.find((f) => fs.existsSync(f)) || metaCands[0];
@@ -153,7 +157,11 @@ async function main() {
   // If no variant is requested, guard EVERY variant that exists on disk (small + big). Both must PASS.
   let variants;
   if (variant) variants = [variant];
-  else { variants = ['small']; if (fs.existsSync(path.join(dir, `${name}.big.rvf`))) variants.push('big'); }
+  else {
+    variants = [];
+    if (fs.existsSync(path.join(dir, `${name}.rvf`))) variants.push('small');
+    if (fs.existsSync(path.join(dir, `${name}.big.rvf`))) variants.push('big');
+  }
 
   let anyFail = false;
   for (const v of variants) {

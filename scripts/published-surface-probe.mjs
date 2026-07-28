@@ -35,11 +35,8 @@
  *      verifies against it, so a malformed sidecar breaks every fresh install
  *
  * ── WHAT IS *NOT* RED, ON PURPOSE ───────────────────────────────────────────────────────────────
- * npm version and Release tag are REPORTED side by side but never asserted equal. README: "Three
- * independent things version separately here — by design." The installer asks GitHub for
- * releases/latest regardless of the npm version, so drift between them is normal operation, and a
- * gate on it would go red for a correct system — the fastest way to teach everyone to ignore a
- * nightly.
+ * Version equality is a product invariant: npm dist-tags.latest and GitHub releases/latest must
+ * name the same Brain generation. A partial publish is red even when both artifacts work alone.
  *
  * ── UNKNOWN IS NEVER PASS ───────────────────────────────────────────────────────────────────────
  * A rate-limited or unreachable network cannot distinguish "the surface is fine" from "the surface
@@ -212,10 +209,20 @@ export async function main() {
   else record('B-npx-exec', 'SKIPPED', '--no-exec');
   const rel = await probeRelease();
 
+  if (reg.latest && rel.tag) {
+    const githubVersion = String(rel.tag).replace(/^v/, '');
+    if (reg.latest === githubVersion) {
+      record('D-version-coherence', 'PASS', `npm ${reg.latest} == GitHub ${rel.tag}`);
+    } else {
+      record('D-version-coherence', 'FAIL', `npm ${reg.latest} != GitHub ${rel.tag} — published surfaces identify different Brain generations`);
+    }
+  } else {
+    record('D-version-coherence', 'UNKNOWN', 'npm or GitHub version unavailable; equality cannot be proven');
+  }
+
   for (const c of checks) say(`  ${c.status.padEnd(7)} ${c.id.padEnd(20)} ${c.detail}`);
 
-  // Reported, never asserted — see the header. Drift here is by design, not a defect.
-  say(`\n  npm dist-tags.latest = ${reg.latest ?? '?'} · GitHub releases/latest = ${rel.tag ?? '?'} (independent streams by design; not gated)`);
+  say(`\n  npm dist-tags.latest = ${reg.latest ?? '?'} · GitHub releases/latest = ${rel.tag ?? '?'} (must match)`);
 
   const failed = checks.filter((c) => c.status === 'FAIL');
   const unknown = checks.filter((c) => c.status === 'UNKNOWN');

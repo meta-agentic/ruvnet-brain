@@ -234,19 +234,17 @@ for (const p of todo) {
     const kb = p.name.toLowerCase();                 // artifacts are lowercase (ruvector.rvf), registry name is RuVector
     const full = FULL_HINTS[kb];
     const keep = KEEP_DIRS[kb];
-    const buildArgs = ['forge-build.mjs', '--repo', dir, '--out', '.', '--name', kb,
+    const buildArgs = ['forge-refresh.mjs', '--repo', dir, '--out', '.', '--name', kb,
       '--canonical-url', process.env.RUVNET_CANONICAL_URL || 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb'];
     if (full) buildArgs.push('--full', full);
     if (keep) buildArgs.push('--keep', keep);
-    console.log(`[build] ${kb}`);
+    console.log(`[refresh] ${kb}`);
     execFileSync(NODE, buildArgs, { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
-    console.log(`[sharp] ${kb}`);
-    execFileSync(NODE, ['forge-big.mjs', 'both', '--dir', '.', '--name', kb], { cwd: path.join(ROOT, 'kb'), env, stdio: 'inherit' });
     console.log(`[symbols] ${kb}`);
     execFileSync(NODE, ['scripts/build-symbols.mjs', '--name', kb], { cwd: ROOT, env, stdio: 'inherit' });
     // Corpus QA gate (scripts/corpus-qa.mjs): structural (passages>0, full-bodies>0 where
     // FULL_HINTS demands them, vectors==passages, embed.json present) + deterministic
-    // self-retrieval round trip on both variants. Non-zero exit throws -> failures[] ->
+    // self-retrieval round trip on every canonical store. Non-zero exit throws -> failures[] ->
     // the run aborts before stamp/bundle/publish. This is the machine version of the
     // 2026-07-10 hand-verification: a store that embeds wrong or reads wrong cannot ship.
     console.log(`[qa] ${kb}`);
