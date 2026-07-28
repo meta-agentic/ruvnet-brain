@@ -9,6 +9,10 @@ export default defineConfig({
       // "Mutation tests" step), so being listed here is necessary but was already PROVEN insufficient
       // once on this exact file; the corpus is not considered wired until its CI step is green.
       'tests/regression/*.test.mjs',
+      // ADR-058 D5: the coexistence suite. Same lesson, stated twice on one file in one night —
+      // a directory absent from `include` is invisible to `vitest run` no matter what any npm
+      // script or CI step claims to run.
+      'tests/mesh/*.test.mjs',
     ],
     // Windows runners spawn processes MUCH slower than macOS/Linux (Git Bash startup dominates), and
     // a large slice of this suite deliberately exercises real shell hooks as subprocesses rather than

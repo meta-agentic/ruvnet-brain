@@ -1,6 +1,6 @@
 {
   "name": "ruvnet-brain",
-  "version": "3.9.124-dev",
+  "version": "3.9.125-dev",
   "description": "One-command installer for RuvNet Brain — a portable, source-grounded brain over rUv's RuvNet building blocks, delivered as a Claude Code plugin so Claude uses the stack instead of fighting it.",
   "type": "module",
   "bin": {
@@ -13,11 +13,12 @@
     "claims:fix": "node scripts/claims-verify.mjs --fix",
     "version:sync": "node scripts/sync-version.mjs",
     "test:unit": "vitest run tests/unit",
+    "test:mesh": "vitest run tests/mesh",
     "test:mutation": "vitest run tests/mutation",
     "test:regression": "vitest run tests/regression",
     "qe:ux": "node scripts/qe/ux-suite.mjs",
     "test:cov": "vitest run tests/unit --coverage",
-    "test:all": "npm run test:unit && npm run test:mutation && npm run test:regression && npm run test:integration && npm test",
+    "test:all": "npm run test:unit && npm run test:mesh && npm run test:mutation && npm run test:regression && npm run test:integration && npm test",
     "metaharness:receipts": "node scripts/metaharness-receipts.mjs",
     "route:cheap": "node scripts/route-cheap.mjs",
     "route:receipt": "node scripts/dispatch-receipt.mjs",

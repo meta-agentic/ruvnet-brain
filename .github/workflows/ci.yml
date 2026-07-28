@@ -59,6 +59,15 @@ jobs:
         # were never once executed by CI. A test that never runs cannot fail, which makes it exactly
         # the ceremony it was written to replace. Brain-independent, ~11s.
         run: npm run test:mutation
+      - name: Mesh coexistence tests (ADR-058 D5 — never touch what we do not own)
+        # tests/mesh/coexistence.test.mjs: sentinel foreign hooks fire exactly once regardless of
+        # registration order, ~/.claude/settings.json and ~/.codex/config.toml stay byte-equivalent
+        # across a simulated install -> update -> uninstall cycle, and a broken foreign hook never
+        # moves scripts/selfcheck.mjs's own exit code. This ubuntu runner has 2 vCPU (this file's own
+        # header comment sizes every timeout for that, never for the 16-vCPU dev machine) — every
+        # subprocess here runs sequentially and every assertion is on an exit code or a file's bytes,
+        # never on timing or "stdout looked non-empty". Brain-independent, no network.
+        run: npm run test:mesh
       - name: Claims ledger (every advertised number regenerates — coverage badge re-derived from the fresh coverage-summary.json above, not string-matched)
         run: npm run claims:verify
       - name: Installer smoke test
