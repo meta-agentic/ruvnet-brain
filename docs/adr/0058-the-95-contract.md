@@ -4,7 +4,7 @@ title: The 95 contract — one observable per dimension, one mutant per observab
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-28
-impl: partial — D1/D2/D3/D5/D6/D7/D8 + the release-gate vector shipped; D4 in flight
+impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
 supersedes: []
@@ -12,6 +12,9 @@ relates: [ADR-028, ADR-050, ADR-052, ADR-053, ADR-055, ADR-056, ADR-057]
 governs:
   - bin/install.mjs
   - plugin/hooks/hooks.json
+  - plugin/hooks/codex-hooks.json
+  - plugin/scripts/codex-hook-adapter.mjs
+  - plugin/scripts/codex-hook-wrapper.mjs
   - plugin/scripts/verify-interface.sh
   - plugin/scripts/hijack-ruvnet.sh
   - plugin/scripts/session-start.sh
@@ -30,7 +33,9 @@ governs:
 **Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: D3 gained its end-to-end existence
 proof — one real CI debt (`learning-replay.yml`, runs 30325577756/30327349291/30327405302) driven
 from push → red → surfaced → green → closed, with both mutants killed
-**Implementation**: unbuilt · **Verified in sync**: never
+**Implementation**: wired, but the release vector is **UNKNOWN at D4** · **Verified in sync**:
+2026-07-28 for the deterministic local gates only; the required real N=3 executor replay is still
+blocked and earns no pass
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -282,6 +287,8 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **Codex SessionStart/Stop moved from configuration failure to direct real-path proof; the overall release vector remains UNKNOWN at D4.** | Commit `c466c2a`, issue #52. Before: a fresh Codex 0.145.0 session rejected both Brain hook sources on unsupported `_note`, so lifecycle coverage was zero. After: the same child-Codex probe has no Brain parse/clamp errors; the installed stable wrapper returned SessionStart developer context in 0.527s and translated a real open-ledger Stop into Codex `decision:"block"` in 1.172s. The new test executes the wrapper across a v1→v2 active-generation flip after v1 deletion, killing the stale-cache-path failure. Focused tests pass 52/52. This repairs a D5/D8 host-path defect but does not manufacture the blocked D4 replay, so the vector-minimum release law still says UNKNOWN. |
+| 2026-07-28 | **Re-read the governed surfaces after the installer, retrieval, hook, and Top-100 validity repairs. The release verdict remains UNKNOWN, not PASS.** | `bin/install.mjs` now treats a local assembled bundle as the source of truth, prunes stale stores omitted by its manifest, and reports the installed manifest's real 60-repo count instead of the stale hard-coded “20+”. `plugin/hooks/hooks.json` anchors dispatch at `^(Task|Agent)$` and observes `PostToolUse` outcomes through `plugin/scripts/routing-outcome-capture.mjs`; these are outcome receipts, not automatic quality adjudication, so D3 is not overstated. `evals/runs/top-100-latest.json` passes all 12 gates (100/100 grounded and routed, 100 receipts, 8/8 enforceable implementation receipts, semantic 96/100, p95 3.675s). `scripts/release-vector.mjs` still exits 1 because D4 is **UNKNOWN**: live `scripts/learning-replay.mjs` transcripts show Claude Code initialized the treated/control sessions but every arm received HTTP 429 `seven_day` quota rejection before inference. The treated hook did deliver the learned lesson, but a blocked executor is not a behavioral replay. The harness now makes `--help` side-effect-free and records executor failures explicitly as UNKNOWN; focused D4/release/claims tests pass 86/86. The vector-minimum law therefore still bans a healthy/proven release claim. |
 | 2026-07-27 | Initial draft, two-sided duel | Owner: *"get every single one of these numbers to be 95 or better… I want Fable 5 and GPT-5.6 to pull it together into an ADR and a DDD."* Both designs converged on tri-state per-invariant verdicts, vector-minimum release, and mandatory mutants; GPT's `PASS/FAIL/UNKNOWN` naming adopted. GPT's `gh auth` claim checked and found FALSE. Already-narrowed deductions verified first-hand at `install.mjs:3240-3248` and `verify-interface.sh:173` |
 | 2026-07-27 | D6 built: `kb/card-lane-budget.json` + `scripts/qe/card-lane-gate.mjs`, wired into `scripts/qe/ux-suite.mjs` | Both `governs:`-listed files above; §D6 mutants proven (1,100ms sleep → real `ux-suite.mjs` FAIL, not warn; a silent, undocumented manifest-threshold raise across ≥2 commits shows as `presumed-stale` under `node scripts/doc-currency.mjs --check`, per this document's own drift rule). Measured on this machine: p50 0.0245ms / p95 0.0481ms / max 0.0768ms over 100 in-process firings — well inside the 250ms/1000ms budget in `kb/card-lane-budget.json` |
 | 2026-07-27 | **Seven dimensions landed and the release gate itself was built.** D8 `.github/workflows/stranger-matrix.yml` (5 images, real `npm pack` tarball, virgin HOME) · D7 `tests/regression/interface-gate-corpus.test.mjs` · D5 `tests/mesh/coexistence.test.mjs` · D2 `tests/experience/scenarios.json` + `report.mjs` · D1 `REQUIRE_BRAIN` in `ci.yml` · D3 `scripts/signal-watch.mjs` · D6 as the row above. And item 10, `scripts/release-vector.mjs`, now emits the eight-invariant vector this document specified — first run reads **7 PASS, D4 UNKNOWN, verdict UNKNOWN, exit 1**, which is the design working: seven green cells do not average into a pass. | Every `governs:` path above moved. Verified by re-reading each against this document's §D1–§D8 rather than by date-stamping. **The score is expected to read BELOW 38 on the first Gen-2 run** — the stranger matrix went red on all five images and found a real, weeks-old defect this ADR had already recorded twice without anyone fixing it: `session-start.sh` emits 8,795–10,320 bytes against selfcheck's 4,096 cap, and leaves orphaned descendants after SIGTERM. A gate that goes red on its first run against a defect the docs already knew about is the gate doing its job, not the gate being wrong. |

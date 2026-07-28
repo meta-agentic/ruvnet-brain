@@ -1,6 +1,6 @@
 ---
 id: ADR-051
-title: Codex host wiring — register the MCP server at install time, and let the doctor probe it
+title: Codex host wiring — register MCP and adapt the full lifecycle without version-pinned commands
 status: Implemented
 date: 2026-07-24
 updated: 2026-07-27
@@ -13,6 +13,10 @@ governs:
   - .codex/config.toml
   - .codex/hooks.json
   - .codex/skills/*
+  - plugin/.codex-plugin/plugin.json
+  - plugin/hooks/codex-hooks.json
+  - plugin/scripts/codex-hook-adapter.mjs
+  - plugin/scripts/codex-hook-wrapper.mjs
 ---
 
 # ADR-051: Codex host wiring
@@ -44,6 +48,15 @@ The same directory carried a second, separate defect: `.codex/hooks.json` shippe
 maintainer's absolute path that exists on no other machine, invoking an interpreter that is not a
 valid path on native Windows. That is the same failure class as ruvnet/ruflo#2132 and #2721, where a
 hardcoded `/bin/bash` in `hooks.json` made every tool call report `hook (failed) exit code 1`.
+
+Issue #52 exposed the lifecycle half that the original decision explicitly left out. Codex had the
+MCP server, but no Brain-owned SessionStart, UserPromptSubmit, tool, learning, SessionEnd, or Stop
+behavior. When Codex later began importing the Claude plugin automatically, that did not close the
+gap: Codex 0.145.0 rejected both `plugin/hooks/hooks.json` and `.codex/hooks.json` before dispatch
+because their top-level `_note` field is not in Codex's hook schema. Even if parsing had succeeded,
+Claude's Stop `hookSpecificOutput.additionalContext` is not Codex's continuation contract, and
+versioned plugin-cache entrypoints become dead paths when an already-open session survives an
+upgrade that removes its old cache generation.
 
 **Grounding.** The Codex manifest shape below is not invented: it follows rUv's own convention, read
 from the local brain corpus at `metaharness/.codex/skills/repo-genome/skill.toml` (the `mcp_tool`
@@ -136,15 +149,34 @@ advertising a dispatch that cannot fire is worse than an absent one — it is th
 its own capability. The reasoning ships next to them in `.codex/skills/README.md` so the absence reads
 as a decision rather than an oversight.
 
-### 6. The leaked path is removed, not rewritten
+### 6. The project file is schema-valid and deliberately empty
 
-`.codex/hooks.json` has **no consumer anywhere in this repo** (every `hooks.json` consumer resolves
-`plugin/hooks/hooks.json`), and `version-bump-gate.sh` is a maintainer-only dev convenience for this
-repo, documented as such in SECURITY.md. So the entry is removed rather than guessed at, and the file
-keeps a `_note` — the same `_note` idiom `plugin/hooks/hooks.json` already uses — recording what was
-there, why it could never have run, and the rule for anything added later: resolve the path at install
-time, and never name an interpreter by absolute path. Shipping no hook is honest; shipping a hook that
-cannot run is not.
+`.codex/hooks.json` is now a real Codex config source, so its top level is limited to the documented
+`description` and `hooks` fields. It stays empty because lifecycle behavior is user-global and owned
+by the installed plugin; duplicating the same handlers at project scope would fire them twice.
+`version-bump-gate.sh` remains a maintainer-only dev convenience and is not smuggled back into the
+product hook surface.
+
+### 7. One hook implementation, a Codex adapter, and a generation-independent door
+
+`plugin/.codex-plugin/plugin.json` points Codex at `plugin/hooks/codex-hooks.json`, not at Claude's
+host-specific registration file. Every Codex command enters through the same installed path:
+
+```text
+~/.cache/ruvnet-brain/codex-hook.mjs
+```
+
+`wireCodexHost()` copies that self-contained wrapper atomically beside the Brain's stable cache.
+The wrapper reads `active.json` on every invocation, resolves only a contained
+`versions/<version>/` generation, and runs that generation's `codex-hook-adapter.mjs`. Therefore an
+already-loaded command never names the plugin cache generation that an updater may remove.
+
+The adapter then runs the existing shared `hook-shim.mjs` and hook bodies. It translates only real
+host differences: Codex `session_id` becomes the learner's `CLAUDE_SESSION_ID`; bracket-prefixed
+UserPromptSubmit text is wrapped as valid `additionalContext`; Claude's Stop continuation envelope
+becomes Codex `decision: "block"` plus `reason`; and invalid advisory
+`permissionDecision: "defer"` is removed rather than promoted into a deny. SessionEnd is registered
+at Codex's actual three-second maximum. The bodies and their Brain off/on law remain single-source.
 
 ## Consequences
 
@@ -169,10 +201,14 @@ so the self-updating half is the brain, not the copy. Each reinstall refreshes i
 is treated as "a Codex host", which is a heuristic: a leftover directory would get an entry it never
 asked for, inside a clearly marked and removable block.
 
-**Not tested.** No Codex host actually consumed the generated `config.toml` or either manifest —
-these were verified as correct TOML with a real, existing dispatch target, not as accepted by Codex
-itself. The `savings` shell dispatch was verified only in that its script exists at the stable path on
-the development machine.
+The wrapper is a second stable shell alongside the MCP supervisor. That duplication is intentional:
+the command must survive plugin-cache replacement, while behavior continues to hot-swap through
+`active.json`. A missing or invalid active adapter fails silent so a broken optional Brain hook never
+prevents Codex from starting or stopping.
+
+**Not tested.** Windows command expansion for the stable wrapper is not yet proven on native
+Windows. Hook trust still requires explicit user review in `/hooks`; installation must never bypass
+that review. The `savings` shell dispatch remains verified only by target existence on this machine.
 
 ## Follow-ups
 
@@ -182,14 +218,16 @@ the development machine.
   and to the other developer-path shapes (`/home/<account>/`, `C:\Users\`) — is the remaining work.
   The placeholder allowlist is the part to watch: it is the one place where a real leak could hide by
   choosing a permitted name.
-- Re-verify against a real Codex host and record the round trip, replacing the "not tested" note above
-  with a measurement.
+- Add a native-Windows lifecycle round trip for the stable wrapper command.
+- Make installer/doctor output distinguish active hooks from pending trust and print the exact
+  `/hooks` review procedure while definitions are pending.
 - Revisit `brain-score` / `brain-build` / `brain-prompt` if a dispatchable entrypoint ever exists.
 
 ## Currency log
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **Issue #52 lifecycle wiring added and verified through live Codex 0.145.0.** | Commit `c466c2a` adds the Codex manifest, dedicated schema-valid registration, stable wrapper, and host adapter. Before the fix, `codex exec --ephemeral --json --dangerously-bypass-hook-trust` reported `unknown field '_note'` for both the installed plugin and project hook file, so no Brain lifecycle handler loaded; it also clamped the user SessionEnd timeout from 30000s to 3s. After installing the candidate files, the same fresh-session command completed without either hook error. Direct real-path proofs then invoked the installed `~/.cache/ruvnet-brain/codex-hook.mjs`: SessionStart returned valid developer context in 0.527s, and a Stop event with one real open ledger item returned `{"decision":"block","reason":"..."}` in 1.172s. `tests/unit/codex-lifecycle-hooks.test.mjs`, `codex-wiring.test.mjs`, and `npm-tarball-codex.test.mjs` pass 52/52. |
 | 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 6 commits (0d) after this document's last commit. All 6 (`aa8c090`, `314be33`, `a285fcd`, `987590a`, `2b4e24d`, `720a4bf`) touch only `bin/install.mjs`; `.codex/config.toml`, `.codex/hooks.json` and `.codex/skills/*` are untouched since `969b1ed`/`7ccaf1f`. Read `git show aa8c090 -- bin/install.mjs`: ADR-058 D5's coexistence suite adds three `export` keywords to existing private functions so `wireCodexHost`/`mergeCodexConfig` are testable — commit message states "Zero logic changed", confirmed by reading the diff. The model-cache fix (`2b4e24d`) and D8 stranger-matrix work (`987590a`/`a285fcd`) do not touch Codex code at all (`git show <sha> -- bin/install.mjs \| grep -i codex` empty for both). Compared this ADR's §1-6 claims against current code: the managed-block merge markers, `wireCodexHost()`'s atomic write + symlink-resolve, the three doctor lines (`grep -n "Codex: wired\|Codex: host detected\|Codex: no host"`), and both `.codex/skills/*.toml` manifests all still match verbatim |
 
 ## Addendum (2026-07-26) — issue #43: the wiring was dead on every npm install

@@ -10,6 +10,7 @@ supersedes: []
 relates: [ADR-012, ADR-017, ADR-023, ADR-028, ADR-030, ADR-040, ADR-043, ADR-050, ADR-052, ADR-053, ADR-054]
 governs:
   - plugin/hooks/hooks.json
+  - plugin/hooks/codex-hooks.json
   - plugin/scripts/*.mjs
   - plugin/scripts/*.sh
   - kb/forge-mcp-all.mjs
@@ -282,6 +283,16 @@ scope for a doc-currency pass — this file records what the code does, it does 
 needs to treat "answered via card lane, no receipt" as its own class rather than silently falling
 back to "permitted".
 
+**2026-07-28 live recheck:** the early-return omission above was subsequently fixed in
+`kb/forge-mcp-all.mjs` (commit `430319e`): the card lane awaits `evidenceReady`, calls
+`recordAnswer()`, and exposes the same `structuredContent.grounding` shape as the heavy lane.
+The broader guarantee is still incomplete, however. A correct card hit whose prose contains no
+fact recognized by `forge-evidence.mjs` produces no sources and therefore no grounding receipt.
+The top-100 real-MCP smoke reproduced that exact state for the RuVector/HNSW card: cited file
+present and answer correctly routed in 86ms, but `structuredContent.grounding` absent. The
+remaining work is typed capability-card facts (or an explicit non-enforceable receipt class), not
+another call-site bridge.
+
 ## §4 Learning that changes behavior — buildable vs ceremony, honestly split
 
 **Real today (measured):** 27 Tier-1 lessons load every session (global-memory sqlite, read
@@ -528,8 +539,9 @@ SessionStart worst-case is security-guidance's 180s; SessionEnd = 3 concurrent s
 - **F1** Timeout-unit schism, user layer — **fixed 03:00 tonight; now a regression fixture.**
 - **F2** Untimed blocking route-dispatch (user layer, 600s default) — the ADR-053 duel find
   recreated one layer up — **fixed 03:00 tonight; regression fixture.** (Both duelists.)
-- **F3** Subagent-wall matcher split: plugin `Task` only (hooks.json:61) vs user `Task|Agent`;
-  Agent-named dispatch unguarded for strangers; unanchored `Task` also matches TaskStop. (Both.)
+- **F3** Subagent-wall matcher split — **fixed 2026-07-28; regression fixture.** The redundant
+  user-layer dispatch wall was removed, leaving the shipped plugin's anchored registration as the
+  single blocking wall. The merged-registry test now fails if a second copy reappears. (Both.)
 - **F4** Anchoring inconsistency inside hooks.json (`^(...)$` at :71/:101/:111 vs unanchored
   :51/:123); NotebookEdit hits hijack/learn-capture by substring accident. (Fable.)
 - **F5** Stop bypasses the spine — no table entry, no mode, no offBehavior; contradicts the
@@ -636,6 +648,10 @@ delegation drift goes to the interrupt tier (§3.7.9).
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **The lifecycle plane now has a Codex host adapter instead of feeding Claude contracts directly to Codex.** | Commit `c466c2a`, issue #52. Live Codex 0.145.0 first rejected the shared hook file's `_note`, proving zero Brain handlers loaded. The dedicated Codex registration now routes every event through `~/.cache/ruvnet-brain/codex-hook.mjs`, which resolves the active immutable generation on every firing and invokes `plugin/scripts/codex-hook-adapter.mjs`; the shared hook bodies remain the one implementation. SessionStart returned valid context in 0.527s. A real Stop ledger replay returned Codex `decision:"block"` plus the continuation reason in 1.172s. This changes host transport, not §1's decision law or the four-plane topology. Focused packaging/adapter/upgrade tests pass 52/52. |
+| 2026-07-28 | Added an advisory `PostToolUse` observer for explicitly model-routed `Task` and `Agent` dispatches. It records a privacy-preserving `dispatch-observation-v1` row (`model`, terminal host status, success boolean, prompt hash, `verified:false`) and never emits MetaHarness `{embedding,scores}` training data. The PreToolUse declaration now carries `toolUseId`/`sessionId`, so the observer joins the terminal event to the exact dispatch and records whether its model matches. Sanitized fixtures from the live Claude hook-log envelope lock both parser and join. | The router previously accumulated decisions and synthetic k-NN rows but almost no real dispatch outcomes. Host completion is useful operational evidence, but it is not proof that the artifact was correct; separating a linked observation from later verified adjudication prevents the learning loop from training on a false quality label. |
+| 2026-07-28 | **F3's shipped matcher completed:** plugin `route-dispatch` changed from unanchored `Task` to `^(Task\|Agent)$`; the temporary matcher-allowlist exception was removed; a merged-registry regression now proves Task and Agent are covered while TaskStop is not. The routing-outcome summary was also corrected to distinguish observed `{model,success}` rows from MetaHarness `{embedding,scores}` training rows. | GPT-5.6 re-read found the ADR promised the anchored dual-tool matcher while the shipped registry still declared only `Task`. The same audit found 17 valid k-NN training rows were being counted as `undefined`-model failures by the legacy summary, making a learning store look corrupt when it was heterogeneous by design. |
+| 2026-07-28 | **F3 closed on the live merged mesh.** Removed the redundant user-layer route-dispatch registration from both Claude and Codex registries; retained the shipped plugin registration; changed the F3 machine assertion from `it.fails` to a positive regression test. Also anchored the four user-owned tool matchers in each registry so `NotebookEdit`/substring matches cannot fire accidentally. | The live registry lint turned red after the duplicate was removed because the old expected-failure assertion correctly detected that Appendix B had become stale. The repaired test now proves one blocking dispatch wall. Matcher anchoring removes four user-owned F3/F4 findings per registry without editing third-party plugin files. |
 | 2026-07-27 | `governs:` changed: `plugin/scripts/` → `plugin/scripts/*.mjs` + `plugin/scripts/*.sh`; `tests/experience/` → `tests/experience/*.json` + `tests/experience/*.mjs` | `doc-currency.mjs` flagged both as `governs-directory` (a directory's tree object mass-expires on any file changing anywhere under it). Both globs expand via `git ls-files` to the real tracked files in each directory today, preserving this ADR's actual governance scope (effectively the whole scripts directory plus the experience-QA fixtures) in a form the tool can diff per-blob |
 | 2026-07-27 | **DIVERGED, found and documented — §3.9 added.** `kb/card-lane.mjs`, wired as a first responder in `kb/forge-mcp-all.mjs` (`2f9726d`, after this ADR's last commit `b73176a`), returns a cited answer WITHOUT calling `evidence.recordAnswer()` — no GroundingReceipt is emitted for a card-lane hit, reopening the gap §3.1 was written to close, for the same class of question (capability/package existence) the founding esm.sh incident was about. Not fixed here — this pass records what the code does | Re-verification found this by reading `kb/forge-mcp-all.mjs`'s diff at `2f9726d` line-by-line against §3.1's "emits ... on the success path" claim: the card-lane branch returns before `evidence.recordAnswer()` is ever reached, and `kb/card-lane.mjs` has no evidence code of its own (grepped) |
 | 2026-07-27 | Appendix A flagged stale (not re-measured) — `signal-watch` is a 16th plugin-layer hook (`1978088`) added after the census was written; the 15/42 counts are undercounts | Same re-verification pass; a full appendix re-audit is separate work, so the discrepancy is recorded rather than silently left to read as current |
