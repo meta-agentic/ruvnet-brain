@@ -96,7 +96,12 @@ for (const t of targets) {
 // A line can opt out with `sync-version-ignore` (one documented last-ditch fallback); the version toolchain
 // itself is exempt because it legitimately embeds version strings in doc examples + unit-test fixtures.
 if (CHECK) {
-  const SKIP_DIRS = new Set(['node_modules', 'clones', 'dist', '.git']);
+  // `worktrees` (2026-07-27): parallel agents run in git worktrees under .claude/worktrees/, which
+  // is GITIGNORED (.gitignore:110) but still on disk — and this walker reads the FILESYSTEM, not
+  // git's index. So every agent worktree's copy of the repo got scanned for version literals and
+  // the pre-push gate refused a legitimate push over version strings inside transient checkouts
+  // that ship to nobody. A shipping-surface scan must not see a scratch copy of itself.
+  const SKIP_DIRS = new Set(['node_modules', 'clones', 'dist', '.git', 'worktrees']);
   const CODE_EXT = new Set(['.mjs', '.js', '.cjs', '.ts', '.sh']);
   const EXEMPT = new Set([ // the version machinery defines/tests these literals — linting them = false positive
     'scripts/version.mjs', 'scripts/version.test.mjs', 'scripts/sync-version.mjs', 'scripts/self-update.mjs',
