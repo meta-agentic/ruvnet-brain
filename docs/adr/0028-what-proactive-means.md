@@ -3,7 +3,7 @@ id: ADR-028
 title: What "proactive" means — the maturity ladder, and why a page you must visit is not proactivity
 status: Proposed
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-07-27
 authors: [Stuart Kerr, Claude Code]
 tags: [strategy, proactivity, north-star, measurement, 4.0]
 supersedes: []
@@ -88,6 +88,41 @@ receives it, exit 0 so it never refuses), and to make blocking a narrow exceptio
 specific rule into. Governed by ADR-035.
 
 **L4 and L5 remain unbuilt.** 4.0 is not claimable until both land with the five test classes green.
+
+### L5 — what is now MEASURED, and what is still unbuilt (2026-07-27, ADR-058 §D4)
+
+The sentence above stayed true for a reason worth naming: L5's falsifiable test — *"a lesson
+validated in project A demonstrably changes behaviour in project B, and survives a nightly
+refresh"* — had no harness, so "unbuilt" and "unmeasured" were indistinguishable. An independent
+grader scored D4 36/100 with the deduction *"L5 is explicitly unbuilt. The required proof is project
+A outcome changing behavior in project B and surviving refresh."*
+
+**That proof now exists as a check, and it is a RATE, not a verdict:** `scripts/learning-replay.mjs`,
+invariant name **`LEARNING-REPLAY`**, result artifact `data/learning-replay-result.json` (stating the
+SHA it was measured on), consumed by `scripts/claims-verify.mjs`'s critical-invariant vector, run
+nightly by `scripts/nightly-wrapper.sh` with `.github/workflows/learning-replay.yml` as the currency
+gate on its freshness.
+
+**First measurement, 2026-07-27, claude-haiku-4-5, N=3, $0.0877, 53.6s wall:** treated 3/3 carried
+the token, brain-off control 0/3, lesson delivered before the first tool call in 3/3, after a real
+refresh (a new Stable-Spine generation installed and the pointer flipped between record and replay).
+**Rate 3/3.**
+
+**What that does NOT license.** Three things, stated so the number is not read as more than it is:
+
+1. **It measures DELIVERY and EFFECT, not the promotion bar.** The fixture lesson is stored unscoped,
+   which `lesson-gate.mjs` treats as "applies anywhere, by declaration". ADR-029's win-twice
+   cross-project bar — the thing that decides which lessons EARN the right to travel — is not
+   exercised by this trap. The *Compounding rate* row below (lessons promoted ÷ lessons learned) is
+   therefore still unmeasured; only the *survival across a refresh* half of it is.
+2. **A control that also succeeds INVALIDATES the result** (DDD-0013 invariant 6). The trap reports
+   INCONCLUSIVE, never a pass — and it is structurally unable to do otherwise. Measured live: with
+   the control pre-seeded, the harness reported INCONCLUSIVE and exited 3.
+3. **One trap is one trap.** L5 as a LEVEL means every validated lesson compounds across every
+   project; this proves one lesson did, three times out of three, on one machine, on one model.
+
+So the honest line is: **L5's mechanism is now measurable and measured; L5 as a level is still
+unbuilt.** The difference between those two sentences is the entire reason this section exists.
 
 **4.0 is defined as L3 + L4 + L5 shipped and measured.** Not L2 polished. This is the entire content
 of the version decision, and it is why v3.5.0-dev was deliberately not called 4.0.

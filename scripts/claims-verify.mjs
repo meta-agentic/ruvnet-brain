@@ -26,6 +26,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PASS = 'PASS';
 const FAIL = 'FAIL';
 const SKIP = 'SKIP';
+
+// The invariant name, spelled here rather than imported, so a broken or absent learning-replay.mjs
+// degrades to ONE red row instead of taking the whole ledger down with an import error (the ledger
+// has to run on a bare CI runner and report what it can). tests/unit/learning-replay.test.mjs
+// asserts this literal equals the module's exported INVARIANT, so the two cannot drift silently.
+const LEARNING_REPLAY = 'LEARNING-REPLAY';
 const pass = (evidence) => ({ status: PASS, evidence });
 const fail = (evidence) => ({ status: FAIL, evidence });
 const skip = (evidence) => ({ status: SKIP, evidence });
@@ -557,6 +563,55 @@ export async function applyFix({
   return report;
 }
 
+// ── the CRITICAL-INVARIANT VECTOR (ADR-058, "never an average") ─────────────────────────────────
+//
+// ADR-058's release gate is a VECTOR of named invariants, not a mean of scores — an average lets a
+// dead invariant be paid for by seven live ones, which is precisely how a release ships with its
+// learning wire unproven. Each entry is one NAMED invariant whose state is DERIVED from an artifact
+// on disk that states the SHA it was measured on.
+//
+// The vector ADR-058 §"The release gate" specifies in full:
+//   INSTALL-FAILS-LOUD · INTERFACE-CORPUS · LATENCY-DECISION-LANE · COEXIST-BYTE-EQUAL ·
+//   LEARNING-REPLAY · SIGNAL-WATCH-FIRES · SCENARIOS-CURRENT · GUARANTEE-RUNS
+//
+// Only the ones whose harness EXISTS are registered here. Registering the other seven as always-SKIP
+// rows would be the ceremony this repo keeps deleting: a name in a table is not a check. They land
+// as their own D-items land.
+export const invariants = [
+  {
+    name: LEARNING_REPLAY,
+    what: 'a lesson recorded in project A changes an agent\'s produced artifact in project B, against a brain-off control, and survives a nightly refresh',
+    source: 'data/learning-replay-result.json (written by scripts/learning-replay.mjs)',
+    verify: verifyLearningReplay,
+  },
+];
+
+/**
+ * LEARNING-REPLAY — read the trap's own result artifact.
+ *
+ * The ONE rule that governs the mapping: **UNKNOWN IS NEVER PASS, and neither is INCONCLUSIVE.**
+ * A trap that has not run, whose result predates a load-bearing edit, or whose control arm also
+ * produced the token, reports SKIP — printed loudly by the runner, never counted as verified. FAIL
+ * is a real red: the treated arm did not change its artifact.
+ *
+ * The verdict is not recomputed here. It is READ from an artifact that states the SHA it was
+ * measured on, and `checkArtifact()` re-derives whether that SHA is still current for this tree.
+ * A gate that recomputed the verdict from nothing would be asserting, not deriving.
+ */
+export async function verifyLearningReplay() {
+  let mod;
+  try {
+    mod = await import(pathToFileURL(path.join(ROOT, 'scripts', 'learning-replay.mjs')).href);
+  } catch (e) {
+    return fail(`cannot load scripts/learning-replay.mjs: ${e.message}`);
+  }
+  const res = mod.checkArtifact();
+  if (res.status === 'PASS') return pass(res.why);
+  if (res.status === 'FAIL') return fail(res.why);
+  // UNKNOWN | INCONCLUSIVE — loud, and explicitly not a pass.
+  return skip(`${res.status} (never a pass): ${res.why}`);
+}
+
 // ── the ledger ──────────────────────────────────────────────────────────────────────────────────
 export const ledger = [
   {
@@ -589,6 +644,10 @@ export const ledger = [
     source: 'kb/*.big.rvf.idmap.json + kb/PRIVATE-STORES.json',
     verify: verifyChunkCountSurfaces,
   },
+  // The invariant vector rides the same runner so it is printed in the same table and obeys the same
+  // "a skip is never a silent pass" rule. The vector is ALSO exported separately (`invariants`) so a
+  // future release gate can consume the named states without reading prose out of a markdown row.
+  ...invariants.map((iv) => ({ claim: `invariant ${iv.name}: ${iv.what}`, source: iv.source, verify: iv.verify })),
 ];
 
 // ── runner ──────────────────────────────────────────────────────────────────────────────────────
