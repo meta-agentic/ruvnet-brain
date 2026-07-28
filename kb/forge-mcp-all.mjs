@@ -162,10 +162,40 @@ const repoList = (REPOS.length ? REPOS : discovered);
 // break, delay or surface into a query (ADR-055: capped file, swallowed failures).
 // build-bundle.mjs understands this `import(new URL(...))` form and ships the module (see its
 // localImportsOf; the plain-literal pattern alone would have missed it, as it once missed the GONG).
-let evidence = null;
-import(new URL('./forge-evidence.mjs', import.meta.url).href)
-  .then((m) => { evidence = m; })
-  .catch(() => { /* module absent (pre-2026-07-27 bundle) — the brain answers exactly as before */ });
+// NAMED `evidenceWriter`, NOT `evidence`, AND THAT NAME IS LOAD-BEARING. It was `evidence` until
+// 2026-07-27, when `searchAll`'s return value — which also has a member called `evidence`, an
+// unrelated plain {grade, topScore, caveat} object — was destructured into the SAME BLOCK at line
+// ~256 and shadowed it. From that moment `evidence.recordAnswer(...)` at the call site below read
+// the plain object, threw TypeError, and was swallowed by the `catch { /* never */ }` that exists
+// so evidence capture can never break a query. Net effect: THE SUBSTANCE WRITER WAS DEAD ON EVERY
+// PATH and the ledger silently stopped growing, while every test and every gate stayed green —
+// the exact shape of the failure ADR-055 was written to end. Two names, two things.
+// A malfunction degrades to silence PLUS A HEALTH RECORD — never to silence alone (DDD-0013
+// invariant 4). The shadowing bug above threw a TypeError on EVERY answer for a full day and was
+// invisible because the catch that guarantees "evidence capture never breaks a query" also
+// discarded the reason. Both properties are wanted; only one of them was implemented. This writes
+// the diagnosis next to the ledger it failed to write to, capped, best-effort, never surfaced into
+// a response — a query must not fail because the failure log failed.
+function noteEvidenceFailure(lane, err) {
+  try {
+    const line = JSON.stringify({ ts: new Date().toISOString(), lane, err: String(err?.message || err).slice(0, 200) });
+    const p = path.join(KB_DIR, 'evidence-failures.jsonl');
+    if (fs.existsSync(p) && fs.statSync(p).size > 256 * 1024) return;   // capped, like the ledger
+    fs.appendFileSync(p, line + '\n');
+  } catch { /* the failure log failing must never break a query */ }
+}
+
+// KEPT AS A PROMISE, NOT ONLY AS A MUTABLE — the second half of the same bug. The mutable is set
+// on a later tick, and the card lane answers in ~0.1ms, so the fast lane RACED the lazy import and
+// found `null`: measured live 2026-07-27, a card-lane hit minted nothing even after the shadowing
+// was fixed, and nothing was thrown to notice, because `if (writer)` is a silent skip. The heavy
+// path never exposed this — 19.6s is an eternity next to a module load, so the race only appeared
+// once the lane got fast. Awaiting an already-resolved promise costs a microtask; the fast lane
+// measured 0.0242ms p50 and can afford one.
+let evidenceWriter = null;
+const evidenceReady = import(new URL('./forge-evidence.mjs', import.meta.url).href)
+  .then((m) => { evidenceWriter = m; return m; })
+  .catch(() => null); /* module absent (pre-2026-07-27 bundle) — the brain answers exactly as before */
 
 let telemetry = null;
 let telemetryVersion = 'unknown';
@@ -246,11 +276,40 @@ async function handle(msg) {
         const cardHit = answerFromCards(query, KB_DIR);
         if (cardHit.hit) {
           const cardBody = renderCardHit(cardHit);
+          // MINT THE RECEIPT ON THIS LANE TOO (ADR-055 §3.1). When the fast lane became the FIRST
+          // RESPONDER it started answering most queries — including the capability/package-existence
+          // class the founding esm.sh incident came from — and it returned here, well above the only
+          // recordAnswer() call in the file. So the write-path gate saw no evidence for precisely the
+          // questions it most needs evidence about. "The Brain did its job. I ignored it" was a
+          // provable claim again, and the fast lane made it the DEFAULT.
+          //
+          // A card IS a real cited source with a real path, so it earns a real receipt — not a
+          // weaker one. Same success-path scope and same never-break-a-query discipline as the heavy
+          // lane: a hit only, wrapped, failures recorded rather than vanished.
+          let cardReceipt = null;
+          try {
+            const w = await evidenceReady;   // resolved-promise await, not a hopeful mutable read
+            if (w) {
+              cardReceipt = w.recordAnswer({
+                query,
+                repos: [cardHit.repo],
+                results: [{ repo: cardHit.repo, path: cardHit.path, text: cardBody, score: cardHit.coverage }],
+              });
+            }
+          } catch (e) { noteEvidenceFailure('card-lane', e); }
+          markGroundingProven();   // a cited card answer is a real grounded answer (ADR-058 §D8)
           meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: cardBody.length, cardLane: true });
           return ok(id, {
             content: [{ type: 'text', text: cardBody }],
             isError: false,
-            structuredContent: { cardLane: { repo: cardHit.repo, path: cardHit.path, bodyOverlap: cardHit.bodyOverlap, coverage: cardHit.coverage, namedRepo: cardHit.namedRepo } },
+            // Same wire shape as the heavy lane's `structuredContent.grounding`, so a consumer
+            // cannot tell the lanes apart when deciding whether an answer was grounded. If the
+            // fast lane reported grounding differently, every reader would need to know which lane
+            // ran — and the one that forgot would be the one that mattered.
+            structuredContent: {
+              cardLane: { repo: cardHit.repo, path: cardHit.path, bodyOverlap: cardHit.bodyOverlap, coverage: cardHit.coverage, namedRepo: cardHit.namedRepo },
+              ...(cardReceipt ? { grounding: cardReceipt } : {}),
+            },
           });
         }
         const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
@@ -339,7 +398,13 @@ async function handle(msg) {
         // grounding-stamp.sh had to learn (ADR-054 §3), stated once and replayed by
         // tests/unit/fourth-wall.test.mjs T4 for all five shapes.
         let receipt = null;
-        try { if (evidence) receipt = evidence.recordAnswer({ query, repos, results }); } catch { /* never */ }
+        // The catch stays total — evidence capture must never break a query — but it no longer
+        // swallows the diagnosis. A malfunction degrades to silence PLUS A HEALTH RECORD
+        // (DDD-0013 invariant 4); silence alone is how this went unnoticed for a day.
+        try {
+          const w = await evidenceReady;
+          if (w) receipt = w.recordAnswer({ query, repos, results });
+        } catch (e) { noteEvidenceFailure('heavy', e); }
         // ADR-058 §D8: a REAL cited answer (results.length > 0, not the "no results" branch above)
         // clears the install-time "grounding: unproven" verdict. Same success-path scope as the
         // receipt line just above — an empty result must never be mistaken for proof.
