@@ -59,6 +59,8 @@
     "scripts/model-router-setup.mjs",
     "scripts/model-router-status.mjs",
     "scripts/model-router-outcome.mjs",
+    "scripts/subscription-hosts.mjs",
+    "scripts/dual-host-deliberation.mjs",
     "scripts/route-cheap.mjs",
     "scripts/dispatch-receipt.mjs",
     "scripts/metaharness-receipts.mjs",

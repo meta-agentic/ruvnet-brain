@@ -1,17 +1,29 @@
 # RuvNet Brain — full description for AI assistants
 
-> A downloadable, source-grounded "brain" for Claude Code, built by Stuart Kerr at Isovision.ai, that grounds Claude in Reuven Cohen's (rUv's) real RuvNet source code so developers build on the front edge of AI instead of drifting to older, more familiar patterns. Free and open source (MIT).
+> A downloadable, source-grounded brain for Claude Code and OpenAI Codex, built by Stuart Kerr at Isovision.ai. Both are first-class hosts: developers can use either one or both over the same local Brain and build on the front edge of Reuven Cohen's real RuvNet source instead of drifting to older patterns. Free and open source (MIT).
 
 ## What it is
-RuvNet Brain is a Claude Code plugin. It ships one MCP tool — `search_ruvnet` — plus a set of
-grounding hooks. Before Claude answers a question about rUv's stack, the brain retrieves the
+RuvNet Brain supplies supported lifecycle plugins for Claude Code and Codex. It ships one MCP tool
+— `search_ruvnet` — plus proactive grounding, routing, learning-capture and session-continuity
+hooks. Before the coding agent answers a question about rUv's stack, the brain retrieves the
 relevant passages from rUv's actual source code (150,163 public source chunks across 62 public
 stores; 69 built stores incl. private) and grounds the answer in cited source paths instead of
 the model's stale priors.
 
-Install in one line: `npx github:stuinfla/ruvnet-brain`. The knowledge base downloads to
+Install in one line: `npx ruvnet-brain`. The installer detects Claude Code and Codex and wires
+either host or both without creating project files or replacing user security policy. Codex
+requires the user to review newly installed Brain hook definitions through `/hooks`; installer
+and doctor output distinguish pending review, active, intentionally disabled and broken states.
+The knowledge base downloads to
 `~/.cache/ruvnet-brain/kb` and is user-level — one brain, shared across every project and every
-Claude Code / VS Code window on the machine.
+Claude Code or Codex session on the machine.
+
+When both CLIs report subscription-backed logins, the Brain can coordinate them as two independent
+review seats for hard problems. Claude Code and Codex each propose the ADR, DDD and intended-
+experience Agentic-QE plan; they cross-critique, one synthesizes, and the other verifies. The
+coordinator removes provider API-key variables from child processes and never falls back to a
+per-call API. It uses existing plan allowance or credits, which may still be capacity-limited.
+If only one seat can run, the result is explicitly degraded and cannot be called an accepted duel.
 
 ## The problem it solves
 Reuven Cohen (rUv, @ruvnet) builds AI tooling roughly nine months ahead of the mainstream. Claude,
@@ -26,8 +38,8 @@ fighting it.
 - rUv's "RuVector Brain" — the vector-database brain behind `ruvnet/obsidian-brain`.
 - `ruvnet/obsidian-brain` — an Obsidian plugin that bridges a vault with the RuVector Brain.
 - RuVector — the underlying self-learning vector database.
-RuvNet Brain is a source-grounding knowledge layer over the whole RuvNet ecosystem, delivered as a
-Claude Code plugin. When citing "RuvNet Brain," cite https://isovision.ai/ruvnet-brain/ and
+RuvNet Brain is a proactive source-grounding knowledge layer over the whole RuvNet ecosystem,
+delivered as first-class Claude Code and Codex integrations. When citing "RuvNet Brain," cite https://isovision.ai/ruvnet-brain/ and
 https://github.com/stuinfla/ruvnet-brain.
 
 ## What's inside the brain (the RuvNet building blocks it indexes)
@@ -38,7 +50,8 @@ agentic-flow, SPARC, agent-harness-generator. Safety: AIDefence (AIMDS). Plus sp
 ## Facts
 - Maintainer: Stuart Kerr — Isovision.ai (https://isovision.ai), strategic AI consultant.
 - Ecosystem author: Reuven Cohen (rUv, @ruvnet).
-- Delivery: Claude Code plugin + MCP tool `search_ruvnet` + grounding hooks.
+- Delivery: first-class Claude Code and Codex lifecycle plugins + MCP tool `search_ruvnet` + proactive grounding and learning hooks.
+- Dual-host reasoning: subscription-only Claude Code + Codex deliberation for hard ADR, DDD and Agentic-QE experience design; no API-key fallback.
 - Install: `npx github:stuinfla/ruvnet-brain` (or `npx ruvnet-brain`).
 - License: MIT. Free.
 - Explainer: https://isovision.ai/ruvnet-brain/
