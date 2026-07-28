@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+// scripts/release-vector.mjs — the release gate as a CRITICAL-INVARIANT VECTOR, never an average.
+//
+// ADR-058 §"The release gate", DDD-0013 aggregate CandidateVerdict. Eight named invariants, each
+// PASS | FAIL | UNKNOWN **on the exact candidate SHA**. The verdict is the vector MINIMUM.
+//
+// WHY A VECTOR AND NOT A SCORE — the failure this file exists to make impossible:
+// on 2026-07-27 this product scored 18/100 on a stranger's machine while README.md advertised
+// "L1–L4 behavioral harness — all pass" on the same commit. Both statements were derived from real
+// checks. A composite absorbed the 18: average enough green cells and the worst one disappears.
+// So there is deliberately NO averaging operation on this aggregate. Not "we don't call it" — no
+// method computes one, and tests/unit/release-vector.test.mjs asserts the module exposes none.
+// If a future reader wants a percentage, they have to add the capability first, and the mutation
+// test will make them look at this comment while they do it.
+//
+// THE OTHER LAW — UNKNOWN IS NEVER PASS. `behavioral-l1-l4.mjs --levels L5` once selected zero
+// checks and printed `OVERALL: PASS`, exit 0: a run that measured nothing certified itself. Here a
+// detector that cannot tell returns UNKNOWN, UNKNOWN ranks BELOW pass, and the minimum carries it
+// all the way to the verdict. Silence is not consent.
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Ordered worst -> best. The verdict is the minimum, so the ORDER of this array IS the policy.
+export const RANK = ['FAIL', 'UNKNOWN', 'PASS'];
+
+/** The vector minimum. Deliberately the only aggregation in this module. */
+export function verdictOf(results) {
+  if (!results.length) return 'UNKNOWN'; // an empty vector measured nothing — see the L5 incident
+  return results.reduce((worst, r) => (RANK.indexOf(r.state) < RANK.indexOf(worst) ? r.state : worst), 'PASS');
+}
+
+const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
+const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch { return null; } };
+
+/** Run a command; UNKNOWN (not FAIL) when the runner itself could not execute. */
+function run(cmd, args, timeoutMs = 120_000) {
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', timeout: timeoutMs });
+  if (r.error || r.status === null) return { state: 'UNKNOWN', why: `runner did not complete: ${r.error?.code || 'killed/timeout'}` };
+  return { state: r.status === 0 ? 'PASS' : 'FAIL', why: r.status === 0 ? 'exit 0' : `exit ${r.status}`, out: r.stdout };
+}
+
+// ─── the eight invariants ────────────────────────────────────────────────────────────────────
+// Each names the dimension it gates and the dated failure it descends from. A detector with no
+// incident behind it is a checkbox; every one of these was bought with a real defect.
+
+export const INVARIANTS = [
+  {
+    name: 'INSTALL-FAILS-LOUD',
+    dimension: 'D8',
+    incident: 'verifyInstall() warned and continued; a stranger scored 18/100 on an install that could not fail',
+    detect() {
+      if (!exists('.github/workflows/stranger-matrix.yml')) return { state: 'FAIL', why: 'no stranger matrix' };
+      const inst = read('bin/install.mjs');
+      if (inst === null) return { state: 'UNKNOWN', why: 'bin/install.mjs unreadable' };
+      // The substance, not the ceremony: the selfcheck verdict must reach the PROCESS EXIT CODE.
+      // A workflow that runs a check whose result evaporates is the 40/100 defect with extra YAML.
+      return /process\.exitCode\s*=\s*selfcheck/.test(inst)
+        ? { state: 'PASS', why: 'matrix present and selfcheck verdict reaches process.exitCode' }
+        : { state: 'FAIL', why: 'selfcheck verdict never reaches process.exitCode' };
+    },
+  },
+  {
+    name: 'INTERFACE-CORPUS',
+    dimension: 'D7',
+    incident: 'the same shell-parsing defect class recurred across issues #12, #13, #41, #44 with no corpus between them',
+    detect: () => (exists('tests/regression/interface-gate-corpus.test.mjs')
+      ? run('npx', ['vitest', 'run', 'tests/regression/interface-gate-corpus.test.mjs', '--reporter=dot'])
+      : { state: 'FAIL', why: 'no incident corpus' }),
+  },
+  {
+    name: 'LATENCY-DECISION-LANE',
+    dimension: 'D6',
+    incident: 'latency breaches only warned; timing regressions did not block shipping',
+    detect: () => (exists('scripts/qe/card-lane-gate.mjs')
+      ? run('node', ['scripts/qe/card-lane-gate.mjs'])
+      : { state: 'FAIL', why: 'no decision-lane gate' }),
+  },
+  {
+    name: 'COEXIST-BYTE-EQUAL',
+    dimension: 'D5',
+    incident: 'the merged-registry lint found 63 findings across 42 registrations; the prior suite saw 15',
+    detect: () => (exists('tests/mesh/coexistence.test.mjs')
+      ? run('npx', ['vitest', 'run', 'tests/mesh', '--reporter=dot'])
+      : { state: 'FAIL', why: 'no coexistence suite' }),
+  },
+  {
+    name: 'LEARNING-REPLAY',
+    dimension: 'D4',
+    incident: 'L4 asserted the hook\'s own prose contained words — it proved the brain SPOKE, never that anything LISTENED',
+    detect() {
+      // Deliberately UNKNOWN rather than FAIL while unbuilt: FAIL would assert we measured a
+      // regression, and we measured nothing. UNKNOWN still sinks the verdict — that is the point.
+      const artifact = 'evals/learning-replay.json';
+      if (!exists(artifact)) return { state: 'UNKNOWN', why: 'counterfactual replay not built; no artifact at ' + artifact };
+      let j;
+      try { j = JSON.parse(read(artifact)); } catch { return { state: 'UNKNOWN', why: 'replay artifact unparseable' }; }
+      if (j.sha !== headSha()) return { state: 'UNKNOWN', why: `replay graded ${String(j.sha).slice(0, 7)}, candidate is ${headSha().slice(0, 7)}` };
+      if (j.result === 'INCONCLUSIVE') return { state: 'UNKNOWN', why: 'control arm also succeeded — the trap measured nothing' };
+      return { state: j.result === 'PASS' ? 'PASS' : 'FAIL', why: `replay rate ${j.passed ?? '?'}/${j.trials ?? '?'}` };
+    },
+  },
+  {
+    name: 'SIGNAL-WATCH-FIRES',
+    dimension: 'D3',
+    incident: 'the OWNER had to report that CI was red — every local surface stayed calm',
+    detect() {
+      if (!exists('scripts/signal-watch.mjs')) return { state: 'FAIL', why: 'no signal watcher' };
+      const raw = read('plugin/hooks/hooks.json');
+      if (raw === null) return { state: 'UNKNOWN', why: 'plugin/hooks/hooks.json unreadable' };
+      let doc;
+      try { doc = JSON.parse(raw); } catch { return { state: 'UNKNOWN', why: 'hooks.json unparseable' }; }
+      // Built-but-unregistered is the F5 class: the capability exists on disk and never fires. So
+      // check the REGISTRATION — the door it actually walks through.
+      //
+      // AND CHECK IT BY PARSING, NOT BY SUBSTRING. The first version of this detector asked
+      // `raw.includes('signal-watch')`, and its own mutant renamed the handler to
+      // `signal-watch-DISABLED-BY-MUTANT` — which still CONTAINS 'signal-watch', so the gate stayed
+      // green on a registration that could no longer fire. A substring is not a registration; it
+      // would equally match a mention inside a comment, a `_note` field, or a disabled entry.
+      const commands = Object.values(doc.hooks || {})
+        .flatMap((groups) => (Array.isArray(groups) ? groups : []))
+        .flatMap((g) => (Array.isArray(g?.hooks) ? g.hooks : []))
+        .map((h) => String(h?.command || ''));
+      // the shim dispatches by a bare handler id, so match the id as a WHOLE argument token
+      const fires = commands.some((c) => /(^|[\s"'/])signal-watch($|[\s"'|;])/.test(c));
+      return fires
+        ? { state: 'PASS', why: `watcher registered as a dispatchable handler in ${commands.length} shipped registration(s)` }
+        : { state: 'FAIL', why: 'watcher exists but is not registered as a dispatchable handler — it will never fire' };
+    },
+  },
+  {
+    name: 'SCENARIOS-CURRENT',
+    dimension: 'D2',
+    incident: 'ADR-053 specified a mental-model scenario list; it was simply absent',
+    detect: () => (exists('tests/experience/report.mjs')
+      ? run('node', ['tests/experience/report.mjs'])
+      : { state: 'FAIL', why: 'no scenario report' }),
+  },
+  {
+    name: 'GUARANTEE-RUNS',
+    dimension: 'D1',
+    incident: 'the product guarantee skipped on every CI runner; REQUIRE_BRAIN=1 was set nowhere in the repo',
+    detect() {
+      const ci = read('.github/workflows/ci.yml');
+      if (ci === null) return { state: 'UNKNOWN', why: 'ci.yml unreadable' };
+      return /REQUIRE_BRAIN/.test(ci)
+        ? { state: 'PASS', why: 'REQUIRE_BRAIN wired in ci.yml — a skipped battery fails' }
+        : { state: 'FAIL', why: 'REQUIRE_BRAIN set nowhere; the guarantee skips' };
+    },
+  },
+];
+
+export function headSha() {
+  const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : 'UNKNOWN-SHA';
+}
+
+/** Strings a non-PASS verdict mechanically bans from release surfaces (ADR-058). */
+export const BANNED_WHEN_DEGRADED = ['healthy', 'proven', 'all pass'];
+
+export async function evaluate(invariants = INVARIANTS) {
+  const sha = headSha();
+  const results = [];
+  for (const inv of invariants) {
+    const r = await inv.detect();
+    results.push({ name: inv.name, dimension: inv.dimension, state: r.state, why: r.why, sha });
+  }
+  return { sha, results, verdict: verdictOf(results) };
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  const { sha, results, verdict } = await evaluate();
+  const json = process.argv.includes('--json');
+  if (json) {
+    console.log(JSON.stringify({ sha, verdict, results }, null, 2));
+  } else {
+    const mark = { PASS: '✓', FAIL: '✗', UNKNOWN: '?' };
+    console.log(`\n  release vector @ ${sha.slice(0, 7)}\n`);
+    for (const r of results) {
+      console.log(`  ${mark[r.state]} ${r.state.padEnd(7)} ${r.dimension.padEnd(3)} ${r.name.padEnd(22)} ${r.why}`);
+    }
+    console.log(`\n  verdict: ${verdict}   (vector MINIMUM over ${results.length} invariants — never an average)`);
+    if (verdict !== 'PASS') {
+      console.log(`  release metadata must read DEGRADED; these strings are banned: ${BANNED_WHEN_DEGRADED.map((s) => `"${s}"`).join(', ')}\n`);
+    } else {
+      console.log('');
+    }
+  }
+  process.exitCode = verdict === 'PASS' ? 0 : 1;
+}

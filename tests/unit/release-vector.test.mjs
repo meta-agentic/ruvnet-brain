@@ -1,0 +1,185 @@
+// tests/unit/release-vector.test.mjs — the release gate must be UNGAMEABLE, not merely correct.
+//
+// THE DEFECT THIS DESCENDS FROM (2026-07-27, same commit, both derived from real checks):
+//   README.md   "L1–L4 behavioral harness — all pass"
+//   graders     18/100 on a stranger's machine
+// Neither statement was a lie. A composite absorbed the 18. Averaging is the mechanism by which a
+// product's worst property becomes invisible while every individual check stays honest — so the
+// tests below do not check that the current numbers are good. They check that the SHAPE of the
+// aggregation cannot hide a bad one, whatever the numbers are next month.
+import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import * as RV from '../../scripts/release-vector.mjs';
+
+const REPO = path.resolve(import.meta.dirname, '../..');
+
+const inv = (name, state) => ({ name, dimension: 'Dx', state, why: 'fixture' });
+
+describe('the verdict is the vector MINIMUM — a bad cell can never be averaged away', () => {
+  it('one FAIL among seven PASS yields FAIL, not 87%', () => {
+    const v = RV.verdictOf([...Array(7).fill(inv('ok', 'PASS')), inv('bad', 'FAIL')]);
+    expect(v).toBe('FAIL');
+  });
+
+  it('one UNKNOWN among seven PASS yields UNKNOWN — silence is not consent', () => {
+    // `behavioral-l1-l4.mjs --levels L5` selected zero checks and printed OVERALL: PASS, exit 0.
+    // A run that measured nothing certified itself. UNKNOWN must sink the verdict for that reason.
+    expect(RV.verdictOf([...Array(7).fill(inv('ok', 'PASS')), inv('dunno', 'UNKNOWN')])).toBe('UNKNOWN');
+  });
+
+  it('FAIL outranks UNKNOWN downward — the worst cell wins, in both orders', () => {
+    expect(RV.verdictOf([inv('a', 'UNKNOWN'), inv('b', 'FAIL')])).toBe('FAIL');
+    expect(RV.verdictOf([inv('a', 'FAIL'), inv('b', 'UNKNOWN')])).toBe('FAIL');
+  });
+
+  it('an EMPTY vector is UNKNOWN, never PASS — measuring nothing is not a pass', () => {
+    expect(RV.verdictOf([])).toBe('UNKNOWN');
+  });
+
+  it('all-PASS is the ONLY way to reach PASS', () => {
+    expect(RV.verdictOf(Array(8).fill(inv('ok', 'PASS')))).toBe('PASS');
+    for (const bad of ['FAIL', 'UNKNOWN']) {
+      expect(RV.verdictOf([...Array(7).fill(inv('ok', 'PASS')), inv('x', bad)])).not.toBe('PASS');
+    }
+  });
+});
+
+describe('no averaging operation EXISTS on this aggregate — by construction, not by convention', () => {
+  it('the module exposes no mean/average/score/percent/composite function', () => {
+    // DDD-0013 invariant 2 is a statement about the CODE, not about our intentions. If someone adds
+    // `export function score()` later, this test makes them read why it was forbidden.
+    const forbidden = /^(average|mean|score|percent|percentage|composite|overall|aggregate|total)$/i;
+    const offenders = Object.keys(RV).filter((k) => forbidden.test(k));
+    expect(offenders, `averaging surface(s) appeared on the release vector: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('and the source contains no arithmetic mean over the results', () => {
+    const src = fs.readFileSync(path.join(REPO, 'scripts/release-vector.mjs'), 'utf8');
+    const live = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    expect(live).not.toMatch(/\.length\s*\)?\s*\*\s*100/);   // n/total * 100
+    expect(live).not.toMatch(/reduce\([^)]*\+\s*\w+\s*[,)]/); // summing states
+  });
+});
+
+describe('every invariant carries a real incident and a real detector', () => {
+  it('eight invariants, one per dimension D1–D8, no duplicates', () => {
+    expect(RV.INVARIANTS).toHaveLength(8);
+    const dims = RV.INVARIANTS.map((i) => i.dimension).sort();
+    expect(dims).toEqual(['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8']);
+  });
+
+  it('each names a dated failure — a detector with no incident behind it is a checkbox', () => {
+    for (const i of RV.INVARIANTS) {
+      expect(i.incident, `${i.name} has no incident`).toBeTruthy();
+      expect(i.incident.length, `${i.name}'s incident is too thin to be real`).toBeGreaterThan(40);
+      expect(typeof i.detect).toBe('function');
+    }
+  });
+});
+
+describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () => {
+  it('MUTANT: unregister signal-watch from the shipped hooks.json → D3 goes FAIL', () => {
+    // The F5 class: a capability that exists on disk and is never registered will never fire.
+    // The detector must read the REGISTRATION, so this mutant edits the registration, not the file.
+    const real = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
+    expect(real.detect().state).toBe('PASS');                       // control
+
+    const p = path.join(REPO, 'plugin/hooks/hooks.json');
+    const before = fs.readFileSync(p, 'utf8');
+    try {
+      fs.writeFileSync(p, before.replaceAll('signal-watch', 'signal-watch-DISABLED-BY-MUTANT'));
+      const after = real.detect();
+      expect(after.state).toBe('FAIL');
+      expect(after.why).toMatch(/not registered/);
+    } finally {
+      fs.writeFileSync(p, before);
+    }
+    expect(fs.readFileSync(p, 'utf8')).toBe(before);                 // restored, byte-for-byte
+    expect(real.detect().state).toBe('PASS');                        // and green again
+  });
+
+  it('MUTANT: sever the selfcheck→exitCode wire → D8 goes FAIL even with the matrix present', () => {
+    // This is the ACTUAL historical 40/100 defect: the workflow ran, the check ran, and the verdict
+    // evaporated at process exit. The matrix file still exists in this mutant — proving the detector
+    // binds to the substance (the exit wire) and not to the ceremony (a YAML file being present).
+    const real = RV.INVARIANTS.find((i) => i.name === 'INSTALL-FAILS-LOUD');
+    expect(real.detect().state).toBe('PASS');
+
+    const p = path.join(REPO, 'bin/install.mjs');
+    const before = fs.readFileSync(p, 'utf8');
+    try {
+      fs.writeFileSync(p, before.replace(/process\.exitCode\s*=\s*selfcheck/, 'void (selfcheck'));
+      const after = real.detect();
+      expect(after.state).toBe('FAIL');
+      expect(after.why).toMatch(/never reaches process\.exitCode/);
+      expect(fs.existsSync(path.join(REPO, '.github/workflows/stranger-matrix.yml'))).toBe(true);
+    } finally {
+      fs.writeFileSync(p, before);
+    }
+    expect(fs.readFileSync(p, 'utf8')).toBe(before);
+    expect(real.detect().state).toBe('PASS');
+  });
+
+  it('MUTANT: a stale replay artifact graded against another SHA reads UNKNOWN, not PASS', () => {
+    // Gate C++ v1 graded the PARENT commit and reported on the candidate. A verdict is only ever
+    // about the SHA it was measured on; a mismatched one measured a different product.
+    const real = RV.INVARIANTS.find((i) => i.name === 'LEARNING-REPLAY');
+    const p = path.join(REPO, 'evals/learning-replay.json');
+    const existed = fs.existsSync(p);
+    const before = existed ? fs.readFileSync(p, 'utf8') : null;
+    try {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, JSON.stringify({ sha: '0'.repeat(40), result: 'PASS', passed: 3, trials: 3 }));
+      const after = real.detect();
+      expect(after.state).toBe('UNKNOWN');
+      expect(after.why).toMatch(/candidate is/);
+    } finally {
+      if (existed) fs.writeFileSync(p, before); else fs.rmSync(p, { force: true });
+    }
+  });
+
+  it('MUTANT: a replay whose CONTROL also succeeded reads UNKNOWN — an invalid trap is not a pass', () => {
+    // DDD-0013 invariant 6, the exact inversion of L4: if the brain-off control produced the same
+    // artifact, the trap measured nothing about the brain. INCONCLUSIVE must never round up.
+    const real = RV.INVARIANTS.find((i) => i.name === 'LEARNING-REPLAY');
+    const p = path.join(REPO, 'evals/learning-replay.json');
+    const existed = fs.existsSync(p);
+    const before = existed ? fs.readFileSync(p, 'utf8') : null;
+    const sha = RV.headSha();
+    try {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, JSON.stringify({ sha, result: 'INCONCLUSIVE', passed: 3, trials: 3 }));
+      const after = real.detect();
+      expect(after.state).toBe('UNKNOWN');
+      expect(after.why).toMatch(/control arm also succeeded/);
+    } finally {
+      if (existed) fs.writeFileSync(p, before); else fs.rmSync(p, { force: true });
+    }
+  });
+});
+
+describe('the CLI is the door that actually gets walked through', () => {
+  it('exits non-zero whenever the verdict is not PASS, and prints the DEGRADED ban list', () => {
+    // An earlier reading of a gate in this repo showed "FAIL (hard)" next to exit 0 — it was the
+    // harness reading a pipe's status, not the process's. Read the process's status directly.
+    const r = spawnSync('node', ['scripts/release-vector.mjs'], { cwd: REPO, encoding: 'utf8', timeout: 180_000 });
+    expect(r.status, 'the runner itself must complete').not.toBeNull();
+    const verdictLine = (r.stdout.match(/verdict:\s*(\w+)/) || [])[1];
+    expect(['PASS', 'FAIL', 'UNKNOWN']).toContain(verdictLine);
+    expect(r.status === 0).toBe(verdictLine === 'PASS');
+    if (verdictLine !== 'PASS') {
+      for (const banned of RV.BANNED_WHEN_DEGRADED) expect(r.stdout).toContain(banned);
+    }
+  });
+
+  it('--json emits a machine-readable verdict carrying the candidate SHA', () => {
+    const r = spawnSync('node', ['scripts/release-vector.mjs', '--json'], { cwd: REPO, encoding: 'utf8', timeout: 180_000 });
+    const j = JSON.parse(r.stdout);
+    expect(j.sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(j.results).toHaveLength(8);
+    expect(j.verdict).toBe(RV.verdictOf(j.results));
+    for (const x of j.results) expect(x.sha).toBe(j.sha);   // every result stamped with the same SHA
+  });
+});
