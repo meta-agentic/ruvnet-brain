@@ -30,7 +30,7 @@
 [![explainer](https://img.shields.io/badge/▶%20see%20it%20live-isovision.ai%2Fruvnet--brain-e8a13a?style=flat-square)](https://isovision.ai/ruvnet-brain/)
 [![license](https://img.shields.io/badge/license-MIT-8ecae6?style=flat-square)](LICENSE)
 [![grounded](https://img.shields.io/badge/answers-cited%20rUv%20source-333?style=flat-square)](#testing--proof)
-[![coverage](https://img.shields.io/badge/coverage-28%25%20of%20ALL%20source%20·%20honest-b58900?style=flat-square)](#testing--proof)
+[![coverage](https://img.shields.io/badge/coverage-32%25%20of%20ALL%20source%20·%20honest-b58900?style=flat-square)](#testing--proof)
 
 > **One Brain generation everywhere.** npm, the GitHub tag/release, bundle manifests, source metadata, and checksum-bound RVF generations must share the same product version. Headline claims are regenerated and checked by the claims ledger (`scripts/claims-verify.mjs`); other numbers below are hand-stamped and dated:
 > - **`plugin`** (badge above) — the Claude Code plugin itself: SKILL.md, the grounding hooks, the MCP server. Read live from [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json). Updates often — this is where behavior fixes land.
@@ -483,9 +483,9 @@ node plugin/test/run-tests.mjs                    # full plugin QA over real JSO
 | **Context-scenario routing** | **7 / 8 (88%)** | full-scenario prompts route correctly |
 | **L1–L3 behavioral harness** | **all pass** | route · deep-recall (returns _code_) · implement (cites the API) — each graded on a retrieval outcome |
 | **L4 "orchestrate"** | **downgraded — measures speech, not obedience** | L4 asserts the hook's own injected prose contains required words (`must: ['take the wheel','SPARC','swarm',…]`). That proves **the brain spoke**. It cannot fail when the advice is read and ignored — which is the failure this product exists to prevent. Counterfactual replay against a brain-off control (ADR-058 §D4) is what will earn this row back |
-| **Plugin QA** | **26 / 26** | manifests, hook firing, MCP `initialize`/`tools/list`, capability battery |
+| **Plugin QA** | **60 / 60** | manifests, hook firing, MCP `initialize`/`tools/list`, capability battery |
 | **Clean-room install** | **3 / 3** | download the published bundle fresh → unzip → query → grounded, cited answers |
-| **Unit tests** | **1,832 passing, 169 todo** · 28% of ALL source covered | `npm run test:cov` regenerates both — the coverage floor fails CI if it slips (`claims:verify` re-derives the %, it is not a hand-typed badge). 28% is the honest number over every shipped file; the previous "75%" measured a hand-picked 8-file subset |
+| **Unit tests** | **2,327 passing, 169 todo** · 32% of ALL source covered | `npm run test:cov` regenerates both — the coverage floor fails CI if it slips (`claims:verify` re-derives the %, it is not a hand-typed badge). 32% is the honest number over every shipped file; the previous "75%" measured a hand-picked 8-file subset |
 | **Grounding proof** | `npx ruvnet-brain --doctor` | asks a real question, then checks the cited path really exists in the on-disk store; a citation that doesn't resolve is reported as **NOT grounded** |
 | **Held-out eval** | **grounded 100/100** · routed 63/80 | `npm run eval` — 120 frozen, hash-pinned questions across 5 strata, never used for tuning, graded on ground truth, never by a model |
 
