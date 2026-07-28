@@ -133,10 +133,33 @@ case "${RUFLO_HARNESS_LOOP:-}" in 1|true|yes|on|TRUE|Yes|On) FLYWHEEL=on ;; esac
 if [ "$FLYWHEEL" = "off" ] && grep -qs 'RUFLO_HARNESS_LOOP' .claude/settings.json .claude/settings.local.json 2>/dev/null; then
   FLYWHEEL=on
 fi
-if [ "$RUFLO_STATE" = "yes" ] && [ "$FLYWHEEL" = "off" ]; then
+
+# The cadence belongs to the hook, not to an instruction asking the model to remember whether it
+# already spoke (issue #53). A directory create is the portable atomic primitive here: for one
+# canonical project root + local calendar day, exactly one concurrent process can create the claim.
+# State lives under the user's cache, never in the project. Any inability to canonicalize, hash, or
+# secure the claim fails silent because this is an optional offer, not a safety wall.
+claim_flywheel_day() {
+  _fly_project="${CLAUDE_PROJECT_DIR:-$PWD}"
+  [ -d "$_fly_project" ] || return 1
+  _fly_project=$(cd "$_fly_project" 2>/dev/null && pwd -P) || return 1
+  _fly_sig=$(printf '%s' "$_fly_project" | cksum 2>/dev/null) || return 1
+  set -- $_fly_sig
+  [ -n "${1:-}" ] && [ -n "${2:-}" ] || return 1
+  _fly_day="${RUVNET_FLYWHEEL_DATE:-$(date +%Y-%m-%d 2>/dev/null)}"
+  [ -n "$_fly_day" ] || return 1
+  _fly_root="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain/advisories/flywheel"
+  (
+    umask 077
+    mkdir -p "$_fly_root" 2>/dev/null &&
+      mkdir "$_fly_root/$1-$2-$_fly_day.claim" 2>/dev/null
+  )
+}
+
+if [ "$RUFLO_STATE" = "yes" ] && [ "$FLYWHEEL" = "off" ] && claim_flywheel_day; then
   cat <<'EOF'
 [RuvNet Brain — the self-learning flywheel is available here and switched OFF]
-This project runs Ruflo, and ruflo ≥3.24 ships a self-optimizing flywheel that is OFF by default. Offer it ONCE per session, plainly and warmly — then drop it. NEVER enable it without an explicit yes.
+This project runs Ruflo, and ruflo ≥3.24 ships a self-optimizing flywheel that is OFF by default. Offer it plainly and warmly — then drop it. NEVER enable it without an explicit yes. The hook enforces the delivery cadence; do not repeat this advisory yourself.
 
 Explain it in the user's words, not the plumbing's:
 - WHAT IT IS: ruflo can improve one of its own operating policies over time — specifically how it finds the right stored memory for a query (the BM25/cosine blend, diversity, etc.). Each candidate is scored against a frozen, human-labelled relevance set; a change is promoted ONLY if it measurably beats the current champion on held-out data. Every promotion leaves a signed receipt you can replay yourself, and a drift canary auto-rolls-back on regression. Think "git for decision-policies": each generation has a parent, a diff, evidence, a signature, and an immutable root you can walk back to.
@@ -147,7 +170,7 @@ Explain it in the user's words, not the plumbing's:
   (the GLOBAL binary — never `npx ruflo@latest`, which runs its own private copy and hides drift).
 - TURN IT OFF: remove that env var (and `RUFLO_DAEMON_AUTOSTART=0` stops the daemon auto-starting).
 
-Offer like this, once: "Ruflo can quietly tune how it recalls memory — testing changes against a frozen benchmark and only keeping what provably wins, with a receipt you can replay. It's free, it's off by default, and it does nothing until this project has enough history. Want me to turn it on?" If they decline, respect it for the rest of the session and never raise it again.
+Offer like this: "Ruflo can quietly tune how it recalls memory — testing changes against a frozen benchmark and only keeping what provably wins, with a receipt you can replay. It's free, it's off by default, and it does nothing until this project has enough history. Want me to turn it on?" If they decline, respect it and never raise it again unless they ask.
 EOF
 fi
 
