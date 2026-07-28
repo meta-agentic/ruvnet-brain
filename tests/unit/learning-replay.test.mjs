@@ -20,6 +20,7 @@ import {
   verdictForRun, aggregate, checkArtifact, LOAD_BEARING,
   assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
+  replayRunError,
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -35,6 +36,20 @@ describe('CLI help is side-effect free', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('Usage:');
     expect(fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null).toBe(before);
+  });
+});
+
+describe('executor failures remain visible in replay evidence', () => {
+  it('preserves a subscription rate-limit result as the arm error', () => {
+    const events = [{
+      type: 'result',
+      is_error: true,
+      api_error_status: 429,
+      terminal_reason: 'api_error',
+      result: "You've hit your weekly limit",
+    }];
+    expect(replayRunError(events, {})).toContain("HTTP 429");
+    expect(replayRunError(events, {})).toContain("weekly limit");
   });
 });
 

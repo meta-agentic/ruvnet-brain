@@ -716,6 +716,14 @@ function writeSettings(file, { dirs, stateDir, attemptsFile }) {
  * IN ORDER in one array. `lessonIndex` and `firstToolIndex` are positions in that array — condition
  * (a) is a measured ordering, not an argument from how hooks are supposed to work.
  */
+export function replayRunError(events, processResult) {
+  if (processResult?.error) return String(processResult.error.message || processResult.error);
+  const result = events.find((e) => e.type === 'result');
+  if (!result?.is_error) return null;
+  const status = result.api_error_status ? `HTTP ${result.api_error_status}: ` : '';
+  return `${status}${result.result || result.terminal_reason || 'model execution failed'}`;
+}
+
 export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, tag, forceCommand = null }) {
   const attempts = path.join(dirs.transcripts, `${tag}.attempts.jsonl`);
   const settings = writeSettings(path.join(dirs.base, `settings-${tag}.json`), { dirs, stateDir, attemptsFile: attempts });
@@ -788,7 +796,7 @@ export function runArm({ dirs, arm, stateDir, model, appendSystemPrompt = null, 
       || events.find((e) => e.type === 'assistant')?.message?.model || model,
     transcript: path.relative(ROOT, streamFile),
     exit: r.status,
-    spawnError: r.error ? String(r.error.message) : null,
+    spawnError: replayRunError(events, r),
   };
 }
 
