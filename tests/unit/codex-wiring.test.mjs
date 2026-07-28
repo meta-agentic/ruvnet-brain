@@ -37,11 +37,21 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CODEX_DIR = path.join(ROOT, '.codex');
 
-let mergeCodexConfig, wireCodexHost, codexStatus;
+let mergeCodexConfig, wireCodexHost, codexStatus, codexMarketplaceRows, classifyCodexLifecycle;
+let wireCodexPlugin, codexPluginStatus, codexLifecycleGuidance;
 beforeAll(async () => {
   // Same import-only contract the other installer tests use, so main() never runs on import.
   process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
-  ({ mergeCodexConfig, wireCodexHost, codexStatus } = await import('../../bin/install.mjs'));
+  ({
+    mergeCodexConfig,
+    wireCodexHost,
+    codexStatus,
+    codexMarketplaceRows,
+    classifyCodexLifecycle,
+    wireCodexPlugin,
+    codexPluginStatus,
+    codexLifecycleGuidance,
+  } = await import('../../bin/install.mjs'));
 });
 
 const SERVER = '/some/persistent/home/.claude/ruvnet-brain/mcp/server.mjs';
@@ -287,6 +297,215 @@ describe('codexStatus — the three doctor states, each derived from disk', () =
     expect(codexStatus({ codexDir, configPath }).wired).toBe(true);
     fs.rmSync(r.serverPath);
     expect(codexStatus({ codexDir, configPath }).wired).toBe(false);
+  });
+});
+
+describe('Codex plugin/lifecycle state — live CLI shapes become one actionable verdict', () => {
+  it('reads the current Codex marketplace list envelope instead of treating it as an array', () => {
+    const rows = [{ name: 'ruvnet-brain' }, { name: 'ruflo' }];
+    expect(codexMarketplaceRows({ marketplaces: rows })).toEqual(rows);
+  });
+
+  it('keeps compatibility with the earlier bare-array marketplace response', () => {
+    const rows = [{ name: 'ruvnet-brain' }];
+    expect(codexMarketplaceRows(rows)).toEqual(rows);
+    expect(codexMarketplaceRows(null)).toEqual([]);
+  });
+
+  it('reports active only when every discovered Brain hook is enabled and trusted', () => {
+    const plugin = { available: true, installed: true, enabled: true };
+    const listed = {
+      ok: true,
+      value: {
+        data: [{
+          hooks: [
+            { pluginId: 'ruvnet-brain@ruvnet-brain', enabled: true, trustStatus: 'trusted' },
+            { pluginId: 'ruvnet-brain@ruvnet-brain', enabled: true, trustStatus: 'trusted' },
+            { pluginId: 'other@market', enabled: true, trustStatus: 'untrusted' },
+          ],
+          errors: [],
+        }],
+      },
+    };
+    expect(classifyCodexLifecycle(plugin, listed)).toMatchObject({ state: 'active' });
+  });
+
+  it('makes pending trust explicit instead of printing generic install-success instructions', () => {
+    const plugin = { available: true, installed: true, enabled: true };
+    const listed = {
+      ok: true,
+      value: {
+        data: [{
+          hooks: [{ pluginId: 'ruvnet-brain@ruvnet-brain', enabled: true, trustStatus: 'untrusted' }],
+          errors: [],
+        }],
+      },
+    };
+    expect(classifyCodexLifecycle(plugin, listed)).toMatchObject({
+      state: 'pending-trust',
+      hooks: [{ trustStatus: 'untrusted' }],
+    });
+  });
+
+  it('distinguishes a user-disabled plugin from missing runtime hooks and probe failure', () => {
+    expect(classifyCodexLifecycle(
+      { available: true, installed: true, enabled: false },
+      { ok: true, value: { data: [] } },
+    ).state).toBe('disabled');
+    expect(classifyCodexLifecycle(
+      { available: true, installed: true, enabled: true },
+      { ok: true, value: { data: [{ hooks: [], errors: [] }] } },
+    ).state).toBe('missing-runtime-hooks');
+    expect(classifyCodexLifecycle(
+      { available: true, installed: true, enabled: true },
+      { ok: false, error: 'app-server unavailable' },
+    )).toMatchObject({ state: 'probe-failed', error: 'app-server unavailable' });
+  });
+
+  it('turns each lifecycle state into one concise user action and no false action when active', () => {
+    expect(codexLifecycleGuidance({ state: 'active', hooks: [{}, {}] })).toMatchObject({
+      healthy: true,
+      action: null,
+    });
+    expect(codexLifecycleGuidance({ state: 'pending-trust', hooks: [{}] })).toMatchObject({
+      healthy: false,
+      action: expect.stringContaining('/hooks'),
+    });
+    expect(codexLifecycleGuidance({ state: 'not-installed', hooks: [] })).toMatchObject({
+      healthy: false,
+      action: expect.stringContaining('npx ruvnet-brain'),
+    });
+    expect(codexLifecycleGuidance({ state: 'disabled', hooks: [] })).toMatchObject({
+      healthy: false,
+      intentional: true,
+    });
+    expect(codexLifecycleGuidance({ state: 'missing-runtime-hooks', hooks: [] })).toMatchObject({
+      healthy: false,
+      action: expect.stringContaining('marketplace upgrade'),
+    });
+    expect(codexLifecycleGuidance({ state: 'probe-failed', error: 'timeout', hooks: [] })).toMatchObject({
+      healthy: false,
+      detail: expect.stringContaining('timeout'),
+    });
+  });
+});
+
+describe('wireCodexPlugin — install is idempotent, state-driven, and disable-preserving', () => {
+  it('refreshes a known marketplace and installs the plugin exactly once', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    const calls = [];
+    let installed = false;
+    const runJson = (args) => {
+      calls.push(args);
+      if (args.join(' ') === 'plugin list --json') {
+        return {
+          ok: true,
+          value: {
+            installed: installed ? [{
+              pluginId: 'ruvnet-brain@ruvnet-brain',
+              version: '1.2.3',
+              installed: true,
+              enabled: true,
+            }] : [],
+          },
+        };
+      }
+      if (args.join(' ') === 'plugin marketplace list --json') {
+        return { ok: true, value: { marketplaces: [{ name: 'ruvnet-brain' }] } };
+      }
+      if (args.join(' ') === 'plugin marketplace upgrade ruvnet-brain --json') {
+        return { ok: true, value: {} };
+      }
+      if (args.join(' ') === 'plugin add ruvnet-brain@ruvnet-brain --json') {
+        installed = true;
+        return { ok: true, value: {} };
+      }
+      return { ok: false, error: `unexpected ${args.join(' ')}` };
+    };
+
+    expect(wireCodexPlugin({
+      codexDir,
+      codexHome: codexDir,
+      expectedVersion: '1.2.3',
+      runJson,
+      announce: false,
+    })).toMatchObject({ action: 'installed', installed: true, enabled: true });
+    expect(calls.map((args) => args.join(' '))).toEqual([
+      'plugin list --json',
+      'plugin marketplace list --json',
+      'plugin marketplace upgrade ruvnet-brain --json',
+      'plugin add ruvnet-brain@ruvnet-brain --json',
+      'plugin list --json',
+    ]);
+  });
+
+  it('leaves a user-disabled installation untouched', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    const calls = [];
+    const runJson = (args) => {
+      calls.push(args);
+      return {
+        ok: true,
+        value: {
+          installed: [{
+            pluginId: 'ruvnet-brain@ruvnet-brain',
+            version: '1.2.3',
+            installed: true,
+            enabled: false,
+          }],
+        },
+      };
+    };
+
+    expect(wireCodexPlugin({ codexDir, runJson, announce: false })).toMatchObject({
+      action: 'disabled',
+      enabled: false,
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not refresh or rewrite an already-current enabled installation', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    const calls = [];
+    const runJson = (args) => {
+      calls.push(args);
+      return {
+        ok: true,
+        value: {
+          installed: [{
+            pluginId: 'ruvnet-brain@ruvnet-brain',
+            version: '1.2.3',
+            installed: true,
+            enabled: true,
+          }],
+        },
+      };
+    };
+
+    expect(wireCodexPlugin({
+      codexDir,
+      expectedVersion: '1.2.3',
+      runJson,
+      announce: false,
+    })).toMatchObject({ action: 'unchanged', enabled: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('codexPluginStatus degrades cleanly when the CLI is unavailable', () => {
+    expect(codexPluginStatus({
+      runJson: () => ({ ok: false, error: 'codex not found' }),
+    })).toMatchObject({
+      available: false,
+      installed: false,
+      enabled: false,
+      error: 'codex not found',
+    });
   });
 });
 

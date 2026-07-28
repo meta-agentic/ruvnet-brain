@@ -15,7 +15,7 @@ import https from 'node:https';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
@@ -40,6 +40,10 @@ function verifyBundle(bundlePath, sigPath) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
+const PACKAGE_VERSION = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')).version; }
+  catch { return null; }
+})();
 
 const REPO = 'stuinfla/ruvnet-brain';
 const RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -735,6 +739,252 @@ export function wireCodexHost({
   return { host: true, action, serverPath, hookWrapperPath, changed: text !== before };
 }
 
+const CODEX_PLUGIN_ID = 'ruvnet-brain@ruvnet-brain';
+const CODEX_MARKETPLACE = 'ruvnet-brain';
+const CODEX_MARKETPLACE_SOURCE = 'stuinfla/ruvnet-brain';
+
+// Codex 0.145 returns `{ marketplaces: [...] }`; early preview builds returned the array itself.
+// Keep both shapes so an installer update never turns a harmless host-version difference into a
+// repeated "marketplace already exists" failure.
+export function codexMarketplaceRows(value) {
+  if (Array.isArray(value?.marketplaces)) return value.marketplaces;
+  return Array.isArray(value) ? value : [];
+}
+
+function runCodexJson(args, {
+  codexBin = process.env.CODEX_BIN || 'codex',
+  codexHome = codexHomeDir(),
+  cwd = process.cwd(),
+} = {}) {
+  const r = spawnSync(codexBin, args, {
+    cwd,
+    env: { ...process.env, CODEX_HOME: codexHome },
+    encoding: 'utf8',
+    timeout: 30_000,
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (r.error || r.status !== 0) {
+    const detail = String(r.stderr || r.stdout || r.error?.message || `exit ${r.status}`).trim();
+    return { ok: false, error: detail };
+  }
+  try { return { ok: true, value: JSON.parse(r.stdout || 'null') }; }
+  catch { return { ok: false, error: `Codex returned non-JSON output for ${args.join(' ')}` }; }
+}
+
+export function codexPluginStatus(options = {}) {
+  const { runJson = runCodexJson, ...commandOptions } = options;
+  const listed = runJson(['plugin', 'list', '--json'], commandOptions);
+  if (!listed.ok) return { available: false, installed: false, enabled: false, error: listed.error };
+  const rows = Array.isArray(listed.value?.installed) ? listed.value.installed : [];
+  const row = rows.find((candidate) => candidate?.pluginId === CODEX_PLUGIN_ID);
+  return {
+    available: true,
+    installed: Boolean(row?.installed),
+    enabled: Boolean(row?.enabled),
+    version: row?.version || null,
+    row: row || null,
+  };
+}
+
+export function wireCodexPlugin({
+  codexDir = codexHomeDir(),
+  codexHome = codexDir,
+  codexBin = process.env.CODEX_BIN || 'codex',
+  marketplaceSource = CODEX_MARKETPLACE_SOURCE,
+  expectedVersion = PACKAGE_VERSION,
+  cwd = process.cwd(),
+  announce = true,
+  runJson = runCodexJson,
+} = {}) {
+  if (!fs.existsSync(codexDir)) return { host: false, action: 'no-host' };
+  const options = { codexBin, codexHome, cwd };
+  const before = codexPluginStatus({ ...options, runJson });
+  if (!before.available) {
+    if (announce) warn(`Codex plugin lifecycle not installed — ${before.error}`);
+    return { host: true, action: 'codex-unavailable', ...before };
+  }
+  if (before.installed && !before.enabled) {
+    if (announce) warn(`Codex Brain plugin is installed but disabled by user or policy — left disabled (${CODEX_PLUGIN_ID}).`);
+    return { host: true, action: 'disabled', ...before };
+  }
+  if (before.installed && before.enabled && (!expectedVersion || before.version === expectedVersion)) {
+    if (announce) ok(`Codex Brain plugin already installed and enabled (${before.version || 'version unknown'}) — no changes.`);
+    return { host: true, action: 'unchanged', ...before };
+  }
+
+  const markets = runJson(['plugin', 'marketplace', 'list', '--json'], options);
+  if (!markets.ok) {
+    if (announce) warn(`Codex marketplace check failed — ${markets.error}`);
+    return { host: true, action: 'marketplace-check-failed', error: markets.error };
+  }
+  const marketRows = codexMarketplaceRows(markets.value);
+  const known = marketRows.some((market) => market?.name === CODEX_MARKETPLACE);
+  const marketAction = known
+    ? runJson(['plugin', 'marketplace', 'upgrade', CODEX_MARKETPLACE, '--json'], options)
+    : runJson(['plugin', 'marketplace', 'add', marketplaceSource, '--json'], options);
+  if (!marketAction.ok) {
+    if (announce) warn(`Codex marketplace ${known ? 'upgrade' : 'add'} failed — ${marketAction.error}`);
+    return { host: true, action: 'marketplace-failed', error: marketAction.error };
+  }
+  const added = runJson(['plugin', 'add', CODEX_PLUGIN_ID, '--json'], options);
+  if (!added.ok) {
+    if (announce) warn(`Codex plugin install failed — ${added.error}. The prior MCP registration remains intact.`);
+    return { host: true, action: 'plugin-failed', error: added.error };
+  }
+  const after = codexPluginStatus({ ...options, runJson });
+  if (!after.installed || !after.enabled) {
+    if (announce) warn('Codex accepted the install command but the Brain plugin is not installed and enabled.');
+    return { host: true, action: 'verification-failed', ...after };
+  }
+  if (announce) {
+    ok(`Codex Brain plugin installed and enabled (${after.version || 'version unknown'}).`);
+  }
+  return { host: true, action: before.installed ? 'updated' : 'installed', ...after };
+}
+
+function codexHooksList({
+  codexBin = process.env.CODEX_BIN || 'codex',
+  codexHome = codexHomeDir(),
+  cwd = process.cwd(),
+  timeoutMs = 8_000,
+} = {}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let buffer = '';
+    let stderr = '';
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.kill(); } catch { /* already exited */ }
+      resolve(value);
+    };
+    const child = spawn(codexBin, ['app-server'], {
+      cwd,
+      env: { ...process.env, CODEX_HOME: codexHome },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const timer = setTimeout(() => finish({ ok: false, error: `Codex hooks probe timed out after ${timeoutMs}ms` }), timeoutMs);
+    child.on('error', (error) => finish({ ok: false, error: error.message }));
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.stdout.on('data', (chunk) => {
+      buffer += String(chunk);
+      let newline;
+      while ((newline = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        let message;
+        try { message = JSON.parse(line); } catch { continue; }
+        if (message.id === 1) {
+          child.stdin.write(`${JSON.stringify({ method: 'initialized' })}\n`);
+          child.stdin.write(`${JSON.stringify({ method: 'hooks/list', id: 2, params: { cwds: [cwd] } })}\n`);
+        } else if (message.id === 2) {
+          finish(message.error
+            ? { ok: false, error: message.error.message || JSON.stringify(message.error) }
+            : { ok: true, value: message.result });
+        }
+      }
+    });
+    child.on('exit', (code) => {
+      if (!settled) finish({ ok: false, error: stderr.trim() || `Codex app-server exited ${code} before hooks/list` });
+    });
+    child.stdin.write(`${JSON.stringify({
+      method: 'initialize',
+      id: 1,
+      params: { clientInfo: { name: 'ruvnet_brain_doctor', title: 'RuvNet Brain Doctor', version: PACKAGE_VERSION || '0' } },
+    })}\n`);
+  });
+}
+
+export function classifyCodexLifecycle(plugin, listed = null) {
+  if (!plugin.available) return { state: 'probe-failed', plugin, hooks: [], error: plugin.error };
+  if (!plugin.installed) return { state: 'not-installed', plugin, hooks: [] };
+  if (!plugin.enabled) return { state: 'disabled', plugin, hooks: [] };
+  if (!listed.ok) return { state: 'probe-failed', plugin, hooks: [], error: listed.error };
+  const groups = Array.isArray(listed.value?.data) ? listed.value.data : [];
+  const hooks = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : [])
+    .filter((hook) => hook?.pluginId === CODEX_PLUGIN_ID);
+  const errors = groups.flatMap((group) => Array.isArray(group?.errors) ? group.errors : []);
+  if (errors.length || hooks.length === 0) {
+    return { state: 'missing-runtime-hooks', plugin, hooks, errors };
+  }
+  if (hooks.some((hook) => hook.enabled === false)) return { state: 'disabled', plugin, hooks, errors };
+  if (hooks.every((hook) => hook.trustStatus === 'trusted')) return { state: 'active', plugin, hooks, errors };
+  return { state: 'pending-trust', plugin, hooks, errors };
+}
+
+export async function codexLifecycleStatus(options = {}) {
+  const plugin = codexPluginStatus(options);
+  if (!plugin.available || !plugin.installed || !plugin.enabled) {
+    return classifyCodexLifecycle(plugin);
+  }
+  return classifyCodexLifecycle(plugin, await codexHooksList(options));
+}
+
+export function codexLifecycleGuidance(status) {
+  const hookCount = Array.isArray(status?.hooks) ? status.hooks.length : 0;
+  switch (status?.state) {
+    case 'active':
+      return {
+        healthy: true,
+        intentional: false,
+        summary: `Codex lifecycle active (${hookCount} Brain hook${hookCount === 1 ? '' : 's'} enabled and trusted).`,
+        detail: 'Proactive grounding, routing, learning capture, and session continuity are on.',
+        action: null,
+      };
+    case 'pending-trust':
+      return {
+        healthy: false,
+        intentional: false,
+        summary: `Codex installed the Brain, but ${hookCount || 'its'} lifecycle hook${hookCount === 1 ? '' : 's'} await review.`,
+        detail: 'Search works now; proactive interventions start after Codex records hook trust.',
+        action: `Start a fresh Codex session, run /hooks, and trust only ${CODEX_PLUGIN_ID}.`,
+      };
+    case 'disabled':
+      return {
+        healthy: false,
+        intentional: true,
+        summary: 'Codex Brain lifecycle is disabled.',
+        detail: 'The installer preserved your explicit disabled state instead of silently overriding it.',
+        action: null,
+      };
+    case 'not-installed':
+      return {
+        healthy: false,
+        intentional: false,
+        summary: 'Codex can reach the Brain MCP, but the proactive lifecycle plugin is not installed.',
+        detail: 'Questions can still be grounded; automatic routing, learning, and session guidance are inactive.',
+        action: 'Run npx ruvnet-brain to install and verify the Codex lifecycle plugin.',
+      };
+    case 'missing-runtime-hooks':
+      return {
+        healthy: false,
+        intentional: false,
+        summary: 'Codex has the Brain plugin, but its runtime hooks are missing or invalid.',
+        detail: Array.isArray(status?.errors) && status.errors.length
+          ? status.errors.map(String).join('; ')
+          : 'The installed plugin snapshot did not produce runnable lifecycle definitions.',
+        action: `Run codex plugin marketplace upgrade ${CODEX_MARKETPLACE}, then npx ruvnet-brain.`,
+      };
+    default:
+      return {
+        healthy: false,
+        intentional: false,
+        summary: 'Codex lifecycle status could not be verified.',
+        detail: status?.error || 'Codex did not return a lifecycle status.',
+        action: 'Run npx ruvnet-brain --doctor after confirming codex is on PATH.',
+      };
+  }
+}
+
+function printCodexLifecycle(status) {
+  const guidance = codexLifecycleGuidance(status);
+  console.log(`  ${guidance.healthy ? c.green('✓') : guidance.intentional ? c.dim('○') : c.yellow('!')} ${guidance.summary}`);
+  if (guidance.detail) console.log(`    ${guidance.detail}`);
+  if (guidance.action) console.log(`    ${c.bold(`Fix: ${guidance.action}`)}`);
+  return guidance;
+}
+
 // ── step: verify the install is REAL (counts — never take "installed" on faith) ──────────────────
 // Shared state-gatherer behind verifyInstall / --doctor / --feedback: what is REALLY on disk.
 // Pure read, never prints — callers decide how to narrate (or, for --feedback, how to report) it.
@@ -1145,10 +1395,13 @@ async function doctor() {
   // from disk (our entry present AND the server.mjs it names really there), never asserted from the
   // fact that an install once ran.
   const cx = codexStatus();
+  let codexLifecycle = null;
   if (!cx.host) {
     console.log(`  ${c.dim('Codex: no host detected (no ~/.codex) — nothing to wire.')}`);
   } else if (cx.wired) {
     console.log(`  ${c.green('✓ Codex: wired.')} search_ruvnet is registered in ~/.codex/config.toml and its server exists.`);
+    codexLifecycle = await codexLifecycleStatus();
+    printCodexLifecycle(codexLifecycle);
   } else {
     console.log(`  ${c.yellow('! Codex: host detected but NOT wired')}${
       cx.serverPath && !cx.serverExists ? ` — registered server is missing (${cx.serverPath})` : ' — no [mcp_servers.ruvnet-brain] entry'
@@ -1209,7 +1462,14 @@ async function doctor() {
   // Without --hooks the verdict is the install-state check the old code already computed and threw
   // away, PLUS the persisted grounding verdict above. `allGreen` was RIGHT here all along; nothing
   // ever read it.
-  const failed = (hookResult ? hookResult.exitCode !== 0 : !allGreen) || groundingUnprovenPersisted;
+  const codexLifecycleFailed = Boolean(
+    codexLifecycle
+    && !codexLifecycleGuidance(codexLifecycle).healthy
+    && !codexLifecycleGuidance(codexLifecycle).intentional,
+  );
+  const failed = (hookResult ? hookResult.exitCode !== 0 : !allGreen)
+    || groundingUnprovenPersisted
+    || codexLifecycleFailed;
   if (failed && !hookResult && !groundingUnprovenPersisted) {
     console.log(`  ${c.red('✗ FAILING')} — the warnings above are real. Re-run  ${c.bold('npx ruvnet-brain')}  to repair.`);
   }
@@ -3232,7 +3492,15 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   const plugin = wirePlugin();
   // Codex hosts got nothing before this (issue #42): shipped, never registered. Non-fatal like every
   // other wiring step — a second host we cannot reach must never break the one we can.
-  try { wireCodexHost(); } catch (e) { warn(`(Codex wiring skipped: ${e && e.message})`); }
+  try {
+    const codexHost = wireCodexHost();
+    if (codexHost.host) {
+      const codexPlugin = wireCodexPlugin();
+      if (codexPlugin.available) printCodexLifecycle(await codexLifecycleStatus());
+    }
+  } catch (e) {
+    warn(`(Codex wiring skipped: ${e && e.message})`);
+  }
   // THE CONSUMPTION FIX (the 40/100 finding, half two). These two lines used to be exactly this:
   //
   //     verifyInstall(cacheDir);

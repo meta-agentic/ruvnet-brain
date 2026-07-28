@@ -42,6 +42,17 @@ function packedPaths() {
 }
 
 describe('npm pack ships every module bin/install.mjs dynamically imports', () => {
+  it('ships the Codex bootstrap assets the npm installer copies directly', () => {
+    const packed = packedPaths();
+    for (const required of [
+      'bin/install.mjs',
+      'plugin/mcp/server.mjs',
+      'plugin/scripts/codex-hook-wrapper.mjs',
+    ]) {
+      expect(packed.has(required), `npm pack is missing Codex bootstrap asset: ${required}`).toBe(true);
+    }
+  }, 120_000);
+
   it('the installer actually has dynamic imports to check (the list is not vacuously empty)', () => {
     expect(dynamicImportsOfInstaller().length).toBeGreaterThanOrEqual(3);
   }, 120_000);
