@@ -200,6 +200,100 @@ if [ -f "$ISSUE_STATUS" ] && command -v node >/dev/null 2>&1; then
   esac
 fi
 
+# ── External-signal watch plane, W1+W2 surfacing (ADR-058 §D3; DDD-0013 Context 2) ────────────────
+#
+# THE FAILURE THIS CLOSES: on 2026-07-27 GitHub CI was failing and the OWNER had to tell the model.
+# A product that pitches "proactive" and must be told about a red pipeline by its user has failed.
+# plugin/scripts/signal-watch.mjs (PostToolUse, matcher ^Bash$) opens a pending debt the moment a
+# `git push` succeeds, appended to pending.jsonl (that file's SINGLE writer). This block is the other
+# half: it polls the debt (scripts/signal-watch.mjs — this repo's own maintainer-only dev tool, same
+# class as issue-watch.mjs, so it simply does not exist on a downloader's machine and this whole
+# block stays silent there, matching the open-issue surfacer's own gating just above) when the cache
+# is stale, then surfaces a TRANSITION with zero user input — the 2026-07-27 incident replayed with
+# the human removed.
+#
+# THE ANTI-NAG LAW (ADR-058 §D3, its own hard rule with its own red mutant test): speak on
+# TRANSITIONS ONLY. Green emits ZERO bytes unless it closes a PREVIOUSLY-SURFACED red, which earns
+# exactly one closing line. surfaced.json is this session-start block's own small ledger of what has
+# already been told to the user, so a still-red debt is never re-nagged every session and a debt that
+# was never red never speaks at all on going green.
+#
+# NOT BRAIN_OFF-gated, matching the open-issue SLA banner immediately above (both are named in the
+# top-of-file split note as "KEEPS RUNNING while off" — an off machine must still be able to learn its
+# own CI just broke; this is not the brain advertising itself).
+SIGNAL_DIR="${RUVNET_SIGNAL_DIR:-$HOME/.cache/ruvnet-brain/external-signals}"
+SIGNAL_PENDING="$SIGNAL_DIR/pending.jsonl"
+SIGNAL_STATUS="$SIGNAL_DIR/ci-status.json"
+SIGNAL_SURFACED="$SIGNAL_DIR/surfaced.json"
+if [ -f "$SIGNAL_PENDING" ] && command -v node >/dev/null 2>&1; then
+  SIGNAL_POLLER="${CLAUDE_PROJECT_DIR:-$PWD}/scripts/signal-watch.mjs"
+  if [ -f "$SIGNAL_POLLER" ]; then
+    NOW_SIG=$(date +%s 2>/dev/null || echo 0)
+    LAST_POLL_SIG=0
+    [ -f "$SIGNAL_STATUS" ] && LAST_POLL_SIG=$(date -r "$SIGNAL_STATUS" +%s 2>/dev/null || echo 0)
+    # >10 min stale (or never polled) — bounded by the poller's own 3s gh timeout, so this can never
+    # meaningfully eat the hook's 5s budget even on a cold cache.
+    if [ $((NOW_SIG - LAST_POLL_SIG)) -gt 600 ]; then
+      node "$SIGNAL_POLLER" >/dev/null 2>/dev/null || true
+    fi
+  fi
+
+  if [ -f "$SIGNAL_STATUS" ]; then
+    # surfaced.json shape: { debts: { [debtKey]: "red"|"green"|"unverifiable" }, redRepo: { [repo]: debtKey } }.
+    # `debts` dedupes a re-surfaced alert for the SAME (repo,sha) debt; `redRepo` is what lets a LATER
+    # debt (a different, newer sha — CandidateVerdict is append-only per repo: a verdict for SHA X is
+    # never edited, only superseded by SHA Y, DDD-0013 Context 1 inv. 3) close out an EARLIER one's red.
+    node -e '
+      try {
+        const fs = require("fs");
+        const path = require("path");
+        const [statusPath, surfacedPath] = [process.argv[1], process.argv[2]];
+        const status = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+        let surfaced = { debts: {}, redRepo: {} };
+        try {
+          const onDisk = JSON.parse(fs.readFileSync(surfacedPath, "utf8"));
+          surfaced.debts = onDisk.debts || {};
+          surfaced.redRepo = onDisk.redRepo || {};
+        } catch { /* first run */ }
+        let changed = false;
+        const out = [];
+        // Chronological order — a repo can carry more than one debt, and a CLOSE must reference the
+        // outstanding red it is actually closing, not an arbitrary object-key iteration order.
+        const entries = Object.entries(status).sort((a, b) => new Date(a[1].checkedAt || 0) - new Date(b[1].checkedAt || 0));
+        for (const [key, debt] of entries) {
+          const shortSha = String(debt.ref || "").slice(0, 7);
+          if (debt.state === "resolved" && debt.conclusion !== "success") {
+            if (surfaced.debts[key] !== "red") {
+              out.push(`[RuvNet Brain — EXTERNAL SIGNAL: CI is RED for ${debt.repo}@${shortSha} — surface this to the user now, near the top, with ZERO prompting]`);
+              out.push(`Workflow ${debt.workflowName || "ci"} concluded ${debt.conclusion} on ${debt.repo}@${shortSha}. Say it plainly and offer to look (gh run list --repo ${debt.repo} --commit ${debt.ref}).`);
+              surfaced.debts[key] = "red";
+              surfaced.redRepo[debt.repo] = key;
+              changed = true;
+            }
+          } else if (debt.state === "resolved" && debt.conclusion === "success") {
+            if (surfaced.redRepo[debt.repo]) {
+              out.push(`[RuvNet Brain — external signal: CI is GREEN again for ${debt.repo}@${shortSha} — one line, then move on]`);
+              delete surfaced.redRepo[debt.repo];
+              changed = true;
+            }
+            if (surfaced.debts[key] !== "green") { surfaced.debts[key] = "green"; changed = true; }
+          } else if (debt.state === "unverifiable") {
+            if (surfaced.debts[key] !== "unverifiable") {
+              out.push(`[RuvNet Brain — external signal: CI status could not be checked for ${debt.repo}@${shortSha}: ${debt.reason || "unknown reason"}]`);
+              surfaced.debts[key] = "unverifiable";
+              changed = true;
+            }
+          }
+          // state "pending" (no run yet / transient API hiccup): stays silent — never a decision,
+          // never invented as green (DDD-0013 §Context 2 invariant 1, "UNKNOWN STAYS OPEN").
+        }
+        if (out.length) console.log(out.join("\n"));
+        if (changed) { fs.mkdirSync(path.dirname(surfacedPath), { recursive: true }); fs.writeFileSync(surfacedPath, JSON.stringify(surfaced, null, 2)); }
+      } catch { /* fail-silent — surfacing must never block session start */ }
+    ' "$SIGNAL_STATUS" "$SIGNAL_SURFACED" 2>/dev/null
+  fi
+fi
+
 # ── MetaHarness router: the ONE-LINER OFFER (Stuart's exact UX, 2026-07-12): offer yes/no → on
 # yes, ask two questions → then SHOW the user their recommended path (zero-cost options + what the
 # router uses when work must go out to a paid API). Offered at most once ever per machine; without
