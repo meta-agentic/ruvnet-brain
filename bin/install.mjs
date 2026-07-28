@@ -1127,10 +1127,30 @@ async function doctor() {
     console.log(`  ${c.dim('── hook battery (installed hooks.json, four stdin regimes, external watchdog) ──')}`);
     hookResult = await runSelfCheck({ installState: { repos: v.repos, reader: v.reader, mcp: v.mcp } });
   }
+
+  // ── THE PERSISTED GROUNDING VERDICT (ADR-058 §D8) — read-only, never re-derived here ────────────
+  // bin/install.mjs's own install run is the ONLY writer (right after its real smoke query), so a
+  // failed smoke stays non-fatal there. `--doctor` is different: it is the command someone runs
+  // SPECIFICALLY TO ASK whether the install is healthy, so this is the one place an unresolved
+  // "unproven" verdict DOES gate the exit code — without doctor() re-running a second live query
+  // (the live smoke result printed above already updates the SAME file the next real install or
+  // search_ruvnet touches; this just reads back whatever the most recent real attempt recorded).
+  let groundingUnprovenPersisted = false;
+  try {
+    const mod = await import(new URL('../scripts/selfcheck.mjs', import.meta.url).href);
+    groundingUnprovenPersisted = mod.groundingUnproven(mod.readInstallState());
+    if (groundingUnprovenPersisted) {
+      console.log(`  ${c.yellow('! Grounding UNPROVEN')} (recorded at ${c.bold(mod.installStatePath())}).`);
+      console.log(`    This is what makes ${c.bold('--doctor')} fail here even though nothing above crashed — re-run`);
+      console.log(`    ${c.bold('npx ruvnet-brain')} once you're online, or ask a real question, to clear it.`);
+    }
+  } catch { /* selfcheck.mjs unavailable — degrade to the live smoke signal already printed above */ }
+
   // Without --hooks the verdict is the install-state check the old code already computed and threw
-  // away. `allGreen` was RIGHT here all along; nothing ever read it.
-  const failed = hookResult ? hookResult.exitCode !== 0 : !allGreen;
-  if (failed && !hookResult) {
+  // away, PLUS the persisted grounding verdict above. `allGreen` was RIGHT here all along; nothing
+  // ever read it.
+  const failed = (hookResult ? hookResult.exitCode !== 0 : !allGreen) || groundingUnprovenPersisted;
+  if (failed && !hookResult && !groundingUnprovenPersisted) {
     console.log(`  ${c.red('✗ FAILING')} — the warnings above are real. Re-run  ${c.bold('npx ruvnet-brain')}  to repair.`);
   }
   return failed ? 1 : 0;
@@ -2971,7 +2991,10 @@ Usage:
   node bin/install.mjs --yes, -y           Accept every optional offer (good for scripted installs)
 
 Env:
-  RUVNET_BRAIN_KB   Override where the brain is stored (default ~/.cache/ruvnet-brain/kb)
+  RUVNET_BRAIN_KB       Override where the brain is stored (default ~/.cache/ruvnet-brain/kb)
+  RUVNET_STRICT_INSTALL Make an unproven grounding smoke FATAL (default: never — a first-run model
+                        download or an air-gapped machine is not a broken install). Only ever set
+                        this for a locked-down environment where you want to know immediately.
 
 It is safe to re-run at any time. After installing, restart Claude Code so the grounding hook loads.
 `);
@@ -3252,6 +3275,33 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // user without failing the install.
   if (smoke && smoke.grounded === false) {
     warn('grounding was not proven on this run — the install is present but no verifiable citation came back.');
+  }
+
+  // ── THE DEGRADED STATE, PERSISTED, NOT DODGED (ADR-058 §D8 "the grounding-smoke decision") ──────
+  // A failed smoke stays NON-FATAL here — a first-run model download or an air-gapped machine is
+  // not a broken install, and blocking on it here would fail every offline user on first contact.
+  // What changes is that the verdict stops EVAPORATING: it is written to disk so `--doctor` and
+  // session-start.sh can see it without re-running a live query, and the FIRST REAL search_ruvnet
+  // later either clears it (a real cited answer came back) or reconfirms it. `RUVNET_STRICT_INSTALL`
+  // is the one place this non-fatal default flips to fatal — used ONLY by the hostile-machine CI
+  // cell to prove the strict path is real, never set by a real install.
+  try {
+    const mod = await import(new URL('../scripts/selfcheck.mjs', import.meta.url).href);
+    const grounding = smoke && smoke.grounded === true ? 'proven' : 'unproven';
+    mod.writeInstallState({
+      grounding,
+      reason: !smoke ? 'verify-skipped' : (smoke.grounded === true ? null : (smoke.reason || (smoke.ran ? 'not-grounded' : 'no-answer'))),
+    });
+    if (grounding !== 'proven' && process.env.RUVNET_STRICT_INSTALL === '1') {
+      die(
+        'RUVNET_STRICT_INSTALL=1 and grounding was not proven on this run — refusing to report success.',
+        'This strict mode exists only to prove the DEGRADED state is real (ADR-058 §D8); a default\ninstall never fails here — unset RUVNET_STRICT_INSTALL to get the normal, non-fatal behavior.',
+      );
+    }
+  } catch (e) {
+    // Persisting the verdict must never break a finished install — but a silently-skipped write is
+    // exactly the kind of thing that must be visible, not swallowed, so it is named here.
+    warn(`(could not persist the grounding verdict: ${e && e.message})`);
   }
 })().catch((e) => {
   die(e && e.message ? e.message : String(e));

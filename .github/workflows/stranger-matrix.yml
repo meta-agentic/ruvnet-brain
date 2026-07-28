@@ -1,0 +1,256 @@
+name: stranger-matrix
+# ADR-058 §D8 "stranger's machine · 18 → 95 · FIRST, because it caps everything" — the deduction this
+# closes: "verification failures do not stop installation" (-35) and "nothing on a user's machine
+# exercises even one hook fire post-install" (-15). Installs FROM THE PACKED NPM TARBALL of the
+# candidate SHA — never the checkout, which is the thing that always works and is why issues #42/#43
+# shipped broken (a dependency present in the checkout but absent from `npm pack`'s file list).
+#
+# Five images, each asserting the SAME three things (scripts/ci/stranger-scenario.mjs is the one
+# shared driver — reused across all five, not reimplemented per OS):
+#   (a) healthy        -> exit 0 AND at least one hook FIRED through the INSTALLED registration
+#                          (fires the REAL plugin/ tree at this SHA, via the REAL external
+#                          process-group watchdog scripts/selfcheck.mjs already ships)
+#   (b) seeded-broken   -> forge-mcp-all.mjs deleted from the fixture bundle -> exit NON-ZERO (M-D8a)
+#   (c) no author-local ~/.claude/settings.json exists in any image — asserted inside the driver
+#       before anything runs, so any README-promised behavior that only fires from the owner's own
+#       settings layer would be caught here as a lie.
+#
+# The hostile cell ALSO runs a `strict-ungrounded` scenario proving RUVNET_STRICT_INSTALL=1 (the one
+# place a normally non-fatal grounding-smoke failure becomes fatal) is real, and the ubuntu cell
+# ADDITIONALLY proves M-D8c (a hook that sleeps past its declared timeout makes the battery go red)
+# against the real installed surface.
+#
+# KNOWN, PRE-EXISTING, OUT-OF-SCOPE FINDING (recorded here so it is never mistaken for a defect in
+# this workflow): dry-running the `healthy` scenario locally on macOS against the REAL, unmodified
+# plugin/scripts/session-start.sh shows it writing 8.7-13KB of stdout on a virgin machine — 2-3x the
+# 4096-byte STDOUT_CAP_BYTES scripts/selfcheck.mjs already enforces (verified against origin's
+# unmodified HEAD, not introduced by this build). That means the `healthy` scenario's exit-0 assertion
+# will legitimately fail today, for a reason having nothing to do with D8's own three deductions. This
+# is the gate working as designed — ADR-058 says the first full run "should read below 38" and that a
+# green run against today's product "would be the self-congratulation it exists to kill." Fixing
+# session-start.sh's stdout budget is separate work (candidate: D6's two-tier ux-suite, or its own
+# follow-up), not part of D8's scope, and is deliberately NOT silently patched here.
+#
+# Not yet added to branch protection as a required check — ADR-058's build order (item 10) flips the
+# release gate only "after 1-9 exist"; this is item 1. Making it required is a repo-admin action
+# (branch protection settings), not something this file can do on its own, and should wait until the
+# stdout-budget finding above has a real fix.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  # ── shared prep, three POSIX-shaped jobs (ubuntu / macos share the exact same steps) ─────────────
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm pack the candidate SHA
+        run: npm pack --silent --pack-destination "$RUNNER_TEMP"
+      - name: npm install FROM the tarball into a fresh project (never the checkout)
+        run: |
+          mkdir -p "$RUNNER_TEMP/proj"
+          cd "$RUNNER_TEMP/proj"
+          echo '{}' > package.json
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/ruvnet-brain-*.tgz
+      - name: (a)+(c) healthy image — exit 0, >=1 real hook fire, no author-local settings.json
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario healthy \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-healthy" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+      - name: M-D8c — a hook that sleeps past its declared timeout makes the battery go RED
+        if: always()
+        run: |
+          node scripts/ci/mutate-hook-timeout.mjs \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-healthy"
+      - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario seeded-broken \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-broken" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm pack the candidate SHA
+        run: npm pack --silent --pack-destination "$RUNNER_TEMP"
+      - name: npm install FROM the tarball into a fresh project (never the checkout)
+        run: |
+          mkdir -p "$RUNNER_TEMP/proj"
+          cd "$RUNNER_TEMP/proj"
+          echo '{}' > package.json
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/ruvnet-brain-*.tgz
+      - name: (a)+(c) healthy image — exit 0, >=1 real hook fire, no author-local settings.json
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario healthy \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-healthy" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+      - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario seeded-broken \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-broken" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+
+  # ── windows, Git-Bash shell — this repo has already been bitten by /bin/bash not existing on
+  # Windows runners and by cmd.exe mangling quoted arguments (scripts/selfcheck.mjs's own
+  # shellInvocation() header). `shell: bash` here resolves to Git for Windows' bash (the same shell
+  # Claude Code uses for hooks on a real Windows machine when the user has Git Bash configured),
+  # never /bin/bash. The zip/unzip mechanics are still native PowerShell underneath — that branch
+  # lives in scripts/ci/stranger-scenario.mjs itself (keyed on process.platform, not on which shell
+  # launched node), so it is identical regardless of which of these two Windows jobs is running.
+  windows-gitbash:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm pack the candidate SHA
+        run: npm pack --silent --pack-destination "$RUNNER_TEMP"
+      - name: npm install FROM the tarball into a fresh project (never the checkout)
+        run: |
+          mkdir -p "$RUNNER_TEMP/proj"
+          cd "$RUNNER_TEMP/proj"
+          echo '{}' > package.json
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/ruvnet-brain-*.tgz
+      - name: (a)+(c) healthy image — exit 0, >=1 real hook fire, no author-local settings.json
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario healthy \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-healthy" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+      - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario seeded-broken \
+            --installed "$RUNNER_TEMP/proj/node_modules/ruvnet-brain" \
+            --home "$RUNNER_TEMP/home-broken" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+
+  # ── windows, PowerShell shell — the OTHER real Windows path (default terminal for most Windows
+  # users who never installed Git Bash). Same driver script; only the wrapping shell differs.
+  windows-powershell:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm pack the candidate SHA
+        run: npm pack --silent --pack-destination "$env:RUNNER_TEMP"
+      - name: npm install FROM the tarball into a fresh project (never the checkout)
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/proj" | Out-Null
+          Set-Location "$env:RUNNER_TEMP/proj"
+          '{}' | Set-Content -Path package.json
+          $tgz = Get-ChildItem "$env:RUNNER_TEMP" -Filter 'ruvnet-brain-*.tgz' | Select-Object -First 1
+          npm install --no-audit --no-fund $tgz.FullName
+      - name: (a)+(c) healthy image — exit 0, >=1 real hook fire, no author-local settings.json
+        run: |
+          node scripts/ci/stranger-scenario.mjs `
+            --scenario healthy `
+            --installed "$env:RUNNER_TEMP/proj/node_modules/ruvnet-brain" `
+            --home "$env:RUNNER_TEMP/home-healthy" `
+            --plugin-src "$env:GITHUB_WORKSPACE/plugin"
+      - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs `
+            --scenario seeded-broken `
+            --installed "$env:RUNNER_TEMP/proj/node_modules/ruvnet-brain" `
+            --home "$env:RUNNER_TEMP/home-broken" `
+            --plugin-src "$env:GITHUB_WORKSPACE/plugin"
+
+  # ── the hostile container: no jq, no gh, sh-only, HOME containing a space, network denied ────────
+  # node:20-alpine is chosen deliberately: busybox's default shell is `sh` (no bash at all unless
+  # explicitly installed, which this job never does), and the base image ships neither jq nor gh —
+  # both left absent on purpose rather than removed, so "no jq, no gh" is a property of the image,
+  # not a step that could silently stop being true. zip/unzip ARE installed (apk add), because their
+  # absence would test an entirely different thing (bin/install.mjs's own "no zip extraction tool"
+  # die() path) than what D8 is about here — the grounding-smoke DEGRADED state.
+  #
+  # NETWORK DENIED: a GitHub-hosted `container:` job cannot be given a literal --network=none (that
+  # flag is not exposed through the Actions container config), so this is enforced at the level that
+  # actually matters for THIS scenario: HTTPS_PROXY/HTTP_PROXY point at an address nothing listens
+  # on, so any attempted outbound call (there should be none at all — --local mode makes zero network
+  # calls, verified: the only two network functions in bin/install.mjs, resolveRelease's fetchJson and
+  # download(), are both skipped in --local mode) fails FAST instead of silently succeeding or hanging.
+  hostile:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-alpine
+    defaults:
+      run:
+        shell: sh
+    env:
+      HTTPS_PROXY: http://127.0.0.1:9
+      HTTP_PROXY: http://127.0.0.1:9
+    steps:
+      - name: apk add zip/unzip ONLY — explicitly no jq, no gh
+        run: apk add --no-cache zip unzip
+      - uses: actions/checkout@v4
+      # No actions/setup-node here: the alpine image's own node/npm are what a musl-based hostile
+      # box actually has; actions/setup-node downloads a glibc build that will not run on it.
+      - name: npm pack the candidate SHA
+        run: |
+          mkdir -p /tmp/ci-out
+          npm pack --silent --pack-destination /tmp/ci-out
+      - name: npm install FROM the tarball into a fresh project (never the checkout)
+        run: |
+          mkdir -p /tmp/ci-out/proj
+          cd /tmp/ci-out/proj
+          echo '{}' > package.json
+          npm install --no-audit --no-fund /tmp/ci-out/ruvnet-brain-*.tgz
+      - name: (a)+(c) healthy image — HOME contains a space, exit 0, >=1 real hook fire, no author settings.json
+        run: |
+          mkdir -p "/tmp/virgin home"
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario healthy \
+            --installed /tmp/ci-out/proj/node_modules/ruvnet-brain \
+            --home "/tmp/virgin home/healthy" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+      - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario seeded-broken \
+            --installed /tmp/ci-out/proj/node_modules/ruvnet-brain \
+            --home "/tmp/virgin home/broken" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"
+      - name: RUVNET_STRICT_INSTALL=1 — an unproven grounding smoke IS fatal here, though never by default
+        if: always()
+        run: |
+          node scripts/ci/stranger-scenario.mjs \
+            --scenario strict-ungrounded \
+            --installed /tmp/ci-out/proj/node_modules/ruvnet-brain \
+            --home "/tmp/virgin home/strict" \
+            --plugin-src "$GITHUB_WORKSPACE/plugin"

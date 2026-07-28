@@ -84,6 +84,66 @@ async function loadRegistry() {
   return import(new URL(`file://${path.join(here, 'hook-registry.mjs')}`).href);
 }
 
+// ── §0 THE PERSISTED GROUNDING VERDICT (ADR-058 D8 — the "-20 grounding smoke never fatal" line) ──
+/**
+ * A failed grounding smoke stays NON-FATAL on a default install — a first-run model download or an
+ * air-gapped machine is not a broken install, and blocking there fails every offline user. What
+ * changes is that the verdict stops EVAPORATING the moment the process exits:
+ *
+ *   WRITER   bin/install.mjs, once, right after its own real smoke-query attempt.
+ *   READER   bin/install.mjs's `--doctor` (via groundingUnproven() below) — the one place this DOES
+ *            gate an exit code, because --doctor is the command someone runs specifically TO ASK
+ *            whether the install is healthy, unlike a fresh install which must never abort on this.
+ *   CLEARER  kb/forge-mcp-all.mjs, the moment a REAL search_ruvnet returns real cited passages —
+ *            "the first real search_ruvnet clears or confirms it" (ADR-058 §D8). That file cannot
+ *            import this one (it ships standalone inside the KB bundle, a different runtime root —
+ *            see its own header note on the OFF-switch check for the identical reasoning), so it
+ *            duplicates the tiny path+write logic rather than reaching across that boundary.
+ *   SURFACER plugin/scripts/session-start.sh reads the same file directly (no node dependency to
+ *            spare there either) — this JSON shape is the one contract all four sides share.
+ *
+ * Path matches the existing token-ledger convention (bin/install.mjs's meterSummaryLine() /
+ * scripts/token-report.mjs's CANONICAL_LEDGER): XDG_CACHE_HOME when set, else ~/.cache. Deliberately
+ * NOT under the (possibly RUVNET_BRAIN_KB-overridden) KB dir — this is a HOME-scoped fact, a sibling
+ * of health.json, not a KB artifact.
+ */
+export function installStatePath() {
+  return path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'ruvnet-brain', 'install-state.json');
+}
+
+/** Never throws. Absence is a valid, common state (nothing has ever written here) — returns null. */
+export function readInstallState() {
+  try { return JSON.parse(fs.readFileSync(installStatePath(), 'utf8')); } catch { return null; }
+}
+
+/**
+ * Merge-write the verdict. Best-effort: a failed write must never break whichever caller (install,
+ * doctor, or the MCP server mid-query) is trying to record it. Write-beside-then-rename so a reader
+ * racing the writer never observes a torn/partial file.
+ */
+export function writeInstallState(patch) {
+  const p = installStatePath();
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync(p, 'utf8')); } catch { /* first write */ }
+  const next = { ...prev, ...patch, at: new Date().toISOString() };
+  try {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    const tmp = `${p}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify(next, null, 2));
+    fs.renameSync(tmp, p);
+  } catch { /* best-effort — persisting the verdict must never break the caller */ }
+  return next;
+}
+
+/**
+ * true only when a verdict was actually recorded AND it says something other than 'proven'. No
+ * recorded state at all (a machine that has never run this install, or an install that predates
+ * this feature) is NOT "unproven" — it is unknown, and an unknown must never be charged as a fail.
+ */
+export function groundingUnproven(state) {
+  return Boolean(state) && state.grounding !== 'proven';
+}
+
 // ── §1 RESOLVE THE INSTALLED SURFACE (never the repo's) ─────────────────────────────────────────
 /**
  * Find the plugin payload Claude Code actually BOOTED. Order matters and is not arbitrary:

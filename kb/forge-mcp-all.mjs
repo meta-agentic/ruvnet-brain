@@ -53,6 +53,36 @@ function meterLog(entry) {
   } catch { /* never let metering break a query */ }
 }
 
+// ── CLEAR THE INSTALL-TIME "grounding: unproven" VERDICT (ADR-058 §D8) ──────────────────────────
+// bin/install.mjs writes ~/.cache/ruvnet-brain/install-state.json = { grounding: "unproven" } when
+// its own one-shot smoke query couldn't prove grounding at install time (offline, first-run model
+// download, etc.) — deliberately NON-FATAL there. "The first real search_ruvnet clears or confirms
+// it": once a REAL query from here returns REAL cited passages, there is no more excuse for the
+// persisted verdict to still say unproven, so this clears it the same instant.
+//
+// Same duplication rule as brainOffState() above and for the identical reason: this file ships
+// standalone INSIDE the knowledge bundle (a different runtime root than scripts/selfcheck.mjs,
+// which owns the canonical read/write pair for --doctor and the installer) — an import reaching out
+// to scripts/ would be MODULE_NOT_FOUND on every real install. Path resolution mirrors meterLog()
+// immediately above, not scripts/selfcheck.mjs's os.homedir()-based version, because this file has
+// no `os` import of its own (see the same convention in brainOffState()).
+function markGroundingProven() {
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const dir = process.env.XDG_CACHE_HOME
+      ? path.join(process.env.XDG_CACHE_HOME, 'ruvnet-brain')
+      : path.join(home, '.cache', 'ruvnet-brain');
+    const p = path.join(dir, 'install-state.json');
+    let prev = {};
+    try { prev = JSON.parse(fs.readFileSync(p, 'utf8')); } catch { /* nothing recorded yet, or unreadable */ }
+    if (prev.grounding === 'proven') return; // already clear — no write, no churn
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = `${p}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify({ ...prev, grounding: 'proven', clearedBy: 'search_ruvnet', at: new Date().toISOString() }, null, 2));
+    fs.renameSync(tmp, p);
+  } catch { /* never let this break or delay a real query response */ }
+}
+
 // ── THE OFF SWITCH (ADR-054 §2/§3) — read per call, never cached. ───────────────────────────────
 // A bare existsSync on ~/.config/ruvnet-brain/brain-off. It is duplicated from scripts/brain-state.mjs
 // rather than imported for a hard structural reason: this file ships INSIDE the knowledge bundle,
@@ -310,6 +340,10 @@ async function handle(msg) {
         // tests/unit/fourth-wall.test.mjs T4 for all five shapes.
         let receipt = null;
         try { if (evidence) receipt = evidence.recordAnswer({ query, repos, results }); } catch { /* never */ }
+        // ADR-058 §D8: a REAL cited answer (results.length > 0, not the "no results" branch above)
+        // clears the install-time "grounding: unproven" verdict. Same success-path scope as the
+        // receipt line just above — an empty result must never be mistaken for proof.
+        if (results.length > 0) markGroundingProven();
         return ok(id, {
           content: [{ type: 'text', text: body }],
           isError: false,
