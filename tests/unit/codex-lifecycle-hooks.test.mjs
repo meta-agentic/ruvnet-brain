@@ -110,7 +110,7 @@ describe('Codex lifecycle hook packaging', () => {
 });
 
 describe('Codex lifecycle adapter', () => {
-  it('passes SessionStart text through as developer context', () => {
+  it('wraps bracket-prefixed SessionStart text in the exact Codex context envelope', () => {
     const { home, brain } = fixture();
     installGeneration(brain, 'v1', 'process.stdin.resume(); process.stdin.on("end",()=>process.stdout.write("[RuvNet Brain start]"));');
 
@@ -123,7 +123,12 @@ describe('Codex lifecycle adapter', () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
-    expect(result.stdout).toBe('[RuvNet Brain start]');
+    expect(JSON.parse(result.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: '[RuvNet Brain start]',
+      },
+    });
   });
 
   it('maps Codex PLUGIN_ROOT to the Claude-compatible variable used by shared hooks', () => {
@@ -143,7 +148,12 @@ describe('Codex lifecycle adapter', () => {
     }, { PLUGIN_ROOT: pluginRoot });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe(pluginRoot);
+    expect(JSON.parse(result.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: pluginRoot,
+      },
+    });
   });
 
   it('translates the Claude Stop continuation envelope into Codex block plus reason', () => {
@@ -304,12 +314,17 @@ describe('Codex lifecycle adapter', () => {
   it('resolves the active generation on every invocation after the old one is removed', () => {
     const { home, brain } = fixture();
     installGeneration(brain, 'v1', 'process.stdin.resume(); process.stdin.on("end",()=>process.stdout.write("generation one"));');
-    expect(fire(home, 'session-start', {
+    expect(JSON.parse(fire(home, 'session-start', {
       session_id: 'codex-upgrade',
       hook_event_name: 'SessionStart',
       source: 'startup',
       cwd: ROOT,
-    }).stdout).toBe('generation one');
+    }).stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: 'generation one',
+      },
+    });
 
     installGeneration(brain, 'v2', 'process.stdin.resume(); process.stdin.on("end",()=>process.stdout.write("generation two"));');
     fs.rmSync(path.join(brain, 'versions', 'v1'), { recursive: true });
@@ -321,6 +336,11 @@ describe('Codex lifecycle adapter', () => {
       cwd: ROOT,
     });
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('generation two');
+    expect(JSON.parse(result.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: 'generation two',
+      },
+    });
   });
 });

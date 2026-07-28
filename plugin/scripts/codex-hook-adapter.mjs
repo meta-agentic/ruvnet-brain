@@ -66,10 +66,10 @@ if (event === 'Stop') {
   process.exit(0);
 }
 
-if (event === 'UserPromptSubmit' && !parsed) {
+if ((event === 'SessionStart' || event === 'UserPromptSubmit') && !parsed) {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
+      hookEventName: event,
       additionalContext: stdout,
     },
   }));
