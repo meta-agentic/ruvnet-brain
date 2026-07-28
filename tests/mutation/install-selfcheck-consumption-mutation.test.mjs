@@ -98,7 +98,7 @@ function buildScratchRoot({ mutateTo, includeRvf }) {
   for (const rel of ['scripts/selfcheck.mjs', 'scripts/hook-registry.mjs', 'scripts/install-scope.mjs', 'scripts/upgrade-notice.mjs', 'scripts/user-settings.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
-  for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs']) {
+  for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs', 'kb/model-requirements.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
 

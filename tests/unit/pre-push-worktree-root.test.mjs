@@ -36,7 +36,8 @@ describe('pre-push gate worktree routing', () => {
       'commit', '-qm', 'fixture',
     ], { cwd: repo }).status).toBe(0);
     const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout.trim();
-    const result = spawnSync('/bin/sh', [foreignHook], {
+    const shell = process.platform === 'win32' ? 'sh' : '/bin/sh';
+    const result = spawnSync(shell, [foreignHook], {
       cwd: repo,
       input: `refs/heads/main ${sha} refs/heads/main 0000000000000000000000000000000000000000\n`,
       encoding: 'utf8',

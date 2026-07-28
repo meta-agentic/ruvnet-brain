@@ -1,6 +1,6 @@
 # DDD-0013 — The Verdict context and the External-Signal context
 
-Updated: 2026-07-28 | Version 1.0.1
+Updated: 2026-07-28 | Version 1.0.2
 Created: 2026-07-27
 
 Governs **ADR-058** (the 95 contract). Relates: DDD-0004, DDD-0005, DDD-0008, DDD-0010, ADR-050,
@@ -34,6 +34,7 @@ alarm at once. Two contexts that fail independently beat one that fails complete
 | **UNKNOWN** | the detector could not tell | a pass, a skip, or "probably fine" |
 | **Mutant** | a deliberate break that MUST turn a check red | a hypothetical |
 | **Verdict** | the vector **minimum** over all eight | an average, a score, a composite |
+| **Candidate lineage** | exact SHA, dirty-state digest, and source-file digests that produced an artifact | a branch name, a filename such as `latest`, or the checkout currently open |
 
 ### Aggregate: **CandidateVerdict** (root: the candidate SHA)
 
@@ -49,6 +50,12 @@ alarm at once. Two contexts that fail independently beat one that fails complete
    absorbed the worst number.*
 3. **Append-only: a verdict for SHA X is never edited, only superseded by a verdict for SHA Y.**
    *Gate C++ v1 graded the parent commit.*
+4. **An artifact from a dirty or different lineage is evidence about that lineage only.** It may
+   guide recovery, but it cannot satisfy a gate for the current candidate. A `latest` filename is
+   never identity; the embedded SHA and dirty-state digest are.
+   *The 2026-07-28 Top-100 artifact passed every declared gate while recording `dirty: true` and a
+   source SHA that was neither local `HEAD` nor `origin/main`. ADR-058 then described that work as
+   current before the code reached main.*
 
 ### Aggregate: **IncidentCorpus**
 
@@ -165,5 +172,6 @@ asserted from a document field.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Added candidate lineage as a Verdict value and invariant; no External-Signal change. | Recovery found a passing Top-100 artifact from a dirty, divergent checkout beside a red current candidate. The domain must make it impossible to promote that result by filename or proximity. |
 | 2026-07-28 | No model change. Context 2's SignalDebt transitions are now EXERCISED end to end for the first time, on real data — `tests/unit/signal-lifecycle.test.mjs` + `tests/fixtures/signal-watch/ci-lifecycle-learning-replay.json` | The aggregate said `pending → resolved(conclusion) \| unverifiable(reason)`, **"No other transitions"**, and no test had ever walked one debt across them. It now walks a real one: this repo's `learning-replay.yml` went red on two SHAs (runs `30325577756`, `30327349291`) because of an unquoted colon in a step name, and `68b1ce7` turned it green (run `30327405302`). Invariants 2, 5 and 7 are asserted by name — red surfaces with the actionable minimum, a still-red debt is never re-nagged, the green closes the outstanding red with exactly one line, and every green after that emits zero bytes. Invariant 3 (one writer per state file) is respected by construction: the test appends to `pending.jsonl` as the observer, polls into `ci-status.json` as the poller, and never crosses them |
 | 2026-07-27 | Created | Bounded contexts for ADR-058. Two-sided duel; both designs independently produced a tri-state per-invariant verdict and a vector-minimum release gate, and both refused a shared kernel between the two contexts for the ADR-050 reason. Every invariant above is tied to a dated failure in this repo, not to a principle |

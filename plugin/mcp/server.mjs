@@ -80,44 +80,77 @@ process.on('exit', () => { try { fs.rmSync(LEASE, { force: true }); } catch { /*
 // ── the warm child + private protocol ───────────────────────────────────────────────────────────
 let child = null;            // { proc, generation, nextId, pending: Map<childId, {resolve, reject}> }
 let pendingCount = 0;        // client tools/call requests currently in flight (drain gate for swaps)
+let childRetirement = Promise.resolve();
+let childStartup = null;
+const CHILD_TERM_GRACE_MS = 3_000;
+const CHILD_INIT_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_INIT_TIMEOUT_MS) || 60_000;
 
 function killChild(reason) {
-  if (!child) return;
+  if (!child) return childRetirement;
   const c = child; child = null;
   for (const [, p] of c.pending) p.reject(new Error(`brain worker ${reason}`));
   c.pending.clear();
+  childRetirement = new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(force);
+      resolve();
+    };
+    c.proc.once('exit', finish);
+    const force = setTimeout(() => {
+      try { c.proc.kill('SIGKILL'); } catch { /* already gone */ }
+    }, CHILD_TERM_GRACE_MS);
+    force.unref?.();
+  });
   try { c.proc.kill('SIGTERM'); } catch { /* already dead */ }
+  return childRetirement;
 }
 
 async function ensureChild() {
   const gen = currentGeneration();
-  if (child && child.generation !== gen && pendingCount === 0) killChild('superseded by a newer generation');
+  if (child && child.generation !== gen && pendingCount === 0) await killChild('superseded by a newer generation');
   if (child) return child;
+  await childRetirement;
   if (!fs.existsSync(CHILD_MCP)) return null;
 
-  const env = { ...process.env, KB_DIR: KB };
-  if (!env.KB_MODEL_CACHE) env.KB_MODEL_CACHE = path.join(BRAIN_HOME, 'models');
-  const proc = spawn(process.execPath, [CHILD_MCP], { stdio: ['pipe', 'pipe', 'inherit'], env });
-  const c = { proc, generation: gen, nextId: 1, pending: new Map() };
-  const rl = readline.createInterface({ input: proc.stdout });
-  rl.on('line', (line) => {
-    let msg; try { msg = JSON.parse(line); } catch { return; }
-    const waiter = c.pending.get(msg.id);
-    if (waiter) { c.pending.delete(msg.id); c.sigs?.delete(msg.id); waiter.resolve(msg); return; }
-    // NO WAITER = this request already timed out. The answer is FINISHED and correct; keep it so the
-    // retry is instant instead of recomputing it. Previously this line fell off the end and the work
-    // was discarded (see the note by childRequest).
-    const sig = c.sigs?.get(msg.id);
-    if (sig) { c.sigs.delete(msg.id); latePut(sig, msg); }
-  });
-  proc.on('exit', () => { if (child === c) child = null; lateAnswers.clear(); c.sigs?.clear(); for (const [, p] of c.pending) p.reject(new Error('brain worker exited')); c.pending.clear(); });
-  proc.on('error', () => { if (child === c) child = null; });
-  child = c;
+  if (!childStartup) {
+    childStartup = (async () => {
+      const env = { ...process.env, KB_DIR: KB };
+      if (!env.KB_MODEL_CACHE) env.KB_MODEL_CACHE = path.join(BRAIN_HOME, 'models');
+      const proc = spawn(process.execPath, [CHILD_MCP], { stdio: ['pipe', 'pipe', 'inherit'], env });
+      const c = { proc, generation: currentGeneration(), nextId: 1, pending: new Map() };
+      const rl = readline.createInterface({ input: proc.stdout });
+      rl.on('line', (line) => {
+        let msg; try { msg = JSON.parse(line); } catch { return; }
+        const waiter = c.pending.get(msg.id);
+        if (waiter) { c.pending.delete(msg.id); waiter.resolve(msg); }
+      });
+      proc.on('exit', () => {
+        if (child === c) child = null;
+        for (const [, p] of c.pending) p.reject(new Error('brain worker exited'));
+        c.pending.clear();
+      });
+      proc.on('error', () => { if (child === c) child = null; });
+      child = c;
 
-  // PRIVATE handshake — parent-owned id, never the client's (finding 8).
-  try { await childRequest(c, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'ruvnet-brain-shell', version: SERVER_INFO.version } }, 10_000); }
-  catch { killChild('failed initialize'); return null; }
-  return c;
+      try {
+        await childRequest(c, 'initialize', {
+          protocolVersion: PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: 'ruvnet-brain-shell', version: SERVER_INFO.version },
+        }, CHILD_INIT_TIMEOUT_MS);
+      } catch (e) {
+        await killChild('failed initialize');
+        throw new Error(`brain worker failed to initialize: ${e.message}`);
+      }
+      return c;
+    })();
+  }
+  const attempt = childStartup;
+  try { return await attempt; }
+  finally { if (childStartup === attempt) childStartup = null; }
 }
 
 // A TIMEOUT IS AN OUTAGE, and it must both STOP and be RECORDED. Measured 2026-07-27: the timeout
@@ -150,55 +183,11 @@ async function onChildTimeout(method, timeoutMs) {
 // genuinely useful in the field: a slow machine can raise it, and a CI runner can lower it.
 const CALL_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_CALL_TIMEOUT_MS) || 120_000;
 
-// ── A COMPLETED ANSWER IS NEVER THROWN AWAY (2026-07-27) ─────────────────────────────────────────
-// MEASURED: 82 of 120 recorded cold queries (68.3%, 3-way concurrency) exceed CALL_TIMEOUT_MS. On
-// expiry childRequest deleted its pending entry, so when the child's FINISHED answer arrived, the
-// reader found no waiter and the `if (waiter)` branch above simply dropped it — no else. The most
-// expensive work this product does, completed and binned, on two out of three cold queries. The user
-// then retries the same question and pays the full cost again to recompute an answer that already
-// existed moments ago.
-//
-// So a late answer becomes a CACHED answer, keyed by the request signature, and the retry is served
-// instantly. This is not a cap and costs nothing in quality — it is the same bytes the child already
-// produced, handed to the caller who asked for them.
-//
-// Bounded on purpose: LATE_MAX entries, LATE_TTL_MS, successful results only (an error is not worth
-// replaying), and cleared whenever the child is replaced so a stale generation can never answer for
-// a new one.
-const LATE_MAX = 24;
-const LATE_TTL_MS = 10 * 60_000;
-const lateAnswers = new Map(); // sig -> { at, msg }
-
-function sigOf(method, params) {
-  try { return method + '\u0000' + JSON.stringify(params ?? null); } catch { return null; }
-}
-function lateTake(sig) {
-  if (!sig) return null;
-  const e = lateAnswers.get(sig);
-  if (!e) return null;
-  lateAnswers.delete(sig);                       // one-shot: serve it once, then recompute normally
-  if (Date.now() - e.at > LATE_TTL_MS) return null;
-  return e.msg;
-}
-function latePut(sig, msg) {
-  if (!sig || !msg || msg.error || !msg.result) return;   // successes only
-  lateAnswers.set(sig, { at: Date.now(), msg });
-  while (lateAnswers.size > LATE_MAX) lateAnswers.delete(lateAnswers.keys().next().value);
-}
-export function _lateAnswersSize() { return lateAnswers.size; }   // test seam
-
 function childRequest(c, method, params, timeoutMs = CALL_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const id = c.nextId++;
-    const sig = sigOf(method, params);
-    // Serve an answer the child already finished for this exact request, if one arrived late.
-    const early = lateTake(sig);
-    if (early) { resolve({ ...early, id }); return; }
-    c.sigs = c.sigs || new Map();
-    c.sigs.set(id, sig);
     const timer = setTimeout(() => {
-      c.pending.delete(id);            // the WAITER goes; the id->sig mapping deliberately stays,
-                                       // so the late line below can still be attributed and kept.
+      c.pending.delete(id);
       reject(new Error(`brain worker timeout on ${method}`));
       void onChildTimeout(method, timeoutMs); // after the reject — the caller must not wait on the alarm
     }, timeoutMs);
@@ -218,17 +207,27 @@ async function handleClient(msg) {
     case 'ping':
       return clientOk(id, {});
     case 'tools/list': {
-      const c = await ensureChild();
-      if (c) {
-        try { const r = await childRequest(c, 'tools/list', {}, 15_000); if (r.result?.tools?.length) return clientOk(id, r.result); }
-        catch { /* fall through to the static declaration */ }
-      }
+      try {
+        const c = await ensureChild();
+        if (c) {
+          try { const r = await childRequest(c, 'tools/list', {}, 15_000); if (r.result?.tools?.length) return clientOk(id, r.result); }
+          catch { /* fall through to the static declaration */ }
+        }
+      } catch { /* fall through to the static declaration during a transient startup outage */ }
       return clientOk(id, { tools: FALLBACK_TOOLS });
     }
     case 'tools/call': {
       if (params?.name !== 'search_ruvnet') return clientErr(id, -32602, `unknown tool: ${params?.name}`);
       refreshLease();
-      const c = await ensureChild();
+      let c;
+      try {
+        c = await ensureChild();
+      } catch (e) {
+        return clientOk(id, {
+          content: [{ type: 'text', text: `search_ruvnet error: brain worker temporarily unavailable (${e.message})` }],
+          isError: true,
+        });
+      }
       if (!c) {
         return clientOk(id, { content: [{ type: 'text', text: `search_ruvnet error: the brain bundle is not installed at ${KB}. Install it with: npx github:stuinfla/ruvnet-brain  (or set RUVNET_BRAIN_KB to your brain's kb dir).` }], isError: true });
       }

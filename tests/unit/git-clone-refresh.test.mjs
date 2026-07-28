@@ -34,7 +34,7 @@ describe('withSubmoduleSymlinksDetached', () => {
     });
 
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
-    expect(fs.readlinkSync(link)).toBe('/tmp/shared-target');
+    expect(fs.readlinkSync(link)).toBe(path.resolve('/tmp/shared-target'));
   });
 
   it('restores detached links when the operation fails', () => {

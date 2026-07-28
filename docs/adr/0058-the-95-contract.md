@@ -30,12 +30,13 @@ governs:
 # ADR-058: The 95 contract
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: D3 gained its end-to-end existence
-proof — one real CI debt (`learning-replay.yml`, runs 30325577756/30327349291/30327405302) driven
-from push → red → surfaced → green → closed, with both mutants killed
-**Implementation**: wired, but the release vector is **UNKNOWN at D4** · **Verified in sync**:
-2026-07-28 for the deterministic local gates only; the required real N=3 executor replay is still
-blocked and earns no pass
+**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: recovery re-read found that the
+Top-100/install/routing work described in the newest currency row exists only in a preserved dirty,
+divergent checkout, not in `origin/main`
+**Implementation**: partially wired on `origin/main`; the release vector remains **UNKNOWN at D4**.
+The preserved Top-100 artifact is evidence about its recorded dirty source hash only and earns no
+credit for the current candidate until the changes are reconciled, rerun on the candidate SHA, and
+the artifact records a clean source tree.
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -287,6 +288,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **Recovery correction: the Top-100/install/routing row below described work that was not on `origin/main`.** The code and passing 100-question artifact were preserved in a dirty checkout whose branch is 18 commits behind and 3 ahead of current main. Recovery now proceeds in an isolated worktree rooted at `origin/main`; no result may be promoted until its artifact identifies that candidate SHA and a clean tree. | Live re-read on 2026-07-28: `origin/main` is `e9f7e7c` at `3.9.129-dev`; `scripts/top100-benchmark.mjs`, `evals/top-100.json`, `plugin/scripts/routing-outcome-capture.mjs`, `resolveRuntimeModelCache()` and `pruneUnlistedStores()` are absent there. The preserved artifact reports `dirty: true` and a different source SHA. This is precisely the candidate-binding invariant this ADR requires; the earlier row is retained as a record of the workstream, but it is not shipped state. |
 | 2026-07-28 | Kept D5's real installer mutant executable after `bin/install.mjs` gained the shared model-cache sibling. | `tests/mesh/coexistence.test.mjs` now copies both legitimate installer siblings into its isolated mutant tree. Before this repair the mutant crashed on `../kb/model-requirements.mjs` and D5 failed without exercising byte preservation; `npm run test:mesh` is the real gate. |
 | 2026-07-28 | **Codex SessionStart/Stop moved from configuration failure to direct real-path proof; the overall release vector remains UNKNOWN at D4.** | Commit `c466c2a`, issue #52. Before: a fresh Codex 0.145.0 session rejected both Brain hook sources on unsupported `_note`, so lifecycle coverage was zero. After: the same child-Codex probe has no Brain parse/clamp errors; the installed stable wrapper returned SessionStart developer context in 0.527s and translated a real open-ledger Stop into Codex `decision:"block"` in 1.172s. The new test executes the wrapper across a v1→v2 active-generation flip after v1 deletion, killing the stale-cache-path failure. Focused tests pass 52/52. This repairs a D5/D8 host-path defect but does not manufacture the blocked D4 replay, so the vector-minimum release law still says UNKNOWN. |
 | 2026-07-28 | **Re-read the governed surfaces after the installer, retrieval, hook, and Top-100 validity repairs. The release verdict remains UNKNOWN, not PASS.** | `bin/install.mjs` now treats a local assembled bundle as the source of truth, prunes stale stores omitted by its manifest, and reports the installed manifest's real 60-repo count instead of the stale hard-coded “20+”. `plugin/hooks/hooks.json` anchors dispatch at `^(Task|Agent)$` and observes `PostToolUse` outcomes through `plugin/scripts/routing-outcome-capture.mjs`; these are outcome receipts, not automatic quality adjudication, so D3 is not overstated. `evals/runs/top-100-latest.json` passes all 12 gates (100/100 grounded and routed, 100 receipts, 8/8 enforceable implementation receipts, semantic 96/100, p95 3.675s). `scripts/release-vector.mjs` still exits 1 because D4 is **UNKNOWN**: live `scripts/learning-replay.mjs` transcripts show Claude Code initialized the treated/control sessions but every arm received HTTP 429 `seven_day` quota rejection before inference. The treated hook did deliver the learned lesson, but a blocked executor is not a behavioral replay. The harness now makes `--help` side-effect-free and records executor failures explicitly as UNKNOWN; focused D4/release/claims tests pass 86/86. The vector-minimum law therefore still bans a healthy/proven release claim. |
