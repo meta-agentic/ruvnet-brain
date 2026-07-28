@@ -505,7 +505,9 @@ describe('T4 — a non-answer mints nothing (the ADR-054 §3 discipline, extende
     const msg = (r.stdout || '').split('\n').filter(Boolean)
       .map((l) => { try { return JSON.parse(l); } catch { return null; } }).find((m) => m && m.id === 2);
     expect(msg, `no JSON-RPC reply\nSTDERR:${r.stderr}`).toBeTruthy();
-    expect(msg.result.structuredContent, 'a factless answer must carry no receipt').toBeUndefined();
+    expect(msg.result.structuredContent?.grounding, 'a factless answer must carry no grounding receipt').toBeUndefined();
+    expect(msg.result.structuredContent?.answer, 'structured-only hosts must still see the factless answer')
+      .toBe(msg.result.content[0].text);
     expect(fs.existsSync(evidenceFile)).toBe(false);
   }, 240_000);
 });
