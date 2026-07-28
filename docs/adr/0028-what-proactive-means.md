@@ -103,10 +103,30 @@ SHA it was measured on), consumed by `scripts/claims-verify.mjs`'s critical-inva
 nightly by `scripts/nightly-wrapper.sh` with `.github/workflows/learning-replay.yml` as the currency
 gate on its freshness.
 
-**First measurement, 2026-07-27, claude-haiku-4-5, N=3, $0.0877, 53.6s wall:** treated 3/3 carried
-the token, brain-off control 0/3, lesson delivered before the first tool call in 3/3, after a real
-refresh (a new Stable-Spine generation installed and the pointer flipped between record and replay).
-**Rate 3/3.**
+**Measured 2026-07-27, claude-haiku-4-5, four independent N=3 sets (12 runs, 12 control arms,
+~$0.09 and ~60s per set), each after a real refresh — a new Stable-Spine generation installed and
+the pointer flipped between record and replay:**
+
+| | measured |
+|---|---|
+| treated arm carried the token | **12/12** |
+| brain-off control carried the token | **3/12** |
+| lesson delivered before the first tool call (treated) | **12/12** |
+| set verdicts | PASS · INCONCLUSIVE · INCONCLUSIVE · INCONCLUSIVE |
+
+**The separation is clean and the trap is usually INVALID, and both halves of that sentence
+matter.** The lesson changes the produced artifact every single time it is delivered. But haiku
+reaches `--query` unaided in roughly a quarter of control runs — and under ADR-058's aggregation
+(N=3, any single control success invalidates the set) a per-run contamination rate of ~0.25 leaves
+the trap conclusive only ≈ 42% of nights. **The committed artifact today says INCONCLUSIVE**, and
+`claims-verify.mjs` reports it as a loud SKIP — never a pass.
+
+That is the invariant working, not failing: on those nights the trap genuinely measured the model's
+priors rather than the brain's delivery, and saying so is the entire point. The fix is NOT to
+loosen the token to `-q`-only so `--query` stops counting — the control demonstrably reached a
+correct way of passing the query WITHOUT the lesson, and crediting the lesson anyway is exactly the
+self-deception invariant 6 exists to stop. The fix, when it comes, is a token whose control-side
+prior is genuinely low, chosen BEFORE the runs rather than after them.
 
 **What that does NOT license.** Three things, stated so the number is not read as more than it is:
 
