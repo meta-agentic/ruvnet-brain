@@ -5,7 +5,7 @@
 ## What it is
 RuvNet Brain is a Claude Code plugin. It ships one MCP tool — `search_ruvnet` — plus a set of
 grounding hooks. Before Claude answers a question about rUv's stack, the brain retrieves the
-relevant passages from rUv's actual source code (150,161 public source chunks across 62 public
+relevant passages from rUv's actual source code (150,163 public source chunks across 62 public
 stores; 69 built stores incl. private) and grounds the answer in cited source paths instead of
 the model's stale priors.
 
