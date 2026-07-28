@@ -58,26 +58,45 @@ describe('behavioral-l1-l4.mjs — L4 ORCHESTRATE (real hook, no ONNX/network de
   });
 });
 
-describe('behavioral-l1-l4.mjs — BUG: unmatched --levels silently reports PASS with 0 checks run', () => {
-  it('reproduces the false-positive: --levels L5 (typo) exits 0 and prints OVERALL: PASS with no level ran', () => {
+// THE FIX LANDED 2026-07-27. This block previously PINNED the bug — `expect(r.code).toBe(0)` with the
+// comment "current (buggy) behavior … should arguably be non-zero" — and the file's own note said
+// these assertions "should replace the BUG describe block above" once the fix shipped. They now do.
+//
+// Why the bug mattered enough to fix rather than keep documenting: an empty run that certifies itself
+// is the mechanism by which README:484/526 could advertise "L1–L4 behavioral harness — all pass" as
+// evidence the hook "drives the full pipeline", while two independent graders scored the QE apparatus
+// 38/100 and 53/100. Nothing could contradict the optimistic claim, because the thing meant to
+// contradict it passed by running nothing. GPT-5.6-Sol reproduced it independently during the
+// 2026-07-27 Gen-2 grading.
+//
+// A test that pins a defect has a lifetime bounded by the fix and inverts on the day the work
+// succeeds — the same lesson this repo already recorded for the ADR-0013 stamp-lag test.
+describe('behavioral-l1-l4.mjs — an unmatched --levels must NOT report a silent PASS', () => {
+  it('--levels L5 (typo) exits non-zero and says nothing was verified', () => {
     const r = run(['--levels', 'L5', '--dir', 'kb']);
-    expect(r.code).toBe(0); // current (buggy) behavior — see file header; should arguably be non-zero
-    expect(r.stdout).toMatch(/=== OVERALL: PASS ===/);
-    expect(r.stdout).not.toMatch(/ROUTE|DEEP-RECALL|IMPLEMENT|ORCHESTRATE/); // proves zero levels executed
+    expect(r.code).not.toBe(0);                                   // KNOWN-BAD: this was 0 before the fix
+    expect(r.code).toBe(2);                                       // 2 = "nothing was verified", distinct from a real FAIL(1)
+    expect(r.stdout).toMatch(/unknown level\(s\): L5/);
+    expect(r.stdout).toMatch(/OVERALL: .*FAIL/);
+    expect(r.stdout).toMatch(/nothing was verified/);
+    expect(r.stdout).not.toMatch(/OVERALL: .*PASS/);              // the exact string that used to appear
   });
 
-  it('reproduces the same false-positive with an empty --levels string (no .filter(Boolean) on the split, unlike --repos)', () => {
+  it('an empty --levels string is treated the same, not silently defaulting to all four', () => {
     const r = run(['--levels', '', '--dir', 'kb']);
-    expect(r.code).toBe(0);
-    expect(r.stdout).toMatch(/=== OVERALL: PASS ===/);
-    expect(r.stdout).not.toMatch(/ROUTE|DEEP-RECALL|IMPLEMENT|ORCHESTRATE/);
+    expect(r.code).toBe(2);
+    expect(r.stdout).toMatch(/OVERALL: .*FAIL/);
+    expect(r.stdout).toMatch(/nothing was verified/);
+    expect(r.stdout).not.toMatch(/OVERALL: .*PASS/);
+    expect(r.stdout).not.toMatch(/ROUTE|DEEP-RECALL|IMPLEMENT|ORCHESTRATE/); // still zero levels executed
   });
-});
 
-// Once the fix above lands (sign-off pending), these should replace the "BUG" describe block above.
-describe.todo('behavioral-l1-l4.mjs — desired fix: unmatched --levels must not report a silent PASS', () => {
-  it.todo('exits non-zero (or prints an explicit "0 levels selected" warning) when --levels matches none of L1-L4');
-  it.todo('an empty --levels string is treated the same as an unmatched value, not silently defaulting to all four');
+  it('a REAL level still runs and can still pass — the guard is not a blanket refusal', () => {
+    const r = run(['--levels', 'L4', '--dir', 'kb']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(/ORCHESTRATE/);
+    expect(r.stdout).toMatch(/OVERALL: .*PASS/);
+  });
 });
 
 // L1 ROUTE / L2 DEEP-RECALL / L3 IMPLEMENT all call searchAll() (kb/forge-ask-all.mjs), which needs
