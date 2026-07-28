@@ -75,25 +75,66 @@ function sqliteJson(db, sql) {
   catch (e) { return { ok: false, rows: [], err: `unparseable sqlite3 -json output: ${e.message}` }; }
 }
 
-/** Every entry in the window, FULL content. Never truncated at the query layer. */
+/**
+ * TWO SCHEMA GENERATIONS EXIST IN THE WILD, and a loader that knows only one is a loader that
+ * silently returns nothing. Measured across all 54 stores on this machine, 2026-07-28:
+ *
+ *   LEGACY  payload in `value`; `content` exists but DEFAULTS TO '' and is empty in every row.
+ *           created_at = strftime('%s','now')          -> epoch SECONDS
+ *   CURRENT payload in `content`.
+ *           created_at = strftime('%s','now') * 1000   -> epoch MILLISECONDS
+ *
+ * The first draft read `content` and assumed millis. Result: 8 projects holding 14,000+ entries —
+ * Red Clover Inn (6,358), AI Retirement Analyzer (7,198), XrAy-I, MedReview, partsourcepurchase,
+ * stratasocial, Christina Massuh, Fin Decision Website — loaded ABSOLUTELY NOTHING, and did so
+ * quietly. Their dates rendered as 1970-01-21, which is what a seconds timestamp looks like after
+ * you divide it by 1000 a second time.
+ *
+ * Both facts are DERIVED per store, never configured: columns from PRAGMA table_info, and the epoch
+ * unit from the magnitude of the value itself. Anything below 1e12 cannot be a modern millisecond
+ * timestamp (1e12 ms = 2001-09-09), so it is seconds.
+ */
 export function readEntries(db, { sinceMs, grep, key } = {}) {
   if (!fs.existsSync(db)) return { ok: false, entries: [], err: `no AgentDB at ${db}` };
-  let where = '1=1';
-  if (sinceMs) where += ` AND created_at >= ${Number(sinceMs)}`;
+
+  const cols = sqliteJson(db, "PRAGMA table_info(memory_entries);");
+  if (!cols.ok) return { ok: false, entries: [], err: cols.err };
+  const have = new Set(cols.rows.map((c) => String(c.name)));
+  if (!have.has('key')) return { ok: false, entries: [], err: 'no memory_entries.key — not an AgentDB store' };
+
+  // Payload: prefer a non-empty `content`, fall back to `value`. COALESCE+NULLIF handles the legacy
+  // rows where `content` is present-but-'' rather than NULL.
+  const payload = have.has('content') && have.has('value') ? "COALESCE(NULLIF(content,''), value)"
+    : have.has('content') ? 'content'
+    : have.has('value') ? 'value' : "''";
+  const nsCol = have.has('namespace') ? 'namespace' : "'default'";
+  const tsCol = have.has('created_at') ? 'created_at' : (have.has('updated_at') ? 'updated_at' : '0');
+
+  let where = `TRIM(${payload}) <> ''`;
   if (key) where += ` AND key = '${String(key).replace(/'/g, "''")}'`;
   if (grep) {
     const g = String(grep).replace(/'/g, "''");
-    where += ` AND (lower(content) LIKE lower('%${g}%') OR lower(key) LIKE lower('%${g}%'))`;
+    where += ` AND (lower(${payload}) LIKE lower('%${g}%') OR lower(key) LIKE lower('%${g}%'))`;
   }
-  const sql = `SELECT key, namespace, created_at, content FROM memory_entries WHERE ${where} ORDER BY created_at DESC;`;
+  // NOTE: the time window is applied in JS, AFTER normalizing the epoch unit — doing it in SQL would
+  // require knowing the unit before reading a single row, which is the bug this function exists to fix.
+  const sql = `SELECT key AS k, ${nsCol} AS ns, ${tsCol} AS ts, ${payload} AS body
+               FROM memory_entries WHERE ${where} ORDER BY ${tsCol} DESC LIMIT 4000;`;
   const r = sqliteJson(db, sql);
   if (!r.ok) return { ok: false, entries: [], err: r.err };
-  const entries = r.rows.map((row) => ({
-    key: String(row.key ?? ''),
-    namespace: String(row.namespace ?? ''),
-    at: Number(row.created_at ?? 0),
-    content: String(row.content ?? ''),
-  })).filter((e) => e.key && e.content);
+
+  const MILLIS_FLOOR = 1e12;   // 1e12 ms = 2001-09-09; anything smaller is seconds
+  let entries = r.rows.map((row) => {
+    const raw = Number(row.ts ?? 0);
+    return {
+      key: String(row.k ?? ''),
+      namespace: String(row.ns ?? ''),
+      at: raw > 0 && raw < MILLIS_FLOOR ? raw * 1000 : raw,
+      content: String(row.body ?? ''),
+    };
+  }).filter((e) => e.key && e.content);
+
+  if (sinceMs) entries = entries.filter((e) => e.at >= sinceMs);
   return { ok: true, entries };
 }
 
