@@ -375,7 +375,19 @@ census/lint suite is born red** (appendix B) — which is the proof it works.
    cause rather than tested around. F20 is **confirmed red and measured**: `ground-ruvnet`,
    `learn-flush`, `route-dispatch`, `design-wall`, `verify-interface`, `protect-brain-state`,
    `hijack-ruvnet`, `learn-capture` and `unprompted-runtime` each hang on at least one of the four
-   regimes, and `session-start` emits 8923 bytes against a 4096 cap. Every finding was reproduced
+   regimes, and `session-start` emits 8923 bytes against a 4096 cap. **`session-start`'s two findings
+   are CLOSED as of 2026-07-27** (branch `feat/advocacy-dial-1-5`): the flood and the `orphan` the
+   stranger-matrix reported alongside it. Measured through the same door (`scripts/ci/
+   stranger-scenario.mjs --scenario healthy`, a `npm pack` install into a virgin HOME): **10652/9127
+   bytes → 3663 bytes, all four regimes × both sources, zero contract violations**, verdict line
+   `✓ Self-check passed`. THE PLAYBOOK's full text moved to
+   `plugin/skills/ruvnet-brain/PLAYBOOK.md` and the hook now injects a directive plus a pointer;
+   the three background jobs moved out of the hook's process group through the new
+   `plugin/scripts/detach.mjs`, each with an explicit TTL and a receipt. Both guards were proven
+   live by mutation: +5KB of filler reproduces 8× `stdout-flood`, and a bare `&` job that outlives
+   the parent reproduces 8× `orphan` with `survivors=true`. The remaining `session-start` items in
+   the table below (the other hooks' hangs, F3) are untouched and still item 3's.
+   Every finding was reproduced
    with plain `timeout` + pipes independently of the checker (details in ADR-053 §2). F3 also
    reproduces here as a `double-registration` violation, from `lintM1` — reused, not reimplemented.
    Per this ordering the findings are **recorded, not fixed**; item 3 closes them.

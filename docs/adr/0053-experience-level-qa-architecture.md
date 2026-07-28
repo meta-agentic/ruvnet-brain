@@ -88,7 +88,7 @@ Two axes v1 lacked, now required on every scenario:
 > | finding | independent reproduction |
 > |---|---|
 > | `ground-ruvnet` hangs on held-open stdin AND on 1MB garbage (declared timeout 5s) | `( printf '{}'; sleep 12 ) \| timeout 8 node …/hook-shim.mjs ground-ruvnet` → **exit 124** |
-> | `session-start` writes 8923 bytes of stdout (cap 4096) | `echo '{}' \| node …/hook-shim.mjs session-start \| wc -c` → **8923** |
+> | `session-start` writes 8923 bytes of stdout (cap 4096) — **CLOSED 2026-07-27, now 3663** | `echo '{}' \| node …/hook-shim.mjs session-start \| wc -c` → **8923**, and after the fix → **3663** (ADR-055 build item 2's closure note has the full before/after and the two mutants) |
 > | `learn-flush`, `route-dispatch`, `design-wall`, `verify-interface`, `protect-brain-state`, `hijack-ruvnet`, `learn-capture`, `unprompted-runtime` all hang on at least one regime | same shape |
 > | `route-dispatch.sh` double-registered from two code roots (spine + marketplace-clone) | ADR-055 F3, already known |
 >

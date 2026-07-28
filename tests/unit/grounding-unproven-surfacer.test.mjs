@@ -21,6 +21,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmHome } from '../helpers/reap-detached.mjs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -39,7 +40,10 @@ beforeEach(() => {
   fs.writeFileSync(path.join(cacheDir, '.auto-update-pref'), 'no\n');
   fs.writeFileSync(path.join(cacheDir, '.last-update-check'), String(Math.floor(Date.now() / 1000)));
 });
-afterEach(() => { fs.rmSync(home, { recursive: true, force: true }); });
+// Teardown retries: session-start.sh's spine seed is deliberately detached and still writing
+// into HOME when this runs (plugin/scripts/detach.mjs's header explains why it must be). Node's
+// own maxRetries/retryDelay is the documented answer; no assertion changes.
+afterEach(() => { rmHome(home); });
 
 function run(extraEnv = {}) {
   // 'bash' via PATH (not /bin/bash): Windows runners resolve this to Git Bash, the same shell

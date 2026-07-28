@@ -20,21 +20,26 @@ name: stranger-matrix
 # ADDITIONALLY proves M-D8c (a hook that sleeps past its declared timeout makes the battery go red)
 # against the real installed surface.
 #
-# KNOWN, PRE-EXISTING, OUT-OF-SCOPE FINDING (recorded here so it is never mistaken for a defect in
-# this workflow): dry-running the `healthy` scenario locally on macOS against the REAL, unmodified
-# plugin/scripts/session-start.sh shows it writing 8.7-13KB of stdout on a virgin machine — 2-3x the
-# 4096-byte STDOUT_CAP_BYTES scripts/selfcheck.mjs already enforces (verified against origin's
-# unmodified HEAD, not introduced by this build). That means the `healthy` scenario's exit-0 assertion
-# will legitimately fail today, for a reason having nothing to do with D8's own three deductions. This
-# is the gate working as designed — ADR-058 says the first full run "should read below 38" and that a
-# green run against today's product "would be the self-congratulation it exists to kill." Fixing
-# session-start.sh's stdout budget is separate work (candidate: D6's two-tier ux-suite, or its own
-# follow-up), not part of D8's scope, and is deliberately NOT silently patched here.
+# THE FINDING THIS GATE CAUGHT FIRST, AND ITS CLOSURE (kept as the record, not deleted — the point
+# of the note was that a green first run "would be the self-congratulation it exists to kill", and
+# that stays true of the run that WAS red):
+#   RED, on all five images: plugin/scripts/session-start.sh wrote 8.7-13KB of stdout on a virgin
+#   machine — 2-3x the 4096-byte STDOUT_CAP_BYTES scripts/selfcheck.mjs enforces — and left
+#   descendants alive after SIGTERM to its process group. Pre-existing on origin's unmodified HEAD,
+#   not introduced by this workflow, and recorded here for weeks as separate work.
+#   CLOSED 2026-07-27 (branch feat/advocacy-dial-1-5). Measured through this exact driver, from a
+#   packed tarball into a virgin HOME: 10652/9127 bytes -> 3663, four stdin regimes x both sources,
+#   zero contract violations, `✓ Self-check passed`. THE PLAYBOOK's full text moved to
+#   plugin/skills/ruvnet-brain/PLAYBOOK.md; the three background jobs moved out of the hook's
+#   process group via plugin/scripts/detach.mjs, each with an explicit TTL and a written receipt.
+#   Both guards proven by mutation (+5KB filler -> 8x stdout-flood; a bare `&` job that outlives the
+#   parent -> 8x orphan, survivors=true). Details in ADR-055 build item 2's closure note.
 #
 # Not yet added to branch protection as a required check — ADR-058's build order (item 10) flips the
 # release gate only "after 1-9 exist"; this is item 1. Making it required is a repo-admin action
-# (branch protection settings), not something this file can do on its own, and should wait until the
-# stdout-budget finding above has a real fix.
+# (branch protection settings), not something this file can do on its own. The blocker that note
+# named — "wait until the stdout-budget finding has a real fix" — is now discharged; what remains
+# is the admin action and the rest of items 2-9.
 on:
   push:
     branches: [main]

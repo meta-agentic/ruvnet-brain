@@ -136,7 +136,13 @@ const withDir = mkTmp('rb-ss-ruflo-');
 fs.mkdirSync(path.join(withDir, '.claude-flow')); // project marker → ruflo detectable
 const withRuflo = runSS(withDir, { HOME: mkHome() });
 check('announcement fires when ruflo is detectable, exactly once', withRuflo.status === 0 && withRuflo.stdout.split(MARKER).length === 2);
-const block = withRuflo.stdout.match(/\[RuvNet Brain — token intelligence \+ QE, mention once\][\s\S]*?OPENROUTER_API_KEY\."\n/);
+// The closing quote is OPTIONAL in this anchor (2026-07-27). It used to be mandatory, which made it
+// an accidental assertion that the block ends by writing the user's sentence out verbatim inside
+// quotes. The stdout-budget work replaced that quoted line with a directive — same facts, same
+// required phrases below, ~50 fewer bytes — and the anchor stopped matching, reporting the block as
+// absent rather than as changed. What this check is FOR (the 512-byte budget and the trigger
+// phrases) is untouched; only the boundary it uses to find the block is now shape-agnostic.
+const block = withRuflo.stdout.match(/\[RuvNet Brain — token intelligence \+ QE, mention once\][\s\S]*?OPENROUTER_API_KEY\."?\n/);
 const blockBytes = block ? Buffer.byteLength(block[0], 'utf8') : -1;
 check(`announcement under the 512-byte budget (actual: ${blockBytes})`, blockBytes > 0 && blockBytes <= 512);
 check('announcement names the triggers + the key gate', !!block && ["do this cheaper", "score my harness", "score this repo", '/brain-build', '/brain-prompt', 'OPENROUTER_API_KEY'].every((s) => block[0].includes(s)));
