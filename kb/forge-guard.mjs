@@ -158,8 +158,13 @@ async function main() {
   let variants;
   if (variant) variants = [variant];
   else {
-    variants = ['small'];
+    variants = [];
+    if (fs.existsSync(path.join(dir, `${name}.rvf`))) variants.push('small');
     if (fs.existsSync(path.join(dir, `${name}.big.rvf`))) variants.push('big');
+    if (variants.length === 0) {
+      console.error(`No RVF store found for ${name} in ${dir}`);
+      process.exit(1);
+    }
   }
 
   let anyFail = false;
