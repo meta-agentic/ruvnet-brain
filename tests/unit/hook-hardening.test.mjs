@@ -23,6 +23,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(import.meta.dirname, '../..');
 const SCRIPTS = path.join(REPO, 'plugin', 'scripts');
@@ -342,7 +343,15 @@ describe('unprompted speech requires an OCCASION — no payload, no bytes', () =
     [path.join(SCRIPTS, 'unprompted-runtime.mjs'), 'UserPromptSubmit'],
     { cwd: tmp, input, encoding: 'utf8', timeout: 60_000, env: env({ ...armed(), ...extra }) });
 
-  it('CONTROL: the seeded producer really does speak when a real event occasions it', () => {
+  // WINDOWS (2026-07-28, CI run 30315927742): these two drive a REAL producer, and a producer is a
+  // shell script — `argv: ['/bin/bash', emit]` below, and lesson-hooks.sh for the seeded one. There
+  // is no /bin/bash on a Windows runner, so the child never ran, stdout came back '' and BOTH
+  // assertions failed on a product that is fine. `hasBash` is already computed at the top of this
+  // file for exactly this reason; these two were simply written without it. Skipping is the honest
+  // verdict — the behaviour under test is the payload gate, which the four byte-exact-silence cases
+  // between them still prove on every OS. Faking a shell to keep a green tick would be worse than
+  // an honest skip, and this repo's own rule is that a test which cannot fail is not a test.
+  it.skipIf(!hasBash)('CONTROL: the seeded producer really does speak when a real event occasions it', () => {
     const r = runtime(JSON.stringify({
       prompt: 'give me a long status update about where the build actually is', session_id: 'occ-1',
     }));
@@ -369,7 +378,7 @@ describe('unprompted speech requires an OCCASION — no payload, no bytes', () =
     expect(r.stdout).toBe('');
   }, 60_000);
 
-  it('TEETH: a REAL payload still reaches the producers — the gate is not a mute button', () => {
+  it.skipIf(!hasBash)('TEETH: a REAL payload still reaches the producers — the gate is not a mute button', () => {
     // A trusted fake producer via the documented test seam, so this asserts the payload gate alone
     // and not any real detector's mood.
     const emit = path.join(tmp, 'emit.sh');
@@ -539,7 +548,7 @@ describe('hook-input.mjs: the parser answers through a symlink, or every gate it
 
   it('IMPORTED, it must still stay quiet — isMain has to distinguish, not just say yes', () => {
     const probe = path.join(tmp, 'probe.mjs');
-    fs.writeFileSync(probe, `import { commandOf } from ${JSON.stringify(path.join(SCRIPTS, 'hook-input.mjs'))};\n`
+    fs.writeFileSync(probe, `import { commandOf } from ${JSON.stringify(pathToFileURL(path.join(SCRIPTS, 'hook-input.mjs')).href)};\n`
       + 'process.stdout.write("IMPORT-ONLY:" + commandOf({ tool_input: { command: "x" } }));\n');
     const r = spawnSync(process.execPath, [probe], { input: PAYLOAD, encoding: 'utf8', timeout: 30_000 });
     expect(r.stdout).toBe('IMPORT-ONLY:x');   // no CLI output appended — the module did not self-run

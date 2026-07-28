@@ -126,7 +126,7 @@ describe('the console serves the advocacy dial — real schema, not invented cop
     // This test's actual subject is gatherAdvocacy()'s null-vs-chosen distinction, which only needs a
     // real value to already be on the file it reads — how it got there is a different test's job.
     const out = runJSON(`${IMPORT}
-      const u = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+      const u = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/user-settings.mjs')).href)});
       u.saveSettings({ advocacy: 3 }); // == the default, on purpose: the tricky case
       process.stdout.write(JSON.stringify(m.gatherAdvocacy()));
     `);
@@ -217,7 +217,7 @@ describe('a save round-trips through user-settings.mjs\'s saveSettings, to the f
     // on disk — which is exactly what this asserts, with real teeth (a regression that let the
     // rejection path fall through to a write would flip this value to the default, 3, not 4).
     const out = runJSON(`${IMPORT}
-      const u = await import(${JSON.stringify(path.join(REPO, 'scripts/user-settings.mjs'))});
+      const u = await import(${JSON.stringify(pathToFileURL(path.join(REPO, 'scripts/user-settings.mjs')).href)});
       u.saveSettings({ advocacy: 4 });
       const bad = m.saveAdvocacy({ advocacy: 9 });
       process.stdout.write(JSON.stringify({ bad, after: m.gatherAdvocacy() }));
