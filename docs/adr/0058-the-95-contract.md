@@ -36,10 +36,12 @@ governs:
 **Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: recovery re-read found that the
 Top-100/install/routing work described in the newest currency row exists only in a preserved dirty,
 divergent checkout, not in `origin/main`
-**Implementation**: partially wired on `origin/main`; the release vector remains **UNKNOWN at D4**.
-The preserved Top-100 artifact is evidence about its recorded dirty source hash only and earns no
-credit for the current candidate until the changes are reconciled, rerun on the candidate SHA, and
-the artifact records a clean source tree.
+**Implementation**: partially wired on the recovery candidate. D4 now has a current Codex-backed
+3/3 treated versus 0/3 control artifact on code SHA `bbf6db0`; the complete release vector and
+external graders still decide whether the candidate is releasable. The preserved Top-100 artifact
+is evidence about its recorded dirty source hash only and earns no credit for the current candidate
+until the changes are reconciled, rerun on the candidate SHA, and the artifact records a clean
+source tree.
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -291,6 +293,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **D4 moved from quota-blocked UNKNOWN to a real Codex-backed PASS: 3/3 treated versus 0/3 control.** | `scripts/learning-replay.mjs` now supports `--host codex` without weakening the oracle. The installed Brain plugin's stable wrapper resolves an isolated fixture generation whose Codex adapter records monotonic lesson/tool receipts and blocks the first proposed command before CLI feedback can contaminate the arm. On code SHA `bbf6db0`, all three treated first commands used the real `ruflo memory search -q`, executed with exit 0, and retrieved the seeded note; all three brain-off controls used the rejected positional form, exited 1, retrieved nothing, and received zero lesson bytes. The artifact records host `codex`, model `gpt-5.6-sol`, 71.1s wall, and $0 API cost. The GitHub nightly remains explicitly `--host claude-code` because its non-interactive secret-backed environment is different. |
 | 2026-07-28 | Recovery added executable candidate-lineage enforcement and corrected check-only release wording; implementation remains **partial**. | `scripts/release-vector.mjs` now records commit SHA, committed tree digest, and dirty state, and a dirty lineage forces the vector verdict to FAIL. `scripts/release.mjs` rejects a dirty tree in both check and publish modes and reserves `SHIPPED` for publish; check-only ends `PREFLIGHT PASS — NOT PUBLISHED`. GPT-5.6-Sol returned NO-GO until these gates, Windows CI, packed-candidate Top-100, and real WSL proof land. Fable 5 could not complete the required second review because the live subscription reported its weekly limit; no two-model convergence is claimed. |
 | 2026-07-28 | **Recovery correction: the Top-100/install/routing row below described work that was not on `origin/main`.** The code and passing 100-question artifact were preserved in a dirty checkout whose branch is 18 commits behind and 3 ahead of current main. Recovery now proceeds in an isolated worktree rooted at `origin/main`; no result may be promoted until its artifact identifies that candidate SHA and a clean tree. | Live re-read on 2026-07-28: `origin/main` is `e9f7e7c` at `3.9.129-dev`; `scripts/top100-benchmark.mjs`, `evals/top-100.json`, `plugin/scripts/routing-outcome-capture.mjs`, `resolveRuntimeModelCache()` and `pruneUnlistedStores()` are absent there. The preserved artifact reports `dirty: true` and a different source SHA. This is precisely the candidate-binding invariant this ADR requires; the earlier row is retained as a record of the workstream, but it is not shipped state. |
 | 2026-07-28 | Kept D5's real installer mutant executable after `bin/install.mjs` gained the shared model-cache sibling. | `tests/mesh/coexistence.test.mjs` now copies both legitimate installer siblings into its isolated mutant tree. Before this repair the mutant crashed on `../kb/model-requirements.mjs` and D5 failed without exercising byte preservation; `npm run test:mesh` is the real gate. |
