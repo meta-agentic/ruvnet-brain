@@ -11,10 +11,18 @@ try { input = raw ? JSON.parse(raw) : {}; } catch { /* the shared hook bodies al
 const hookId = process.argv[2] || '';
 const event = String(input.hook_event_name || '');
 let adapted = false;
+const codexToolName = String(input.tool_name).toLowerCase();
 
-// Codex names these two tools differently from the shared Claude hook contracts. Normalize at the
+// Codex names these tools differently from the shared Claude hook contracts. Normalize at the
 // host boundary once so every existing safety/learning body sees the same typed event.
-if (String(input.tool_name).toLowerCase() === 'apply_patch') {
+if (['exec_command', 'functions.exec_command', 'functions__exec_command'].includes(codexToolName)) {
+  input.tool_name = 'Bash';
+  input.tool_input = {
+    ...(input.tool_input || {}),
+    command: input.tool_input?.command || input.tool_input?.cmd || '',
+  };
+  adapted = true;
+} else if (codexToolName === 'apply_patch') {
   const patch = typeof input.tool_input?.command === 'string' ? input.tool_input.command : '';
   const filePath = patch.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]?.trim() || '';
   input.tool_name = 'Edit';
@@ -24,7 +32,7 @@ if (String(input.tool_name).toLowerCase() === 'apply_patch') {
     new_string: patch,
   };
   adapted = true;
-} else if (String(input.tool_name).toLowerCase() === 'spawn_agent') {
+} else if (codexToolName === 'spawn_agent') {
   input.tool_name = 'Agent';
   input.tool_input = {
     ...(input.tool_input || {}),

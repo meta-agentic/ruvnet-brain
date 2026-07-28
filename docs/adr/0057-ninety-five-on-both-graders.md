@@ -3,7 +3,7 @@ id: ADR-057
 title: 95 on both graders — closing a 38/53 against a self-reported 83, dimension by dimension
 status: Proposed
 date: 2026-07-27
-updated: 2026-07-27
+updated: 2026-07-28
 impl: unbuilt
 governs:
   - scripts/behavioral-l1-l4.mjs
@@ -221,6 +221,7 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Re-read all governed paths after the exact-SHA adversarial grade; the document's build-order claims remain accurate, and the current measured score is recorded as 15/100 rather than promoted. | `/private/tmp/qe-grade-gpt56-879b928.out` found D4 15, D1 30, and an overall vector minimum of 15 at SHA `879b928`. This repair closes Codex transport, cache-verifier, portable wiring, and Ruflo-memory-init defects, but does not claim the still-missing N=3 causal replay or stranger matrix. |
 | 2026-07-27 | v2 — corrected the 83-vs-38 framing after the owner caught it: different subject (product self-score vs independent grade of the test suite), different date. Replaced with the falsifiable claim, README:484/526 "L1–L4 behavioral all pass" |
 | 2026-07-27 | Initial draft | Owner's demand for a 95 plan after Fable 53/100 and GPT-5.6-Sol 38/100 (2026-07-27, `qe-grade-gpt.out:18503-18676`; `02567c43-….jsonl:2672`). Three concealment mechanisms verified first-hand: the vacuous `--levels L5` PASS (fixed here), L4's string-matching `must:` list, and `no-silent-substitution.mjs`'s `audit(root = ROOT)` scanning this repo instead of the user's |
 | 2026-07-27 | **Re-read against the governed code; build-order status table added — no prose claim was wrong, but 3-4 of 8 build items had shipped since this ADR was written and the document didn't say so.** | Flagged `presumed-stale`: 5 commits (0d) after this document's last commit (`0cefecc`), across `scripts/behavioral-l1-l4.mjs`, `scripts/no-silent-substitution.mjs`, `bin/install.mjs`, `plugin/hooks/hooks.json`. Checked each governed path and cross-referenced ADR-058 (which explicitly "extends ADR-057's build order" and ships the same day): `.github/workflows/stranger-matrix.yml` now exists (item 3), `kb/card-lane-budget.json`/`scripts/qe/card-lane-gate.mjs` wire a real hard latency gate (item 4), `verify-interface.sh:173` confirms `MATCH_RE` replaced by `commandNodes()` (item 8's parser half); `no-silent-substitution.mjs:121` still reads `audit(root = ROOT)` with no `--project` flag (item 5 still open), no WhitSentry/clean-room fixture exists (item 2 still open), `scripts/claims-verify.mjs` has no vector-minimum gate yet (item 7 still open, ADR-058 itself still `impl: unbuilt`) |

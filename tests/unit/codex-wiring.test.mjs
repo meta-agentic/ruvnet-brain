@@ -181,6 +181,18 @@ describe('wireCodexHost — the filesystem round trip', () => {
     expect(written).toContain('RUFLO_HARNESS_LOOP = "1"'); // theirs, untouched
   });
 
+  it('keeps every default write under the supplied Codex home instead of the real user home', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    const serverDir = path.join(home, '.claude', 'ruvnet-brain', 'mcp');
+    fs.mkdirSync(codexDir, { recursive: true });
+
+    const r = wireCodexHost({ codexDir, serverDir, announce: false });
+
+    expect(r.hookWrapperPath).toBe(path.join(home, '.cache', 'ruvnet-brain', 'codex-hook.mjs'));
+    expect(fs.existsSync(r.hookWrapperPath)).toBe(true);
+  });
+
   it('creates config.toml when the host exists but has none yet', () => {
     const home = tmpdir();
     const codexDir = path.join(home, '.codex');

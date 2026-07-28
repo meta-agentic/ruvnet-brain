@@ -84,16 +84,40 @@ MEM_STATE="off"; MEM_IDLE=0
 #      the main .db's mtime does not move until a checkpoint. mtime on the .db
 #      alone therefore reads "idle" minutes after a successful write.
 #
-# So: consider every store, and each one's -wal, and take the newest.
-for _db in .swarm/agentdb-memory.db .swarm/memory.db .claude/memory.db; do
-  [ -f "$_db" ] || continue
+# So: consider every store, and each one's -wal, and take the newest. A linked git worktree shares
+# repository identity with the primary checkout but not its ignored `.swarm/` directory. If the
+# local worktree has no store, inspect the primary worktree resolved from git's absolute common dir
+# before declaring memory absent.
+check_memory_db() {
+  _db=$1
+  [ -f "$_db" ] || return 1
   MEM_STATE="idle"; MEM_IDLE=1
   if find "$_db" "$_db-wal" -mmin -90 2>/dev/null | grep -q .; then
     MEM_STATE="on"; MEM_IDLE=0
-    break
+    return 0
   fi
+  return 1
+}
+for _db in .swarm/agentdb-memory.db .swarm/memory.db .claude/memory.db; do
+  check_memory_db "$_db" && break
 done
+if [ "$MEM_STATE" = "off" ]; then
+  _common_git=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  case "$_common_git" in
+    */.git)
+      _primary_root=${_common_git%/.git}
+      for _db in \
+        "$_primary_root/.swarm/agentdb-memory.db" \
+        "$_primary_root/.swarm/memory.db" \
+        "$_primary_root/.claude/memory.db"
+      do
+        check_memory_db "$_db" && break
+      done
+      ;;
+  esac
+fi
 unset _db
+unset _common_git _primary_root
 # RUNNING version (this session's loaded plugin) vs STAGED version (marketplace copy on disk).
 GV0="?"
 [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \

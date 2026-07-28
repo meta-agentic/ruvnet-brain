@@ -31,7 +31,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "^(Bash|Edit|Write|exec_command|functions\\.exec_command|functions__exec_command|apply_patch)$",
         "hooks": [
           {
             "type": "command",
@@ -51,7 +51,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
+        "matcher": "^(Edit|Write|apply_patch)$",
         "hooks": [
           {
             "type": "command",
@@ -71,7 +71,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "^(Bash|exec_command|functions\\.exec_command|functions__exec_command)$",
         "hooks": [
           {
             "type": "command",
@@ -93,7 +93,17 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write",
+        "matcher": "^(?:.*__)?search_ruvnet$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" grounding-stamp",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|Edit|Write|exec_command|functions\\.exec_command|functions__exec_command|apply_patch)$",
         "hooks": [
           {
             "type": "command",
@@ -103,7 +113,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
+        "matcher": "^(Edit|Write|apply_patch)$",
         "hooks": [
           {
             "type": "command",
@@ -113,7 +123,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "^(Bash|exec_command|functions\\.exec_command|functions__exec_command)$",
         "hooks": [
           {
             "type": "command",

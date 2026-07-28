@@ -17,6 +17,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { loadRvf, loadTransformers, configureModel } from './resolve-deps.mjs';
+import { configureTransformersModel } from './model-requirements.mjs';
 
 // LAZY, not module-level (2026-07-12): an eager loadRvf() here killed every importer — including
 // forge-mcp-all's MCP server — at STARTUP on any machine without @ruvector/rvf resolvable, before
@@ -109,11 +110,10 @@ function getEmbedder(model) {
 }
 async function loadEmbedderUncached(model) {
   const { T, modelCache, via } = await loadTransformers();
-  T.env.localModelPath = modelCache;
   // Local-first network guard: a remote fetch is permitted ONLY when THIS model is not already
-  // cached locally (offline once cached). When a fetch does happen it is pinned to the exact
-  // revision below, so the weights can never silently change under us.
-  T.env.allowRemoteModels = !fs.existsSync(path.join(modelCache, model));
+  // cached locally (offline once cached). Reads AND downloads use the same detector-visible cache.
+  // When a fetch does happen it is pinned to the exact revision below.
+  configureTransformersModel(T, modelCache, model);
   const revision = PINNED_REVISIONS[model] || 'main';
   if (process.env.KB_DEBUG) console.error(`[forge-ask] transformers via: ${via} | model ${model}@${revision} | cache: ${modelCache} (${T.env.allowRemoteModels ? 'remote' : 'local'})`);
 

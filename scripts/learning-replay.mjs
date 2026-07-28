@@ -520,6 +520,10 @@ const sh = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', ti
 
 function rmrf(p) { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* nothing to remove */ } }
 
+function initMemoryDb(ruflo, db, cwd) {
+  return sh(ruflo, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { cwd });
+}
+
 /**
  * Build the two fixture projects and the isolated brain world.
  *
@@ -574,6 +578,7 @@ export function buildFixtures(baseDir) {
 export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
   const dbA = path.join(dirs.projectA, '.swarm', 'memory.db');
   const key = 'lesson-ruflo-memory-search-flag';
+  const init = initMemoryDb(ruflo, dbA, dirs.projectA);
   const store = sh(ruflo, ['memory', 'store', '-k', key, '--value', LESSON_STATEMENT, '-n', 'default', '--path', dbA],
     { cwd: dirs.projectA });
   // Read it back through the interface under test. If this cannot find the row, the record step did
@@ -602,9 +607,11 @@ export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
   });
   saveLessons([lesson], dirs.lessons);
   return {
-    ok: recorded && loadLessons(dirs.lessons).length === 1,
+    ok: init.status === 0 && store.status === 0 && back.status === 0
+      && recorded && loadLessons(dirs.lessons).length === 1,
     dbA,
     key,
+    initExit: init.status,
     storeExit: store.status,
     readBackExit: back.status,
     lesson,
@@ -626,9 +633,16 @@ export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
  */
 export function seedProjectBMemory(dirs, { ruflo = RUFLO_BIN } = {}) {
   const dbB = path.join(dirs.projectB, '.swarm', 'memory.db');
+  const init = initMemoryDb(ruflo, dbB, dirs.projectB);
   const r = sh(ruflo, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', dbB],
     { cwd: dirs.projectB });
-  return { db: dbB, key: PROJECT_B_MEMORY_KEY, storeExit: r.status, ok: r.status === 0 && fs.existsSync(dbB) };
+  return {
+    db: dbB,
+    key: PROJECT_B_MEMORY_KEY,
+    initExit: init.status,
+    storeExit: r.status,
+    ok: init.status === 0 && r.status === 0 && fs.existsSync(dbB),
+  };
 }
 
 /**

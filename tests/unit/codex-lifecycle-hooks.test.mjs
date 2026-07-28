@@ -9,6 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const WRAPPER = path.join(ROOT, 'plugin', 'scripts', 'codex-hook-wrapper.mjs');
 const ADAPTER = path.join(ROOT, 'plugin', 'scripts', 'codex-hook-adapter.mjs');
 const HOOKS = path.join(ROOT, 'plugin', 'hooks', 'codex-hooks.json');
+const CLAUDE_HOOKS = path.join(ROOT, 'plugin', 'hooks', 'hooks.json');
 const MANIFEST = path.join(ROOT, 'plugin', '.codex-plugin', 'plugin.json');
 
 function fixture() {
@@ -50,6 +51,26 @@ function installGroundingGeneration(brain, version) {
   }));
 }
 
+function installInterfaceGeneration(brain, version) {
+  const scripts = path.join(brain, 'versions', version, 'scripts');
+  fs.mkdirSync(scripts, { recursive: true });
+  for (const file of [
+    'codex-hook-adapter.mjs',
+    'hook-shim.mjs',
+    'hook-shim-bash.mjs',
+    'verify-interface.sh',
+    'hook-input.mjs',
+    'gate-receipt.sh',
+  ]) {
+    fs.copyFileSync(path.join(ROOT, 'plugin', 'scripts', file), path.join(scripts, file));
+  }
+  fs.writeFileSync(path.join(brain, 'active.json'), JSON.stringify({
+    generation: version,
+    version,
+    codeRoot: `versions/${version}`,
+  }));
+}
+
 function fire(home, id, payload, extraEnv = {}) {
   return spawnSync(process.execPath, [WRAPPER, id], {
     cwd: ROOT,
@@ -76,6 +97,45 @@ describe('Codex lifecycle hook packaging', () => {
     expect(hooks.hooks.SessionStart).toBeTruthy();
     expect(hooks.hooks.Stop).toBeTruthy();
     expect(JSON.stringify(hooks.hooks.PreToolUse)).toContain('ground-before-write');
+    expect(JSON.stringify(hooks.hooks.PostToolUse)).toContain('grounding-stamp');
+    expect(hooks.hooks.PostToolUse.some((group) =>
+      group.matcher?.includes('search_ruvnet')
+      && group.hooks.some((hook) => hook.command.includes(' grounding-stamp')))).toBe(true);
+  });
+
+  it('registers successful-search stamping on both first-class hosts', () => {
+    for (const hookFile of [CLAUDE_HOOKS, HOOKS]) {
+      const hooks = JSON.parse(fs.readFileSync(hookFile, 'utf8')).hooks;
+      expect(hooks.PostToolUse.some((group) =>
+        group.matcher?.includes('search_ruvnet')
+        && group.hooks.some((hook) => hook.command.includes(' grounding-stamp'))),
+      `${path.basename(hookFile)} must connect a successful search to the write-time grounding wall`).toBe(true);
+    }
+  });
+
+  it('matches the raw Codex tool names before the adapter normalizes them', () => {
+    const hooks = JSON.parse(fs.readFileSync(HOOKS, 'utf8')).hooks;
+    const groupsFor = (event, hookId) => hooks[event].filter((group) =>
+      group.hooks.some((hook) => hook.command.includes(` ${hookId}`)));
+
+    for (const event of ['PreToolUse', 'PostToolUse']) {
+      for (const group of groupsFor(event, event === 'PreToolUse' ? 'hijack-ruvnet' : 'learn-capture')) {
+        expect(group.matcher).toMatch(/exec_command/);
+        expect(group.matcher).toMatch(/functions\\\.exec_command/);
+        expect(group.matcher).toMatch(/apply_patch/);
+      }
+    }
+    for (const hookId of ['verify-interface', 'design-wall']) {
+      for (const group of groupsFor('PreToolUse', hookId)) {
+        expect(group.matcher).toMatch(/exec_command/);
+        expect(group.matcher).toMatch(/functions\\\.exec_command/);
+      }
+    }
+    for (const hookId of ['ground-before-write', 'protect-state']) {
+      for (const group of groupsFor('PreToolUse', hookId)) {
+        expect(group.matcher).toMatch(/apply_patch/);
+      }
+    }
   });
 
   it('uses one generation-independent entrypoint for every Codex hook', () => {
@@ -228,6 +288,62 @@ describe('Codex lifecycle adapter', () => {
     expect(normalized.tool_name).toBe('Edit');
     expect(normalized.tool_input.file_path).toBe('/tmp/project/src/rvf.ts');
     expect(normalized.tool_input.new_string).toBe(patch);
+  });
+
+  it.each(['exec_command', 'functions.exec_command', 'functions__exec_command'])(
+    'normalizes %s into the shared Bash contract without losing Codex fields',
+    (toolName) => {
+      const { home, brain } = fixture();
+      installGeneration(
+        brain,
+        'v1',
+        'let raw=""; process.stdin.on("data",c=>raw+=c); process.stdin.on("end",()=>process.stdout.write(raw));',
+      );
+      const command = 'ruflo memory search "the prior decision" --limit 10';
+
+      const result = fire(home, 'verify-interface', {
+        session_id: 'codex-exec',
+        turn_id: 'turn-exec',
+        hook_event_name: 'PreToolUse',
+        tool_name: toolName,
+        tool_input: {
+          cmd: command,
+          justification: 'Recall project memory before deciding',
+        },
+        cwd: ROOT,
+      });
+      const normalized = JSON.parse(result.stdout);
+
+      expect(result.status).toBe(0);
+      expect(normalized.tool_name).toBe('Bash');
+      expect(normalized.tool_input.command).toBe(command);
+      expect(normalized.tool_input.cmd).toBe(command);
+      expect(normalized.tool_input.justification).toBe('Recall project memory before deciding');
+    },
+  );
+
+  it('blocks an unverified Ruflo command through the real Codex exec_command boundary', () => {
+    const { home, brain } = fixture();
+    installInterfaceGeneration(brain, 'v1');
+    const profile = path.join(home, '.claude', 'model-router', 'profile.json');
+    fs.mkdirSync(path.dirname(profile), { recursive: true });
+    fs.writeFileSync(profile, '{}');
+
+    const result = fire(home, 'verify-interface', {
+      session_id: 'codex-interface-wall',
+      turn_id: 'turn-interface-wall',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'exec_command',
+      tool_input: {
+        cmd: 'ruflo memory search "the prior decision" --limit 10',
+      },
+      cwd: ROOT,
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('BLOCKED — you have not read the interface for: ruflo memory search');
+    expect(result.stderr).toContain('ruflo memory search --help');
   });
 
   it('blocks the founding remote-import contradiction through the installed Codex boundary', () => {

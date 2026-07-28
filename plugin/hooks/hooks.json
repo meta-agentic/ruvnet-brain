@@ -125,6 +125,16 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "^(?:.*__)?search_ruvnet$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" grounding-stamp || true",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|MultiEdit|Bash",
         "hooks": [
           {

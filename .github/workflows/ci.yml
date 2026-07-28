@@ -279,24 +279,27 @@ jobs:
         # stranger actually runs.
         run: |
           set -e
-          # A normal query currently loads the cross-encoder reranker but can answer from the RVF's
-          # stored vectors without ever instantiating the query embedder. That made the old "warm"
-          # step green while Xenova/all-MiniLM-L6-v2 remained absent. Import the INSTALLED bundle's
-          # resolver, configure it with this job's KB_MODEL_CACHE, and execute one real embedding.
+          # The installed RVF sidecars are the source of truth. Canonical `*.big.rvf` stores use
+          # BGE, while the old gate hard-coded MiniLM and therefore declared itself warm even when
+          # the real reader could not answer one general query. Warm every model required by a
+          # matching installed RVF, then assert those exact model leaves below.
           node --input-type=module <<'NODE' > /tmp/embedder-warm.log 2>&1
           import path from 'node:path';
           import { pathToFileURL } from 'node:url';
+          import { requiredEmbedderModels } from './kb/model-requirements.mjs';
           const resolver = pathToFileURL(path.join(process.env.RUVNET_BRAIN_KB, 'resolve-deps.mjs')).href;
-          const { loadTransformers, configureModel } = await import(resolver);
+          const { loadTransformers } = await import(resolver);
           const { T, modelCache, via } = await loadTransformers();
-          configureModel(T, modelCache);
           // The pinned installed resolver can predate the source fix: localModelPath controls reads,
           // while cacheDir controls remote downloads. Force both at the actual CI door.
+          T.env.localModelPath = modelCache;
           T.env.cacheDir = modelCache;
-          const embed = await T.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
-          await embed('warm the exact query embedder', { pooling: 'mean', normalize: true });
-          if (typeof embed.dispose === 'function') await embed.dispose();
-          console.log(`embedder instantiated via ${via}; cache=${modelCache}`);
+          for (const model of requiredEmbedderModels(process.env.RUVNET_BRAIN_KB)) {
+            const embed = await T.pipeline('feature-extraction', model, { quantized: true });
+            await embed('warm the exact query embedder', { pooling: 'mean', normalize: true });
+            if (typeof embed.dispose === 'function') await embed.dispose();
+            console.log(`embedder ${model} instantiated via ${via}; cache=${modelCache}`);
+          }
           NODE
           READER="$RUVNET_BRAIN_KB/forge-ask-all.mjs"
           if [ -f "$READER" ]; then
@@ -312,17 +315,26 @@ jobs:
           # `test -d "$KB_MODEL_CACHE"` — the directory, which the bundle creates whether or not a
           # model was ever downloaded into it. So it passed on a COLD cache, the warm step went
           # green, and the battery one step later reported the product broken over an infrastructure
-          # miss. plugin/test/model-cache.mjs:29,43 checks `<KB_MODEL_CACHE>/Xenova/all-MiniLM-L6-v2`
-          # and nothing else; this now checks the same thing, so the two cannot disagree.
+          # miss. model-requirements.mjs now reads the required models from the installed RVF
+          # sidecars; this assertion consumes that same list, so the reader and gate cannot disagree.
           #
           # A path assertion that names only the parent is the same defect class as bin/install.mjs's
           # models-cache-vs-models divergence: both "verified" a location adjacent to the one that
           # matters. This lane warms through a --pin'ned bundle whose reader may predate that fix, so
           # on failure it PRINTS WHERE THE MODEL ACTUALLY LANDED rather than only saying it is absent
           # — a diagnostic that discards the diagnosis costs the next person a whole CI cycle.
-          EMBEDDER="$KB_MODEL_CACHE/Xenova/all-MiniLM-L6-v2"
-          if [ ! -d "$EMBEDDER" ]; then
-            echo "::error::the embedder the battery reads is ABSENT after a SUCCESSFUL warm query: $EMBEDDER"
+          MISSING_MODELS="$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { requiredEmbedderModels } from './kb/model-requirements.mjs';
+          const missing = requiredEmbedderModels(process.env.RUVNET_BRAIN_KB)
+            .filter((model) => !fs.existsSync(path.join(process.env.KB_MODEL_CACHE, ...model.split('/'))));
+          process.stdout.write(missing.join('\n'));
+          NODE
+          )"
+          if [ -n "$MISSING_MODELS" ]; then
+            echo "::error::required embedder(s) are ABSENT after a SUCCESSFUL warm query:"
+            echo "$MISSING_MODELS"
             echo "--- what the warm query actually wrote (searching .brain-cache for any downloaded model) ---"
             find "$GITHUB_WORKSPACE/.brain-cache" -maxdepth 5 -type d \( -name 'all-MiniLM*' -o -name 'Xenova' -o -name '*models*' \) 2>/dev/null | head -20
             echo "--- onnx weights anywhere under .brain-cache ---"
@@ -330,7 +342,11 @@ jobs:
             echo "--- warm query log ---"; tail -25 /tmp/warm.log
             exit 1
           fi
-          echo "warmed: $(du -sh "$EMBEDDER" | cut -f1) at $EMBEDDER"
+          echo "warmed every query model required by the installed RVF sidecars:"
+          node --input-type=module <<'NODE'
+          import { requiredEmbedderModels } from './kb/model-requirements.mjs';
+          for (const model of requiredEmbedderModels(process.env.RUVNET_BRAIN_KB)) console.log(`  ${model}`);
+          NODE
       - name: Core capability battery — REQUIRE_BRAIN=1 (a skipped battery is now a hard failure)
         env:
           REQUIRE_BRAIN: '1'

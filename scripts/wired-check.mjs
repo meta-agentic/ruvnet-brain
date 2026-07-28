@@ -203,19 +203,9 @@ const STANDALONE = [
     + 'live); its own launchd trigger self-removed after firing. Kept for the record — deletion is '
     + 'also reasonable and is flagged as a candidate in the wiring report, Stuart\'s call'],
 
-  // Gates that ship deliberately INERT in hooks.json (SECURITY.md documents this exact class:
-  // "ship as inert files with every install; they only ever run if something else explicitly wires
-  // them into a settings.json") — an in-repo caller is structurally the wrong thing to demand for a
-  // gate the INSTALLING USER activates in their own, out-of-repo settings.json:
-  ['ground-before-write', 'PreToolUse (Write|Edit|MultiEdit) gate — confirmed LIVE 2026-07-23 wired '
-    + 'into Stuart\'s own global ~/.claude/settings.json (ADR-0012), not this repo\'s files. '
-    + 'SECURITY.md documents it as shipping inert in hooks.json by design'],
-  ['grounding-stamp', 'PostToolUse hook on search_ruvnet — the OTHER half of ground-before-write: it '
-    + 'stamps which rUv products a query grounded, read later by the write-path gate. SECURITY.md §"four '
-    + 'more scripts" names it explicitly as shipping INERT with every install, run only when a user\'s '
-    + 'settings.json wires it (this repo\'s .claude/settings.json does). Same ships-inert class as '
-    + 'ground-before-write above; surfaced here 2026-07-23 when the comment-strip stopped a prose mention '
-    + 'from standing in for a caller.'],
+  // The grounding wall and its successful-search stamp used to be in this inert class. They now
+  // ship through the plugin shim on both Claude and Codex; keeping them exempt here made the wiring
+  // report contradict its own live hook census.
   ['kling-preflight', 'PreToolUse (Bash) gate — ships inert by design, same SECURITY.md class as '
     + 'ground-before-write. Per ADR-0014 ownership moved to the Kling skill (confirmed live: a copy '
     + 'ships at ~/.claude/skills/klingai/scripts/kling-preflight.sh); NOT currently wired into any '

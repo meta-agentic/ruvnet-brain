@@ -475,8 +475,10 @@ describe('§2b byte-equivalence — ~/.claude/settings.json', () => {
     fs.writeFileSync(file, source.replace(find, replace)); // .replace (no /g) hits ONLY the FIRST
     // occurrence — verified below to be the one inside writeSettingsStatusLine, not the removal path.
     // Preserve the installer's real module shape. Copying only install.mjs made the mutant crash on
-    // its legitimate ../kb/brain-profile.mjs import before the mutation could be exercised.
-    fs.copyFileSync(path.join(REPO_ROOT, 'kb', 'brain-profile.mjs'), path.join(kbDir, 'brain-profile.mjs'));
+    // its legitimate ../kb sibling imports before the mutation could be exercised.
+    for (const sibling of ['brain-profile.mjs', 'model-requirements.mjs']) {
+      fs.copyFileSync(path.join(REPO_ROOT, 'kb', sibling), path.join(kbDir, sibling));
+    }
     process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
     try {
       const mod = await import(pathToFileURL(file).href);

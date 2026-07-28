@@ -56,6 +56,7 @@
     "kb/verify-citation.mjs",
     "kb/zip-extract.mjs",
     "kb/brain-profile.mjs",
+    "kb/model-requirements.mjs",
     "scripts/model-router-engine.mjs",
     "scripts/model-router-setup.mjs",
     "scripts/model-router-status.mjs",

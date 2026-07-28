@@ -55,6 +55,13 @@ describe.skipIf(process.platform === 'win32')('hook-shim.mjs — restart-free ho
     expect(run('ground-ruvnet').status).toBe(0);
   });
 
+  it('dispatches the successful-search grounding stamp as an advisory hook', () => {
+    seedSpine('1.0.0', { 'grounding-stamp.sh': '#!/bin/bash\necho STAMP-DISPATCHED\nexit 97\n' });
+    const result = run('grounding-stamp');
+    expect(result.stdout).toContain('STAMP-DISPATCHED');
+    expect(result.status).toBe(0);
+  });
+
   it('no spine at all (first install) → quiet fallback to the frozen plugin dir', () => {
     fs.writeFileSync(path.join(PLUGIN_ROOT, 'scripts', 'ground-ruvnet.sh'), '#!/bin/bash\necho FROZEN-FALLBACK\n');
     const r = run('ground-ruvnet');

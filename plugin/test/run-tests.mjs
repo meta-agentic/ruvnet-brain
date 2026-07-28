@@ -22,7 +22,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resolveModelCache, modelPresent, classifyBattery } from './model-cache.mjs';
+import {
+  resolveModelCache,
+  requiredEmbedderModels,
+  modelPresent,
+  classifyBattery,
+} from './model-cache.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // plugin/
 let pass = 0;
@@ -203,14 +208,17 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
   await finish();
 } else {
   const questions = readJson(process.env.CAP_QUESTIONS || 'test/capability-questions.json') || [];
-  // COLD-CACHE EVIDENCE (docs/4.0-READINESS.md §6 item 1). The MCP child embeds every question with
-  // Xenova/all-MiniLM-L6-v2. If that model has never been downloaded, EVERY query fails and — parsed
+  // COLD-CACHE EVIDENCE (docs/4.0-READINESS.md §6 item 1). Read the required query model from the
+  // installed RVF sidecars. Canonical `*.big.rvf` stores use BGE; assuming MiniLM here used to make
+  // this gate declare itself warm while the real reader failed every general query.
+  // If a required model has never been downloaded, EVERY query fails and — parsed
   // by this battery — prints the same "(no hit)" a real outage prints, mislabeling a healthy brain as
   // broken. Resolve the SAME cache path the child will use (mirrors plugin/mcp/server.mjs) and read
   // the one honest signal: is the embedder on disk? A cold cache is reported distinctly and is NOT a
   // failure; an outage (model present, retrieval still dead) stays red. See plugin/test/model-cache.mjs.
   const modelCache = resolveModelCache();
-  const haveModel = modelPresent(modelCache);
+  const requiredModels = requiredEmbedderModels(KB);
+  const haveModel = modelPresent(modelCache, requiredModels);
   await withServer(KB, async (rpc) => {
     const init = await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
     check('launcher: initialize returns serverInfo ruvnet-brain', init?.result?.serverInfo?.name === 'ruvnet-brain');
@@ -222,7 +230,8 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
     if (!haveModel) {
       coldSkipped = true;
       console.log(`\n  ⚠️  CAPABILITY BATTERY SKIPPED — COLD MODEL CACHE (embedder not downloaded).`);
-      console.log(`      Xenova/all-MiniLM-L6-v2 is ABSENT at ${path.join(modelCache, 'Xenova', 'all-MiniLM-L6-v2')}.`);
+      console.log(`      Required query model(s): ${requiredModels.join(', ')}`);
+      console.log(`      At least one is ABSENT from ${modelCache}.`);
       console.log(`      This is NOT a retrieval outage: the corpus is present and the launcher answered above.`);
       console.log(`      A cold cache makes EVERY query fail identically to a real outage, so the battery is not`);
       console.log(`      run rather than printing a misleading "(no hit)" on every question (empty-first house rule).`);

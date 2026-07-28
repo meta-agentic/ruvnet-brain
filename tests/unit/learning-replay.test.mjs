@@ -228,6 +228,7 @@ describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checke
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-live-'));
     fs.mkdirSync(path.join(dir, '.swarm'), { recursive: true });
     db = path.join(dir, '.swarm', 'memory.db');
+    spawnSync(RUFLO_BIN, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { encoding: 'utf8', timeout: 120_000, cwd: dir });
     spawnSync(RUFLO_BIN, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', db], { encoding: 'utf8', timeout: 120_000, cwd: dir });
   });
   afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -247,7 +248,11 @@ describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checke
   }, 180_000);
 
   t('MUTANT 2 live — a perfect command against an EMPTY store exits 0 and retrieves nothing', () => {
-    fs.rmSync(db, { force: true });
+    // Remove the whole closed fixture store, including WAL/SHM sidecars. Deleting only memory.db
+    // lets Ruflo replay the seeded row from memory.db-wal into the "empty" replacement.
+    fs.rmSync(path.dirname(db), { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(db), { recursive: true });
+    spawnSync(RUFLO_BIN, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { encoding: 'utf8', timeout: 120_000, cwd: dir });
     const e = executeProducedCommand('ruflo memory search -q "caching strategy"', { cwd: dir, base: dir });
     expect(e.exit).toBe(0);
     expect(e.retrieved).toBe(false);

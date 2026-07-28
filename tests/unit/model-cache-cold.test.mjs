@@ -11,7 +11,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveModelCache, modelPresent, classifyBattery, EMBEDDER_REL } from '../../plugin/test/model-cache.mjs';
+import {
+  resolveModelCache,
+  requiredEmbedderModels,
+  modelPresent,
+  classifyBattery,
+  EMBEDDER_REL,
+  BGE_EMBEDDER_REL,
+} from '../../plugin/test/model-cache.mjs';
+import { configureTransformersModel } from '../../kb/model-requirements.mjs';
 
 let tmp;
 const savedEnv = {};
@@ -50,6 +58,76 @@ describe('modelPresent — the one honest signal: is the embedder on disk?', () 
     // exactly the state of ~/.cache/ruvnet-brain/models that produced this bug. It must read cold.
     fs.mkdirSync(path.join(tmp, 'Xenova', 'ms-marco-MiniLM-L-6-v2'), { recursive: true });
     expect(modelPresent(tmp)).toBe(false);
+  });
+});
+
+describe('requiredEmbedderModels — follows the installed RVF sidecars', () => {
+  it('requires BGE when canonical big stores declare BGE, not the unrelated MiniLM fallback', () => {
+    fs.writeFileSync(path.join(tmp, 'ruflo.big.rvf'), '');
+    fs.writeFileSync(
+      path.join(tmp, 'ruflo.big.rvf.embed.json'),
+      JSON.stringify({ model: 'Xenova/bge-base-en-v1.5', dimensions: 768 }),
+    );
+    expect(requiredEmbedderModels(tmp)).toEqual(['Xenova/bge-base-en-v1.5']);
+    fs.mkdirSync(path.join(tmp, EMBEDDER_REL), { recursive: true });
+    expect(modelPresent(tmp, requiredEmbedderModels(tmp))).toBe(false);
+    fs.mkdirSync(path.join(tmp, BGE_EMBEDDER_REL), { recursive: true });
+    expect(modelPresent(tmp, requiredEmbedderModels(tmp))).toBe(true);
+  });
+
+  it('deduplicates models and ignores orphan sidecars whose RVF is absent', () => {
+    for (const name of ['a', 'b']) {
+      fs.writeFileSync(path.join(tmp, `${name}.big.rvf`), '');
+      fs.writeFileSync(
+        path.join(tmp, `${name}.big.rvf.embed.json`),
+        JSON.stringify({ model: 'Xenova/bge-base-en-v1.5' }),
+      );
+    }
+    fs.writeFileSync(
+      path.join(tmp, 'orphan.rvf.embed.json'),
+      JSON.stringify({ model: 'Xenova/all-MiniLM-L6-v2' }),
+    );
+    expect(requiredEmbedderModels(tmp)).toEqual(['Xenova/bge-base-en-v1.5']);
+  });
+
+  it('matches the reader: a canonical big store supersedes its legacy small store', () => {
+    fs.writeFileSync(path.join(tmp, 'ruflo.rvf'), '');
+    fs.writeFileSync(
+      path.join(tmp, 'ruflo.rvf.embed.json'),
+      JSON.stringify({ model: 'Xenova/all-MiniLM-L6-v2' }),
+    );
+    fs.writeFileSync(path.join(tmp, 'ruflo.big.rvf'), '');
+    fs.writeFileSync(
+      path.join(tmp, 'ruflo.big.rvf.embed.json'),
+      JSON.stringify({ model: 'Xenova/bge-base-en-v1.5' }),
+    );
+    expect(requiredEmbedderModels(tmp)).toEqual(['Xenova/bge-base-en-v1.5']);
+  });
+
+  it('falls back to MiniLM only when no readable installed-store sidecar exists', () => {
+    expect(requiredEmbedderModels(tmp)).toEqual(['Xenova/all-MiniLM-L6-v2']);
+    fs.writeFileSync(path.join(tmp, 'broken.rvf'), '');
+    fs.writeFileSync(path.join(tmp, 'broken.rvf.embed.json'), '{bad json');
+    expect(requiredEmbedderModels(tmp)).toEqual(['Xenova/all-MiniLM-L6-v2']);
+  });
+});
+
+describe('configureTransformersModel — reads and downloads through the same cache', () => {
+  it('sets both localModelPath and cacheDir to the detector-visible cache', () => {
+    const T = { env: {} };
+    const r = configureTransformersModel(T, tmp, 'Xenova/bge-base-en-v1.5');
+    expect(T.env.localModelPath).toBe(tmp);
+    expect(T.env.cacheDir).toBe(tmp);
+    expect(T.env.allowRemoteModels).toBe(true);
+    expect(r.local).toBe(false);
+  });
+
+  it('disables remote loading when that exact model is already local', () => {
+    fs.mkdirSync(path.join(tmp, BGE_EMBEDDER_REL), { recursive: true });
+    const T = { env: {} };
+    const r = configureTransformersModel(T, tmp, 'Xenova/bge-base-en-v1.5');
+    expect(T.env.allowRemoteModels).toBe(false);
+    expect(r.local).toBe(true);
   });
 });
 

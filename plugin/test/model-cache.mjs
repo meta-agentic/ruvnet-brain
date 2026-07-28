@@ -20,13 +20,22 @@
 // so the battery inspects the SAME path the MCP child loads the model from — the evidence is about
 // the real door, not an adjacent one.
 
-import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {
+  MINILM_MODEL,
+  BGE_MODEL,
+  requiredEmbedderModels,
+  missingEmbedderModels,
+} from '../../kb/model-requirements.mjs';
 
 // The embedder the query side needs. The reranker (Xenova/ms-marco-MiniLM-L-6-v2) is a DIFFERENT
 // model and its presence does not warm the query path — only this leaf makes queries answerable.
-export const EMBEDDER_REL = path.join('Xenova', 'all-MiniLM-L6-v2');
+export { requiredEmbedderModels };
+export const EMBEDDER_MODEL = MINILM_MODEL;
+export const BGE_EMBEDDER_MODEL = BGE_MODEL;
+export const EMBEDDER_REL = path.join(...EMBEDDER_MODEL.split('/'));
+export const BGE_EMBEDDER_REL = path.join(...BGE_EMBEDDER_MODEL.split('/'));
 
 // Same resolution the MCP server applies to the brain child (server.mjs:37,99):
 //   BRAIN_HOME = RUVNET_BRAIN_HOME || ~/.cache/ruvnet-brain
@@ -38,9 +47,12 @@ export function resolveModelCache(env = process.env) {
   return path.join(brainHome, 'models');
 }
 
-// The single piece of evidence: does the embedder model actually exist on disk?
-export function modelPresent(modelCache = resolveModelCache()) {
-  try { return fs.existsSync(path.join(modelCache, EMBEDDER_REL)); }
+// Read the query model from every installed RVF's own sidecar. Canonical Brain stores are BGE
+// `*.big.rvf`; assuming MiniLM here made the release battery call itself warm while the real reader
+// could not answer a single general query. An orphan sidecar is not a runtime requirement.
+// The single piece of evidence: do ALL embedders required by the installed stores exist on disk?
+export function modelPresent(modelCache = resolveModelCache(), models = [EMBEDDER_MODEL]) {
+  try { return models.length > 0 && missingEmbedderModels(modelCache, models).length === 0; }
   catch { return false; }
 }
 

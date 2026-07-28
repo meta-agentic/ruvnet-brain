@@ -20,6 +20,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import { applyBrainProfile, readBrainProfile } from '../kb/brain-profile.mjs';
+import {
+  requiredEmbedderModels,
+  missingEmbedderModels,
+} from '../kb/model-requirements.mjs';
 
 // SEC-0010 #6 — the Ed25519 PUBLIC key is EMBEDDED here (not a separate file) so the installer's
 // trust root travels with the installer code itself: an attacker who swaps the downloaded bundle
@@ -610,7 +614,8 @@ const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
 const codexHomeDir = () => path.join(os.homedir(), '.codex');
 const codexConfigPath = () => path.join(codexHomeDir(), 'config.toml');
 const codexServerDir = () => path.join(os.homedir(), '.claude', 'ruvnet-brain', 'mcp');
-const codexHookWrapperPath = () => path.join(os.homedir(), '.cache', 'ruvnet-brain', 'codex-hook.mjs');
+const codexHookWrapperPath = (codexDir = codexHomeDir()) =>
+  path.join(path.dirname(codexDir), '.cache', 'ruvnet-brain', 'codex-hook.mjs');
 
 // The exact bytes we own. Kept in one place so the writer and the doctor probe can never disagree.
 function codexManagedBlock(serverPath) {
@@ -692,7 +697,7 @@ export function wireCodexHost({
   serverDir = codexServerDir(),
   source = path.join(__dirname, '..', 'plugin', 'mcp', 'server.mjs'),
   hookWrapperSource = path.join(__dirname, '..', 'plugin', 'scripts', 'codex-hook-wrapper.mjs'),
-  hookWrapperPath = codexHookWrapperPath(),
+  hookWrapperPath = codexHookWrapperPath(codexDir),
   announce = true,
 } = {}) {
   let host = false;
@@ -1357,16 +1362,18 @@ async function doctor() {
   // runtime never reads proves nothing about the runtime — the D8 deduction, in one line of path.
   const brainHome = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
   const modelCacheDir = process.env.KB_MODEL_CACHE || path.join(brainHome, 'models');
-  const haveLocalModel = fs.existsSync(path.join(modelCacheDir, 'Xenova', 'all-MiniLM-L6-v2'))
-    || fs.existsSync(path.join(modelCacheDir, 'Xenova/all-MiniLM-L6-v2'));
+  const requiredModels = requiredEmbedderModels(cacheDir);
+  const missingModels = missingEmbedderModels(modelCacheDir, requiredModels);
+  const haveLocalModel = missingModels.length === 0;
   try {
     await fetch('https://huggingface.co', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
     ok('model host reachable (huggingface.co) — cold-cache model download would work');
   } catch {
     if (haveLocalModel) {
-      ok(`model host UNREACHABLE, but the embedder is already cached locally (${modelCacheDir}) — queries work offline`);
+      ok(`model host UNREACHABLE, but every required embedder is cached locally (${modelCacheDir}) — queries work offline`);
     } else {
       warn('network-restricted environment detected: huggingface.co unreachable (3s probe) AND no local model cache.');
+      warn(`  Missing query model(s): ${missingModels.join(', ')}`);
       warn(`  The first query needs the embedder model once. Fix: on a networked machine run one query, then copy`);
       warn(`  its model cache to this machine and set KB_MODEL_CACHE to that path. (Queries fail loud, not hang.)`);
     }
