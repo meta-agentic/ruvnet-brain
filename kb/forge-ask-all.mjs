@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { searchKb } from './forge-ask.mjs';
 import { rerankPairs, cePrefilterScores } from './forge-rerank.mjs';
 import { tokenize, buildCorpusStats, bm25Score } from './forge-hybrid.mjs';
+import { assessImplementation, implementationNotice } from './implementation-evidence.mjs';
 
 // TRANSCRIPT/dialogue stores need LEXICAL (BM25) candidate generation, not dense alone. A fact spoken
 // in passing ("…876 commits…") embeds poorly against a conceptual question, so dense buries it past
@@ -380,7 +381,8 @@ export function selectResults({ query, ranked, k = 6 }) {
       : null,
   };
 
-  return { results, adrCollision, evidence };
+  const assessed = assessImplementation(query, results);
+  return { results: assessed.results, adrCollision, evidence, implementation: assessed.implementation };
 }
 
 // Query every repo, pool, rerank on a common scale, return global top-k labeled by repo.
@@ -547,7 +549,7 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
       })),
     }) + '\n');
   }
-  const { results, adrCollision, evidence } = selectResults({ query, ranked, k });
+  const { results, adrCollision, evidence, implementation } = selectResults({ query, ranked, k });
 
   // `pooled` stays the number of pairs the cross-encoder read IN FULL — that is what the count
   // has always meant to a reader. `pooledAll`/`cappedOut` report what the cap withheld, because a
@@ -559,7 +561,7 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     repos: list, perRepo, results,
     pooled: candidates.length, pooledAll: pooledAll.length, cappedOut,
     prefiltered: s1 ? pooledAll.length : 0, prefilterTokens: s1 ? cascadeTokens : 0, prefilterMs,
-    corpusAge, adrCollision, evidence,
+    corpusAge, adrCollision, evidence, implementation,
   };
 }
 
@@ -578,7 +580,7 @@ function parseArgs() {
 async function main() {
   const { dir, query, k, pool, repos } = parseArgs();
   if (!query) { console.error('Usage: node forge-ask-all.mjs --dir <bundle-dir> --q "question" [--k 6] [--pool 8] [--repos a,b]'); process.exit(2); }
-  const { repos: used, perRepo, results, pooled, pooledAll, cappedOut, prefiltered, prefilterTokens, adrCollision, evidence } = await searchAll({ dir, query, k, pool, repos });
+  const { repos: used, perRepo, results, pooled, pooledAll, cappedOut, prefiltered, prefilterTokens, adrCollision, evidence, implementation } = await searchAll({ dir, query, k, pool, repos });
   // ── GONG LAYER (CLI): all repos erroring is an OUTAGE, not a quiet zero. Banner + exit 1 + alarm.
   // The non-zero exit is load-bearing: scripts/nightly-wrapper.sh's canary and any cron/CI caller
   // rely on it — a total failure that exits 0 is exactly the silent death this exists to kill.
@@ -607,6 +609,8 @@ async function main() {
   // Surface the ambiguity BEFORE the results, so it is read as a caveat on everything below rather
   // than a footnote after the reader has already accepted the first hit as "the" answer.
   if (adrCollision) console.log(`⚠ ${adrCollision.note}`);
+  const truthNote = implementationNotice(implementation).trim();
+  if (truthNote) console.log(truthNote);
   // Confidence BEFORE the results, so it is read as a caveat on everything below rather than a
   // footnote after the reader has already drawn a conclusion from a thin list.
   if (evidence?.caveat) {
@@ -624,7 +628,7 @@ async function main() {
     : cappedOut ? ` (cross-encoded ${pooled} of ${pooledAll}; ${cappedOut} beyond the pair budget)` : '';
   console.log(`repos searched: ${used.join(', ')}  |  per-repo hits: ${JSON.stringify(perRepo)}  |  pooled candidates: ${pooled}${poolNote}\n`);
   results.forEach((r, i) => {
-    console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}${r.statusLabel ? `  [${r.statusLabel}]` : ''}`);
+    console.log(`#${i + 1}  repo=${r.repo}  ce=${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}  vec=${r.bestDistance?.toFixed(4)}${r.kind ? `  kind=${r.kind}` : ''}  evidence=${r.evidenceClass || 'unknown'}${r.lifecycleStatus ? `  lifecycle=${r.lifecycleStatus}` : ''}`);
     console.log(`path : ${r.repo}/${r.path}`);
     console.log(`title: ${r.title}`);
     if (r.designIntentWarning) console.log(r.designIntentWarning);

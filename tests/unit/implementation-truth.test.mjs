@@ -1,0 +1,130 @@
+import { describe, expect, it } from 'vitest';
+import { selectResults } from '../../kb/forge-ask-all.mjs';
+import { answerFromCards } from '../../kb/card-lane.mjs';
+import { groundedToolResult } from '../../kb/grounded-response.mjs';
+import { implementationNotice } from '../../kb/implementation-evidence.mjs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const KB = path.join(ROOT, 'kb');
+
+function ranked(kind, path_, text, score = 8) {
+  return [{
+    repo: 'fictional-ruv-project',
+    kind,
+    path: path_,
+    title: 'Plausible capability',
+    fullText: text,
+    text,
+    ceScore: score,
+    bestDistance: 0.1,
+  }];
+}
+
+describe('implementation truth gate — design intent is never built-state proof', () => {
+  it('marks a strong Proposed ADR hit unproven for a built-state question', () => {
+    const out = selectResults({
+      query: 'Did Reuven build and ship autonomous orbital deployment in this project?',
+      ranked: ranked(
+        'adr',
+        'docs/adr/ADR-900-orbital-deployment.md',
+        'Status: Proposed\n\nThis ADR proposes autonomous orbital deployment.',
+      ),
+    });
+
+    expect(out.implementation).toMatchObject({
+      required: true,
+      verdict: 'unproven',
+      implementationSources: [],
+    });
+    expect(out.results[0].evidenceClass).toBe('design-intent');
+    expect(out.results[0].lifecycleStatus).toBe('proposed');
+  });
+
+  it('proves built-state only from implementation-bearing source or a manifest', () => {
+    const out = selectResults({
+      query: 'Does this project implement orbital deployment?',
+      ranked: ranked(
+        'source',
+        'src/orbital_deployment.rs',
+        'pub struct OrbitalDeployment;\nimpl OrbitalDeployment { pub fn deploy(&self) {} }',
+      ),
+    });
+
+    expect(out.implementation).toMatchObject({
+      required: true,
+      verdict: 'proven',
+      implementationSources: ['fictional-ruv-project/src/orbital_deployment.rs'],
+    });
+    expect(out.results[0].evidenceClass).toBe('implementation');
+  });
+
+  it('does not use an irrelevant source hit as proof merely because it is code', () => {
+    const out = selectResults({
+      query: 'Does this project implement orbital deployment?',
+      ranked: ranked('source', 'src/unrelated.rs', 'pub fn unrelated() {}', 1),
+    });
+    expect(out.implementation.verdict).toBe('unproven');
+    expect(out.implementation.implementationSources).toEqual([]);
+  });
+
+  it('does not treat an Accepted ADR as implementation evidence', () => {
+    const out = selectResults({
+      query: 'Has this project implemented orbital deployment?',
+      ranked: ranked(
+        'adr',
+        'docs/adr/ADR-901-orbital-deployment.md',
+        'Status: Accepted\n\nThe team accepts this deployment design.',
+      ),
+    });
+    expect(out.implementation.verdict).toBe('unproven');
+    expect(out.results[0]).toMatchObject({
+      evidenceClass: 'design-intent',
+      lifecycleStatus: 'accepted',
+    });
+  });
+
+  it('does not let a capability card answer a built/shipped capability claim', () => {
+    const hit = answerFromCards('Did Reuven build and ship agent swarms in ruflo?', KB);
+    expect(hit.hit).toBe(false);
+    expect(hit.reason).toMatch(/implementation evidence/i);
+  });
+
+  it('also requires proof for ordinary capability wording, not only the word "built"', () => {
+    const hit = answerFromCards('Can ruflo orchestrate agent swarms?', KB);
+    expect(hit.hit).toBe(false);
+    expect(hit.reason).toMatch(/implementation evidence/i);
+  });
+});
+
+describe('MCP grounded response — a receipt without inspectable evidence is impossible', () => {
+  it('duplicates the answer into structured content so structured-only hosts still see it', () => {
+    const result = groundedToolResult({
+      body: 'SOURCE: ruflo/src/swarm.ts\nThe implementation exports SwarmCoordinator.',
+      grounding: { receiptId: 'receipt-1', sources: [{ path: 'ruflo/src/swarm.ts' }] },
+      implementation: { required: true, verdict: 'proven' },
+    });
+
+    expect(result.content[0].text).toContain('SwarmCoordinator');
+    expect(result.structuredContent.answer).toBe(result.content[0].text);
+    expect(result.structuredContent.grounding.receiptId).toBe('receipt-1');
+  });
+
+  it('refuses an empty answer even when a grounding receipt exists', () => {
+    expect(() => groundedToolResult({
+      body: '',
+      grounding: { receiptId: 'receipt-without-evidence' },
+    })).toThrow(/inspectable answer/i);
+  });
+
+  it('gives the host an explicit non-assertion instruction when proof is absent', () => {
+    const notice = implementationNotice({
+      required: true,
+      verdict: 'unproven',
+      implementationSources: [],
+    });
+    expect(notice).toMatch(/NOT PROVEN/);
+    expect(notice).toMatch(/Do not tell the user.*built, shipped, implemented/s);
+  });
+});

@@ -100,7 +100,7 @@ const FAST_LANE_BOUND_MS = 3000;
 
 describe('card lane — FIRST RESPONDER on the real hot path (subprocess, unmodified server)', () => {
   it('a card-covered question answers via the card lane, fast, with real stores present', async () => {
-    const { response, elapsedMs } = await callSearchRuvnet(REAL_KB, 'Can RuLake cache vector queries in front of a vector store?');
+    const { response, elapsedMs } = await callSearchRuvnet(REAL_KB, 'Which RuvNet tool should I use to cache repeated vector queries?');
     const r = response.result;
     expect(r.isError).toBe(false);
     expect(r.structuredContent?.cardLane?.repo).toBe('rulake');
@@ -113,7 +113,7 @@ describe('card lane — FIRST RESPONDER on the real hot path (subprocess, unmodi
 
   it('the same card hit works with ZERO .rvf stores in the bundle — decoupled from the heavy path entirely', async () => {
     fs.copyFileSync(path.join(REAL_KB, 'capability-cards.md'), path.join(tmp, 'capability-cards.md'));
-    const { response, elapsedMs } = await callSearchRuvnet(tmp, 'Does SAFLA implement a self-aware feedback loop?');
+    const { response, elapsedMs } = await callSearchRuvnet(tmp, 'Which RuvNet tool should I use for a self-aware feedback loop?');
     const r = response.result;
     expect(r.structuredContent?.cardLane?.repo).toBe('safla');
     expect(elapsedMs).toBeLessThan(FAST_LANE_BOUND_MS);
@@ -143,7 +143,7 @@ describe('card lane — FIRST RESPONDER on the real hot path (subprocess, unmodi
       if (fs.existsSync(src)) fs.copyFileSync(src, path.join(tmp, f));
     }
     // card-lane.mjs is deliberately NOT copied — the copy's own "./card-lane.mjs" import must fail.
-    await expect(callSearchRuvnet(tmp, 'Does SAFLA implement a self-aware feedback loop?', {
+    await expect(callSearchRuvnet(tmp, 'Which RuvNet tool should I use for a self-aware feedback loop?', {
       timeoutMs: 8000, serverPath: path.join(tmp, 'forge-mcp-all.mjs'),
     })).rejects.toThrow();
   }, 15_000);

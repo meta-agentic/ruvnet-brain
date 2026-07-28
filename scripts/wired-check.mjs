@@ -91,6 +91,9 @@ const STANDALONE = [
   ['fix-metaharness-memretrieve', 'one-shot historical repair; kept for the record'],
   ['gen-console-images', 'build-time asset generation, run by hand'],
   ['adr-backfill', 'one-shot backfill by a human; its result is enforced by adr-format.test.mjs'],
+  ['stamp-existing-rvf-generations', 'one-shot maintainer migration that binds already-built canonical '
+    + 'RVFs to RVF-GENERATIONS.json and optionally prunes legacy sidecars; build-bundle.mjs consumes '
+    + 'and validates the resulting manifest, so scheduling this destructive migration would be wrong'],
   ['release', 'the ship path, run by a human'],
   // Run by the launchd nightly, which lives OUTSIDE this repo — so no in-repo caller can exist.
   // This is the one category the scanner genuinely cannot reach, and saying so is the honest form.

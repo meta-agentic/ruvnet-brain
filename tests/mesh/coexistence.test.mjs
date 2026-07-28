@@ -467,12 +467,24 @@ describe('§2b byte-equivalence — ~/.claude/settings.json', () => {
     expect(source.includes(find), `mutation anchor not found: ${find}`).toBe(true);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-installer-mutant-'));
     mutantDirs.push(dir);
-    const file = path.join(dir, 'install-mutant.mjs');
+    const binDir = path.join(dir, 'bin');
+    const kbDir = path.join(dir, 'kb');
+    fs.mkdirSync(binDir);
+    fs.mkdirSync(kbDir);
+    const file = path.join(binDir, 'install-mutant.mjs');
     fs.writeFileSync(file, source.replace(find, replace)); // .replace (no /g) hits ONLY the FIRST
     // occurrence — verified below to be the one inside writeSettingsStatusLine, not the removal path.
+    // Preserve the installer's real module shape. Copying only install.mjs made the mutant crash on
+    // its legitimate ../kb/brain-profile.mjs import before the mutation could be exercised.
+    fs.copyFileSync(path.join(REPO_ROOT, 'kb', 'brain-profile.mjs'), path.join(kbDir, 'brain-profile.mjs'));
     process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
-    const mod = await import(pathToFileURL(file).href);
-    return { mod, dir };
+    try {
+      const mod = await import(pathToFileURL(file).href);
+      return { mod, dir };
+    } catch (error) {
+      cleanupMutant(dir);
+      throw error;
+    }
   }
   function cleanupMutant(dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* already gone */ } }
 

@@ -82,7 +82,7 @@ Verified first-hand at file:line, not relayed:
 | D1 −4 coverage floor vs badge | **Closed** (floor 26/28, badge 28%, re-derived by claims-verify) | Nothing — but it was only 4 points |
 | D1 −8 `REQUIRE_BRAIN` | **Open** — grep confirms **0** workflow files set it | §D1 |
 | Vacuous-pass guard | **Closed** — `--levels L5` exits 2 | Nothing |
-| Fast lane | **Closed** — `kb/card-lane.mjs` at 0.1158ms warm, 19/19 | Feeds D6's budget |
+| Fast lane | **Safety-corrected, performance proof reopened.** Reuven Cohen's 2026-07-28 report exposed that curated capability cards were being treated as built-state proof. The truth gate now forces factual capability/implementation claims to source search (0/19 capability assertions use cards); recommendation-only routing remains fast. | Generate and verify source anchors for cards before restoring fast factual answers; until then correctness wins and D6 gets no capability-latency credit. |
 | D6 −22 "latency breaches only warn" | **Closed.** `kb/card-lane-budget.json` (checked-in manifest) + `scripts/qe/card-lane-gate.mjs` (in-process p50/p95/max over 100 firings) wired into `scripts/qe/ux-suite.mjs` as a genuine hard gate; env-sensitive timings unchanged (still advisory) | Nothing — both mutants proven (1,100ms sleep → real FAIL; silent manifest raise → `doc-currency` `presumed-stale` BLOCK once drift accumulates, see build report) |
 
 Everything else in both graders' lists is fully open.

@@ -20,6 +20,8 @@ import path from 'node:path';
 import { searchAll, discoverRepos } from './forge-ask-all.mjs';
 import { guardPassages } from './forge-guard-injection.mjs';
 import { answerFromCards, renderCardHit } from './card-lane.mjs';
+import { implementationNotice } from './implementation-evidence.mjs';
+import { groundedToolResult } from './grounded-response.mjs';
 
 // ── THE GONG (brain-alarm.mjs): a total retrieval failure must NEVER read as "(no results)". ──
 // Loaded dynamically + guarded (same pattern as telemetry) so an older bundle without the module
@@ -299,22 +301,15 @@ async function handle(msg) {
           } catch (e) { noteEvidenceFailure('card-lane', e); }
           markGroundingProven();   // a cited card answer is a real grounded answer (ADR-058 §D8)
           meterLog({ ts: new Date().toISOString(), source: 'mcp', tool: 'search_ruvnet', k, bytes: cardBody.length, cardLane: true });
-          return ok(id, {
-            content: [{ type: 'text', text: cardBody }],
-            isError: false,
-            // Same wire shape as the heavy lane's `structuredContent.grounding`, so a consumer
-            // cannot tell the lanes apart when deciding whether an answer was grounded. If the
-            // fast lane reported grounding differently, every reader would need to know which lane
-            // ran — and the one that forgot would be the one that mattered.
-            structuredContent: {
+          return ok(id, groundedToolResult({
+            body: cardBody,
+            grounding: cardReceipt?.sources?.length ? cardReceipt : null,
+            extra: {
               cardLane: { repo: cardHit.repo, path: cardHit.path, bodyOverlap: cardHit.bodyOverlap, coverage: cardHit.coverage, namedRepo: cardHit.namedRepo },
-              // A receipt with NO sources is not evidence of grounding — it is a receipt for
-              // nothing. Gate on sources, not on the receipt object being truthy.
-              ...(cardReceipt?.sources?.length ? { grounding: cardReceipt } : {}),
             },
-          });
+          }));
         }
-        const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision, implementation } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
         // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
@@ -344,8 +339,7 @@ async function handle(msg) {
           `#${i + 1}  repo=${r.repo}  (relevance ${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}; vec ${r.bestDistance?.toFixed(4)})\n`
           + `path : ${r.repo}/${r.path}\n`
           + `title: ${r.title}\n`
-          + (r.statusLabel ? `${r.statusLabel}\n` : '')
-          + (r.designIntentWarning ? `${r.designIntentWarning}\n` : '')
+          + `evidence class: ${r.evidenceClass || 'unknown'}${r.lifecycleStatus ? `; lifecycle status: ${r.lifecycleStatus}` : ''}\n`
           + `----- full document (${(r.fullText || '').length} chars, ${r.chunksJoined} chunk(s)${r.truncated ? ', truncated' : ''}) -----\n`
           + `${r.fullText || r.text || ''}\n`
         ).join('\n========================================================\n\n');
@@ -377,9 +371,11 @@ async function handle(msg) {
         // Same discipline for cross-repo ADR-number collisions (issue #33 Part B).
         const adrNote = adrCollision ? `⚠ ${adrCollision.note}\n\n` : '';
         const header = `Searched ${repos.length} RuvNet repos (${repos.join(', ')}).\n${staleness}`;
+        const truthNote = implementationNotice(implementation);
         const body = text
-          ? degraded + header + adrNote + evidenceNote + text
+          ? degraded + header + adrNote + truthNote + evidenceNote + text
           : degraded + header + adrNote
+            + truthNote
             + '(no results — the search ran; nothing in the corpus matched this query)\n'
             + '➡ This means THIS QUERY found nothing, NOT that the capability is absent from the ecosystem. '
             + 'Try a narrower query or name a specific repo or artifact before concluding it must be built.';
@@ -411,16 +407,11 @@ async function handle(msg) {
         // clears the install-time "grounding: unproven" verdict. Same success-path scope as the
         // receipt line just above — an empty result must never be mistaken for proof.
         if (results.length > 0) markGroundingProven();
-        return ok(id, {
-          content: [{ type: 'text', text: body }],
-          isError: false,
-          // The typed receipt (ADR-055 §3.1). Compact on purpose — structuredContent is context the
-          // user pays for; the full fact record lives in the ledger, not on the wire.
-          // Sources, not truthiness — see the card lane above. This read `receipt ?` and was
-          // GREEN only because the writer was dead: with recordAnswer never running, a
-          // zero-source receipt could not be produced to expose it.
-          ...(receipt?.sources?.length ? { structuredContent: { grounding: receipt } } : {}),
-        });
+        return ok(id, groundedToolResult({
+          body,
+          grounding: receipt?.sources?.length ? receipt : null,
+          implementation,
+        }));
       } catch (e) {
         const body = `search_ruvnet error: ${e.message}`;
         // k re-derived: the try-block's `k` is out of scope here, and an error response is still

@@ -30,6 +30,7 @@
 // to make explicitly, not something to drift into by accident.
 import fs from 'node:fs';
 import path from 'node:path';
+import { requiresImplementationProof } from './implementation-evidence.mjs';
 
 export const CARDS_FILE = 'capability-cards.md';
 
@@ -143,6 +144,9 @@ const MIN_MARGIN = 1;        // the winner must beat the runner-up by at least o
 export function answerFromCards(query, dir) {
   const q = String(query || '').trim();
   if (!q) return { hit: false, reason: 'empty query' };
+  if (requiresImplementationProof(q)) {
+    return { hit: false, reason: 'implementation evidence required; curated cards cannot prove built or shipped state' };
+  }
   const cards = loadCards(dir);
   if (!cards || !cards.length) return { hit: false, reason: 'no capability-cards.md in this bundle' };
 

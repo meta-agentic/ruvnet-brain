@@ -94,7 +94,7 @@ describe('loadCards — reads capability-cards.md from a bundle dir, honestly ab
   });
 });
 
-describe('answerFromCards — POSITIVE: a real, representative "does rUv ship X" question set', () => {
+describe('answerFromCards — capability claims require implementation evidence', () => {
   const results = QUESTION_SETS.map((q) => ({ q, hit: answerFromCards(q.query, KB) }));
 
   it('measures and reports the REAL hit fraction on this representative set (no estimate)', () => {
@@ -105,9 +105,9 @@ describe('answerFromCards — POSITIVE: a real, representative "does rUv ship X"
       // eslint-disable-next-line no-console
       console.log(`  ${r.hit.hit ? 'HIT ' : 'MISS'} repo=${r.hit.repo || '-'}  "${r.q.query}"`);
     }
-    // A real, non-trivial slice of this domain-matched set must be answerable — this is the whole
-    // point of the fast lane. The exact fraction is reported above from a REAL run, never assumed.
-    expect(hitCount).toBeGreaterThanOrEqual(Math.ceil(results.length * 0.6));
+    // Curated prose routes work; it does not prove shipped state. Capability questions must take
+    // the implementation-bearing source lane even when this costs latency.
+    expect(hitCount).toBe(0);
   });
 
   it('every hit on this set names one of the repos the question itself expects', () => {
@@ -117,11 +117,10 @@ describe('answerFromCards — POSITIVE: a real, representative "does rUv ship X"
     }
   });
 
-  it('a plain "what is <repo> and what does it do" question is answered — the degenerate, ideal case', () => {
+  it('a plain "what is <repo> and what does it do" question requires source proof', () => {
     const hit = answerFromCards('What is dspy.ts and what does it do?', KB);
-    expect(hit.hit).toBe(true);
-    expect(hit.repo).toBe('dspy.ts');
-    expect(hit.text).toMatch(/DSPy/i);
+    expect(hit.hit).toBe(false);
+    expect(hit.reason).toMatch(/implementation evidence/i);
   });
 
   it('an unnamed, purely DESCRIBED need still resolves to the right repo (no repo named at all)', () => {
@@ -171,12 +170,10 @@ describe('answerFromCards — NEGATIVE: silence-or-fallthrough, NEVER a fabricat
     expect(hit.hit).toBe(false);
   });
 
-  it('BREAK IT: the same repo-naming DOES confidently hit when the card actually covers the ask', () => {
-    // The counterfactual proving the assertion above is not vacuous — same repo, a question its
-    // own card really does answer.
+  it('even a card-covered capability assertion falls through until the card carries source proof', () => {
     const hit = answerFromCards('Can AgentDB run graph queries over agent memory?', KB);
-    expect(hit.hit).toBe(true);
-    expect(hit.repo).toBe('agentdb');
+    expect(hit.hit).toBe(false);
+    expect(hit.reason).toMatch(/implementation evidence/i);
   });
 
   it('no card in this bundle ever cites a privately-fenced repo, even under adversarial phrasing', () => {
@@ -189,7 +186,7 @@ describe('answerFromCards — NEGATIVE: silence-or-fallthrough, NEVER a fabricat
 
 describe('renderCardHit — the answer must be usable and cited on its own', () => {
   it('carries the fast-lane marker, the citation path, the repo, and the full card body', () => {
-    const hit = answerFromCards('Can ruflo orchestrate agent swarms, and what implements it?', KB);
+    const hit = answerFromCards('Which ruflo tool should I use for agent swarm orchestration?', KB);
     expect(hit.hit).toBe(true);
     const text = renderCardHit(hit);
     expect(text).toMatch(/FAST LANE/);
