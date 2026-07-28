@@ -216,9 +216,16 @@ jobs:
     defaults:
       run:
         shell: sh
-    env:
-      HTTPS_PROXY: http://127.0.0.1:9
-      HTTP_PROXY: http://127.0.0.1:9
+    # THE BLACKHOLED PROXY IS PER-STEP, NOT PER-JOB. It was job-level `env:`, which meant the dead
+    # proxy also strangled the image's OWN SETUP — `apk add` could not reach the alpine repos
+    # ("ERROR: unable to select packages"), and with apk dead the checkout never landed, so every
+    # later step died on `Cannot find module .../scripts/ci/stranger-scenario.mjs`. Three red steps,
+    # one cause, and none of them the thing this cell exists to test.
+    #
+    # The point of the blackhole is that the PRODUCT must behave on a box with no outbound network.
+    # Fetching the product, and the tools needed to unpack it, is not part of that claim — a stranger
+    # obtains the package by some means we do not control. So the hostility is applied exactly where
+    # the assertion lives and nowhere else.
     steps:
       - name: apk add zip/unzip ONLY — explicitly no jq, no gh
         run: apk add --no-cache zip unzip
@@ -236,6 +243,9 @@ jobs:
           echo '{}' > package.json
           npm install --no-audit --no-fund /tmp/ci-out/ruvnet-brain-*.tgz
       - name: (a)+(c) healthy image — HOME contains a space, exit 0, >=1 real hook fire, no author settings.json
+        env:
+          HTTPS_PROXY: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
         run: |
           mkdir -p "/tmp/virgin home"
           node scripts/ci/stranger-scenario.mjs \
@@ -244,6 +254,9 @@ jobs:
             --home "/tmp/virgin home/healthy" \
             --plugin-src "$GITHUB_WORKSPACE/plugin"
       - name: (b) seeded-broken image (M-D8a) — forge-mcp-all.mjs deleted -> exit NON-ZERO
+        env:
+          HTTPS_PROXY: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
         if: always()
         run: |
           node scripts/ci/stranger-scenario.mjs \
@@ -252,6 +265,9 @@ jobs:
             --home "/tmp/virgin home/broken" \
             --plugin-src "$GITHUB_WORKSPACE/plugin"
       - name: RUVNET_STRICT_INSTALL=1 — an unproven grounding smoke IS fatal here, though never by default
+        env:
+          HTTPS_PROXY: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
         if: always()
         run: |
           node scripts/ci/stranger-scenario.mjs \

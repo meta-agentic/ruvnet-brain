@@ -282,8 +282,29 @@ jobs:
             RVF_MODULE_PATH="$RUVNET_BRAIN_KB/node_modules" node kb/forge-ask-all.mjs --dir "$RUVNET_BRAIN_KB" --q "does ruvector use hnsw" --k 1 > /tmp/warm.log 2>&1 || {
               echo "::error::embedder warm FAILED via repo copy + RVF_MODULE_PATH"; tail -25 /tmp/warm.log; exit 1; }
           fi
-          test -d "$KB_MODEL_CACHE" || { echo "::error::KB_MODEL_CACHE absent after a SUCCESSFUL query: $KB_MODEL_CACHE"; exit 1; }
-          echo "warmed: $(du -sh "$KB_MODEL_CACHE" | cut -f1) in $KB_MODEL_CACHE"
+          # ASSERT THE EXACT PATH THE BATTERY READS, NOT ITS PARENT. This check was
+          # `test -d "$KB_MODEL_CACHE"` — the directory, which the bundle creates whether or not a
+          # model was ever downloaded into it. So it passed on a COLD cache, the warm step went
+          # green, and the battery one step later reported the product broken over an infrastructure
+          # miss. plugin/test/model-cache.mjs:29,43 checks `<KB_MODEL_CACHE>/Xenova/all-MiniLM-L6-v2`
+          # and nothing else; this now checks the same thing, so the two cannot disagree.
+          #
+          # A path assertion that names only the parent is the same defect class as bin/install.mjs's
+          # models-cache-vs-models divergence: both "verified" a location adjacent to the one that
+          # matters. This lane warms through a --pin'ned bundle whose reader may predate that fix, so
+          # on failure it PRINTS WHERE THE MODEL ACTUALLY LANDED rather than only saying it is absent
+          # — a diagnostic that discards the diagnosis costs the next person a whole CI cycle.
+          EMBEDDER="$KB_MODEL_CACHE/Xenova/all-MiniLM-L6-v2"
+          if [ ! -d "$EMBEDDER" ]; then
+            echo "::error::the embedder the battery reads is ABSENT after a SUCCESSFUL warm query: $EMBEDDER"
+            echo "--- what the warm query actually wrote (searching .brain-cache for any downloaded model) ---"
+            find "$GITHUB_WORKSPACE/.brain-cache" -maxdepth 5 -type d \( -name 'all-MiniLM*' -o -name 'Xenova' -o -name '*models*' \) 2>/dev/null | head -20
+            echo "--- onnx weights anywhere under .brain-cache ---"
+            find "$GITHUB_WORKSPACE/.brain-cache" -name '*.onnx' 2>/dev/null | head -10
+            echo "--- warm query log ---"; tail -25 /tmp/warm.log
+            exit 1
+          fi
+          echo "warmed: $(du -sh "$EMBEDDER" | cut -f1) at $EMBEDDER"
       - name: Core capability battery — REQUIRE_BRAIN=1 (a skipped battery is now a hard failure)
         env:
           REQUIRE_BRAIN: '1'
