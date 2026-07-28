@@ -53,4 +53,14 @@ describe('checksum-bound RVF generation identity', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, RVF_GENERATIONS_FILE), 'utf8'));
     expect(Object.keys(manifest.stores).sort()).toEqual(['one', 'two']);
   });
+
+  it('fails when a canonical store has no generation record', () => {
+    const dir = fixtureDir();
+    fs.writeFileSync(path.join(dir, 'recorded.big.rvf'), 'one');
+    fs.writeFileSync(path.join(dir, 'missing.big.rvf'), 'two');
+    writeRvfGeneration({ dir, store: 'recorded', model: 'bge', dimensions: 768 });
+    expect(verifyRvfGenerations(dir, {
+      requiredStores: ['recorded', 'missing'],
+    }).failures).toContain('missing: no generation record');
+  });
 });

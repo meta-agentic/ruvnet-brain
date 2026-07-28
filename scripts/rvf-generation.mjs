@@ -66,11 +66,18 @@ export function writeRvfGeneration({
   return manifest.stores[store];
 }
 
-export function verifyRvfGenerations(dir, { version = getVersion(), releaseTag = getVersionTag() } = {}) {
+export function verifyRvfGenerations(dir, {
+  version = getVersion(),
+  releaseTag = getVersionTag(),
+  requiredStores = [],
+} = {}) {
   const manifest = readRvfGenerations(dir);
   const failures = [];
   if (manifest.brainVersion !== version) failures.push(`brainVersion=${manifest.brainVersion}, expected ${version}`);
   if (manifest.releaseTag !== releaseTag) failures.push(`releaseTag=${manifest.releaseTag}, expected ${releaseTag}`);
+  for (const store of requiredStores) {
+    if (!manifest.stores[store]) failures.push(`${store}: no generation record`);
+  }
   for (const [store, generation] of Object.entries(manifest.stores)) {
     const file = path.join(dir, generation.file || `${store}.big.rvf`);
     if (!fs.existsSync(file)) {

@@ -93,7 +93,11 @@ for (const rel of ['kb/RVF-GENERATIONS.json']) {
 }
 
 if (CHECK && fs.existsSync(path.join(ROOT, 'kb/RVF-GENERATIONS.json'))) {
-  const { failures } = verifyRvfGenerations(path.join(ROOT, 'kb'));
+  const kbDir = path.join(ROOT, 'kb');
+  const requiredStores = fs.readdirSync(kbDir)
+    .filter((file) => file.endsWith('.big.rvf'))
+    .map((file) => file.slice(0, -'.big.rvf'.length));
+  const { failures } = verifyRvfGenerations(kbDir, { requiredStores });
   for (const failure of failures) {
     console.error(`[version] RVF GENERATION DRIFT: ${failure}`);
     drift++;

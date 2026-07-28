@@ -168,7 +168,29 @@ for (const name of built) {
     status: 'built',
   });
 }
-cp('RVF-GENERATIONS.json', OUT, { required: true });
+// Publish only generation records for stores that passed the private-store fence above. Copying
+// the machine-wide ledger wholesale would leak private store names/hashes even though their RVFs
+// were correctly excluded.
+{
+  const generationsFile = path.join(KB, 'RVF-GENERATIONS.json');
+  if (!fs.existsSync(generationsFile)) {
+    missing.push('RVF-GENERATIONS.json');
+  } else {
+    const source = JSON.parse(fs.readFileSync(generationsFile, 'utf8'));
+    const stores = {};
+    for (const { name } of builtRepos) {
+      if (!source.stores?.[name]) missing.push(`RVF-GENERATIONS.json:${name}`);
+      else stores[name] = source.stores[name];
+    }
+    fs.writeFileSync(path.join(OUT, 'RVF-GENERATIONS.json'), `${JSON.stringify({
+      schemaVersion: source.schemaVersion,
+      brainVersion: source.brainVersion,
+      releaseTag: source.releaseTag,
+      stores,
+    }, null, 2)}\n`);
+    copied++;
+  }
+}
 
 // L2 articles (whole dir, fencing out private repos' raw .md) + master primer dir (the master
 // ruvnet-primer overview — not per-repo, so nothing private to fence there).
