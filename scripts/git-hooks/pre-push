@@ -75,7 +75,15 @@ if [ -n "$SECRET_HITS" ]; then
   exit 1
 fi
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Hooks may be shared by several git worktrees. Resolving from this script's own path is wrong when
+# core.hooksPath names another checkout: the hook then validates that checkout while pushing the
+# current one (measured 2026-07-28: announced 3.9.128, pushed 3.9.129). Git already knows the
+# worktree whose refs are being pushed, so derive the shipping root from that live repository.
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$ROOT" ] || [ ! -f "$ROOT/scripts/verify-channels.mjs" ]; then
+  echo "  ⛔ pre-push gate cannot resolve the worktree being pushed."
+  exit 1
+fi
 node "$ROOT/scripts/verify-channels.mjs" --pre-push
 status=$?
 if [ "$status" -ne 0 ]; then
