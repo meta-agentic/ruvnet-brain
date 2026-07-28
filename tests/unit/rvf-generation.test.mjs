@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   RVF_GENERATIONS_FILE,
+  canonicalRvfStores,
+  hasCanonicalRvfStore,
   verifyRvfGenerations,
   writeRvfGeneration,
 } from '../../scripts/rvf-generation.mjs';
@@ -21,6 +23,17 @@ function fixtureDir() {
 }
 
 describe('checksum-bound RVF generation identity', () => {
+  it('discovers only canonical big RVFs and matches registry names case-insensitively', () => {
+    const dir = fixtureDir();
+    fs.writeFileSync(path.join(dir, 'ruvector.big.rvf'), 'canonical');
+    fs.writeFileSync(path.join(dir, 'ruvector.rvf'), 'obsolete');
+    fs.writeFileSync(path.join(dir, 'ruvector.big.rvf.idmap.json'), '{}');
+
+    expect(canonicalRvfStores(dir)).toEqual(['ruvector']);
+    expect(hasCanonicalRvfStore(dir, 'RuVector')).toBe(true);
+    expect(hasCanonicalRvfStore(dir, 'ruflo')).toBe(false);
+  });
+
   it('binds exact RVF bytes to the one Brain version and detects byte drift', () => {
     const dir = fixtureDir();
     fs.writeFileSync(path.join(dir, 'demo.big.rvf'), Buffer.from('rvf generation one'));

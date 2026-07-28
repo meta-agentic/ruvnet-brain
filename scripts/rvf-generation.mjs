@@ -12,6 +12,18 @@ import { getVersion, getVersionTag } from './version.mjs';
 
 export const RVF_GENERATIONS_FILE = 'RVF-GENERATIONS.json';
 
+export function canonicalRvfStores(dir) {
+  return fs.readdirSync(dir)
+    .map((file) => file.match(/^(.+)\.big\.rvf$/)?.[1])
+    .filter(Boolean)
+    .sort();
+}
+
+export function hasCanonicalRvfStore(dir, name) {
+  const wanted = String(name).toLowerCase();
+  return canonicalRvfStores(dir).some((store) => store.toLowerCase() === wanted);
+}
+
 export function sha256File(file) {
   const hash = crypto.createHash('sha256');
   const fd = fs.openSync(file, 'r');

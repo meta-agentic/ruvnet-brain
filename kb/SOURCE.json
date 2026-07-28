@@ -1,6 +1,6 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-27T10:01:33.811Z",
+  "builtUtc": "2026-07-28T15:08:01.850Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
@@ -9,11 +9,112 @@
       "sourceRepo": "https://github.com/ruvnet/open-claude-code",
       "sourceCommit": "09f4a1e415272f29d35d28b949a87acdfeefb057",
       "sourceDescribe": "v2.0.0-nightly.20260725",
-      "builtUtc": "2026-07-27T10:01:33.811Z",
+      "builtUtc": "2026-07-28T15:04:51.856Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
       "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/open-claude-code-kb-bundle.zip",
       "selfUpdate": "node forge-update.mjs open-claude-code"
+    },
+    "ruvector": {
+      "kbName": "ruvector",
+      "sourceRepo": "https://github.com/ruvnet/RuVector",
+      "sourceCommit": "597be6a753472f0521fe2def097116e717ed4332",
+      "sourceDescribe": "597be6a",
+      "builtUtc": "2026-07-28T14:59:34.177Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruvector-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruvector"
+    },
+    "ruflo": {
+      "kbName": "ruflo",
+      "sourceRepo": "https://github.com/ruvnet/ruflo",
+      "sourceCommit": "a158418a8b774f678dd36831be4ad1d5619b3395",
+      "sourceDescribe": "a158418",
+      "builtUtc": "2026-07-28T14:57:52.950Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruflo-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruflo"
+    },
+    "agentic-qe": {
+      "kbName": "agentic-qe",
+      "sourceRepo": "https://github.com/proffesor-for-testing/agentic-qe",
+      "sourceCommit": "1c7a089eaa6e5fac1b458e9024f1e35e5682b56b",
+      "sourceDescribe": "v3.13.2",
+      "builtUtc": "2026-07-28T15:03:46.940Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/agentic-qe-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs agentic-qe"
+    },
+    "ruvnet": {
+      "kbName": "ruvnet",
+      "sourceRepo": "https://github.com/ruvnet/ruvnet",
+      "sourceCommit": "9e31715f15a7cb64154ce669c7db56242a6c60ad",
+      "sourceDescribe": "9e31715",
+      "builtUtc": "2026-07-28T15:04:54.024Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruvnet-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruvnet"
+    },
+    "worldgraph": {
+      "kbName": "worldgraph",
+      "sourceRepo": "https://github.com/ruvnet/worldgraph",
+      "sourceCommit": "75e29dbf9f631c6a590300e8d5436162f2108e97",
+      "sourceDescribe": "75e29db",
+      "builtUtc": "2026-07-28T15:04:56.118Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/worldgraph-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs worldgraph"
+    },
+    "cognitum-claude-plugin": {
+      "kbName": "cognitum-claude-plugin",
+      "sourceRepo": "https://github.com/cognitum-one/cognitum-claude-plugin",
+      "sourceCommit": "83f7adb33194bed33ee552b24423e5117f527687",
+      "sourceDescribe": "83f7adb",
+      "builtUtc": "2026-07-28T15:04:57.414Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-claude-plugin-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs cognitum-claude-plugin"
+    },
+    "cognitum-cogs": {
+      "kbName": "cognitum-cogs",
+      "sourceRepo": "git@github.com:cognitum-one/cogs.git",
+      "sourceCommit": "f896ef19ffe147b2e0fe400829ff5b4bd3dfabe8",
+      "sourceDescribe": "f896ef1",
+      "builtUtc": "2026-07-28T15:05:03.231Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-cogs-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs cognitum-cogs"
+    },
+    "cognitum-support": {
+      "kbName": "cognitum-support",
+      "sourceRepo": "git@github.com:cognitum-one/support.git",
+      "sourceCommit": "bf9af9c44b5b111da2b68086d11fd6213099b6c0",
+      "sourceDescribe": "bf9af9c",
+      "builtUtc": "2026-07-28T15:05:25.768Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/cognitum-support-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs cognitum-support"
+    },
+    "ruview": {
+      "kbName": "ruview",
+      "sourceRepo": "https://github.com/ruvnet/RuView",
+      "sourceCommit": "a70ca90525b9f724d9356c4cf75e10476550024c",
+      "sourceDescribe": "a70ca90",
+      "builtUtc": "2026-07-28T15:08:01.850Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruview-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs ruview"
     }
-  }
+  },
+  "brainVersion": "3.9.129-dev",
+  "releaseTag": "v3.9.129-dev"
 }

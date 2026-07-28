@@ -15,6 +15,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { FULL_HINTS, KEEP_DIRS } from './full-hints.mjs';
+import { withSubmoduleSymlinksDetached } from './git-clone-refresh.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -227,8 +228,14 @@ for (const p of todo) {
       fs.mkdirSync(CLONE_DIR, { recursive: true });
       execFileSync('git', ['clone', '--depth', '1', `https://github.com/${p.owner || p.org || 'ruvnet'}/${p.repo || p.name}`, dir], { stdio: 'inherit' });
     } else {
-      execFileSync('git', ['-C', dir, 'fetch', '--depth', '1', 'origin'], { stdio: 'inherit' });
-      execFileSync('git', ['-C', dir, 'reset', '--hard', 'origin/HEAD'], { stdio: 'inherit' });
+      // Some cached clones deduplicate large submodules with symlinks to another clone. Git refuses
+      // even a fetch when a gitlink path is a symlink ("expected submodule path ... not to be a
+      // symbolic link"). Detach only those declared submodule symlinks for fetch/reset, then restore
+      // them in finally so a network/reset failure cannot strand the cache in a half-repaired state.
+      withSubmoduleSymlinksDetached(dir, () => {
+        execFileSync('git', ['-C', dir, 'fetch', '--depth', '1', 'origin'], { stdio: 'inherit' });
+        execFileSync('git', ['-C', dir, 'reset', '--hard', 'origin/HEAD'], { stdio: 'inherit' });
+      });
     }
     const env = { ...process.env, KB_MODEL_CACHE: MODEL_CACHE };
     const kb = p.name.toLowerCase();                 // artifacts are lowercase (ruvector.rvf), registry name is RuVector

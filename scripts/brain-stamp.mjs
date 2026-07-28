@@ -8,16 +8,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { canonicalRvfStores, hasCanonicalRvfStore } from './rvf-generation.mjs';
 import { getVersionTag, stripTag } from './version.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const BRAIN_VERSION = arg('--brain-version', getVersionTag()); // inherits the single source of truth
 const NOW = new Date().toISOString();
+const KB_DIR = path.join(ROOT, 'kb');
 
 // Known local clones (extend as repos are added). Self-update resolves remote SHAs for the rest.
 const CLONES = JSON.parse(process.env.RUVNET_KNOWN_CLONES || '{}');
-const builtName = (n) => fs.existsSync(path.join(ROOT, 'kb', `${n}.rvf`));
+const builtName = (n) => hasCanonicalRvfStore(KB_DIR, n);
 const shaOf = (dir) => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir }).toString().trim(); } catch { return null; } };
 // no shell: slug is placed in a URL arg, never interpreted by a shell
 const remoteSha = (slug) => { try { return execFileSync('git', ['ls-remote', `https://github.com/ruvnet/${slug}`, 'HEAD']).toString().split(/\s/)[0] || null; } catch { return null; } };
@@ -56,13 +58,12 @@ const findClone = (name) => {
   return ci && fs.existsSync(path.join(clonesDir, ci, '.git')) ? path.join(clonesDir, ci) : null;
 };
 const seen = new Set(repos.map((r) => r.name.toLowerCase()));
-for (const f of fs.readdirSync(path.join(ROOT, 'kb'))) {
-  const m = f.match(/\.rvf$/) ? f.replace(/\.rvf$/, '').replace(/\.big$/, '') : null;
-  if (!m || seen.has(m.toLowerCase())) continue;
-  seen.add(m.toLowerCase());
-  const cloneDir = findClone(m);
+for (const store of canonicalRvfStores(KB_DIR)) {
+  if (seen.has(store.toLowerCase())) continue;
+  seen.add(store.toLowerCase());
+  const cloneDir = findClone(store);
   repos.push({
-    name: m, tier: 'fresh', stars: undefined,
+    name: store, tier: 'fresh', stars: undefined,
     builtFromSha: cloneDir ? (shaOf(cloneDir) || 'unknown') : 'unknown',
     latestRemoteSha: null,
     status: 'built',

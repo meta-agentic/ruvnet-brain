@@ -13,7 +13,7 @@
       "name": "RuView",
       "tier": "T0",
       "stars": 75658,
-      "builtFromSha": "f783df234eec22929b88e256422cbfc50579196b",
+      "builtFromSha": "a70ca90525b9f724d9356c4cf75e10476550024c",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "26c35b59b40a0a95b286ccf5ac675a15edcc995f",
+      "builtFromSha": "a158418a8b774f678dd36831be4ad1d5619b3395",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -29,7 +29,7 @@
       "name": "RuVector",
       "tier": "T0",
       "stars": 4296,
-      "builtFromSha": "6a6c39e662a4c3184dcb913db91a09401c84b2ae",
+      "builtFromSha": "597be6a753472f0521fe2def097116e717ed4332",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -197,7 +197,7 @@
       "name": "agentic-qe",
       "tier": "T1",
       "stars": 0,
-      "builtFromSha": "3a5cfd4201b069915dfa7e7aed5276f5168b0300",
+      "builtFromSha": "1c7a089eaa6e5fac1b458e9024f1e35e5682b56b",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -213,7 +213,7 @@
       "name": "open-claude-code",
       "tier": "T2",
       "stars": 416,
-      "builtFromSha": "f4bf7a4af1fdf0ec1caa878c15fa5761ae2ff177",
+      "builtFromSha": "09f4a1e415272f29d35d28b949a87acdfeefb057",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -221,7 +221,7 @@
       "name": "ruvnet",
       "tier": "T2",
       "stars": 217,
-      "builtFromSha": "2c02fb59ffcd2c3826908b74cc6e68e7a4e363fb",
+      "builtFromSha": "9e31715f15a7cb64154ce669c7db56242a6c60ad",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -341,7 +341,7 @@
       "name": "worldgraph",
       "tier": "T2",
       "stars": 7,
-      "builtFromSha": "4441bc07b566659877c25e22cd5aea457bdba4f2",
+      "builtFromSha": "75e29dbf9f631c6a590300e8d5436162f2108e97",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -389,7 +389,7 @@
       "name": "cognitum-cogs",
       "tier": "T2",
       "stars": 14,
-      "builtFromSha": "fec275df069288b2cc76ebd74618e20a31003972",
+      "builtFromSha": "f896ef19ffe147b2e0fe400829ff5b4bd3dfabe8",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -397,7 +397,7 @@
       "name": "cognitum-support",
       "tier": "T2",
       "stars": 19,
-      "builtFromSha": "26a92df8c17341fe73c0e455168c3f849130fafd",
+      "builtFromSha": "bf9af9c44b5b111da2b68086d11fd6213099b6c0",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -417,16 +417,16 @@
       "status": "built"
     },
     {
-      "name": "cognitum-learn-site",
+      "name": "cognitum-learn",
       "tier": "fresh",
-      "builtFromSha": "4a653f83d1ddfbdc0e53a152f268791ae7018e1e",
+      "builtFromSha": "82805c2481c33e09b215ed8ab7b38ec6dfdf48c2",
       "latestRemoteSha": null,
       "status": "built"
     },
     {
-      "name": "cognitum-learn",
+      "name": "cognitum-learn-site",
       "tier": "fresh",
-      "builtFromSha": "82805c2481c33e09b215ed8ab7b38ec6dfdf48c2",
+      "builtFromSha": "4a653f83d1ddfbdc0e53a152f268791ae7018e1e",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -487,16 +487,16 @@
       "status": "built"
     },
     {
-      "name": "cognitum-trader-jackishim",
+      "name": "cognitum-trader",
       "tier": "fresh",
-      "builtFromSha": "d40e9d7ab1b933fd12efbc6ccd0e66336cb374cd",
+      "builtFromSha": "3ae7311ac9fa6ae33e870f1fd083b207012d4273",
       "latestRemoteSha": null,
       "status": "built"
     },
     {
-      "name": "cognitum-trader",
+      "name": "cognitum-trader-jackishim",
       "tier": "fresh",
-      "builtFromSha": "3ae7311ac9fa6ae33e870f1fd083b207012d4273",
+      "builtFromSha": "d40e9d7ab1b933fd12efbc6ccd0e66336cb374cd",
       "latestRemoteSha": null,
       "status": "built"
     },
