@@ -80,8 +80,13 @@ describe('loadCards — reads capability-cards.md from a bundle dir, honestly ab
     // same mtime (no write) -> cache hit, same array reference
     expect(loadCards(tmp)).toBe(first);
 
-    // real edit -> mtime changes -> cache must invalidate, not serve stale content
+    // real edit -> cache must invalidate, not serve stale content.
+    // The mtime is bumped EXPLICITLY: writing twice in one tick leaves mtimeMs identical on
+    // filesystems that quantise it (this went red on CI 2026-07-28 for exactly that reason), so
+    // without this the test measures the clock instead of the invalidation it claims to test.
     fs.writeFileSync(file, '## widget\nUpdated body.\n\n## gadget\nA second card.\n');
+    const bumped = new Date(Date.now() + 2000);
+    fs.utimesSync(file, bumped, bumped);
     const second = loadCards(tmp);
     expect(second).not.toBe(first);
     expect(second.map((c) => c.repo)).toEqual(['widget', 'gadget']);

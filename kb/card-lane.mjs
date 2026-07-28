@@ -103,7 +103,12 @@ export function parseCards(md) {
 // Memoized by (dir, mtime) — capability-cards.md is tiny (~20KB) and this process is typically the
 // long-lived warm MCP child, so parsing once and reusing is what gets a hit down into low-single-
 // digit milliseconds instead of re-parsing ~30 cards on every call.
-let _cache = null; // { dir, mtimeMs, cards }
+// Keyed by (dir, mtimeMs, SIZE). mtime alone is not enough: many filesystems quantise mtime (ext4
+// on CI, and some to a whole second), so two writes inside one tick are indistinguishable and the
+// cache serves stale cards. Size is free from the same stat() and closes the common case. Found
+// 2026-07-28 when CI went red on exactly that race — the PRODUCT was right and the test was
+// clock-dependent, but the staleness window is real and worth closing rather than tolerating.
+let _cache = null; // { dir, mtimeMs, size, cards }
 
 /** Read + parse capability-cards.md from a bundle dir. Returns null (never []) when it is absent —
  *  an older/partial bundle without this file must not be silently reported as "zero cards". */
@@ -111,7 +116,7 @@ export function loadCards(dir) {
   const file = path.join(dir, CARDS_FILE);
   let stat;
   try { stat = fs.statSync(file); } catch { return null; }
-  if (_cache && _cache.dir === dir && _cache.mtimeMs === stat.mtimeMs) return _cache.cards;
+  if (_cache && _cache.dir === dir && _cache.mtimeMs === stat.mtimeMs && _cache.size === stat.size) return _cache.cards;
   const raw = fs.readFileSync(file, 'utf8');
   const cards = parseCards(raw).map((c) => ({
     repo: c.repo,
@@ -120,7 +125,7 @@ export function loadCards(dir) {
     // Identity token: the repo's own WHOLE key, lowercased — never split (see wholeTokens above).
     repoIdentity: c.repo.toLowerCase(),
   }));
-  _cache = { dir, mtimeMs: stat.mtimeMs, cards };
+  _cache = { dir, mtimeMs: stat.mtimeMs, size: stat.size, cards };
   return cards;
 }
 
