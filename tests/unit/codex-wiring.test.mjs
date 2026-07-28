@@ -11,10 +11,10 @@
 // reinstalls. That is asserted at byte level below, against a pure function, so no test ever goes
 // near a real ~/.codex.
 //
-// The second is TRUTHFULNESS of the manifests. A skill.toml that names a tool the server does not
-// serve is the product lying about its own capability, and it fails in the most expensive place —
-// at the user's keyboard, in the other host, where we are not watching. So every dispatch target
-// here is checked against what plugin/mcp/server.mjs actually declares.
+// The second is TRUTHFULNESS of skill discovery. Codex discovers native plugin SKILL.md files and
+// migrates short Claude commands. A skill that depends on a sibling command file absent from the
+// migrated directory is the product lying at the user's keyboard, so native skills must be
+// self-contained and the retired skill.toml surface must not return.
 //
 // The third is the LEAK CLASS. .codex/hooks.json shipped a path inside the maintainer's home
 // directory. Its removal is worth nothing if the next edit reintroduces it, so the guard is
@@ -26,7 +26,7 @@
 //   high        — the invariants that cost something when broken: byte preservation, idempotency,
 //                 refusing to clobber a user's own entry, and a doctor that probes instead of asserts
 //   numeric     — the leak guard, asserted as a count over every shipped file under .codex/ + plugin/
-//   qualitative — each manifest states what it dispatches to, and names a target that exists
+//   qualitative — native plugin skills are self-contained and discovered by the real Codex loader
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'node:fs';
@@ -521,103 +521,26 @@ describe('wireCodexPlugin — install is idempotent, state-driven, and disable-p
   });
 });
 
-// ── the shipped manifests: valid TOML, and every target real ─────────────────────────────────────
-// No TOML dependency in this package, so this is a deliberately small parser: enough to prove the
-// files are well-formed key/value TOML with the sections the grounded shape requires, and no more.
-function parseToml(src) {
-  const out = Object.create(null);
-  let section = null;
-  let arrayOfTables = null;
-  src.split('\n').forEach((raw, i) => {
-    const line = raw.replace(/\s+#.*$/, '').trim();
-    if (!line || line.startsWith('#')) return;
-    let m = /^\[\[([A-Za-z0-9_.-]+)\]\]$/.exec(line);
-    if (m) { arrayOfTables = m[1]; (out[m[1]] ||= []).push(Object.create(null)); section = null; return; }
-    m = /^\[([A-Za-z0-9_."'-]+)\]$/.exec(line);
-    if (m) { section = m[1]; arrayOfTables = null; out[section] ||= Object.create(null); return; }
-    m = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
-    if (!m) throw new Error(`line ${i + 1}: not a TOML key/value or table header: ${raw}`);
-    const [, key, rawVal] = m;
-    let val = rawVal.trim();
-    if (/^".*"$/.test(val)) val = val.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    else if (/^\[.*\]$/.test(val)) val = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
-    const target = arrayOfTables ? out[arrayOfTables][out[arrayOfTables].length - 1] : out[section];
-    if (!target) throw new Error(`line ${i + 1}: key outside any table: ${raw}`);
-    target[key] = val;
-  });
-  return out;
-}
+// ── native plugin skills: the actual current Codex surface ───────────────────────────────────────
+describe('plugin/skills/*/SKILL.md — native, self-contained Codex skills', () => {
+  const native = ['brain-console', 'whats-new'];
 
-const manifestDirs = () => {
-  const skills = path.join(CODEX_DIR, 'skills');
-  return fs.existsSync(skills)
-    ? fs.readdirSync(skills, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && fs.existsSync(path.join(skills, e.name, 'skill.toml')))
-      .map((e) => ({ name: e.name, file: path.join(skills, e.name, 'skill.toml') }))
-    : [];
-};
-
-describe('.codex/skills/*/skill.toml — parses, and dispatches somewhere real', () => {
-  const served = (() => {
-    const src = fs.readFileSync(path.join(ROOT, 'plugin', 'mcp', 'server.mjs'), 'utf8');
-    return new Set([...src.matchAll(/name: '([a-z_]+)'/g)].map((m) => m[1]));
-  })();
-
-  it('the tiny parser can actually fail (a test that cannot fail is not a test)', () => {
-    expect(() => parseToml('this is not toml')).toThrow();
-    expect(() => parseToml('key = "orphan"')).toThrow(/outside any table/);
-    expect(parseToml('[a]\nk = "v"\n[[b]]\nn = "1"')).toEqual({ a: { k: 'v' }, b: [{ n: '1' }] });
-  });
-
-  it('there are manifests to check (an empty pass proves nothing)', () => {
-    expect(manifestDirs().length).toBeGreaterThanOrEqual(2);
-  });
-
-  for (const { name, file } of manifestDirs()) {
-    describe(name, () => {
-      const t = parseToml(fs.readFileSync(file, 'utf8'));
-
-      it('carries [skill] name + description, and name matches its directory', () => {
-        expect(t.skill).toBeTruthy();
-        expect(t.skill.name).toBe(name);
-        expect(typeof t.skill.description).toBe('string');
-        expect(t.skill.description.length).toBeGreaterThan(40);
-      });
-
-      it('carries the [dispatch] + [command] sections the grounded shape requires', () => {
-        expect(t.dispatch).toBeTruthy();
-        expect(['mcp_tool', 'shell']).toContain(t.dispatch.type);
-        expect(t.command?.name).toBe(name);
-        expect(Array.isArray(t.catalog?.tags)).toBe(true);
-      });
-
-      it('dispatches to a target that EXISTS — never an aspirational one', () => {
-        if (t.dispatch.type === 'mcp_tool') {
-          // The server name must be the one the installer registers in ~/.codex/config.toml…
-          expect(t.dispatch.server).toBe('ruvnet-brain');
-          // …and the tool must be one the server really serves.
-          expect(served.has(t.dispatch.tool), `${name} names tool "${t.dispatch.tool}", served: ${[...served]}`).toBe(true);
-        } else {
-          expect(typeof t.dispatch.command).toBe('string');
-          expect(t.dispatch.command.length).toBeGreaterThan(0);
-          // A shell dispatch must be portable: no developer home, no absolute interpreter.
-          expect(t.dispatch.command).not.toMatch(/\/Users\/|\/home\/[a-z]/);
-          expect(t.dispatch.command).not.toMatch(/^\/bin\/(ba)?sh\b/);
-        }
-      });
+  for (const name of native) {
+    it(`${name} has matching frontmatter and no absent sibling dependency`, () => {
+      const file = path.join(ROOT, 'plugin', 'skills', name, 'SKILL.md');
+      const src = fs.readFileSync(file, 'utf8');
+      expect(src).toMatch(new RegExp(`^---\\nname: ${name}\\n`));
+      expect(src).toMatch(/description: .{40,}/);
+      expect(src).not.toMatch(/follow .*\.md.*same directory/i);
     });
   }
 
-  it('search_ruvnet is the tool the server declares, so the mcp_tool manifest is grounded', () => {
-    expect(served.has('search_ruvnet')).toBe(true);
-  });
-
-  it('the skills that are NOT manifested are documented as a decision, not an oversight', () => {
-    const readme = fs.readFileSync(path.join(CODEX_DIR, 'skills', 'README.md'), 'utf8');
-    for (const skipped of ['brain-score', 'brain-build', 'brain-prompt']) {
-      expect(readme).toContain(skipped);
-      expect(fs.existsSync(path.join(CODEX_DIR, 'skills', skipped, 'skill.toml'))).toBe(false);
-    }
+  it('retired skill.toml manifests cannot silently become a second unsupported surface', () => {
+    const skills = path.join(CODEX_DIR, 'skills');
+    const manifests = fs.existsSync(skills)
+      ? fs.readdirSync(skills, { recursive: true }).filter((name) => name.endsWith('skill.toml'))
+      : [];
+    expect(manifests).toEqual([]);
   });
 });
 

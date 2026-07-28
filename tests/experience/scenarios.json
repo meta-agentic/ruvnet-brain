@@ -194,11 +194,11 @@
       "id": "S18",
       "host": "codex",
       "os": "ubuntu",
-      "artifact": "codex skill manifests (.codex/skills/*/skill.toml)",
-      "stage": "install — every shipped skill manifest must dispatch to a target that actually exists, and no shipped file may leak a developer's real home-directory path (the second defect ADR-051 found alongside issue #42)",
+      "artifact": "native Codex plugin skills (plugin/skills/*/SKILL.md)",
+      "stage": "install — native skills must be self-contained and visible through the real Codex plugin loader, and no shipped file may leak a developer's real home-directory path (the second defect ADR-051 found alongside issue #42)",
       "user-state": "fresh-home",
       "classification": "ci",
-      "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs: each .codex/skills/*/skill.toml dispatches to a target the server actually declares (search_ruvnet), unmanifested skills are a documented decision not an oversight, and zero shipped files under .codex/ or plugin/ contain a real /Users/<account>/ path.",
+      "evidence": "ci.yml#check — tests/integration/codex-skill-discovery.test.mjs installs the local marketplace into an isolated Codex home and proves brain-console + whats-new are discovered without broken sibling references; tests/unit/codex-wiring.test.mjs proves the retired skill.toml surface is absent and zero shipped files under .codex/ or plugin/ contain a real /Users/<account>/ path.",
       "owner": null
     },
     {

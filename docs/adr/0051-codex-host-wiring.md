@@ -12,7 +12,9 @@ governs:
   - bin/install.mjs
   - .codex/config.toml
   - .codex/hooks.json
-  - .codex/skills/*
+  - plugin/skills/*
+  - plugin/commands/brain-console.md
+  - plugin/commands/rvcb.md
   - plugin/.codex-plugin/plugin.json
   - plugin/hooks/codex-hooks.json
   - plugin/scripts/codex-hook-adapter.mjs
@@ -58,10 +60,10 @@ Claude's Stop `hookSpecificOutput.additionalContext` is not Codex's continuation
 versioned plugin-cache entrypoints become dead paths when an already-open session survives an
 upgrade that removes its old cache generation.
 
-**Grounding.** The Codex manifest shape below is not invented: it follows rUv's own convention, read
-from the local brain corpus at `metaharness/.codex/skills/repo-genome/skill.toml` (the `mcp_tool`
-variant) and `metaharness/.codex/skills/example-harness/skill.toml` (the `shell` variant). Across the
-corpus those are the only two dispatch types that exist — 24 `mcp_tool`, 2 `shell`.
+**Grounding.** Current Codex plugin discovery is verified at the installed boundary with
+`codex plugin marketplace add`, `codex plugin add`, and `codex debug prompt-input`. That live path
+discovers native `plugin/skills/<name>/SKILL.md` files and migrates eligible Claude commands. The
+older repo-local `.codex/skills/*/skill.toml` convention is not the shipped plugin skill surface.
 
 ## Decision
 
@@ -129,25 +131,21 @@ project" becomes "It works in EVERY project in Claude Code … Codex is NOT wire
 sentence is a true claim about Claude Code that would be read as a claim about every editor, which is
 precisely the invisible gap #42 reported.
 
-### 5. Ship only the manifests that can actually fire
+### 5. Native plugin skills are the Codex command surface
 
-`.codex/skills/<name>/skill.toml` manifests ship for two skills, both with a dispatch verified to
-exist:
+Codex discovers the prose contracts under `plugin/skills/*/SKILL.md` directly. The plugin therefore
+ships native skills for every durable Brain workflow, including `brain-console` and `whats-new`.
+Those two are self-contained because the real command migrator drops rendered commands above its
+size ceiling and does not copy sibling Markdown files into the generated skill directory.
 
-| Skill | Dispatch | Backend, and how it was verified |
-|---|---|---|
-| `search-ruvnet` | `mcp_tool` → `ruvnet-brain` / `search_ruvnet` | live `tools/list` round trip against `plugin/mcp/server.mjs`: it serves exactly one tool |
-| `savings` | `shell` | `~/.claude/model-router/bin/metaharness-receipts.mjs`, which the installer copies there; `$HOME`-relative, so no developer path is baked in |
+The Claude commands remain available, but migrated aliases must also be self-contained. In
+particular, `brain-console.md` and `rvcb.md` carry their own launch procedure instead of telling
+Codex to read an absent `rvbc.md` beside the generated `SKILL.md`.
 
-`brain-score`, `brain-build` and `brain-prompt` are **deliberately not manifested**. They are agent
-prose contracts — a scorecard rubric, a phase-gated build contract, a metaprompting method. They have
-no MCP tool (the server serves `search_ruvnet` and nothing else) and no single CLI entrypoint: the
-scripts they mention are steps *inside* the contract, not the thing that runs it. Dispatching
-`brain-build` at `route-cheap.mjs` would print a routing decision and run no build. Since the grounded
-shape offers only `mcp_tool` and `shell`, neither can honestly carry a prose contract, and a manifest
-advertising a dispatch that cannot fire is worse than an absent one — it is the product lying about
-its own capability. The reasoning ships next to them in `.codex/skills/README.md` so the absence reads
-as a decision rather than an oversight.
+The obsolete `.codex/skills/*/skill.toml` files are removed. They were neither the native plugin
+surface nor exercised by the installed loader, so retaining them created a second, misleading
+contract. `search_ruvnet` remains reachable through the registered MCP server; `savings` remains a
+native plugin skill.
 
 ### 6. The project file is schema-valid and deliberately empty
 
@@ -208,7 +206,8 @@ prevents Codex from starting or stopping.
 
 **Not tested.** Windows command expansion for the stable wrapper is not yet proven on native
 Windows. Hook trust still requires explicit user review in `/hooks`; installation must never bypass
-that review. The `savings` shell dispatch remains verified only by target existence on this machine.
+that review. Native skill discovery is proven with the installed Codex loader on macOS, not yet on
+native Windows.
 
 ## Follow-ups
 
@@ -221,12 +220,12 @@ that review. The `savings` shell dispatch remains verified only by target existe
 - Add a native-Windows lifecycle round trip for the stable wrapper command.
 - Make installer/doctor output distinguish active hooks from pending trust and print the exact
   `/hooks` review procedure while definitions are pending.
-- Revisit `brain-score` / `brain-build` / `brain-prompt` if a dispatchable entrypoint ever exists.
 
 ## Currency log
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Native `brain-console` and `whats-new` Codex skills replace the dropped-command and absent-sibling failure; obsolete `skill.toml` manifests are removed. | The real isolated-home plugin install showed `rvbc` and `whats-new` were omitted at migration while `brain-console` and `rvcb` referenced `rvbc.md`, which was not copied. `tests/integration/codex-skill-discovery.test.mjs` pins the installed boundary. |
 | 2026-07-28 | Codex shell events now normalize `exec_command`, `functions.exec_command`, and `functions__exec_command` into the shared Bash contract; custom `codexDir` installs keep the stable wrapper inside the matching isolated home. | Exact installed-boundary tests in `tests/unit/codex-lifecycle-hooks.test.mjs` reproduce the previously missed raw Codex tool names and prove the wrong Ruflo command is blocked. `tests/unit/codex-wiring.test.mjs` proves a temporary Codex home causes no write to the maintainer's `~/.cache`. |
 | 2026-07-28 | **Issue #52 lifecycle wiring added and verified through live Codex 0.145.0.** | Commit `c466c2a` adds the Codex manifest, dedicated schema-valid registration, stable wrapper, and host adapter. Before the fix, `codex exec --ephemeral --json --dangerously-bypass-hook-trust` reported `unknown field '_note'` for both the installed plugin and project hook file, so no Brain lifecycle handler loaded; it also clamped the user SessionEnd timeout from 30000s to 3s. After installing the candidate files, the same fresh-session command completed without either hook error. Direct real-path proofs then invoked the installed `~/.cache/ruvnet-brain/codex-hook.mjs`: SessionStart returned valid developer context in 0.527s, and a Stop event with one real open ledger item returned `{"decision":"block","reason":"..."}` in 1.172s. `tests/unit/codex-lifecycle-hooks.test.mjs`, `codex-wiring.test.mjs`, and `npm-tarball-codex.test.mjs` pass 52/52. |
 | 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** | Flagged `presumed-stale`: 6 commits (0d) after this document's last commit. All 6 (`aa8c090`, `314be33`, `a285fcd`, `987590a`, `2b4e24d`, `720a4bf`) touch only `bin/install.mjs`; `.codex/config.toml`, `.codex/hooks.json` and `.codex/skills/*` are untouched since `969b1ed`/`7ccaf1f`. Read `git show aa8c090 -- bin/install.mjs`: ADR-058 D5's coexistence suite adds three `export` keywords to existing private functions so `wireCodexHost`/`mergeCodexConfig` are testable — commit message states "Zero logic changed", confirmed by reading the diff. The model-cache fix (`2b4e24d`) and D8 stranger-matrix work (`987590a`/`a285fcd`) do not touch Codex code at all (`git show <sha> -- bin/install.mjs \| grep -i codex` empty for both). Compared this ADR's §1-6 claims against current code: the managed-block merge markers, `wireCodexHost()`'s atomic write + symlink-resolve, the three doctor lines (`grep -n "Codex: wired\|Codex: host detected\|Codex: no host"`), and both `.codex/skills/*.toml` manifests all still match verbatim |
