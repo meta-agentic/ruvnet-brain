@@ -50,6 +50,7 @@ describe('npm pack ships every module bin/install.mjs dynamically imports', () =
       'plugin/scripts/codex-hook-wrapper.mjs',
       'scripts/subscription-hosts.mjs',
       'scripts/dual-host-deliberation.mjs',
+      'scripts/dual-host-suggest.mjs',
     ]) {
       expect(packed.has(required), `npm pack is missing Codex bootstrap asset: ${required}`).toBe(true);
     }

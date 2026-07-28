@@ -78,7 +78,16 @@ When both Claude Code and Codex are verified as subscription-authenticated, hard
 two-host job. Hard means architecture/ADR, DDD or bounded-context design, security or production
 migration, and holistic Agentic-QE experience planning.
 
-Run the installed coordinator:
+Before handling a non-trivial task, run the fast subscription gate:
+
+```bash
+node ~/.claude/model-router/bin/dual-host-suggest.mjs "<task>"
+```
+
+An action of `duel` is mandatory: run the installed coordinator before proposing or implementing
+the solution. `login-required` means ask once for the missing Claude Code or ChatGPT subscription
+login; do not ask for an API key. `single-host` means the task is routine enough not to spend two
+seats.
 
 ```bash
 node ~/.claude/model-router/bin/dual-host-deliberation.mjs "<task>"

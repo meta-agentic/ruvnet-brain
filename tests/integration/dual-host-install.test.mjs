@@ -37,5 +37,6 @@ describe('subscription-only dual-host installer wiring', () => {
     const bin = path.join(home, '.claude', 'model-router', 'bin');
     expect(fs.existsSync(path.join(bin, 'subscription-hosts.mjs'))).toBe(true);
     expect(fs.existsSync(path.join(bin, 'dual-host-deliberation.mjs'))).toBe(true);
+    expect(fs.existsSync(path.join(bin, 'dual-host-suggest.mjs'))).toBe(true);
   });
 });

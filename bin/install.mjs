@@ -2332,7 +2332,7 @@ export async function offerRouterProfile() {
   // invisible; without the VIEWER, the user has no scoreboard to hold it to. Shipping one without the
   // other is how a router ends up "working" with three test pings in its log and nobody the wiser.
   // (dispatch-receipt.mjs relative-imports route-cheap.mjs — they land in the same bin/ dir, so it resolves.)
-  for (const t of ['model-router-engine.mjs', 'model-router-setup.mjs', 'model-router-status.mjs', 'model-router-outcome.mjs', 'subscription-hosts.mjs', 'dual-host-deliberation.mjs', 'route-cheap.mjs', 'dispatch-receipt.mjs', 'metaharness-receipts.mjs', 'codex-routed.sh']) {
+  for (const t of ['model-router-engine.mjs', 'model-router-setup.mjs', 'model-router-status.mjs', 'model-router-outcome.mjs', 'subscription-hosts.mjs', 'dual-host-deliberation.mjs', 'dual-host-suggest.mjs', 'route-cheap.mjs', 'dispatch-receipt.mjs', 'metaharness-receipts.mjs', 'codex-routed.sh']) {
     const s = path.join(pkgRoot, 'scripts', t);
     if (fs.existsSync(s)) { fs.copyFileSync(s, path.join(routerDir, 'bin', t)); copied++; }
   }
