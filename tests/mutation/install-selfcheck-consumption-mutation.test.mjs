@@ -98,7 +98,9 @@ function buildScratchRoot({ mutateTo, includeRvf }) {
   for (const rel of ['scripts/selfcheck.mjs', 'scripts/hook-registry.mjs', 'scripts/install-scope.mjs', 'scripts/upgrade-notice.mjs', 'scripts/user-settings.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
-  fs.copyFileSync(path.join(REPO, 'kb/verify-citation.mjs'), path.join(root, 'kb/verify-citation.mjs'));
+  for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs']) {
+    fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
+  }
 
   fs.copyFileSync(buildFixtureZip({ includeRvf }), path.join(root, 'dist', 'ruvnet-brain.zip'));
   return root;
