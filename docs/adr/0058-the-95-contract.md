@@ -4,7 +4,7 @@ title: The 95 contract — one observable per dimension, one mutant per observab
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-28
-impl: built
+impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
 supersedes: []
@@ -33,15 +33,17 @@ governs:
 # ADR-058: The 95 contract
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: recovery re-read found that the
-Top-100/install/routing work described in the newest currency row exists only in a preserved dirty,
-divergent checkout, not in `origin/main`
-**Implementation**: partially wired on the recovery candidate. D4 now has a current Codex-backed
-3/3 treated versus 0/3 control artifact on code SHA `bbf6db0`; the complete release vector and
-external graders still decide whether the candidate is releasable. The preserved Top-100 artifact
-is evidence about its recorded dirty source hash only and earns no credit for the current candidate
-until the changes are reconciled, rerun on the candidate SHA, and the artifact records a clean
-source tree.
+**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: recovery reconciled the formerly
+dirty Top-100/install/routing work onto the candidate branch and re-read the governed surfaces
+through commit `4ad464e`.
+**Implementation**: wired on the recovery candidate, not released. D4 has a current Codex-backed
+3/3 treated versus 0/3 control artifact on source SHA `63e5e67`, plus committed delete-lesson and
+brain-off-treated causal failures in `2b39f68`. D3 now executes its real signal lifecycle from the
+release vector (`2984783`). The packed installer, Top-100 harness, routing outcomes, retrieval
+receipts, and structured CLI boundary are committed (`7eb11fb`, `b48fb3b`, `27cca88`, `859a16d`,
+`e089074`, `4ad464e`). This is still not a release verdict: D4 has not met the win-twice promotion
+bar, WSL2 and the published artifact remain unproven, and both external graders have not re-run on
+one clean published candidate.
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -84,7 +86,7 @@ Verified first-hand at file:line, not relayed:
 |---|---|---|
 | D8 −35 "verification failures do not stop installation" | **Narrowed.** `bin/install.mjs:3240-3248` consumes `runSelfCheck()` and sets `process.exitCode` | No stranger-machine matrix exercises it; no mutant proves the line is load-bearing |
 | D8 −20 "grounding smoke never fatal" | Still true **by design** | §D8 decides it explicitly rather than dodging |
-| D7 −30 "regex parses shell semantics" | **Narrowed.** `MATCH_RE` is gone as live code — the single remaining occurrence is `verify-interface.sh:173`, a comment reading *"MATCH_RE is gone, not demoted"*. Structural `commandNodes()` classifier at :100 | No seeded incident corpus, no FP/FN mutants — a fifth recurrence is undetectable |
+| D7 −30 "regex parses shell semantics" | **Closed at the authorization boundary.** `e089074` enforces managed CLI help/run through structured schemas and literal argv; `4ad464e` makes raw-shell `verify-interface.sh` advisory-only. `tests/regression/interface-gate-corpus.test.mjs` proves every historical shell shape exits 0, and `tests/unit/verify-interface.test.mjs` ratchets out blocking dependencies on shell-structure reconstruction. | Packed/published-host proof is still required under D8; the raw hook is migration guidance, never authority. |
 | D1 −4 coverage floor vs badge | **Closed** (floor 26/28, badge 28%, re-derived by claims-verify) | Nothing — but it was only 4 points |
 | D1 −8 `REQUIRE_BRAIN` | **Open** — grep confirms **0** workflow files set it | §D1 |
 | Vacuous-pass guard | **Closed** — `--levels L5` exits 2 | Nothing |
@@ -293,6 +295,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | **Recovery candidate is now source-reconciled and wired through the final #48 boundary; release proof remains incomplete.** | `7eb11fb` makes `bin/install.mjs` replace local bundles and prune manifest-omitted stores with executable installer mutants. `b48fb3b` adds `scripts/top100-benchmark.mjs`, `scripts/top100-corpus.mjs`, semantic assertions, and the release gate; no generated Top-100 run is treated as published-artifact proof. `2984783` makes `scripts/release-vector.mjs` execute the D3 signal lifecycle and four mutants. `2b39f68` records D4 PASS at source SHA `63e5e67` plus delete-lesson and brain-off-treated FAIL artifacts. `27cca88` records dispatch outcomes as `verified:false`, not quality labels. `859a16d` routes exact evidence through `kb/forge-ask-all.mjs` to grounding receipts. `e089074` adds the structured managed-CLI MCP boundary; `4ad464e` makes raw Bash advisory-only. `63e5e67` requires confirmed router consent. These commits establish wiring, not release: D4 win-twice, WSL2, the installed published artifact, and both external ≥95 grades remain unproven. |
 | 2026-07-28 | **D4 moved from quota-blocked UNKNOWN to a real Codex-backed PASS: 3/3 treated versus 0/3 control.** | `scripts/learning-replay.mjs` now supports `--host codex` without weakening the oracle. The installed Brain plugin's stable wrapper resolves an isolated fixture generation whose Codex adapter records monotonic lesson/tool receipts and blocks the first proposed command before CLI feedback can contaminate the arm. On code SHA `bbf6db0`, all three treated first commands used the real `ruflo memory search -q`, executed with exit 0, and retrieved the seeded note; all three brain-off controls used the rejected positional form, exited 1, retrieved nothing, and received zero lesson bytes. The artifact records host `codex`, model `gpt-5.6-sol`, 71.1s wall, and $0 API cost. The GitHub nightly remains explicitly `--host claude-code` because its non-interactive secret-backed environment is different. |
 | 2026-07-28 | Recovery added executable candidate-lineage enforcement and corrected check-only release wording; implementation remains **partial**. | `scripts/release-vector.mjs` now records commit SHA, committed tree digest, and dirty state, and a dirty lineage forces the vector verdict to FAIL. `scripts/release.mjs` rejects a dirty tree in both check and publish modes and reserves `SHIPPED` for publish; check-only ends `PREFLIGHT PASS — NOT PUBLISHED`. GPT-5.6-Sol returned NO-GO until these gates, Windows CI, packed-candidate Top-100, and real WSL proof land. Fable 5 could not complete the required second review because the live subscription reported its weekly limit; no two-model convergence is claimed. |
 | 2026-07-28 | **Recovery correction: the Top-100/install/routing row below described work that was not on `origin/main`.** The code and passing 100-question artifact were preserved in a dirty checkout whose branch is 18 commits behind and 3 ahead of current main. Recovery now proceeds in an isolated worktree rooted at `origin/main`; no result may be promoted until its artifact identifies that candidate SHA and a clean tree. | Live re-read on 2026-07-28: `origin/main` is `e9f7e7c` at `3.9.129-dev`; `scripts/top100-benchmark.mjs`, `evals/top-100.json`, `plugin/scripts/routing-outcome-capture.mjs`, `resolveRuntimeModelCache()` and `pruneUnlistedStores()` are absent there. The preserved artifact reports `dirty: true` and a different source SHA. This is precisely the candidate-binding invariant this ADR requires; the earlier row is retained as a record of the workstream, but it is not shipped state. |

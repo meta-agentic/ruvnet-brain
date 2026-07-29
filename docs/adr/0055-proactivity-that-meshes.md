@@ -4,6 +4,7 @@ title: Proactivity that meshes — one decision law, four planes, substance-boun
 status: Accepted
 date: 2026-07-27
 updated: 2026-07-28
+impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6 (codex, read-only)]
 tags: [proactivity, hooks, mesh, fourth-wall, learning, grounding, qa]
 supersedes: []
@@ -18,7 +19,6 @@ governs:
   - tests/mesh/*.mjs
   - tests/experience/*.json
   - tests/experience/*.mjs
-  - ~/.claude/settings.json (this machine's layer — census appendix A)
 ---
 
 # ADR-055: Proactivity that meshes
@@ -26,6 +26,35 @@ governs:
 **Status**: Accepted (duel-verified two-sided 2026-07-27 — full record below, incl. the first run's process failure)
 **Date**: 2026-07-27
 **Related**: ADR-012, ADR-017, ADR-023, ADR-028, ADR-030, ADR-040, ADR-043, ADR-050, ADR-052, ADR-053, ADR-054
+
+## Current implementation checkpoint — 2026-07-28 recovery candidate
+
+This checkpoint supersedes present-tense implementation claims in the dated incident and build
+history below; it does not rewrite that history.
+
+- **Interface enforcement moved to structure, not reconstructed Bash.** Commit `e089074` adds
+  `plugin/mcp/managed-cli-interface.mjs` and the `ruvnet_cli_help` → `ruvnet_cli_run` protocol
+  boundary: seven enumerated executables, literal argv, `shell:false`, and a fresh successful-help
+  prerequisite. Commit `4ad464e` makes `plugin/scripts/verify-interface.sh` advisory-only and
+  registers it as advisory with `|| true`; raw Bash cannot produce an interface refusal.
+- **The signal and routing planes now record observable outcomes without inventing quality.**
+  Commit `2984783` makes `scripts/release-vector.mjs` execute the red→surface→dedupe→green→silence
+  D3 lifecycle and its four mutants. Commit `27cca88` wires
+  `plugin/scripts/routing-outcome-capture.mjs` and records linked terminal observations with
+  `verified:false`; model success is not silently promoted to artifact correctness.
+- **Retrieval evidence now reaches the candidate pool and receipt boundary.** Commit `859a16d`
+  adds exact package, inventory, quoted-claim, ADR, and backend rescue candidates in
+  `kb/forge-ask-all.mjs`, then carries their evidence through `kb/forge-mcp-all.mjs` and
+  `kb/forge-evidence.mjs`. This closes the current exact-evidence routing gap; it does not claim
+  every open-world query can yield a deterministic blocking fact.
+- **Consent remains fail-safe.** Commit `63e5e67` makes an `assumed:` router profile insufficient
+  to activate a blocking wall. The later raw-interface demotion in `4ad464e` narrows that rule:
+  route-dispatch still requires confirmed consent; interface guidance is nonblocking regardless.
+
+The ADR is `impl: wired`, not a claim that every aspirational dispatcher in §2 exists. The shipped
+registries, protocol boundary, evidence path, and release detectors are connected. Remaining
+limitations are explicit in ADR-058: no published-artifact/WSL2 proof, no external two-grader ≥95
+verdict, and D4's win-twice promotion bar remains unexercised.
 
 ## Context — the owner's overnight mandate, verbatim in spirit
 
@@ -52,8 +81,8 @@ Both duelists converged on this independently; the wording below is the merge.
 
 **BLOCK (exit 2) is lawful iff ALL of:**
 1. A **deterministic detector** connects the exact proposed action to **contradictory held
-   evidence**: money (undeclared model on dispatch), honesty (push without bump; ungraded visual;
-   unread interface), consent (the user's own state record), or **explicit contradiction of
+   evidence**: money (undeclared model on dispatch), honesty (push without bump; ungraded visual),
+   consent (the user's own state record), or **explicit contradiction of
    grounded source or user policy** (§3).
 2. **Malfunction ≠ decision.** Exit 2 is a decision; parse/dependency/timeout/state failures
    permit the action and record degraded health — they never manufacture a refusal
@@ -101,7 +130,7 @@ Every always-on byte is context tax the token-ledger must show.
 |---|---|---|
 | **Speech** | `unprompted-runtime.mjs` (exists) | anticipate, lesson-hooks, grounding-drift (§3.6); ground-ruvnet's footer becomes a candidate |
 | **Mutation** (Write/Edit/MultiEdit/NotebookEdit) | `implementation-guard.mjs` — ONE registration, ONE parse | consent (protect-state), grounding gate, fourth-wall detectors D1–D5 |
-| **Execution** (Bash / Task / Agent) | `execution-guard.mjs` — ONE registration, ONE parse | route-dispatch, verify-interface, design-wall, version-bump, package/network checks |
+| **Execution** (Bash / Task / Agent) | structured MCP boundary for managed CLI calls; existing registered execution guards for the remaining walls | route-dispatch, design-wall, version-bump, package/network checks; legacy verify-interface is advisory |
 | **Lifecycle** (Stop / SessionEnd) | continuation-gate **via the shim**; ONE SessionEnd coordinator | work-ledger debt, grounding debt, learning flush, autocapture ordering |
 
 Detector modules stay small and independently testable; consolidation is at the parse/decision
@@ -186,7 +215,7 @@ overnight run trains exactly the workaround culture the false-positive disciplin
 prevent. **Resolution shipped**: token mintable in-band with a mandatory stated reason, every
 mint receipted and adjudicated; if adjudication ever shows in-band minting laundering bad
 overrides, the human-terminal clause is the pre-agreed escalation. Existing walls
-(design-wall, verify-interface, version-bump) keep their in-band skip tokens + receipts until
+(design-wall, version-bump) keep their in-band skip tokens + receipts until
 precision data justifies migrating them.
 
 ### 3.6 The interrupt tier
@@ -655,6 +684,7 @@ delegation drift goes to the interrupt tier (§3.7.9).
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Recovery reconciled the mesh with the structured CLI boundary, executable D3 signal proof, outcome-only routing receipts, and exact-evidence retrieval. `impl:` is now `wired`; the machine-local `~/.claude/settings.json` census was removed from `governs:` because it is historical environment evidence, not a source artifact this ADR can currency-check. | Commits `e089074` and `4ad464e` move interface authorization into `plugin/mcp/managed-cli-interface.mjs` and make `plugin/scripts/verify-interface.sh` permanently advisory. Commit `2984783` makes `scripts/release-vector.mjs` run `tests/unit/signal-lifecycle.test.mjs` plus `tests/mutation/signal-watch-mutation.test.mjs`. Commit `27cca88` adds `plugin/scripts/routing-outcome-capture.mjs` with `verified:false`. Commit `859a16d` updates `kb/forge-ask-all.mjs`, `kb/forge-mcp-all.mjs`, and `kb/forge-evidence.mjs` so exact rescued evidence produces receipts. Commit `63e5e67` requires confirmed rather than assumed router consent. These are source/path referents, not an external score; published-artifact, WSL2, D4 win-twice, and two-grader proof remain open in ADR-058. |
 | 2026-07-28 | Successful `search_ruvnet` events now stamp grounding through the shipped shim on both Claude and Codex; linked worktrees recognize the primary worktree's AgentDB; the obsolete user-level duplicate stamp was removed. | The release check for SHA `879b928` passed only on the maintainer HOME because `grounding-stamp.sh` was globally wired but absent from the shipped registries. `tests/unit/hook-shim.test.mjs` and `worktree-memory-detection.test.mjs` now prove the portable boundaries, and the merged hook lint proves the stamp is registered once. |
 | 2026-07-28 | **The lifecycle plane now has a Codex host adapter instead of feeding Claude contracts directly to Codex.** | Commit `c466c2a`, issue #52. Live Codex 0.145.0 first rejected the shared hook file's `_note`, proving zero Brain handlers loaded. The dedicated Codex registration now routes every event through `~/.cache/ruvnet-brain/codex-hook.mjs`, which resolves the active immutable generation on every firing and invokes `plugin/scripts/codex-hook-adapter.mjs`; the shared hook bodies remain the one implementation. SessionStart returned valid context in 0.527s. A real Stop ledger replay returned Codex `decision:"block"` plus the continuation reason in 1.172s. This changes host transport, not §1's decision law or the four-plane topology. Focused packaging/adapter/upgrade tests pass 52/52. |
 | 2026-07-28 | Added an advisory `PostToolUse` observer for explicitly model-routed `Task` and `Agent` dispatches. It records a privacy-preserving `dispatch-observation-v1` row (`model`, terminal host status, success boolean, prompt hash, `verified:false`) and never emits MetaHarness `{embedding,scores}` training data. The PreToolUse declaration now carries `toolUseId`/`sessionId`, so the observer joins the terminal event to the exact dispatch and records whether its model matches. Sanitized fixtures from the live Claude hook-log envelope lock both parser and join. | The router previously accumulated decisions and synthetic k-NN rows but almost no real dispatch outcomes. Host completion is useful operational evidence, but it is not proof that the artifact was correct; separating a linked observation from later verified adjudication prevents the learning loop from training on a false quality label. |
