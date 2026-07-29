@@ -669,7 +669,7 @@ describe('parallel replay fixture allocation', () => {
 });
 
 describe('fixture process containment', () => {
-  it('reaps only a daemon whose explicit workspace is under this replay run', async () => {
+  it.skipIf(process.platform === 'win32')('reaps only a daemon whose explicit workspace is under this replay run', async () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-daemon-cleanup-'));
     const child = spawn(process.execPath, [
       '-e', 'setInterval(() => {}, 1000)',
