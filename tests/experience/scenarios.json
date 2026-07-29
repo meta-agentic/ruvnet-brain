@@ -1,7 +1,7 @@
 {
   "version": 1,
   "updated": "2026-07-28",
-  "note": "ADR-053 §1 / ADR-058 D2: a hand-written list of coherent scenarios grounded in how this product is ACTUALLY installed and used — never a Cartesian host x os x artifact matrix (ADR-053 §1 killed that structurally). Every 'ci'/'scheduled-live-probe' scenario's evidence field embeds a '<workflow>.yml#<job>' token that tests/experience/report.mjs verifies actually exists in .github/workflows/ — a scenario can never point at a fictional runner. 'manual' scenarios require a named owner and sit OUTSIDE the coverage denominator.",
+  "note": "ADR-053 §1 / ADR-058 D2: a hand-written list of coherent scenarios grounded in how this product is ACTUALLY installed and used — never a Cartesian host x os x artifact matrix. Every machine-reachable scenario has structured proofs joining a workflow job to an exact existing test/driver path that the job invokes. Job-name existence alone is not evidence. Manual scenarios require a named owner and sit OUTSIDE the coverage denominator.",
   "scenarios": [
     {
       "id": "S01",
@@ -12,6 +12,7 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/integration/install-smoke.mjs: `--doctor` against an empty RUVNET_BRAIN_KB reports the diagnostic honestly (brain not found) and never crashes; read-only, the pinned dir is untouched afterward.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/integration/install-smoke.mjs" }],
       "owner": null
     },
     {
@@ -23,6 +24,7 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/integration/install-smoke.mjs: `--doctor` on a complete brain dir (real stores + reader deps + mcp entrypoint present) returns exit 0, computed from those real files.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/integration/install-smoke.mjs" }],
       "owner": null
     },
     {
@@ -34,6 +36,10 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/integration/install-smoke.mjs: `--update` against an empty KB dir exits non-zero with the re-run-installer message.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/integration/install-smoke.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/integration/install-smoke.mjs" }
+      ],
       "owner": null
     },
     {
@@ -45,6 +51,7 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "integration-linux.yml#integration — tests/integration/stale-install-trap.test.mjs: an installed OLD tag triggers a real re-download; a rate-limited/offline latest-check (source != 'latest') must not report a fabricated 'out of date' and downgrade an ahead-of-latest install.",
+      "proofs": [{ "workflow": "integration-linux.yml", "job": "integration", "path": "tests/integration/stale-install-trap.test.mjs" }],
       "owner": null
     },
     {
@@ -56,6 +63,10 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: wireCodexHost() creates config.toml and registers [mcp_servers.ruvnet-brain] with a resolved absolute server path when ~/.codex exists but has no config yet.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/unit/codex-wiring.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -67,6 +78,10 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: mergeCodexConfig preserves every pre-existing section byte-for-byte, leaves a user's own ruvnet-brain declaration alone, and preserves content the user added after our block.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/unit/codex-wiring.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -78,6 +93,10 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/codex-wiring.test.mjs: a second/third install run reproduces config.toml byte-for-byte, and a chmod-600 config never comes back world-readable.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/unit/codex-wiring.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -89,6 +108,7 @@
       "user-state": "hostile-path",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs: a symlinked config keeps its identity — the write goes THROUGH the link, never replacing it with a plain file.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" }],
       "owner": null
     },
     {
@@ -100,6 +120,7 @@
       "user-state": "hostile-path",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/codex-wiring.test.mjs (failure-injection cases): a config-write or server-copy failure leaves the prior registration byte-intact (write-beside-then-rename), demonstrated to fail against the pre-fix plain copyFileSync/writeFileSync.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" }],
       "owner": null
     },
     {
@@ -111,6 +132,10 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/npm-tarball-codex.test.mjs: `npm pack` + unpack proves plugin/mcp/server.mjs is IN the tarball, byte-identical to source, and no other plugin/ content leaks in.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/npm-tarball-codex.test.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/unit/npm-tarball-codex.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -122,6 +147,7 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/npm-tarball-codex.test.mjs: initialize + tools/list succeed against the server copied from the real unpacked tarball, with the documented search_ruvnet schema (required string query, optional integer k).",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/npm-tarball-codex.test.mjs" }],
       "owner": null
     },
     {
@@ -133,6 +159,7 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/hook-battery.test.mjs: the 15-case ground-ruvnet.sh gate battery (playbook/grounding/hijack triggers, malformed & empty stdin, a 200KB prompt, unicode/emoji, JSON-escaped quotes, canary command substitutions) — every case exits 0.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/hook-battery.test.mjs" }],
       "owner": null
     },
     {
@@ -144,6 +171,7 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/hook-battery.test.mjs: session-start.sh run twice with the same HOME — a sane greeting both times, star-ask appearing on the first eligible run and never again.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/hook-battery.test.mjs" }],
       "owner": null
     },
     {
@@ -155,6 +183,10 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check & ci.yml#windows-unit — tests/unit/selfcheck-battery.test.mjs: every hooks.json registration is driven through the real shim under all four stdin regimes; a genuinely hung hook is caught and killed by the process-group watchdog (an in-process timer cannot catch it).",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/selfcheck-battery.test.mjs" },
+        { "workflow": "ci.yml", "job": "windows-unit", "path": "tests/unit/selfcheck-battery.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -166,6 +198,7 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "ci.yml#check — tests/unit/selfcheck-battery.test.mjs coexistence suite: foreign hook registrations are enumerated and never executed.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "tests/unit/selfcheck-battery.test.mjs" }],
       "owner": null
     },
     {
@@ -177,6 +210,10 @@
       "user-state": "fresh-home (fresh CI runner)",
       "classification": "ci",
       "evidence": "ci.yml#warm-brain — plugin/test/run-tests.mjs's capability battery, run with REQUIRE_BRAIN=1 against a real installed brain (ADR-058 D1); the SAME lane's mutant proof lives at ci.yml#check (tests/integration/require-brain-lane.mjs), which points RUVNET_BRAIN_KB at a deliberately empty dir.",
+      "proofs": [
+        { "workflow": "ci.yml", "job": "warm-brain", "path": "plugin/test/run-tests.mjs" },
+        { "workflow": "ci.yml", "job": "check", "path": "tests/integration/require-brain-lane.mjs" }
+      ],
       "owner": null
     },
     {
@@ -188,6 +225,7 @@
       "user-state": "fresh-home",
       "classification": "ci",
       "evidence": "ci.yml#check — npm test (plugin/test/run-tests.mjs): the core-capability battery prints \"CORE CAPABILITY BATTERY SKIPPED\" and stays exit 0 when REQUIRE_BRAIN is unset, the honest counterpart to S16's hard failure.",
+      "proofs": [{ "workflow": "ci.yml", "job": "check", "path": "plugin/test/run-tests.mjs" }],
       "owner": null
     },
     {
@@ -198,7 +236,11 @@
       "stage": "install — native skills must be self-contained and visible through the real Codex plugin loader, and no shipped file may leak a developer's real home-directory path (the second defect ADR-051 found alongside issue #42)",
       "user-state": "fresh-home",
       "classification": "ci",
-      "evidence": "ci.yml#check — tests/integration/codex-skill-discovery.test.mjs installs the local marketplace into an isolated Codex home and proves brain-console + whats-new are discovered without broken sibling references; tests/unit/codex-wiring.test.mjs proves the retired skill.toml surface is absent and zero shipped files under .codex/ or plugin/ contain a real /Users/<account>/ path.",
+      "evidence": "integration-linux.yml#integration — tests/integration/codex-skill-discovery.test.mjs installs the local marketplace into an isolated Codex home and proves brain-console + whats-new are discovered without broken sibling references; ci.yml#check — tests/unit/codex-wiring.test.mjs proves the retired skill.toml surface is absent and zero shipped files under .codex/ or plugin/ contain a real /Users/<account>/ path.",
+      "proofs": [
+        { "workflow": "integration-linux.yml", "job": "integration", "path": "tests/integration/codex-skill-discovery.test.mjs" },
+        { "workflow": "ci.yml", "job": "check", "path": "tests/unit/codex-wiring.test.mjs" }
+      ],
       "owner": null
     },
     {
@@ -210,6 +252,7 @@
       "user-state": "populated-home",
       "classification": "ci",
       "evidence": "integration-linux.yml#integration — tests/integration/uninstall-footprint.test.mjs exercises the real --uninstall path and its footprint.",
+      "proofs": [{ "workflow": "integration-linux.yml", "job": "integration", "path": "tests/integration/uninstall-footprint.test.mjs" }],
       "owner": null
     },
     {
@@ -219,9 +262,10 @@
       "artifact": "npm (npx ruvnet-brain) / codex config.toml",
       "stage": "install — the full install + Codex/Claude-Code wiring journey on macOS",
       "user-state": "fresh-home",
-      "classification": "manual",
-      "evidence": "No macOS CI job exists today: ci.yml has only the ubuntu `check`/`warm-brain` jobs and `windows-unit`; integration-linux.yml is ubuntu-only. ADR-053 itself names this gap directly: \"macOS gets a mechanical verdict via the release-qualification lane rather than trusting one developer laptop\" — that lane is not yet built (ADR-053 rollout item 6, unbuilt).",
-      "owner": "Stuart Kerr"
+      "classification": "ci",
+      "evidence": "stranger-matrix.yml#macos — scripts/ci/stranger-scenario.mjs installs the packed candidate into a virgin HOME, runs the assembled `--local` bundle path, verifies the installed registration fires a real hook, and proves a seeded-broken bundle exits non-zero on macos-latest.",
+      "proofs": [{ "workflow": "stranger-matrix.yml", "job": "macos", "path": "scripts/ci/stranger-scenario.mjs" }],
+      "owner": null
     },
     {
       "id": "S21",
@@ -230,20 +274,28 @@
       "artifact": "local clone (`node bin/install.mjs --local`, assembled dist/ruvnet-brain/ directory)",
       "stage": "install — the from-a-repo-clone path a contributor building the bundle locally takes",
       "user-state": "fresh-home",
-      "classification": "manual",
-      "evidence": "Grep confirms zero references to `--local` or FLAG_LOCAL anywhere under tests/ — this path is entirely untested today. Verified manually by Stuart before cutting a local bundle build.",
-      "owner": "Stuart Kerr"
+      "classification": "ci",
+      "evidence": "stranger-matrix.yml#ubuntu/#macos/#windows-gitbash/#windows-powershell/#hostile — scripts/ci/stranger-scenario.mjs drives the real installer with `--local` against a freshly assembled directory on every matrix surface; healthy must fire, seeded-broken must fail.",
+      "proofs": [
+        { "workflow": "stranger-matrix.yml", "job": "ubuntu", "path": "scripts/ci/stranger-scenario.mjs" },
+        { "workflow": "stranger-matrix.yml", "job": "macos", "path": "scripts/ci/stranger-scenario.mjs" },
+        { "workflow": "stranger-matrix.yml", "job": "windows-gitbash", "path": "scripts/ci/stranger-scenario.mjs" },
+        { "workflow": "stranger-matrix.yml", "job": "windows-powershell", "path": "scripts/ci/stranger-scenario.mjs" },
+        { "workflow": "stranger-matrix.yml", "job": "hostile", "path": "scripts/ci/stranger-scenario.mjs" }
+      ],
+      "owner": null
     },
     {
       "id": "S22",
       "host": "both",
       "os": "all",
-      "artifact": "brain cache directory (RUVNET_BRAIN_KB / XDG_CACHE_HOME)",
-      "stage": "install — a real hostile HOME: a path containing spaces or unicode, a read-only cache directory, or a near-full disk",
+      "artifact": "packed npm artifact + assembled local bundle",
+      "stage": "install — hostile sh-only container with HOME containing spaces, no jq/gh, and outbound HTTP blackholed",
       "user-state": "hostile-path",
-      "classification": "manual",
-      "evidence": "ADR-053 rollout item 10 (\"Hostile-home journeys — spaces/unicode/read-only/ENOSPC\") is explicitly unbuilt; grep across tests/ for these conditions returns zero hits. Verified manually by Stuart when reported by a user.",
-      "owner": "Stuart Kerr"
+      "classification": "ci",
+      "evidence": "stranger-matrix.yml#hostile — scripts/ci/stranger-scenario.mjs installs into `/tmp/virgin home`, with sh only, jq/gh absent, proxy-blackholed network, and exercises healthy, seeded-broken, and strict-ungrounded outcomes.",
+      "proofs": [{ "workflow": "stranger-matrix.yml", "job": "hostile", "path": "scripts/ci/stranger-scenario.mjs" }],
+      "owner": null
     },
     {
       "id": "S23",
@@ -254,7 +306,19 @@
       "user-state": "fresh-home",
       "classification": "scheduled-live-probe",
       "evidence": "published-surface-probe.yml#probe — nightly (cron '17 7 * * *', never on push) scripts/published-surface-probe.mjs: resolves the npm packument + dist-tags.latest, fetches a real byte range of the published tarball and asserts gzip magic, then INSTALLS AND EXECUTES `npx -y ruvnet-brain@latest --help` from the registry, and finally checks releases/latest carries ruvnet-brain.zip above a truncation floor, that its download URL serves the API-declared byte count, and that the .zip.sha256 sidecar is a well-formed 64-hex digest. RED when the package is unpublished, the tarball is not a gzip, the published CLI exits non-zero or prints someone else's help, the Release asset is missing/truncated/unfetchable, or the sidecar is malformed. A rate-limited or unreachable network is UNKNOWN (exit 4) and still red — never green-because-we-could-not-look. Every OTHER scenario in this list runs against the source checkout, which is a different artifact from the one a user receives; only a schedule can catch a surface that died without a commit.",
+      "proofs": [{ "workflow": "published-surface-probe.yml", "job": "probe", "path": "scripts/published-surface-probe.mjs" }],
       "owner": null
+    },
+    {
+      "id": "S24",
+      "host": "both",
+      "os": "all",
+      "artifact": "brain cache directory (RUVNET_BRAIN_KB / XDG_CACHE_HOME)",
+      "stage": "install — hostile storage semantics not represented by the spaces/no-network cell: unicode HOME, read-only cache, or ENOSPC/near-full disk",
+      "user-state": "hostile-path",
+      "classification": "manual",
+      "evidence": "No committed workflow drives the installer through unicode HOME, read-only cache, or ENOSPC. S22 covers spaces and missing tools/network only; it is not evidence for these different filesystem failures.",
+      "owner": "Stuart Kerr"
     }
   ]
 }

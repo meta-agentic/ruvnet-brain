@@ -1,9 +1,10 @@
 // tests/experience/report.test.mjs — ADR-058 D2: proves tests/experience/report.mjs is
 // load-bearing, not decorative.
 //
-// The ADR names two mutants that MUST make the report go red:
+// The ADR names mutants that MUST make the report go red:
 //   1. delete one scenario's classification -> report red
-//   2. point one scenario at a non-existent workflow job -> report red
+//   2. point one scenario at a non-existent workflow job/file -> report red
+//   3. point a proof at a missing path OR an existing path the named job never invokes -> red
 //
 // Both are exercised here as real subprocess runs against MUTATED COPIES of the real
 // scenarios.json (never the live file, and never in-process — a fresh process is what the real CI
@@ -52,20 +53,39 @@ test('MUTANT 2 — pointing one scenario at a non-existent workflow job makes th
   const mutated = structuredClone(REAL_SCENARIOS);
   const target = mutated.scenarios.find((s) => s.classification === 'ci');
   assert.ok(target, 'fixture assumption: at least one ci-classified scenario must exist to mutate');
-  target.evidence = 'ci.yml#this-job-does-not-exist — fabricated for the mutant proof';
+  target.proofs[0].job = 'this-job-does-not-exist';
   const r = runReport(mutated);
   assert.notEqual(r.status, 0, `expected a non-zero exit once a scenario names a fictional job, got ${r.status}\n${r.stdout}`);
   assert.match(r.stdout, /this-job-does-not-exist/, 'must name the offending job in the failure output');
-  assert.match(r.stdout, /has no such job/, 'must say the job does not exist, not merely that something failed');
+  assert.match(r.stdout, /job .* does not exist/, 'must say the job does not exist, not merely that something failed');
 });
 
 test('MUTANT 2b — pointing a scenario at a non-existent workflow FILE also makes the report red', () => {
   const mutated = structuredClone(REAL_SCENARIOS);
   const target = mutated.scenarios.find((s) => s.classification === 'ci');
-  target.evidence = 'no-such-file.yml#check — fabricated for the mutant proof';
+  target.proofs[0].workflow = 'no-such-file.yml';
   const r = runReport(mutated);
   assert.notEqual(r.status, 0, `expected a non-zero exit once a scenario names a fictional workflow file, got ${r.status}\n${r.stdout}`);
   assert.match(r.stdout, /does not exist in \.github\/workflows/);
+});
+
+test('MUTANT 3a — a proof path that does not exist makes the report red', () => {
+  const mutated = structuredClone(REAL_SCENARIOS);
+  const target = mutated.scenarios.find((s) => s.classification === 'ci');
+  target.proofs[0].path = 'tests/unit/removed-by-mutant.test.mjs';
+  const r = runReport(mutated);
+  assert.notEqual(r.status, 0, `expected a missing proof path to fail, got ${r.status}\n${r.stdout}`);
+  assert.match(r.stdout, /not an existing repo file/);
+});
+
+test('MUTANT 3b — an existing path the named job never invokes makes the report red', () => {
+  const mutated = structuredClone(REAL_SCENARIOS);
+  const target = mutated.scenarios.find((s) => s.id === 'S23');
+  assert.ok(target, 'fixture assumption: S23 is the scheduled published-surface probe');
+  target.proofs[0].path = 'tests/unit/codex-wiring.test.mjs'; // exists, but probe job never runs it
+  const r = runReport(mutated);
+  assert.notEqual(r.status, 0, `expected an uninvoked existing proof path to fail, got ${r.status}\n${r.stdout}`);
+  assert.match(r.stdout, /does not invoke/);
 });
 
 test('manual-share cap: pushing manual above 20% of the list makes the report red', () => {
