@@ -117,6 +117,7 @@ export async function measureFirings({ n = 30, repo = REPO_ROOT, fireFn = fireHo
     XDG_CACHE_HOME: path.join(home, '.cache'),
     RUVNET_BRAIN_HOME: brainHome,
     RUVNET_BRAIN_STATE_DIR: stateDir,
+    RUVNET_SESSION_TRACE: '1',
     CLAUDE_PLUGIN_ROOT: r.surface.root,
   };
   const timeoutSec = typeof r.reg.timeout === 'number' ? r.reg.timeout : 5;
