@@ -158,9 +158,30 @@ export const INVARIANTS = [
         .map((h) => String(h?.command || ''));
       // the shim dispatches by a bare handler id, so match the id as a WHOLE argument token
       const fires = commands.some((c) => /(^|[\s"'/])signal-watch($|[\s"'|;])/.test(c));
-      return fires
-        ? { state: 'PASS', why: `watcher registered as a dispatchable handler in ${commands.length} shipped registration(s)` }
-        : { state: 'FAIL', why: 'watcher exists but is not registered as a dispatchable handler — it will never fire' };
+      if (!fires) {
+        return { state: 'FAIL', why: 'watcher exists but is not registered as a dispatchable handler — it will never fire' };
+      }
+
+      // Registration is necessary but not sufficient. The first release gate stopped here and
+      // certified a named handler without proving that a real red verdict reached the maintainer.
+      // Execute the whole shipped path: push debt → poller → red surface → dedupe → green close →
+      // silence. The paired mutation suite deletes the consumer, breaks dedupe, converts UNKNOWN
+      // to green, and blinds the observer; every mutant must remain killed for D3 to pass.
+      const behavior = run('npx', [
+        'vitest', 'run',
+        'tests/unit/signal-lifecycle.test.mjs',
+        'tests/mutation/signal-watch-mutation.test.mjs',
+        '--reporter=dot',
+      ]);
+      return behavior.state === 'PASS'
+        ? {
+            state: 'PASS',
+            why: `registered in ${commands.length} shipped registration(s); executable red→surface→green→silence lifecycle and 4 mutants pass`,
+          }
+        : {
+            state: behavior.state,
+            why: `signal-watch behavioral lifecycle or mutant proof failed (${behavior.why})`,
+          };
     },
   },
   {

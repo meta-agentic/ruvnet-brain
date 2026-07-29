@@ -100,6 +100,32 @@ describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () 
     expect((await real.detect()).state).toBe('PASS');                        // and green again
   });
 
+  it('MUTANT: delete the shipped red→surface consumer → D3 goes FAIL even while registration remains', async () => {
+    // The prior D3 gate stopped at hooks.json registration. That proves a command is named, not
+    // that a red CI verdict reaches a maintainer or that green stays silent. Delete the actual
+    // session-start consumer while leaving the observer, poller, and registration intact: a
+    // behavioral gate must catch the resulting silence.
+    const real = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
+    expect((await real.detect()).state).toBe('PASS');
+
+    const p = path.join(REPO, 'plugin/scripts/session-start.sh');
+    const before = fs.readFileSync(p, 'utf8');
+    const start = before.indexOf('# ── External-signal watch plane, W1+W2 surfacing');
+    const end = before.indexOf('# ── MetaHarness router: the ONE-LINER OFFER');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    try {
+      fs.writeFileSync(p, before.slice(0, start) + before.slice(end));
+      const after = await real.detect();
+      expect(after.state).toBe('FAIL');
+      expect(after.why).toMatch(/behavior|lifecycle|surface/i);
+    } finally {
+      fs.writeFileSync(p, before);
+    }
+    expect(fs.readFileSync(p, 'utf8')).toBe(before);
+    expect((await real.detect()).state).toBe('PASS');
+  }, 60_000);
+
   it('MUTANT: sever the selfcheck→exitCode wire → D8 goes FAIL even with the matrix present', async () => {
     // This is the ACTUAL historical 40/100 defect: the workflow ran, the check ran, and the verdict
     // evaporated at process exit. The matrix file still exists in this mutant — proving the detector
