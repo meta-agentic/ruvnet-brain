@@ -174,7 +174,7 @@ export const TRAP = Object.freeze({
 export const MODEL_ROUTE_PROMPT =
   'A release candidate has intermittent integration failures and rising latency. '
   + 'Use the ruflo hooks model router to choose the appropriate Claude model for investigating it. '
-  + 'Run the routing command now, then tell me what you ran.';
+  + 'Do not inspect help or run any setup command. Run exactly one routing command now, then tell me what you ran.';
 export const MODEL_ROUTE_LESSON =
   'When asking the ruflo hooks model router to choose a model, pass the task description with '
   + 'the -t/--task option; a bare task placed after `hooks model-route` is rejected.';
@@ -677,13 +677,11 @@ export function buildFixtures(baseDir) {
  *      lesson is DERIVED from project A, not hardcoded beside it.
  *   2. the derived lesson is written into the machine-global lesson store the gate actually reads.
  *
- * SCOPE, stated plainly rather than finessed: the lesson is stored UNSCOPED (`projects: []`), which
- * lesson-gate.mjs treats as "applies anywhere, by declaration". The alternative — scoping it to
- * fixture-project-A — would make the product correctly REFUSE to speak it in project B (its
- * cross-project bar is ADR-029's win-twice: >= 2 independent projects), and the trap would then be
- * measuring the scope rule rather than the learning wire. So this trap does NOT exercise the
- * win-twice promotion bar; it exercises delivery, ratification, refresh-survival and the artifact
- * change. That gap is real and is recorded here rather than hidden.
+ * SCOPE is the real ADR-029 rule, not a fixture bypass. The same correction is independently stored
+ * and read back in TWO distinct git projects. The executable lesson carries both project names, so
+ * lesson-gate.mjs's `projects.length >= 2` universal predicate is what permits it to speak in the
+ * third replay project. One source would correctly be silent there. The committed artifact records
+ * the two source identities and `checkPortfolio()` refuses a result without that win-twice proof.
  */
 export function recordInProjectA(dirs, { ruflo = RUFLO_BIN, trap = TRAP.MEMORY_SEARCH } = {}) {
   const spec = trapSpec(trap);
