@@ -33,10 +33,17 @@ const CONSOLE_MJS = path.join(REPO, 'scripts', 'onboarding-console.mjs');
 const LIVE_SIGNAL = /it's live|take a look|refresh the tab/i;
 const EXPLANATION = /Onboarding Console|read-only until you click|scanning your setup/i;
 
+export function isolatedHomeEnv(home, base = process.env) {
+  // os.homedir() reads HOME on POSIX and USERPROFILE on Windows. Setting only HOME made the
+  // Windows lane scan the runner account instead of the intended virgin fixture, so the cold
+  // completion probe timed out while Linux/macOS exercised a different state.
+  return { ...base, HOME: home, USERPROFILE: home };
+}
+
 export function runCommandProbe({ timeoutMs = 60000 } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'uxqe-cold-'));
   const port = 7900 + (process.pid % 90);   // a distinct cold port; vary per run without Date/random
-  const env = { ...process.env, HOME: home, CONSOLE_PORT: String(port) };
+  const env = { ...isolatedHomeEnv(home), CONSOLE_PORT: String(port) };
   const t0 = Date.now();
   const lines = [];   // { at: ms-since-start, text }
   return new Promise((resolve) => {

@@ -6,6 +6,12 @@ import { describe, expect, it } from 'vitest';
 const probeUrl = new URL('../ux/command-probe.mjs', import.meta.url).href;
 
 describe('command UX probe lifecycle', () => {
+  it('isolates the home directory on both POSIX and Windows host contracts', async () => {
+    const { isolatedHomeEnv } = await import(probeUrl);
+    const env = isolatedHomeEnv('fixture-home', { KEEP: 'yes', HOME: 'old-home', USERPROFILE: 'old-profile' });
+    expect(env).toMatchObject({ KEEP: 'yes', HOME: 'fixture-home', USERPROFILE: 'fixture-home' });
+  });
+
   it('releases its timeout handle after the live signal without requiring process.exit', () => {
     const script = [
       `const { runCommandProbe } = await import(${JSON.stringify(probeUrl)});`,
