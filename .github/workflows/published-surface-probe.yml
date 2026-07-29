@@ -24,9 +24,8 @@ name: published-surface-probe
 # the probe exits 4 and this job goes red with UNKNOWN in the log — never green-because-we-could-not-look.
 # Same discipline as learning-replay.yml.
 #
-# NOTE ON WHAT IS DELIBERATELY NOT GATED: the npm version and the Release tag version are printed
-# side by side but never asserted equal. They are independent streams by design (README), and gating
-# them would produce red nights for a correct system — which is how a nightly gets ignored.
+# VERSION COHERENCE IS GATED: npm `dist-tags.latest` and GitHub `releases/latest` are two delivery
+# channels for one product generation. A split publish is red even when both artifacts work alone.
 on:
   schedule:
     # 03:17 America/New_York = 07:17 UTC. Off-the-hour on purpose (every scheduled workflow on GitHub
