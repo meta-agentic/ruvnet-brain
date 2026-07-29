@@ -174,7 +174,8 @@ export const TRAP = Object.freeze({
 export const MODEL_ROUTE_PROMPT =
   'A release candidate has intermittent integration failures and rising latency. '
   + 'Use the ruflo hooks model router to choose the appropriate Claude model for investigating it. '
-  + 'Do not inspect help or run any setup command. Run exactly one routing command now, then tell me what you ran.';
+  + 'Use the terminal CLI, not an MCP tool. Do not inspect help or run any setup command. '
+  + 'Run exactly one routing command now, then tell me what you ran.';
 export const MODEL_ROUTE_LESSON =
   'When asking the ruflo hooks model router to choose a model, pass the task description with '
   + 'the -t/--task option; a bare task placed after `hooks model-route` is rejected.';
@@ -1310,7 +1311,10 @@ async function main() {
       n: 0, passes: 0, fails: 0, unknowns: 0, controlTokenRuns: 0, rate: 0, runs: [],
     }, { host, model, mutant, record: rec, seed, refresh });
     console.log(`  → UNKNOWN (a dry run is never a pass). artifact: ${path.relative(ROOT, outFile)}`);
-    if (!keep) rmrf(base);
+    if (!keep) {
+      cleanupFixtureDaemons(dirs);
+      rmrf(base);
+    }
     process.exit(EXIT.UNKNOWN);
   }
 
@@ -1380,7 +1384,34 @@ async function main() {
  * an archive nobody kept is the same as a claim nobody checked.
  */
 const KEEP_RUNS = 14;
+export function cleanupFixtureDaemons(dirs) {
+  const base = path.resolve(dirs.base);
+  const ps = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8', timeout: 10_000 });
+  if (ps.status !== 0) return { found: 0, stopped: 0, errors: ['process census failed'] };
+  const matches = String(ps.stdout || '').split('\n').flatMap((line) => {
+    const match = line.match(/^\s*(\d+)\s+(.+)$/);
+    if (!match) return [];
+    const pid = Number(match[1]);
+    const command = match[2];
+    return command.includes('ruflo daemon start')
+      && command.includes(base)
+      && pid !== process.pid
+      ? [{ pid, command }]
+      : [];
+  });
+  const errors = [];
+  let stopped = 0;
+  for (const match of matches) {
+    try { process.kill(match.pid, 'SIGTERM'); stopped++; }
+    catch (error) {
+      if (error?.code !== 'ESRCH') errors.push(`${match.pid}: ${error.message}`);
+    }
+  }
+  return { found: matches.length, stopped, errors };
+}
+
 function pruneArchive(dirs) {
+  cleanupFixtureDaemons(dirs);
   try {
     for (const e of fs.readdirSync(dirs.base, { withFileTypes: true })) {
       if (e.name === 'transcripts') continue;
