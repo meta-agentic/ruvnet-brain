@@ -42,9 +42,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const REAL_INSTALLER = path.join(REPO, 'bin/install.mjs');
 const ANCHOR = 'process.exitCode = selfcheck.exitCode;';
 
-const hasZip = spawnSync('zip', ['-v'], { stdio: 'ignore' }).status === 0;
-const hasUnzip = spawnSync('unzip', ['-v'], { stdio: 'ignore' }).status === 0;
-const canRun = hasZip && hasUnzip && process.platform !== 'win32'; // POSIX unzipInto() branch only
+const canRun = process.platform !== 'win32'; // safePath() executable filtering is POSIX-shaped
 
 const scratchDirs = [];
 afterEach(() => { for (const d of scratchDirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -60,11 +58,11 @@ function safePath() {
 }
 
 /**
- * A minimal KB bundle zip, packed the way unzipInto() expects: one top-level `ruvnet-brain/` dir.
+ * A minimal assembled KB directory, matching the real `--local` contract.
  * Staging is delegated to scripts/ci/build-fixture-kb.mjs — the SAME script the stranger-matrix
  * workflow uses, so this test and the CI matrix can never drift onto two different fixture shapes.
  */
-function buildFixtureZip({ includeRvf }) {
+function buildFixtureDir({ includeRvf }) {
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'mutant-kb-stage-'));
   scratchDirs.push(stage);
   const root = path.join(stage, 'ruvnet-brain');
@@ -72,9 +70,7 @@ function buildFixtureZip({ includeRvf }) {
     path.join(REPO, 'scripts/ci/build-fixture-kb.mjs'), '--out', root,
     ...(includeRvf ? [] : ['--no-rvf']),
   ]);
-  const zipPath = path.join(stage, 'ruvnet-brain.zip');
-  execFileSync('zip', ['-q', '-r', zipPath, 'ruvnet-brain'], { cwd: stage });
-  return zipPath;
+  return root;
 }
 
 /**
@@ -98,11 +94,13 @@ function buildScratchRoot({ mutateTo, includeRvf }) {
   for (const rel of ['scripts/selfcheck.mjs', 'scripts/hook-registry.mjs', 'scripts/install-scope.mjs', 'scripts/upgrade-notice.mjs', 'scripts/user-settings.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
-  for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs']) {
+  for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs', 'kb/model-requirements.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
 
-  fs.copyFileSync(buildFixtureZip({ includeRvf }), path.join(root, 'dist', 'ruvnet-brain.zip'));
+  fs.cpSync(buildFixtureDir({ includeRvf }), path.join(root, 'dist', 'ruvnet-brain'), {
+    recursive: true,
+  });
   return root;
 }
 

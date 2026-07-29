@@ -3,7 +3,7 @@
 //
 //   npx ruvnet-brain                           # published on npm — shortest, recommended
 //   npx github:stuinfla/ruvnet-brain           # always the latest commit, even ahead of the npm release
-//   node bin/install.mjs --local               # from a repo clone that already has dist/ruvnet-brain.zip
+//   node bin/install.mjs --local               # from a repo clone with assembled dist/ruvnet-brain/
 //
 // Goal: a newcomer runs ONE command and ends up with (a) the brain on disk and (b) the Claude Code
 // plugin wired at user scope — narrating "what I'm doing and why" at every step (the product's ethos).
@@ -288,6 +288,14 @@ async function resolveRelease() {
     return { tag: FORCED_VERSION, url: fallbackUrl(FORCED_VERSION), source: 'forced' };
   }
 
+  // Deterministic integration seam: stale/current behavior must not depend on GitHub API quota.
+  // It is inert unless the installer's existing mutation-safe test mode is explicitly enabled.
+  if (process.env.RUVNET_BRAIN_TEST === '1' && process.env.RUVNET_BRAIN_TEST_LATEST_TAG) {
+    const tag = process.env.RUVNET_BRAIN_TEST_LATEST_TAG;
+    info(`test mode: latest Release is ${c.bold(tag)}`);
+    return { tag, url: fallbackUrl(tag), source: 'latest' };
+  }
+
   try {
     info(`checking ${RELEASE_API} …`);
     const rel = await fetchJson(RELEASE_API);
@@ -324,16 +332,24 @@ function resolveCacheDir() {
 // ── step: obtain the bundle (local or download) ──────────────────────────────────────────────────
 async function obtainBundle(release) {
   const localZip = path.join(REPO_ROOT, 'dist', 'ruvnet-brain.zip');
+  const localDir = path.join(REPO_ROOT, 'dist', 'ruvnet-brain');
   const haveLocal = fs.existsSync(localZip);
+  const haveLocalDir = fs.existsSync(path.join(localDir, 'forge-mcp-all.mjs'));
 
-  if (FLAG_LOCAL && !haveLocal) {
+  if (FLAG_LOCAL && !haveLocalDir) {
     die(
-      `--local was passed but ${localZip} does not exist.`,
+      `--local was passed but ${localDir} is not an assembled brain bundle.`,
       `Build it first with:  ${c.bold('node scripts/build-bundle.mjs')}  (then re-run with --local),\nor drop --local to download the published brain instead.`,
     );
   }
 
-  if (haveLocal || FLAG_LOCAL) {
+  if (FLAG_LOCAL) {
+    step('Using the local brain bundle', 'you are running from the repo, so no download is needed');
+    info(`source: ${localDir}`);
+    return { sourceDir: localDir, downloaded: false };
+  }
+
+  if (haveLocal) {
     step('Using the local brain bundle', 'you are running from the repo, so no download is needed');
     info(`source: ${localZip}`);
     return { zipPath: localZip, downloaded: false };
@@ -342,7 +358,7 @@ async function obtainBundle(release) {
   const downloadUrl = (release && release.url) || fallbackUrl(RELEASE_VERSION);
   step(
     `Downloading the brain (${APPROX_SIZE})`,
-    'the brain is the embedded source of 20+ RuvNet repos — too big for git, so it ships as a Release',
+    'the brain embeds source from dozens of RuvNet repos — too big for git, so it ships as a Release',
   );
   info(`version: ${c.bold((release && release.tag) || RELEASE_VERSION)}`);
   info(`from: ${downloadUrl}`);
@@ -401,12 +417,26 @@ async function obtainBundle(release) {
 //   win32     -> node:zlib first (no PATH lookup, no shell, no quoting), PowerShell second.
 // Every attempt is recorded and, if all of them fail, ALL are printed with the exact command and
 // exit code. The old message's best property — it named the precise failing command — is kept.
-async function unzipInto(zipPath, cacheDir) {
+export function copyLocalBundleInto(sourceDir, cacheDir) {
+  let copied = 0;
+  for (const entry of fs.readdirSync(sourceDir)) {
+    fs.cpSync(path.join(sourceDir, entry), path.join(cacheDir, entry), {
+      recursive: true,
+      force: true,
+      preserveTimestamps: true,
+    });
+    copied++;
+  }
+  return copied;
+}
+
+async function unzipInto(zipPath, cacheDir, sourceDir = null) {
   step(
     'Unpacking the brain into place',
     'so the plugin finds forge-mcp-all.mjs and the vector stores right where it looks',
   );
 
+  const localCopy = async () => `local directory copy — ${copyLocalBundleInto(sourceDir, cacheDir)} top-level entries`;
   const nodeExtract = async () => {
     const { extractZip } = await import(new URL('../kb/zip-extract.mjs', import.meta.url).href);
     const r = await extractZip(zipPath, cacheDir);
@@ -434,9 +464,11 @@ async function unzipInto(zipPath, cacheDir) {
     return `${psExe} Expand-Archive`;
   };
 
-  const strategies = IS_WIN
-    ? [['node:zlib (built-in)', nodeExtract], ['PowerShell Expand-Archive', psExtract]]
-    : [['unzip', unzipExtract], ['node:zlib (built-in)', nodeExtract]];
+  const strategies = sourceDir
+    ? [['local assembled directory', localCopy]]
+    : (IS_WIN
+        ? [['node:zlib (built-in)', nodeExtract], ['PowerShell Expand-Archive', psExtract]]
+        : [['unzip', unzipExtract], ['node:zlib (built-in)', nodeExtract]]);
 
   // The zip extracts to a top-level `ruvnet-brain/` folder. Extract into the cache dir, then lift
   // its CONTENTS up one level so that cacheDir/forge-mcp-all.mjs exists (idempotent: overwrites).
@@ -470,6 +502,16 @@ async function unzipInto(zipPath, cacheDir) {
     fs.rmdirSync(nested);
   }
 
+  // An update is a replacement, not an overlay. Before this prune existed, installing a public
+  // bundle over a KB that once contained private stores left every omitted `.rvf` and passages file
+  // behind. discoverRepos() then served those stale stores as if they were part of the new bundle.
+  // Only repo-artifact families are touched; reader deps, local logs, preferences, and unrelated
+  // files remain byte-for-byte.
+  const pruned = pruneUnlistedStores(cacheDir);
+  if (pruned.length) {
+    warn(`pruned ${pruned.length} stale repo artifact file(s) omitted by this bundle: ${[...new Set(pruned.map((p) => p.repo))].join(', ')}`);
+  }
+
   if (!fs.existsSync(path.join(cacheDir, 'forge-mcp-all.mjs'))) {
     die(
       `the brain unpacked but forge-mcp-all.mjs is missing from ${cacheDir}.`,
@@ -477,6 +519,40 @@ async function unzipInto(zipPath, cacheDir) {
     );
   }
   ok(`brain unpacked to ${cacheDir}`);
+}
+
+export function pruneUnlistedStores(cacheDir) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(cacheDir, 'manifest.json'), 'utf8'));
+    const allowed = new Set((manifest.builtRepos || []).map((r) => String(r?.name || '')).filter(Boolean));
+    if (manifest.conceptsStore?.store) allowed.add(String(manifest.conceptsStore.store).replace(/\.big\.rvf$|\.rvf$/, ''));
+    // ruv-gists is a separately assembled provenance store, not a registry builtRepo.
+    if (fs.existsSync(path.join(cacheDir, 'ruv-gists.rvf')) || fs.existsSync(path.join(cacheDir, 'ruv-gists.big.rvf'))) {
+      allowed.add('ruv-gists');
+    }
+    if (!allowed.size) return [];
+
+    const presentRepos = new Set();
+    for (const entry of fs.readdirSync(cacheDir)) {
+      const m = /^(.*?)(?:\.big)?\.rvf$/.exec(entry);
+      if (m?.[1] && /^[A-Za-z0-9._-]+$/.test(m[1])) presentRepos.add(m[1]);
+      const primer = /^(.*)-primer\.md$/.exec(entry);
+      if (primer?.[1] && /^[A-Za-z0-9._-]+$/.test(primer[1])) presentRepos.add(primer[1]);
+    }
+    const stale = [...presentRepos].filter((repo) => !allowed.has(repo));
+    const removed = [];
+    for (const repo of stale) {
+      for (const entry of fs.readdirSync(cacheDir)) {
+        if (entry !== repo && entry !== `${repo}-primer.md` && !entry.startsWith(`${repo}.`)) continue;
+        fs.rmSync(path.join(cacheDir, entry), { recursive: true, force: true });
+        removed.push({ repo, entry });
+      }
+    }
+    return removed;
+  } catch {
+    // A missing/corrupt manifest is already a verification failure. Never guess what to delete.
+    return [];
+  }
 }
 
 // ── step: install the reader deps ────────────────────────────────────────────────────────────────
@@ -606,9 +682,9 @@ function wirePlugin() {
 //      it and touch nothing. Their hand-written config outranks our convenience.
 //
 // The registered path must also OUTLIVE the install. The npx checkout is ephemeral (the same reason
-// the spend watchdog and the router tools get copied under ~/.claude), and plugin/mcp/server.mjs is
-// self-contained — node builtins only — so it is copied to a persistent home and THAT absolute path
-// is what gets registered. Registering the npx dir would rot the moment the temp dir vanished.
+// the spend watchdog and the router tools get copied under ~/.claude). The MCP shell and its one
+// local structured-interface module use node builtins only; both are copied to a persistent home and
+// THAT absolute server path is registered. Registering the npx dir would rot when the temp dir vanished.
 const CODEX_BLOCK_START = '# --- ruvnet-brain (managed block, installer-rewritten) ---';
 const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
 const codexHomeDir = () => path.join(os.homedir(), '.codex');
@@ -712,11 +788,20 @@ export function wireCodexHost({
     if (announce) warn('MCP server missing from this bundle — Codex left untouched (non-fatal)');
     return { host: true, action: 'no-source' };
   }
+  const managedCliSource = path.join(path.dirname(source), 'managed-cli-interface.mjs');
+  if (!fs.existsSync(managedCliSource)) {
+    if (announce) warn('MCP structured-interface module missing from this bundle — Codex left untouched (non-fatal)');
+    return { host: true, action: 'no-source' };
+  }
   const serverPath = path.join(serverDir, 'server.mjs');
+  const managedCliPath = path.join(serverDir, 'managed-cli-interface.mjs');
   fs.mkdirSync(serverDir, { recursive: true });
   // Write-beside-then-rename, both here and for the config below (issue #43): an interrupted plain
   // copy leaves a TORN server.mjs at the exact path a prior install's config already points at, so
   // Codex spawns half a file. rename() over the target is atomic; a failure leaves the old bytes.
+  // Copy the dependency first. If the later server swap fails, the previously registered server
+  // remains byte-intact and continues to import a backward-compatible module at the same path.
+  atomicReplace(managedCliPath, (tmp) => fs.copyFileSync(managedCliSource, tmp));
   atomicReplace(serverPath, (tmp) => fs.copyFileSync(source, tmp));
   if (fs.existsSync(hookWrapperSource)) {
     fs.mkdirSync(path.dirname(hookWrapperPath), { recursive: true });
@@ -731,7 +816,7 @@ export function wireCodexHost({
       ok('Codex already declares ruvnet-brain in your own config — left exactly as you wrote it');
       info(`  to hand it to us instead, delete that ${c.bold('[mcp_servers.ruvnet-brain]')} block and re-run this installer`);
     }
-    return { host: true, action, serverPath, hookWrapperPath };
+    return { host: true, action, serverPath, managedCliPath, hookWrapperPath };
   }
   if (text !== before) {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -742,7 +827,7 @@ export function wireCodexHost({
     info(`  server: ${serverPath} ${c.dim('(persistent copy — the npx dir vanishes)')}`);
     info(`  ${c.dim('only our marked block is written; every other section is byte-preserved')}`);
   }
-  return { host: true, action, serverPath, hookWrapperPath, changed: text !== before };
+  return { host: true, action, serverPath, managedCliPath, hookWrapperPath, changed: text !== before };
 }
 
 const CODEX_PLUGIN_ID = 'ruvnet-brain@ruvnet-brain';
@@ -1071,6 +1156,12 @@ async function loadCitationVerifier(cacheDir) {
 // real, indexed passage on this disk. The old check here tested `/rvf|ruvector|hnsw/` against the
 // answer text, which a hallucinated "just use RVF!" passes with zero sources. Keyword presence is
 // not evidence. We now print the cited path as a receipt, so you can go look at it yourself.
+export function resolveRuntimeModelCache(env = process.env, home = os.homedir()) {
+  if (env.KB_MODEL_CACHE) return env.KB_MODEL_CACHE;
+  const brainHome = env.RUVNET_BRAIN_HOME || path.join(home, '.cache', 'ruvnet-brain');
+  return path.join(brainHome, 'models');
+}
+
 async function smokeQuery(cacheDir) {
   const ask = path.join(cacheDir, 'forge-ask-all.mjs');
   if (!fs.existsSync(ask)) return { ran: false };
@@ -1093,7 +1184,10 @@ async function smokeQuery(cacheDir) {
       cwd: cacheDir,
       encoding: 'utf8',
       timeout: 240000,
-      env: process.env,
+      // The stable MCP shell sets this exact default before spawning its worker. Passing the same
+      // path here makes the install smoke warm the model cache the product will actually reopen,
+      // instead of a second kb-local cache that can go green while the real door stays cold.
+      env: { ...process.env, KB_MODEL_CACHE: resolveRuntimeModelCache() },
     });
   } catch {
     warn("skipped the live test (couldn't launch the reader) — it'll warm on your first real question");
@@ -1360,8 +1454,7 @@ async function doctor() {
   // every cold query re-fetches the embedder because install warmed the wrong path, and it is why
   // search_ruvnet timed out twice in one session. A smoke test that passes against a cache the
   // runtime never reads proves nothing about the runtime — the D8 deduction, in one line of path.
-  const brainHome = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
-  const modelCacheDir = process.env.KB_MODEL_CACHE || path.join(brainHome, 'models');
+  const modelCacheDir = resolveRuntimeModelCache();
   const requiredModels = requiredEmbedderModels(cacheDir);
   const missingModels = missingEmbedderModels(modelCacheDir, requiredModels);
   const haveLocalModel = missingModels.length === 0;
@@ -3190,13 +3283,24 @@ export async function offerStatusline() {
 }
 
 // ── final success block ──────────────────────────────────────────────────────────────────────────
+function installedRepoCount(cacheDir) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(cacheDir, 'manifest.json'), 'utf8'));
+    return Array.isArray(manifest.builtRepos) && manifest.builtRepos.length
+      ? String(manifest.builtRepos.length)
+      : 'dozens of';
+  } catch {
+    return 'dozens of';
+  }
+}
+
 function success({ cacheDir, isCustom, plugin, env, nightly }) {
   const line = '─'.repeat(64);
   console.log(`\n${c.green(line)}`);
   console.log(`${c.green(c.bold('  RuvNet Brain is installed.'))}`);
   console.log(`${c.green(line)}`);
   console.log(`\n  What you now have:`);
-  console.log(`    • the brain (embedded source of 20+ RuvNet repos) at:`);
+  console.log(`    • the brain (embedded source of ${installedRepoCount(cacheDir)} RuvNet repos) at:`);
   console.log(`        ${c.bold(cacheDir)}`);
   console.log(
     `    • the Claude Code plugin ${plugin.wired ? c.green('wired at user scope') : c.yellow('(finish the 2 commands above)')} — search_ruvnet + grounding hook`,
@@ -3313,7 +3417,7 @@ Usage:
                               ~/.cache/ruvnet-brain/.telemetry-consent)
   node bin/install.mjs --version <tag>     Install a specific Release tag (e.g. --version v0.5.0-dev)
   node bin/install.mjs --pin               Skip the latest-check; use the bundled known-good version
-  node bin/install.mjs --local             Install from a repo clone's dist/ruvnet-brain.zip
+  node bin/install.mjs --local             Install from a repo clone's assembled dist/ruvnet-brain/
   node bin/install.mjs --force             Re-fetch and reinstall even if already present
   node bin/install.mjs --no-verify         Skip the post-install verify + warm-up smoke test
   node bin/install.mjs --with-stack        Also add missing Ruflo / RuVector (no prompt)
@@ -3455,12 +3559,12 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
       info(`${c.dim('(the old installer skipped this whenever any brain was present, which is why stale installs never moved)')}`);
     }
     // Resolve which Release to fetch BEFORE downloading. Skipped entirely on the --local path
-    // (obtainBundle short-circuits to the repo's dist/ zip and never touches the network).
+    // (obtainBundle short-circuits to the repo's assembled dist/ directory and never touches the network).
     const localZipPresent =
       FLAG_LOCAL || fs.existsSync(path.join(REPO_ROOT, 'dist', 'ruvnet-brain.zip'));
     // Reuse the staleness check's resolution when it already ran — one network round-trip, not two.
     const release = localZipPresent ? null : (resolvedRelease || await resolveRelease());
-    const { zipPath, tmpDir, downloaded, sigError } = await obtainBundle(release);
+    const { zipPath, sourceDir, tmpDir, downloaded, sigError } = await obtainBundle(release);
     // Verify the Ed25519 signature BEFORE extracting a downloaded bundle into the user's config
     // (SEC-0010 #6 — trust root = the pubkey EMBEDDED in this file, so an attacker who swaps the
     // bundle cannot also swap the key it is checked against).
@@ -3490,7 +3594,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
         ok(reason);
       }
     }
-    await unzipInto(zipPath, cacheDir);
+    await unzipInto(zipPath, cacheDir, sourceDir);
     const brainProfile = readBrainProfile();
     if (brainProfile !== 'complete') {
       const scoped = applyBrainProfile(cacheDir, brainProfile);

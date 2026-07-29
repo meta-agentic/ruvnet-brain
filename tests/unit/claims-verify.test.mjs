@@ -9,6 +9,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   ledger,
@@ -325,5 +326,47 @@ describe('verifyVersionSurfaces — delegates to the existing single-source-of-t
     // evidence in the message: on a FAIL, the runner names the drifted surface instead of just 'FAIL'
     expect(res.status, res.evidence).toBe('PASS');
     expect(res.evidence).toContain('agree');
+  });
+});
+
+describe('claims:verify read-only contract', () => {
+  const PRUNE = new Set(['.git', '.swarm', 'node_modules', 'coverage', 'dist', 'clones']);
+
+  // Git-independent on purpose: this catches creation or mutation of ignored/untracked artifacts
+  // too (the exact regression was evals/runs/top-100-latest.json). Size + mtime is sufficient for
+  // the purity boundary and avoids hashing the installed brain's hundreds of megabytes.
+  function repoSnapshot() {
+    const rows = [];
+    const walk = (dir) => {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (ent.isDirectory() && PRUNE.has(ent.name)) continue;
+        const absolute = path.join(dir, ent.name);
+        const relative = path.relative(ROOT, absolute).split(path.sep).join('/');
+        if (ent.isDirectory()) {
+          walk(absolute);
+        } else if (ent.isFile() || ent.isSymbolicLink()) {
+          const stat = fs.lstatSync(absolute);
+          rows.push(`${relative}\0${stat.size}\0${stat.mtimeMs}`);
+        }
+      }
+    };
+    walk(ROOT);
+    return rows.sort();
+  }
+
+  it('the CLI changes no repo file and creates no artifact', () => {
+    const before = repoSnapshot();
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'claims-verify.mjs')], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        // Keep the check deterministic and cheap; absence is an intentional loud SKIP.
+        RUVNET_BRAIN_KB: path.join(TMP, 'purity-absent-brain'),
+      },
+    });
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(repoSnapshot()).toEqual(before);
   });
 });

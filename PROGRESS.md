@@ -127,8 +127,9 @@ predicate → silent. Score of the auto-fixer on the four issues: 0/4.
   verb, both MATCH_RE branches; probe table = permanent regression suite; true positives still
   block. The live buggy gate blocked our own fix agent's quoted command mid-work.
 - #42 Codex wiring: install-time [mcp_servers.ruvnet-brain] managed block in ~/.codex/
-  config.toml (merge-never-clobber, idempotent), skill.toml manifests (skills not commands),
-  leaked /Users/ path removed + repo-wide guard test, doctor probes Codex wired/not-wired.
+  config.toml (merge-never-clobber, idempotent), native plugin skills discovered through the real
+  Codex loader, leaked /Users/ path removed + repo-wide guard test, doctor probes Codex
+  wired/not-wired. The obsolete repo-local skill.toml surface was removed on 2026-07-28.
 - ADR-050 issue-pipeline invariants: bot comments never satisfy SLA (BOT_MARKER exclusion),
   first-sighting ntfy page (awareness ≤1h), one failure comment per issue EVER, circuit breaker
   (2 fails → stop until issue changes + urgent needs-human page), banner always shows open

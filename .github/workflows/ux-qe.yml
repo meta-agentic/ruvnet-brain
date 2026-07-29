@@ -1,0 +1,43 @@
+name: ux-qe
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  ux-qe:
+    name: ux-qe (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium and Linux system dependencies
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium
+        if: runner.os != 'Linux'
+        run: npx playwright install chromium
+      - name: Run deterministic UX hard gates
+        env:
+          UX_QE_EVIDENCE: artifacts/ux-qe-${{ runner.os }}.json
+        run: npm run qe:ux
+      - name: Upload machine-readable UX evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-qe-${{ runner.os }}
+          path: artifacts/ux-qe-${{ runner.os }}.json
+          if-no-files-found: error

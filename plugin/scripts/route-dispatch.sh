@@ -55,6 +55,16 @@ INPUT="${INPUT:0:65536}"
 # ── OPT-IN GATE. No profile = this user never asked for cost routing = we do not touch their tools. ──
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
+# A non-interactive install records useful detection data with an explicit `assumed:` basis, but it
+# never asked the consent questions. Treat that provenance as inert. Existing confirmed profiles
+# that predate the basis field remain compatible; malformed/unreadable profiles fail open.
+PROFILE_INPUT=""
+while IFS= read -r _profile_line; do
+  PROFILE_INPUT+="$_profile_line"
+  [ ${#PROFILE_INPUT} -ge 65536 ] && break
+done < "$PROFILE" 2>/dev/null || exit 0
+[ -n "$_profile_line" ] && PROFILE_INPUT+="$_profile_line"
+case "$PROFILE_INPUT" in *'"basis"'*'"assumed:'*) exit 0 ;; esac
 
 # ── Deliberate escape hatch (must be used ON PURPOSE, never reached by omission). ──
 [ "${RUVNET_ALLOW_INHERITED_MODEL:-0}" = "1" ] && exit 0
@@ -78,6 +88,8 @@ SUBTYPE=$(field subagent_type)
 
 MODEL=$(field model)
 DESC=$(field description)
+TOOL_USE_ID=$(field tool_use_id)
+SESSION_ID=$(field session_id)
 DESC="${DESC// /_}"; DESC="${DESC:0:40}"   # builtin substitution — no `tr`, no `cut`
 
 if [ -n "$MODEL" ]; then
@@ -92,8 +104,8 @@ if [ -n "$MODEL" ]; then
   {
     TS=$(date -u +%FT%TZ) || TS="unknown"   # the one external command, and only on the allow path
     mkdir -p "$HOME/.claude/metaharness"
-    printf '{"ts":"%s","event":"dispatch","model":"%s","agent":"%s","task":"%s"}\n' \
-      "$TS" "$MODEL" "${SUBTYPE:-unknown}" "${DESC:-unlabeled}" \
+    printf '{"ts":"%s","event":"dispatch","model":"%s","agent":"%s","task":"%s","toolUseId":"%s","sessionId":"%s"}\n' \
+      "$TS" "$MODEL" "${SUBTYPE:-unknown}" "${DESC:-unlabeled}" "${TOOL_USE_ID:-}" "${SESSION_ID:-}" \
       >> "$HOME/.claude/metaharness/dispatch-log.jsonl"
   } 2>/dev/null || true
   exit 0

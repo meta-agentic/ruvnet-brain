@@ -1,4 +1,4 @@
-Updated: 2026-07-22 11:05:00 EDT | Version 1.0.0
+Updated: 2026-07-28 21:50:00 EDT | Version 1.0.1
 Created: 2026-07-22 11:05:00 EDT
 
 # The Architecture Map — what the pieces ARE, and what you lose if you take only some
@@ -213,7 +213,7 @@ Six Claude Code events, 14 invocations, 10 distinct scripts. All but two route t
 | UserPromptSubmit | `lesson-hooks.sh assert-fact/recommend-architecture` | advisory | Surfaces your own recorded corrections that apply to stating a fact or proposing an architecture. |
 | PreToolUse `Write\|Edit\|Bash` | `hijack-ruvnet.sh` | advisory (`permissionDecision: defer`) | Scans the payload for four categories of classical default — vector stores (`pinecone\|pgvector\|chroma\|weaviate\|faiss\|milvus\|qdrant\|hnswlib\|annoy`), paid embedding APIs, RAG/agent frameworks (`langchain\|llamaindex\|autogen\|crewai\|semantic-kernel`), memory glue (`mem0\|zep\|redis+memory`) — and injects the rUv replacement. **Never blocks.** `DECISION="defer"` is on line 12 and a one-word edit makes it `deny`; it ships as `defer` because a false-positive deny would brick legitimate work. |
 | PreToolUse `Task` | `route-dispatch.sh` | **blocking** | Refuses a subagent dispatch that would silently inherit your main-loop model. **Opt-in only**: no `~/.claude/model-router/profile.json` → the hook does nothing, not even a warning. |
-| PreToolUse `Bash` | `verify-interface.sh` | **blocking** | Refuses an ecosystem CLI subcommand whose `--help` you haven't read in 24 h. Born from reporting AgentDB broken three times when the real defect was calling `ruflo memory search "q"` positionally instead of `-q`. |
+| PreToolUse `Bash` | `verify-interface.sh` | advisory | Points legacy raw-shell callers to the structured `ruvnet_cli_help` → `ruvnet_cli_run` boundary. It never blocks: issue #48 retired authorization decisions derived from reconstructed shell structure. |
 | PreToolUse `Bash` | `design-wall.sh` | **blocking** | Refuses shipping/committing/opening a visual surface without a fresh design-grade stamp. **Repo-scoped since issue #17** — it checks the plugin manifest's own name and stays silent everywhere else, after a plain `git commit` in an unrelated project got blocked demanding a ruvnet-brain ritual. |
 | PreToolUse `Write\|Edit\|MultiEdit` / `Bash` | `lesson-hooks.sh write-code` / `mutate-machine` | advisory | Your recorded corrections for writing code / changing the machine. |
 | PostToolUse `Write\|Edit\|MultiEdit\|Bash` | `learn-capture.sh` | advisory | Appends one compact step to the session's learning queue: the command *verb* or a file's *basename*. Never content, never full paths, never secrets. |

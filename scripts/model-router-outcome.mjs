@@ -55,22 +55,34 @@ function appendOutcome({ model, success, note, taskHash }) {
   return entry;
 }
 
-function summarize() {
+export function summarize(file = OUTCOMES_LOG) {
   let lines;
   try {
-    lines = fs.readFileSync(OUTCOMES_LOG, 'utf8').trim().split('\n').filter(Boolean);
+    lines = fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean);
   } catch {
-    return { total: 0, byModel: {} };
+    return { total: 0, outcomes: 0, trainingRows: 0, invalid: 0, byModel: {} };
   }
   const byModel = {};
+  let outcomes = 0;
+  let trainingRows = 0;
+  let invalid = 0;
   for (const l of lines) {
     let d;
-    try { d = JSON.parse(l); } catch { continue; }
+    try { d = JSON.parse(l); } catch { invalid++; continue; }
+    if (Array.isArray(d.embedding) && d.embedding.length && d.scores && typeof d.scores === 'object') {
+      trainingRows++;
+      continue;
+    }
+    if (typeof d.model !== 'string' || typeof d.success !== 'boolean') {
+      invalid++;
+      continue;
+    }
     const m = byModel[d.model] || (byModel[d.model] = { total: 0, successes: 0, failures: 0 });
+    outcomes++;
     m.total++;
     if (d.success) m.successes++; else m.failures++;
   }
-  return { total: lines.length, byModel };
+  return { total: lines.length, outcomes, trainingRows, invalid, byModel };
 }
 
 function main() {
@@ -81,8 +93,8 @@ function main() {
   }
 
   if (args.summary) {
-    const { total, byModel } = summarize();
-    console.log(`Routing outcomes: ${total} labeled (${OUTCOMES_LOG.replace(os.homedir(), '~')})`);
+    const { total, outcomes, trainingRows, invalid, byModel } = summarize();
+    console.log(`Routing data: ${total} row(s) — ${outcomes} observed outcome(s), ${trainingRows} k-NN training row(s), ${invalid} invalid (${OUTCOMES_LOG.replace(os.homedir(), '~')})`);
     for (const [model, s] of Object.entries(byModel)) {
       console.log(`  ${model.padEnd(32)} total:${s.total}  successes:${s.successes}  failures:${s.failures}`);
     }

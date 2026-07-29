@@ -10,7 +10,17 @@ set +e
 # ── WHERE THIS HOOK'S OWN FILES LIVE. Resolved once: every background job below launches through
 # scripts/detach.mjs, a sibling in whichever payload root is executing this body (the spine version
 # dir or the frozen plugin — both mirror plugin/, see update-apply.mjs's stagePayload).
-HOOK_DIR="$(dirname "$0")"
+HOOK_DIR="${0%/*}"
+if [ "$HOOK_DIR" = "$0" ]; then
+  # A native Node process passes this script to Git Bash as C:\...\session-start.sh. In that
+  # invocation $0 has backslashes, so the slash-only expansion above leaves the whole filename
+  # unchanged and every sibling helper silently disappears. Strip the final Windows component
+  # without spawning dirname/cygpath on the latency-critical startup path.
+  case "$0" in
+    *\\*) HOOK_DIR="${0%\\*}" ;;
+    *) HOOK_DIR="." ;;
+  esac
+fi
 DETACH="$HOOK_DIR/detach.mjs"
 
 # ── TOKEN METER (ADR-0011 token_cost_efficiency) — same meter as ground-ruvnet.sh. Everything this
@@ -117,6 +127,10 @@ fi
 GONG_KB="$HOME/.cache/ruvnet-brain/kb"
 GONG_HEALTH="$HOME/.cache/ruvnet-brain/health.json"
 BRAIN_PROBLEM=""
+GONG_HAS_RVF=0
+for GONG_RVF in "$GONG_KB"/*.rvf; do
+  if [ -f "$GONG_RVF" ]; then GONG_HAS_RVF=1; break; fi
+done
 # ADR-054 §3 (Health): an ABSENT knowledge bundle on a machine where the user switched the brain OFF
 # is "disabled by choice", never "THE BRAIN IS DOWN". Screaming a red alarm at someone for the exact
 # state they asked for is the product lying about its own condition — and it would train them to
@@ -124,14 +138,14 @@ BRAIN_PROBLEM=""
 # bundle that IS present but broken (missing reader deps, a failed real search) still rings, because
 # that is a genuine breakage waiting for them the moment they switch back on.
 GONG_ABSENT_BY_CHOICE=0
-if [ "$BRAIN_OFF" = "1" ] && { [ ! -d "$GONG_KB" ] || ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; }; then
+if [ "$BRAIN_OFF" = "1" ] && { [ ! -d "$GONG_KB" ] || [ "$GONG_HAS_RVF" != "1" ]; }; then
   GONG_ABSENT_BY_CHOICE=1
 fi
 if [ "$GONG_ABSENT_BY_CHOICE" = "1" ]; then
   BRAIN_PROBLEM=""
 elif [ ! -d "$GONG_KB" ]; then
   BRAIN_PROBLEM="the brain cache directory is MISSING ($GONG_KB) — reinstall: npx github:stuinfla/ruvnet-brain"
-elif ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; then
+elif [ "$GONG_HAS_RVF" != "1" ]; then
   BRAIN_PROBLEM="NO vector stores (.rvf) found in $GONG_KB — the brain is empty; reinstall: npx github:stuinfla/ruvnet-brain --force"
 elif [ ! -f "$GONG_KB/node_modules/@xenova/transformers/package.json" ]; then
   BRAIN_PROBLEM="reader dependencies are MISSING (node_modules gone) — every search WILL fail. Fix: cd $GONG_KB && npm i"
@@ -335,16 +349,34 @@ STAMP="$STATE_DIR/.last-update-check"
 PREF_FILE="$STATE_DIR/.auto-update-pref"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
+# Parse the tiny plugin manifest once with shell builtins. The former grep|sed pipelines read the
+# same file three times per session; on Git-for-Windows each pipeline launches two processes.
+PLUGIN_VERSION=""
+PLUGIN_UPDATED=""
+PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT:-}/.claude-plugin/plugin.json"
+if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$PLUGIN_JSON" ]; then
+  PLUGIN_TEXT=$(<"$PLUGIN_JSON")
+  case "$PLUGIN_TEXT" in
+    *'"version"'*)
+      PLUGIN_VALUE="${PLUGIN_TEXT#*\"version\"}"; PLUGIN_VALUE="${PLUGIN_VALUE#*:}"
+      PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"; PLUGIN_VERSION="${PLUGIN_VALUE%%\"*}" ;;
+  esac
+  case "$PLUGIN_TEXT" in
+    *'"updated"'*)
+      PLUGIN_VALUE="${PLUGIN_TEXT#*\"updated\"}"; PLUGIN_VALUE="${PLUGIN_VALUE#*:}"
+      PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"; PLUGIN_UPDATED="${PLUGIN_VALUE%%\"*}" ;;
+  esac
+fi
+
 # ── what's-new: the FIRST session after a version change surfaces ONE positive line about what the
 # new version ADDS — users should learn what improved, not just that something updated. Fires once per
 # new version (tracked in .last-announced-version), EVERY session (not rate-limited like the heartbeat
 # below, so it lands the moment a user restarts onto a new version), non-blocking. To announce a
 # release, add a line to the case. Keep it upbeat and benefit-first — this is the good-news channel.
-RUNNING_V=""
-[ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-  RUNNING_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+RUNNING_V="$PLUGIN_VERSION"
 ANNOUNCED_FILE="$STATE_DIR/.last-announced-version"
-LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
+LAST_ANNOUNCED=""
+[ -f "$ANNOUNCED_FILE" ] && IFS= read -r LAST_ANNOUNCED < "$ANNOUNCED_FILE"
 # ── MAJOR-LINE milestone: the "what's new in the big release" first-run experience (owner, 2026-07-25:
 # "people will wake up and it's 4.0 — they won't see the web explainer; the brain has to introduce
 # itself and bring up the console"). This fires ONCE per major line, not per patch: the first session a
@@ -374,7 +406,8 @@ if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ]; then
        elif [ "$V_INT" -ge 3009071 ]; then MILESTONE="4.0-line"; fi ;;
   esac
   MILESTONE_FILE="$STATE_DIR/.last-major-milestone"
-  LAST_MILESTONE=$(cat "$MILESTONE_FILE" 2>/dev/null)
+  LAST_MILESTONE=""
+  [ -f "$MILESTONE_FILE" ] && IFS= read -r LAST_MILESTONE < "$MILESTONE_FILE"
   if [ -n "$MILESTONE" ] && [ "$MILESTONE" != "$LAST_MILESTONE" ]; then
     MILESTONE_SHOWN=1
     echo "[RuvNet Brain — MAJOR-LINE welcome ($MILESTONE), show ONCE near the top of your first response]"
@@ -474,11 +507,17 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
   else
     # The ONE honest nag (replaces the old every-session "restart to load"): fires ONLY when the
     # active generation changed boot-frozen declarations vs what this CC process booted with.
-    SPINE_V=$(grep -m1 '"version"' "$SPINE_HOME/active.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
-    SHELL_CHANGED=$(grep -m1 '"shellChanged"' "$SPINE_HOME/active.json" 2>/dev/null | grep -c 'true' || true)
-    BOOT_V=""
-    [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-      BOOT_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+    SPINE_V=""
+    SHELL_CHANGED=0
+    while IFS= read -r SPINE_LINE; do
+      case "$SPINE_LINE" in
+        *'"version"'*)
+          SPINE_VALUE="${SPINE_LINE#*:}"; SPINE_VALUE="${SPINE_VALUE#*\"}"
+          SPINE_V="${SPINE_VALUE%%\"*}" ;;
+        *'"shellChanged"'*true*) SHELL_CHANGED=1 ;;
+      esac
+    done < "$SPINE_HOME/active.json"
+    BOOT_V="$PLUGIN_VERSION"
     if [ "$SHELL_CHANGED" = "1" ] && [ -n "$BOOT_V" ] && [ -n "$SPINE_V" ] && [ "$BOOT_V" != "$SPINE_V" ]; then
       echo "[RuvNet Brain — v$SPINE_V changed boot-level declarations (the rare case); this session booted v$BOOT_V's]"
       echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V changed a boot-level declaration — one restart picks it up (\`claude --continue\` keeps this whole conversation). Everything else already updated live.\""
@@ -487,12 +526,16 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
 fi
 
 # Check EVERY session start, deduped to once per 15 min (a burst of window-opens = one check).
-# The check is a single 3s-capped fetch of a ~1KB raw file — negligible. The old ~20h limit meant
-# a release shipped an hour after your last check stayed invisible until TOMORROW — day-long
-# version skew, exactly what this heartbeat exists to prevent. Detection latency is now "your
-# next restart," which is also the only moment a new version can load anyway.
+# Network I/O NEVER runs in the hook's foreground. A 3s-capped curl was previously called
+# "negligible", but on windows-latest the surrounding shell/process startup pushed one real
+# SessionStart past its 5s declaration and the stranger battery killed it. The check now runs
+# through detach.mjs and writes one version line; a later stale-window session consumes that receipt
+# before launching the next check. This adds at most one 15-minute interval of detection latency
+# while keeping SessionStart independent of GitHub/network health.
 NOW=$(date +%s 2>/dev/null || echo 0)
-LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
+LAST=0
+[ -f "$STAMP" ] && IFS= read -r LAST < "$STAMP"
+[ -n "$LAST" ] || LAST=0
 if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   echo "$NOW" > "$STAMP" 2>/dev/null
 
@@ -524,14 +567,14 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
     [ -f "$DETACH" ] && node "$DETACH" 60 "$STATE_DIR/.last-kb-check.log" \
       /bin/sh -c "cd '$KB_DIR' && node forge-update.mjs --check"
   fi
-  LOCAL_V=""
-  [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-    LOCAL_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
-  REMOTE_V=$(curl -fsS --max-time 3 \
-    "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json" 2>/dev/null \
-    | grep -m1 '"version"' | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+  LOCAL_V="$RUNNING_V"
+  VERSION_LOG="$STATE_DIR/.last-version-check.log"
+  REMOTE_V=$(grep -m1 -E '^[0-9]+(\.[0-9]+){2}(-[A-Za-z0-9.-]+)?$' "$VERSION_LOG" 2>/dev/null | head -1)
+  [ -f "$DETACH" ] && node "$DETACH" 10 "$VERSION_LOG" \
+    /bin/sh -c "curl -fsS --max-time 3 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json' 2>/dev/null | grep -m1 '\"version\"' | sed -E 's/.*\"version\": *\"([^\"]+)\".*/\\1/'"
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
-    AUTO_PREF=$(cat "$PREF_FILE" 2>/dev/null || echo "")
+    AUTO_PREF=""
+    [ -f "$PREF_FILE" ] && IFS= read -r AUTO_PREF < "$PREF_FILE"
     if [ "$AUTO_PREF" = "yes" ] && command -v claude >/dev/null 2>&1; then
       # STABLE SPINE (ADR-023): download via CC's trusted marketplace path as before, then hand the
       # staged payload to the ONE update engine — gate, atomic active.json flip, receipt. Hook
@@ -581,9 +624,9 @@ fi
 
 # ── read the ACTUAL installed versions (plugin AND brain bundle), live, never hardcoded ──
 BANNER_V="unknown"; BANNER_D=""; BANNER_KB=""
-if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ]; then
-  BANNER_V=$(grep -m1 '"version"'  "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
-  BANNER_D=$(grep -m1 '"updated"'  "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"updated": *"([^"]+)".*/\1/')
+if [ -n "$PLUGIN_VERSION" ]; then
+  BANNER_V="$PLUGIN_VERSION"
+  BANNER_D="$PLUGIN_UPDATED"
 fi
 [ -z "$BANNER_V" ] && BANNER_V="unknown"
 # Record what THIS session actually loaded. The statusline (and anything else) must report the
@@ -702,14 +745,8 @@ if [ "$BRAIN_OFF" = "1" ]; then
   # The meter still finalizes below — an off session's byte count is a real measurement.
   if [ -n "$METER_TMP" ]; then
     exec 1>&3 3>&-
-    cat "$METER_TMP" 2>/dev/null
-    METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
-    rm -f "$METER_TMP" 2>/dev/null
     METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
-    mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
-      printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
-        >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
+    node "$HOOK_DIR/finalize-token-meter.mjs" "$METER_TMP" "$METER_LEDGER_DIR" "$PWD" 2>/dev/null
   fi
   exit 0
 fi
@@ -772,7 +809,7 @@ fi
 # text one Read away for the turn that actually needs it, which the per-turn Gate-3 reminder is
 # already the precedent for. This is the ADR-level call tests/unit/hook-hardening.test.mjs §4 said
 # was owed — a human should sanity-check that judgement, which is why it is written down here.
-PLAYBOOK_DOC="$(dirname "$0")/../skills/ruvnet-brain/PLAYBOOK.md"
+PLAYBOOK_DOC="$HOOK_DIR/../skills/ruvnet-brain/PLAYBOOK.md"
 cat <<EOF
 [RuvNet Brain — standing build playbook for this session (referenced by later turns as THE PLAYBOOK)]
 Full text: $PLAYBOOK_DOC — read it before your first build response this session. Condensed:
@@ -787,15 +824,9 @@ EOF
 # Fail-silent at every step: metering can never block a session start (still exit 0 regardless).
 if [ -n "$METER_TMP" ]; then
   exec 1>&3 3>&-
-  cat "$METER_TMP" 2>/dev/null
-  METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
-  rm -f "$METER_TMP" 2>/dev/null
   # ONE fixed, user-level ledger — see the full note in ground-ruvnet.sh (issue #36, mamd69).
   # Writing relative to CWD scattered hidden .ruvnet-brain/ directories into users' project trees.
   METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
-  mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
-    printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
-      >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
+  node "$HOOK_DIR/finalize-token-meter.mjs" "$METER_TMP" "$METER_LEDGER_DIR" "$PWD" 2>/dev/null
 fi
 exit 0

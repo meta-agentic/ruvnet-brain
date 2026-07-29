@@ -1,15 +1,9 @@
 #!/usr/bin/env node
 // scripts/ci/stranger-scenario.mjs — the shared driver behind .github/workflows/stranger-matrix.yml
 // (ADR-058 §D8). ONE portable script so all five images (ubuntu, windows Git-Bash, windows
-// PowerShell, macos, hostile container) run the IDENTICAL scenario logic — only the FIXTURE-BUILDING
-// zip step is OS-native (zipDir() below), matching the reasoning scripts/selfcheck.mjs's own header
-// states for shellInvocation(): the platform-specific step is isolated to one small, explicit branch
-// rather than duplicated across five YAML files.
-// NOTE: UNZIPPING is no longer platform-specific anywhere. The product extracts in-process with
-// node:zlib (kb/zip-extract.mjs) precisely because shelling to `unzip` is what broke both Windows
-// cells of this matrix. Only the zip-CREATION side below still shells out, because these fixtures
-// must be built by a tool OTHER than the one under test — an extractor validated against archives
-// its own writer produced would be validating nothing.
+// PowerShell, macos, hostile container) run the IDENTICAL scenario logic. The `--local` contract is
+// the assembled dist/ruvnet-brain/ directory, so this harness gives the packed installer that exact
+// shape. Published Release ZIP extraction is a separate path with its own release/update tests.
 //
 // Runs against the PACKED, INSTALLED copy — the caller is expected to have already run
 // `npm pack` + `npm install <tarball>` and pass --installed pointing at
@@ -37,6 +31,7 @@ import os from 'node:os';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { selfCheckOuterTimeoutMs } from './stranger-timeout.mjs';
+import { stageLocalBundle } from './stranger-fixture-stage.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const argv = process.argv.slice(2);
@@ -76,16 +71,6 @@ function safePath() {
   }).join(sep);
 }
 
-/** One top-level `ruvnet-brain/` dir zipped natively per platform (unzipInto()'s expected shape). */
-function zipDir(stageParent, destZip) {
-  if (process.platform === 'win32') {
-    const cmd = `Compress-Archive -Path (Join-Path '${stageParent}' 'ruvnet-brain') -DestinationPath '${destZip}' -Force`;
-    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', cmd]);
-  } else {
-    execFileSync('zip', ['-q', '-r', destZip, 'ruvnet-brain'], { cwd: stageParent });
-  }
-}
-
 function buildKbFixture({ dropMcp, noRvf }) {
   const stageParent = fs.mkdtempSync(path.join(os.tmpdir(), 'stranger-kb-stage-'));
   const root = path.join(stageParent, 'ruvnet-brain');
@@ -93,9 +78,7 @@ function buildKbFixture({ dropMcp, noRvf }) {
   if (dropMcp) args.push('--drop-mcp');
   if (noRvf) args.push('--no-rvf');
   execFileSync(process.execPath, args, { stdio: 'inherit' });
-  const zipPath = path.join(stageParent, 'ruvnet-brain.zip');
-  zipDir(stageParent, zipPath);
-  return zipPath;
+  return root;
 }
 
 /**
@@ -174,9 +157,8 @@ const authorSettings = path.join(HOME_DIR, '.claude', 'settings.json');
 if (fs.existsSync(authorSettings)) fail(`author-local settings.json must not exist in a virgin image: ${authorSettings}`);
 
 const dropMcp = SCENARIO === 'seeded-broken';
-const zipPath = buildKbFixture({ dropMcp, noRvf: false });
-fs.mkdirSync(path.join(INSTALLED, 'dist'), { recursive: true });
-fs.copyFileSync(zipPath, path.join(INSTALLED, 'dist', 'ruvnet-brain.zip'));
+const fixtureDir = buildKbFixture({ dropMcp, noRvf: false });
+stageLocalBundle(fixtureDir, INSTALLED);
 
 const strictEnv = SCENARIO === 'strict-ungrounded' ? { RUVNET_STRICT_INSTALL: '1' } : {};
 const install = runInstaller(

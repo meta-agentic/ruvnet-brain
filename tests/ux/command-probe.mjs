@@ -33,13 +33,23 @@ const CONSOLE_MJS = path.join(REPO, 'scripts', 'onboarding-console.mjs');
 const LIVE_SIGNAL = /it's live|take a look|refresh the tab/i;
 const EXPLANATION = /Onboarding Console|read-only until you click|scanning your setup/i;
 
+export function isolatedHomeEnv(home, base = process.env) {
+  // os.homedir() reads HOME on POSIX and USERPROFILE on Windows. Setting only HOME made the
+  // Windows lane scan the runner account instead of the intended virgin fixture, so the cold
+  // completion probe timed out while Linux/macOS exercised a different state.
+  return { ...base, HOME: home, USERPROFILE: home };
+}
+
 export function runCommandProbe({ timeoutMs = 60000 } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'uxqe-cold-'));
   const port = 7900 + (process.pid % 90);   // a distinct cold port; vary per run without Date/random
-  const env = { ...process.env, HOME: home, CONSOLE_PORT: String(port) };
+  const env = { ...isolatedHomeEnv(home), CONSOLE_PORT: String(port) };
   const t0 = Date.now();
   const lines = [];   // { at: ms-since-start, text }
   return new Promise((resolve) => {
+    let settled = false;
+    let poll = null;
+    let timeout = null;
     const child = spawn(process.execPath, [CONSOLE_MJS, '--serve'], { env, stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO });
     const onChunk = (buf) => {
       const at = Date.now() - t0;
@@ -53,6 +63,10 @@ export function runCommandProbe({ timeoutMs = 60000 } = {}) {
     child.stderr.on('data', onChunk);
 
     const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (poll) clearInterval(poll);
+      if (timeout) clearTimeout(timeout);
       try { child.kill('SIGINT'); } catch {}
       try { child.kill('SIGKILL'); } catch {}
       try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
@@ -76,11 +90,15 @@ export function runCommandProbe({ timeoutMs = 60000 } = {}) {
     };
 
     // Resolve as soon as we have the live signal (plus a beat), else on timeout.
-    const poll = setInterval(() => {
-      if (lines.some((l) => LIVE_SIGNAL.test(l.text))) { clearInterval(poll); setTimeout(finish, 100); }
+    poll = setInterval(() => {
+      if (lines.some((l) => LIVE_SIGNAL.test(l.text))) {
+        clearInterval(poll);
+        poll = null;
+        setTimeout(finish, 100);
+      }
     }, 200);
-    setTimeout(() => { clearInterval(poll); finish(); }, timeoutMs);
-    child.on('error', () => { clearInterval(poll); finish(); });
+    timeout = setTimeout(finish, timeoutMs);
+    child.on('error', finish);
   });
 }
 

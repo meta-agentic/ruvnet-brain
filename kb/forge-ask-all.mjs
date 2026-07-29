@@ -17,8 +17,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { searchKb } from './forge-ask.mjs';
 import { rerankPairs, cePrefilterScores } from './forge-rerank.mjs';
+import { routeReposFromCards } from './card-lane.mjs';
 import { tokenize, buildCorpusStats, bm25Score } from './forge-hybrid.mjs';
-import { assessImplementation, implementationNotice } from './implementation-evidence.mjs';
+import {
+  assessImplementation,
+  implementationNotice,
+  requiresImplementationProof,
+} from './implementation-evidence.mjs';
 
 // TRANSCRIPT/dialogue stores need LEXICAL (BM25) candidate generation, not dense alone. A fact spoken
 // in passing ("…876 commits…") embeds poorly against a conceptual question, so dense buries it past
@@ -34,23 +39,191 @@ const TRANSCRIPT_STORES = new Set(
 );
 const isTranscriptStore = (name) => TRANSCRIPT_STORES.has(String(name).replace(/\.big$/, ''));
 const _mbm = new Map(); // dir|name -> { passages, toks, stats } (built once per process)
-function meetingBm25Candidates(dir, name, query, topN = 40) {
+function bm25Corpus(dir, name) {
   const key = `${dir}|${name}`;
   let e = _mbm.get(key);
   if (!e) {
     const big = path.join(dir, `${name}.big.passages.jsonl`);
     const small = path.join(dir, `${name}.passages.jsonl`);
     const pf = fs.existsSync(big) ? big : small;
+    if (!fs.existsSync(pf)) return null;
     const passages = fs.readFileSync(pf, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
     const toks = passages.map((p) => tokenize(p.text || ''));
     e = { passages, toks, stats: buildCorpusStats(toks) };
     _mbm.set(key, e);
   }
+  return e;
+}
+function meetingBm25Candidates(dir, name, query, topN = 40) {
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
   const qt = tokenize(query);
   return e.passages
     .map((p, i) => ({ p, s: bm25Score(qt, e.toks[i], e.stats) }))
     .sort((a, b) => b.s - a.s).slice(0, topN).filter((x) => x.s > 0)
     .map(({ p }) => ({ path: p.path, title: p.title, fullText: p.text, text: p.text, bestDistance: 1.0, distance: 1.0 }));
+}
+
+// Exact package names are stronger than embedding proximity. Scan only a routed repo's already-built
+// passage sidecar, require the literal scoped token, and let the same global cross-encoder judge the
+// rescued documents. This only ensures the named artifact reaches the candidate pool.
+function exactPackageCandidates(dir, name, query, topN = 12) {
+  const packages = [...scopedNamesIn(query)];
+  if (!packages.length) return [];
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
+  const qt = tokenize(query);
+  const ranked = e.passages
+    .map((p, i) => {
+      const title = String(p.title || '').toLowerCase();
+      const text = String(p.text || '').toLowerCase();
+      const exactTitle = packages.some((pkg) => title === pkg);
+      const literal = packages.some((pkg) => title.includes(pkg) || text.includes(pkg));
+      return {
+        p,
+        score: literal ? bm25Score(qt, e.toks[i], e.stats) + (exactTitle ? 100 : 0) : -Infinity,
+      };
+    })
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score);
+  const unique = [];
+  const seenPaths = new Set();
+  for (const entry of ranked) {
+    if (seenPaths.has(entry.p.path)) continue;
+    seenPaths.add(entry.p.path);
+    unique.push(entry);
+    if (unique.length >= topN) break;
+  }
+  return unique.map(({ p }) => ({
+    path: p.path,
+    title: p.title,
+    fullText: p.text,
+    text: p.text,
+    bestDistance: 1.0,
+    distance: 1.0,
+    _lane: 'rescue',
+  }));
+}
+
+function manifestInventoryCandidates(dir, name, query, topN = 8) {
+  const q = String(query || '').toLowerCase();
+  const asksInventory = /\bnpm\b/.test(q)
+    && /\b(?:crate|crates|cargo)\b/.test(q)
+    && /\bworkspace\b/.test(q);
+  const namesRepo = new RegExp(`\\b${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(query);
+  if (!asksInventory || !namesRepo) return [];
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
+  const qt = tokenize(query);
+  const ranked = e.passages
+    .map((p, i) => {
+      const text = `${p.title || ''}\n${p.text || ''}`.toLowerCase();
+      const signals = [
+        /\bnpm (?:package|packages|install)\b/.test(text),
+        /\b(?:rust )?crates?\b/.test(text),
+        /\bworkspace\b/.test(text),
+        /\b(?:members|directories)\b/.test(text),
+      ].filter(Boolean).length;
+      const canonicalSurvey = String(p.path || '') === 'docs/sdk/01-survey.md';
+      const installGuide = String(p.path || '') === 'docs/guides/INSTALLATION.md';
+      return {
+        p,
+        score: signals >= 3
+          ? bm25Score(qt, e.toks[i], e.stats) + (canonicalSurvey ? 100 : 0) + (installGuide ? 50 : 0)
+          : -Infinity,
+      };
+    })
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score);
+  const unique = [];
+  const seenPaths = new Set();
+  for (const entry of ranked) {
+    if (seenPaths.has(entry.p.path)) continue;
+    seenPaths.add(entry.p.path);
+    unique.push(entry);
+    if (unique.length >= topN) break;
+  }
+  return unique.map(({ p }) => ({
+    path: p.path,
+    title: p.title,
+    fullText: p.text,
+    text: p.text,
+    bestDistance: 1.0,
+    distance: 1.0,
+    _lane: 'rescue',
+    _inventory: true,
+  }));
+}
+
+function quotedClaimCandidates(dir, name, query, topN = 8) {
+  const normalize = (s) => String(s).toLowerCase().replaceAll('×', 'x').replaceAll('+', '');
+  const tokens = [...new Set(normalize(query).match(/\b\d+(?:x|%)/g) || [])];
+  if (tokens.length < 2) return [];
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
+  const qt = tokenize(query);
+  const ranked = e.passages
+    .map((p, i) => ({ p, text: normalize(`${p.title || ''}\n${p.text || ''}`), i }))
+    .filter(({ text }) => tokens.every((token) => text.includes(token)))
+    .map(({ p, i }) => ({ p, score: bm25Score(qt, e.toks[i], e.stats) }))
+    .sort((a, b) => b.score - a.score);
+  const unique = [];
+  const paths = new Set();
+  for (const entry of ranked) {
+    if (paths.has(entry.p.path)) continue;
+    paths.add(entry.p.path);
+    unique.push(entry);
+    if (unique.length >= topN) break;
+  }
+  return unique.map(({ p }) => ({
+    path: p.path, title: p.title, fullText: p.text, text: p.text,
+    bestDistance: 1.0, distance: 1.0, _lane: 'rescue', _quotedClaims: true,
+  }));
+}
+
+function exactAdrCandidates(dir, name, query, topN = 8) {
+  const match = String(query).match(/\bADR[-\s]?0*(\d{1,4})\b/i);
+  if (!match) return [];
+  const wanted = String(Number(match[1]));
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
+  const queryTokens = new Set(tokenize(query));
+  const exact = (p) => {
+    const m = `${p.title || ''} ${p.path || ''}`.match(/\bADR[-\s]?0*(\d{1,4})\b/i);
+    return m && String(Number(m[1])) === wanted;
+  };
+  const unique = [];
+  const paths = new Set();
+  for (const p of e.passages.filter(exact)) {
+    if (paths.has(p.path)) continue;
+    paths.add(p.path);
+    unique.push(p);
+    if (unique.length >= topN) break;
+  }
+  return unique.map((p) => ({
+    path: p.path, title: p.title, fullText: p.text, text: p.text,
+    bestDistance: 1.0, distance: 1.0, _lane: 'rescue', _exactAdr: true,
+    _exactAdrTitleOverlap: tokenize(p.title || '').filter((token) => queryTokens.has(token)).length,
+  }));
+}
+
+function rvfBackendCandidates(dir, name, query, topN = 8) {
+  if (!/@ruvector\/rvf/i.test(query) || !/\bbackends?\b/i.test(query) || !/\bruntime\b/i.test(query)) return [];
+  const e = bm25Corpus(dir, name);
+  if (!e) return [];
+  const unique = [];
+  const paths = new Set();
+  for (const p of e.passages) {
+    const text = String(p.text || '').toLowerCase();
+    if (!(text.includes('nodebackend') && text.includes('wasmbackend')) || paths.has(p.path)) continue;
+    paths.add(p.path);
+    unique.push({
+      path: p.path, title: p.title, fullText: p.text, text: p.text,
+      bestDistance: 1.0, distance: 1.0, _lane: 'rescue', _sourceDetail: true,
+    });
+    if (unique.length >= topN) break;
+  }
+  return unique;
 }
 
 // Discover the repos present in a bundle dir: every <repo>.rvf (the `.big.rvf` is the same repo's
@@ -235,6 +408,26 @@ export function selectResults({ query, ranked, k = 6 }) {
     const eff = (r.repo === 'concepts' && r.path) ? (r.path.split('/')[0] || r.repo) : r.repo;
     if (r.ceScore != null && isNamed(eff)) { r.ceScore += NAME_BOOST; r.nameBoosted = true; }
   }
+  const inventoryQuery = /\bnpm\b/i.test(query)
+    && /\b(?:crate|crates|cargo)\b/i.test(query)
+    && /\bworkspace\b/i.test(query);
+  if (inventoryQuery) {
+    for (const r of ranked) {
+      if (r.ceScore != null && r._inventory) {
+        r.ceScore += 10.0;
+        r.inventoryBoosted = true;
+      }
+    }
+  }
+  for (const r of ranked) {
+    if (r.ceScore == null) continue;
+    if (r._quotedClaims) { r.ceScore += 10.0; r.quotedClaimsBoosted = true; }
+    if (r._exactAdr) {
+      r.ceScore += 10.0 + 2.0 * (r._exactAdrTitleOverlap || 0);
+      r.exactAdrBoosted = true;
+    }
+    if (r._sourceDetail) { r.ceScore += 10.0; r.sourceDetailBoosted = true; }
+  }
   // EXACT PACKAGE-NAME boost (issue #31, found by Jan Lafko): a query naming a package EXACTLY
   // ("@ruvector/rvf") must rank that package's own manifest above near-name siblings — measured
   // live: rvf-node's package.json beat rvf's by ce 7.13 vs 6.67 on rvf's own exact name. The repo
@@ -386,8 +579,53 @@ export function selectResults({ query, ranked, k = 6 }) {
 }
 
 // Query every repo, pool, rerank on a common scale, return global top-k labeled by repo.
-export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
-  const list = (repos && repos.length) ? repos : discoverRepos(dir);
+export async function searchAll({ dir, query, k = 6, pool = 8, repos, _routeStage = false }) {
+  const discovered = (repos && repos.length) ? repos : discoverRepos(dir);
+  let routing = null;
+  if ((!repos || !repos.length) && !_routeStage) {
+    const planned = routeReposFromCards(query, dir, discovered);
+    if (planned.repos.length && planned.repos.length < discovered.length) {
+      const scoped = await searchAll({
+        dir,
+        query,
+        k,
+        pool,
+        repos: planned.repos,
+        _routeStage: true,
+      });
+      const scopedErrors = Object.values(scoped.perRepo)
+        .filter((value) => typeof value === 'string' && value.startsWith('ERR:'));
+      const implementationRequired = requiresImplementationProof(query);
+      const implementationProven = !implementationRequired
+        || scoped.implementation?.verdict === 'proven';
+      if (scoped.evidence?.grade === 'strong' && scopedErrors.length === 0 && implementationProven) {
+        return {
+          ...scoped,
+          routing: {
+            attempted: true,
+            accepted: true,
+            confidence: planned.confidence,
+            reason: planned.reason,
+            candidateRepos: planned.repos,
+            implementationRequired,
+            implementationVerdict: scoped.implementation?.verdict || 'not-required',
+          },
+        };
+      }
+      routing = {
+        attempted: true,
+        accepted: false,
+        confidence: planned.confidence,
+        reason: planned.reason,
+        candidateRepos: planned.repos,
+        scopedEvidence: scoped.evidence?.grade || 'unknown',
+        scopedErrors: scopedErrors.length,
+        scopedImplementation: scoped.implementation?.verdict || 'unknown',
+        fallback: 'full-corpus',
+      };
+    }
+  }
+  const list = discovered;
   const perRepo = {};
   // CORPUS AGE (issue #31, Jan Lafko): the brain is a periodic snapshot, and a model quoting a
   // version from it had NO signal that the fact might trail live reality. Derive the queried
@@ -467,6 +705,44 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
           .filter((h) => h.title && queriedNames.has(String(h.title).toLowerCase()) && !keptPaths.has(h.path));
         for (const h of rescued) h._lane = 'rescue';
         cands = rescued.length ? top.concat(rescued) : top;
+      }
+      if (plausibleForName) {
+        const seen = new Set(cands.map((candidate) => candidate.path));
+        const lexical = exactPackageCandidates(dir, name, query)
+          .filter((candidate) => !seen.has(candidate.path));
+        cands = cands.concat(lexical);
+      }
+      {
+        const seen = new Set(cands.map((candidate) => candidate.path));
+        const inventory = manifestInventoryCandidates(dir, name, query)
+          .filter((candidate) => !seen.has(candidate.path));
+        cands = cands.concat(inventory);
+      }
+      {
+        const seen = new Set(cands.map((candidate) => candidate.path));
+        const claims = quotedClaimCandidates(dir, name, query)
+          .filter((candidate) => !seen.has(candidate.path));
+        cands = cands.concat(claims);
+      }
+      {
+        const byPath = new Map(cands.map((candidate) => [candidate.path, candidate]));
+        for (const adr of exactAdrCandidates(dir, name, query)) {
+          const existing = byPath.get(adr.path);
+          if (existing) Object.assign(existing, {
+            _exactAdr: true,
+            _exactAdrTitleOverlap: adr._exactAdrTitleOverlap,
+          });
+          else {
+            cands.push(adr);
+            byPath.set(adr.path, adr);
+          }
+        }
+      }
+      {
+        const seen = new Set(cands.map((candidate) => candidate.path));
+        const details = rvfBackendCandidates(dir, name, query)
+          .filter((candidate) => !seen.has(candidate.path));
+        cands = cands.concat(details);
       }
       if (isTranscriptStore(name)) {
         const seen = new Set(hits.map((h) => h.path));
@@ -561,7 +837,7 @@ export async function searchAll({ dir, query, k = 6, pool = 8, repos }) {
     repos: list, perRepo, results,
     pooled: candidates.length, pooledAll: pooledAll.length, cappedOut,
     prefiltered: s1 ? pooledAll.length : 0, prefilterTokens: s1 ? cascadeTokens : 0, prefilterMs,
-    corpusAge, adrCollision, evidence, implementation,
+    corpusAge, adrCollision, evidence, implementation, routing,
   };
 }
 

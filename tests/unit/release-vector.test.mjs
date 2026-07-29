@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import * as RV from '../../scripts/release-vector.mjs';
 
@@ -79,6 +80,46 @@ describe('every invariant carries a real incident and a real detector', () => {
   });
 });
 
+describe('release-vector runners cross the Windows command-shim boundary', () => {
+  it('D3 executes the available npx.cmd shim instead of returning UNKNOWN', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-release-vector-win32-'));
+    const shim = path.join(dir, 'npx.cmd');
+    const actualPlatform = process.platform;
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    const previousPath = process.env.PATH;
+    const previousComSpec = process.env.ComSpec;
+    try {
+      fs.writeFileSync(
+        shim,
+        actualPlatform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n',
+      );
+      if (actualPlatform !== 'win32') {
+        fs.chmodSync(shim, 0o755);
+        const commandInterpreter = path.join(dir, 'cmd.exe');
+        fs.writeFileSync(commandInterpreter, [
+          '#!/bin/sh',
+          '[ "$1" = /d ] && [ "$2" = /c ] && [ "$3" = npx.cmd ]',
+          '',
+        ].join('\n'));
+        fs.chmodSync(commandInterpreter, 0o755);
+        process.env.ComSpec = commandInterpreter;
+      }
+      Object.defineProperty(process, 'platform', { ...platformDescriptor, value: 'win32' });
+      process.env.PATH = dir;
+
+      const d3 = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
+      expect(await d3.detect()).toMatchObject({ state: 'PASS' });
+    } finally {
+      Object.defineProperty(process, 'platform', platformDescriptor);
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      if (previousComSpec === undefined) delete process.env.ComSpec;
+      else process.env.ComSpec = previousComSpec;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () => {
   it('MUTANT: unregister signal-watch from the shipped hooks.json → D3 goes FAIL', async () => {
     // The F5 class: a capability that exists on disk and is never registered will never fire.
@@ -99,6 +140,32 @@ describe('KNOWN-BAD MUTANTS — the gate proven to go red on real breakage', () 
     expect(fs.readFileSync(p, 'utf8')).toBe(before);                 // restored, byte-for-byte
     expect((await real.detect()).state).toBe('PASS');                        // and green again
   });
+
+  it('MUTANT: delete the shipped red→surface consumer → D3 goes FAIL even while registration remains', async () => {
+    // The prior D3 gate stopped at hooks.json registration. That proves a command is named, not
+    // that a red CI verdict reaches a maintainer or that green stays silent. Delete the actual
+    // session-start consumer while leaving the observer, poller, and registration intact: a
+    // behavioral gate must catch the resulting silence.
+    const real = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
+    expect((await real.detect()).state).toBe('PASS');
+
+    const p = path.join(REPO, 'plugin/scripts/session-start.sh');
+    const before = fs.readFileSync(p, 'utf8');
+    const start = before.indexOf('# ── External-signal watch plane, W1+W2 surfacing');
+    const end = before.indexOf('# ── MetaHarness router: the ONE-LINER OFFER');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    try {
+      fs.writeFileSync(p, before.slice(0, start) + before.slice(end));
+      const after = await real.detect();
+      expect(after.state).toBe('FAIL');
+      expect(after.why).toMatch(/behavior|lifecycle|surface/i);
+    } finally {
+      fs.writeFileSync(p, before);
+    }
+    expect(fs.readFileSync(p, 'utf8')).toBe(before);
+    expect((await real.detect()).state).toBe('PASS');
+  }, 60_000);
 
   it('MUTANT: sever the selfcheck→exitCode wire → D8 goes FAIL even with the matrix present', async () => {
     // This is the ACTUAL historical 40/100 defect: the workflow ran, the check ran, and the verdict
@@ -186,7 +253,7 @@ describe('the CLI is the door that actually gets walked through', () => {
     const j = JSON.parse(r.stdout);
     expect(j.sha).toMatch(/^[0-9a-f]{40}$/);
     expect(j.results).toHaveLength(8);
-    expect(j.verdict).toBe(RV.verdictOf(j.results));
+    expect(j.verdict).toBe(RV.verdictWithLineage(j.results, j.lineage));
     for (const x of j.results) expect(x.sha).toBe(j.sha);   // every result stamped with the same SHA
   }, 190_000);
 });

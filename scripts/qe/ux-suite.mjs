@@ -1,12 +1,10 @@
 // ux-suite.mjs — the UX-experience QE suite runner (owner request 2026-07-24).
 //
-// Runs the deterministic UX probes, prints a table of MEASURED numbers, and exits non-zero on a HARD
-// failure. Two tiers of "hard failure", deliberately not conflated (ADR-058 D6):
-//  1. Environment-sensitive timings (server-ready, console/tips paint, command→explanation, dead-air)
-//     stay ADVISORY — WARN only. These are subject to real machine noise (cold node boot, first-paint,
-//     disk cache state) that has nothing to do with correctness, and a flaky gate trains people to
-//     override it. A missing completion signal or a probe that could not run at all is still a hard
-//     failure regardless of tier — silence is not success.
+// Runs the deterministic UX probes, prints a table of MEASURED numbers, writes a machine-readable
+// receipt when UX_QE_EVIDENCE is set, and exits non-zero on any HARD failure.
+//  1. Environment-sensitive timings (server-ready, console/tips paint, command→explanation,
+//     dead-air) are HARD user-experience budgets. Platform calibration gives slower hosted runners
+//     honest headroom without turning "slow enough for a person to notice" into advisory green.
 //  2. kb/card-lane.mjs's decision lane is MODEL-FREE, ML-FREE keyword overlap with a measured warm
 //     baseline of 0.1158ms. Its budget (kb/card-lane-budget.json, p95 <= 250ms / absolute fail
 //     >1000ms — ~2,159x / ~8,600x the baseline) has so much headroom that a breach cannot be
@@ -34,40 +32,144 @@
 //    `aqe status`, but the MEASUREMENT is a plain deterministic probe, NOT aqe-internal. Verified live
 //    2026-07-24: `aqe domain` supports only list/health (not create), so inventing an "onboarding-ux"
 //    domain would be fiction. We do not. If aqe isn't present, the suite runs identically and says so.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { runRenderProbe } from '../../tests/ux/render-probe.mjs';
 import { runCommandProbe } from '../../tests/ux/command-probe.mjs';
 import { runCardLaneGate } from './card-lane-gate.mjs';
 import { runSessionStartGate } from './session-start-gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const RENDER_PROBE = path.resolve(HERE, '../../tests/ux/render-probe.mjs');
+const RENDER_PROBE_TIMEOUT_MS = 30_000;
 
-// Frozen 2026-07-24 from the first real run on this Mac — see docs/qe/ux-first-run.md. WARN thresholds,
-// not hard gates. Each is the measured value rounded up with headroom, so a WARN means "slower than the
-// machine that set the bar", not "broken". Re-freeze if the first-run doc is regenerated.
-// First real run on this Mac (2026-07-24, docs/qe/ux-first-run.md): server-ready 1199ms, console
-// paint 336ms, tips hero 269ms, tips first-section 202ms, command→explanation 840ms (≈ cold node
-// boot + first print), dead-air 2009ms. Thresholds = measured × ~1.5 rounded, so a WARN means
-// "slower than the machine that set the bar", not "broken". Re-freeze if ux-first-run.md is regenerated.
-const WARN = {
-  'server-ready':               2000,   // measured 1199
-  'console time-to-visible':    2500,   // measured 336 (huge headroom — first paint is cheap)
-  'tips time-to-visible (hero)':2000,   // measured 269
-  'tips first-section':         2000,   // measured 202
-  'commandToExplanationMs':     1300,   // measured 840; "near-instant" is dominated by node boot
-  'maxDeadAirMs':               3000,   // measured 2009; the product's own no-dead-air bar is 3s
-};
+function stopProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
+    return;
+  }
+  try { process.kill(-child.pid, 'SIGTERM'); } catch {}
+  try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+}
 
-function line(label, measured, unit, warnAt) {
+/**
+ * Browser drivers can wedge below JavaScript, so an in-process Promise timeout is not a bound.
+ * Run the render probe in its own process group and kill the whole group at the deadline.
+ */
+export function runRenderProbeIsolated({
+  probeFile = RENDER_PROBE,
+  timeoutMs = RENDER_PROBE_TIMEOUT_MS,
+} = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [probeFile], {
+      cwd: path.resolve(HERE, '../..'),
+      env: process.env,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      stopProcessTree(child);
+      const trace = stderr.trim().split('\n').filter(Boolean).slice(-4).join(' | ');
+      finish({
+        results: [],
+        notes: [`render probe exceeded ${timeoutMs}ms process deadline${trace ? `; last stages: ${trace}` : ''}`],
+      });
+    }, timeoutMs);
+
+    child.on('error', (error) => finish({ results: [], notes: [`render probe spawn failed: ${error.message}`] }));
+    child.on('close', () => {
+      try {
+        const parsed = JSON.parse(stdout);
+        finish(parsed);
+      } catch {
+        const trace = stderr.trim().split('\n').filter(Boolean).slice(-4).join(' | ');
+        finish({ results: [], notes: [`render probe returned no readable JSON${trace ? `; last stages: ${trace}` : ''}`] });
+      }
+    });
+  });
+}
+
+// Darwin values are frozen from the measured 2026-07-24 baseline in docs/qe/ux-first-run.md.
+// Linux and Windows receive bounded hosted-runner startup headroom; the visible-paint and dead-air
+// product promises stay tight. These are release budgets, not performance claims about GitHub's
+// hardware. CI receipts make future recalibration evidence-based rather than guessed.
+export const PLATFORM_BUDGETS = Object.freeze({
+  darwin: Object.freeze({
+    'server-ready': 2500,
+    'console time-to-visible': 2500,
+    'tips time-to-visible (hero)': 2000,
+    'tips first-section': 2000,
+    commandToExplanationMs: 1500,
+    maxDeadAirMs: 3000,
+  }),
+  linux: Object.freeze({
+    'server-ready': 4000,
+    'console time-to-visible': 3000,
+    'tips time-to-visible (hero)': 2500,
+    'tips first-section': 2500,
+    commandToExplanationMs: 2500,
+    maxDeadAirMs: 3000,
+  }),
+  win32: Object.freeze({
+    'server-ready': 6000,
+    'console time-to-visible': 4000,
+    'tips time-to-visible (hero)': 3500,
+    'tips first-section': 3500,
+    commandToExplanationMs: 3000,
+    maxDeadAirMs: 3000,
+  }),
+});
+
+export function budgetsForPlatform(platform = process.platform) {
+  const budgets = PLATFORM_BUDGETS[platform];
+  if (!budgets) throw new Error(`unsupported UX-QE platform: ${platform}`);
+  return budgets;
+}
+
+export function timingFailure(label, measured, budget) {
+  if (measured == null) return `${label}: could not measure`;
+  if (measured > budget) return `${label}: ${measured}ms exceeds HARD ${budget}ms budget`;
+  return null;
+}
+
+function line(label, measured, unit, hardAt) {
   const val = measured == null ? 'NOT RUN' : `${measured}${unit}`;
   let flag = '';
   if (measured == null) flag = '  ✗ could not measure';
-  else if (warnAt != null && measured > warnAt) flag = `  ⚠ over ${warnAt}${unit} (proposed)`;
-  else if (warnAt != null) flag = '  ✓';
+  else if (hardAt != null && measured > hardAt) flag = `  ✗ HARD FAIL (>${hardAt}${unit})`;
+  else if (hardAt != null) flag = `  ✓ HARD budget ${hardAt}${unit}`;
   return `  ${label.padEnd(30)} ${String(val).padStart(10)}${flag}`;
 }
+
+function writeEvidence(receipt) {
+  const jsonOutIndex = process.argv.indexOf('--json-out');
+  if (jsonOutIndex >= 0 && !process.argv[jsonOutIndex + 1]) {
+    throw new Error('--json-out requires a file path');
+  }
+  const target = jsonOutIndex >= 0
+    ? process.argv[jsonOutIndex + 1]
+    : process.env.UX_QE_EVIDENCE;
+  if (!target) return;
+  const resolved = path.resolve(target);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, `${JSON.stringify(receipt, null, 2)}\n`);
+};
 
 function tryRegisterAqeTask() {
   // Best-effort visibility only. Never fails the suite; never bills a model. `submit` enqueues
@@ -81,8 +183,11 @@ function tryRegisterAqeTask() {
   return { registered: true, id };
 }
 
-async function main() {
+export async function runUxSuite() {
   console.log('\n  RuvNet Brain — UX-experience QE suite  (deterministic · model-free · runs on your account)\n');
+  const platform = process.platform;
+  const budgets = budgetsForPlatform(platform);
+  const startedAt = new Date().toISOString();
 
   const aqe = tryRegisterAqeTask();
   console.log(aqe.registered
@@ -93,10 +198,11 @@ async function main() {
 
   // ── Probe 1: render time-to-visible ──────────────────────────────────────────────────────────
   console.log('  ── time-to-visible (console + tips) ──');
-  const render = await runRenderProbe();
+  const render = await runRenderProbeIsolated();
   for (const r of render.results) {
-    console.log(line(r.label, r.ms, 'ms', WARN[r.label]));
-    if (r.ms == null) hardFailures.push(`${r.label}: could not measure`);
+    console.log(line(r.label, r.ms, 'ms', budgets[r.label]));
+    const failure = timingFailure(r.label, r.ms, budgets[r.label]);
+    if (failure) hardFailures.push(failure);
   }
   for (const n of render.notes) { console.log(`  ! ${n}`); hardFailures.push(`render: ${n}`); }
   // Any expected render row missing entirely = not run = hard fail.
@@ -106,13 +212,16 @@ async function main() {
   // ── Probe 2/3: command → explanation → "it's live" ──────────────────────────────────────────
   console.log('\n  ── command → explanation → completion signal ──');
   const cmd = await runCommandProbe();
-  console.log(line('command→explanation', cmd.commandToExplanationMs, 'ms', WARN.commandToExplanationMs));
+  console.log(line('command→explanation', cmd.commandToExplanationMs, 'ms', budgets.commandToExplanationMs));
   console.log(line('command→"it\'s live"', cmd.commandToLiveMs, 'ms', null) + '  (reported, not gated)');
-  console.log(line('max dead-air gap', cmd.maxDeadAirMs, 'ms', WARN.maxDeadAirMs));
+  console.log(line('max dead-air gap', cmd.maxDeadAirMs, 'ms', budgets.maxDeadAirMs));
   console.log(`  completion signal present      ${cmd.completionSignalPresent ? '        YES  ✓' : '         NO  ✗ (GAP)'}`);
   if (cmd.liveSignalText) console.log(`    signal: "${cmd.liveSignalText}"`);
 
-  if (cmd.commandToExplanationMs == null) hardFailures.push('command→explanation: NOT RUN (no explanatory line seen)');
+  const explanationFailure = timingFailure('command→explanation', cmd.commandToExplanationMs, budgets.commandToExplanationMs);
+  if (explanationFailure) hardFailures.push(explanationFailure);
+  const deadAirFailure = timingFailure('max dead-air gap', cmd.maxDeadAirMs, budgets.maxDeadAirMs);
+  if (deadAirFailure) hardFailures.push(deadAirFailure);
   if (!cmd.completionSignalPresent) hardFailures.push('completion signal MISSING — the "it\'s live, take a look at your page" line never printed');
 
   // ── Probe 4: decision-lane latency — HARD GATE, not advisory (ADR-058 D6) ───────────────────
@@ -154,20 +263,49 @@ async function main() {
   }
 
   // ── Not run on this host (stated, never faked) ──────────────────────────────────────────────
-  console.log('\n  ── not run here (stated, not faked) ──');
-  console.log('    Linux / Windows  — execute in CI runners (macOS cannot run them); add to .github/workflows matrix');
-  console.log('    Codex host       — command→explanation under Codex needs a Codex runner present; CI-gated, never faked from Claude/Mac');
+  console.log('\n  ── execution scope ──');
+  console.log(`    Platform          — ${platform} ${os.arch()} (this process; other OSes execute as separate CI jobs)`);
+  console.log('    Codex host        — NOT RUN: GitHub-hosted runners do not provide a configured Codex host; this probes the shipped console process directly');
 
   // ── Verdict ─────────────────────────────────────────────────────────────────────────────────
+  const receipt = {
+    schemaVersion: 1,
+    suite: 'ruvnet-brain-ux-qe',
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    gitSha: process.env.GITHUB_SHA || null,
+    platform,
+    arch: os.arch(),
+    node: process.version,
+    budgetsMs: budgets,
+    render,
+    command: cmd,
+    hardFailures,
+    pass: hardFailures.length === 0,
+    scope: {
+      browser: 'Playwright Chromium, real local console HTTP server',
+      command: 'direct shipped console process',
+      codexHost: 'not-run',
+    },
+  };
+  writeEvidence(receipt);
+
   console.log('\n  ── verdict ──');
   if (hardFailures.length === 0) {
-    console.log('  PASS — every probe ran; completion signal present; decision-lane latency AND session-start wall time inside their HARD budgets. Env-timing WARNs (if any) are advisory.\n');
-    process.exit(0);
+    console.log('  PASS — every probe ran and every render, explanation, dead-air, decision-lane, and session-start HARD budget passed.\n');
+    return receipt;
   }
   console.log('  FAIL (hard):');
   for (const f of hardFailures) console.log(`    ✗ ${f}`);
   console.log('');
-  process.exit(1);
+  const error = new Error(`UX QE failed with ${hardFailures.length} hard failure(s)`);
+  error.receipt = receipt;
+  throw error;
 }
 
-main().catch((e) => { console.error('  ux-suite crashed:', e.message); process.exit(2); });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  runUxSuite().catch((e) => {
+    if (!e.receipt) console.error('  ux-suite crashed:', e.message);
+    process.exit(e.receipt ? 1 : 2);
+  });
+}

@@ -297,12 +297,13 @@ describe.skipIf(bashOnly)('ADR-054 gate 2 — off disarms the grounding gate and
     expect(r.stderr).toMatch(/SUBAGENT DISPATCH BLOCKED/);
   });
 
-  it('OFF does NOT disarm verify-interface — guessing a CLI\'s flags is not a brain feature', () => {
+  it('the verify-interface body remains nonblocking even if invoked directly while OFF', () => {
     optIn();
     offNow();
     const r = fireBash(VERIFY_IFACE, { tool_name: 'Bash', tool_input: { command: 'npx ruf' + 'lo@latest memory search -q test' } });
-    expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/BLOCKED — you have not read the interface/);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(r.stdout).toContain('ruvnet_cli_help');
   });
 
   it('OFF does NOT disarm the design wall — honesty about visual surfaces is not retrieval', () => {
@@ -317,12 +318,12 @@ describe.skipIf(bashOnly)('ADR-054 gate 2 — off disarms the grounding gate and
 
   it('the shim declares the split as DATA, not as scattered ifs — and the walls are marked `run`', () => {
     const src = fs.readFileSync(SHIM, 'utf8');
-    for (const wall of ['route-dispatch', 'verify-interface', 'design-wall', 'protect-state']) {
+    for (const wall of ['route-dispatch', 'design-wall', 'protect-state']) {
       const line = src.split('\n').find((l) => l.includes(`'${wall}':`));
       expect(line, `${wall} missing from the shim table`).toBeTruthy();
       expect(line, `${wall} must keep running while the brain is off`).toMatch(/offBehavior:\s*'run'/);
     }
-    for (const quiet of ['ground-ruvnet', 'hijack-ruvnet', 'unprompted-speech', 'md-stamp']) {
+    for (const quiet of ['ground-ruvnet', 'hijack-ruvnet', 'verify-interface', 'unprompted-speech', 'md-stamp']) {
       const line = src.split('\n').find((l) => l.includes(`'${quiet}':`));
       expect(line, `${quiet} must go silent while the brain is off`).toMatch(/offBehavior:\s*'silence'/);
     }

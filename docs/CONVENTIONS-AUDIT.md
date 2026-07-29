@@ -1,7 +1,7 @@
 # The Conventions Audit — every rule in this repo, and whether anything enforces it
 
 Created: 2026-07-22
-Updated: 2026-07-22 — initial audit
+Updated: 2026-07-28 — issue #48 structured CLI boundary and raw-shell demotion
 Why: The owner, 2026-07-22 — *"There are dozens of things like this that are the difference between
 you acting as a smart learning partner and somebody that needs to constantly be reminded of
 everything all the time."* This document is the enumeration of "things like this." It exists because
@@ -96,8 +96,8 @@ Eight enforcement surfaces exist. This is the honest denominator for everything 
 | 2 | **CI `ci.yml` / windows-unit** | full `tests/unit` on win32 | hard red | cross-platform regressions |
 | 3 | **`scripts/git-hooks/pre-push`** | secret scan + `verify-channels --pre-push` | refuses push | live API keys, channel drift |
 | 4 | **`.claude/settings.json` PreToolUse:Bash** | `version-bump-gate.sh` | exit 2 | every push carries a version bump |
-| 5 | **`~/.claude/settings.json` PreToolUse** | `verify-interface.sh`, `route-dispatch.sh`, `ground-before-write.sh` | exit 2 | unread CLI interfaces, un-routed subagent fan-out, ungrounded rUv-domain writes |
-| 6 | **`plugin/hooks/hooks.json`** | 11 hooks via `hook-shim.mjs` | 3 blocking | + `design-wall.sh` (95-grade), `hijack-ruvnet`, learn capture/flush |
+| 5 | **`~/.claude/settings.json` PreToolUse** | `route-dispatch.sh`, `ground-before-write.sh`; `verify-interface.sh` advisory | exit 2 only from the two walls | un-routed subagent fan-out and ungrounded rUv-domain writes; legacy raw-shell CLI calls receive migration guidance only |
+| 6 | **`plugin/hooks/hooks.json`** | hooks via `hook-shim.mjs` | 4 blocking | `route-dispatch`, `design-wall`, `unprompted-speech`, and `protect-state`; interface guidance is advisory |
 | 7 | **`scripts/release.mjs`** | gates A–E | aborts ship | both suites, narrative version, clean tree, live channel walk |
 | 8 | **`Stop` hook** | `continuation-gate.mjs` | advisory (exit 0) | unfinished authorized work |
 
@@ -169,9 +169,9 @@ path, or surface but not the stated rule · **PROSE ONLY** = nothing mechanical.
 | Convention | Stated where | Enforced by | Status | Cost to gate |
 |---|---|---|---|---|
 | No rUv-domain code write without a fresh grounding stamp | ADR-0012; `feedback_gate_the_write_path.md` | `ground-before-write.sh` (exit 2) | **GATED** | done |
-| Read a CLI's `--help` before invoking it | `feedback_ground_interfaces_not_just_facts.md` | `verify-interface.sh` (exit 2) | **GATED** | done |
+| Read a CLI's live interface before invoking it | `feedback_ground_interfaces_not_just_facts.md` | structured `ruvnet_cli_help` → `ruvnet_cli_run`; finite executable enum, literal argv, `shell:false` | **GATED** for the structured boundary; raw Bash advisory only | done |
 | Mechanical work never runs in the main loop | `feedback_route_mechanical_work.md` | `route-dispatch.sh` (exit 2) | **GATED** | done |
-| ONE global ruflo, never `npx ruflo@latest` | Rule 21; `feedback_one_global_ruflo.md` | `verify-interface.sh` + `stack-currency.test.mjs` | **PARTIAL** | Low — grep `npx ruflo` in the Bash gate |
+| ONE global ruflo, never `npx ruflo@latest` | Rule 21; `feedback_one_global_ruflo.md` | `stack-currency.test.mjs`; raw Bash notice is advisory | **PARTIAL** | Low — enforce at install/config boundaries, not by parsing shell text |
 | Subscription-first routing | `feedback_subscription_first_routing.md` | `route-cheap.mjs` / router profile — advisory | **PARTIAL** | Med |
 | **Check `~/.claude/skills` before building any visual** | `feedback_use_the_tools_you_already_have.md` | nothing | **PROSE ONLY** | Med — a PreToolUse advisory on visual-build intent |
 | **Inventory env keys/subs/CLIs before spending** | `feedback_inventory_before_you_buy.md` | `kling-preflight.sh` covers Kling only | **PARTIAL** | Med |

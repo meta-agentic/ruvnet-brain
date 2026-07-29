@@ -134,4 +134,107 @@ describe('an MCP call timeout is both STOPPED and RECORDED', () => {
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   }, 90000);
+
+  it('fully retires a SIGTERM-resistant worker before a replacement serves the next call', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-mcp-retire-'));
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-fakehome-'));
+    const starts = path.join(home, 'starts.txt');
+    const firstPid = path.join(home, 'first.pid');
+    fs.mkdirSync(path.join(home, 'kb'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'kb', 'forge-mcp-all.mjs'), `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const starts = process.env.STUB_STARTS;
+const n = (fs.existsSync(starts) ? Number(fs.readFileSync(starts, 'utf8')) : 0) + 1;
+fs.writeFileSync(starts, String(n));
+if (n === 1) {
+  fs.writeFileSync(process.env.STUB_FIRST_PID, String(process.pid));
+  process.on('SIGTERM', () => {});
+}
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let m; try { m = JSON.parse(line); } catch { return; }
+  if (m.method === 'initialize') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } } }) + '\\n');
+  } else if (n > 1 && m.method === 'tools/call') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'recovered worker' }] } }) + '\\n');
+  }
+});
+setInterval(() => {}, 1 << 30);
+`);
+    const server = startServer({
+      RUVNET_BRAIN_HOME: home,
+      RUVNET_BRAIN_KB: path.join(home, 'kb'),
+      RUVNET_BRAIN_CALL_TIMEOUT_MS: '500',
+      STUB_STARTS: starts,
+      STUB_FIRST_PID: firstPid,
+      HOME: fakeHome,
+      USERPROFILE: fakeHome,
+      NTFY_TOPIC: '',
+      RUVNET_BRAIN_TEST: '1',
+    });
+
+    try {
+      server.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      await waitFor(() => server.lines.some((l) => l.includes('"id":1')), 5000, 'initialize response');
+      server.send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: 'hang once' } } });
+      await waitFor(() => server.lines.find((l) => l.includes('"id":2')), 5000, 'first call timeout');
+
+      server.send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: 'recover' } } });
+      const reply = await waitFor(() => server.lines.find((l) => l.includes('"id":3')), 10000, 'replacement response');
+      expect(reply).toContain('recovered worker');
+      expect(reply).not.toContain('not installed');
+      expect(Number(fs.readFileSync(starts, 'utf8'))).toBeGreaterThanOrEqual(2);
+
+      const pid = Number(fs.readFileSync(firstPid, 'utf8'));
+      expect(() => process.kill(pid, 0)).toThrow();
+    } finally {
+      try { server.proc.kill('SIGKILL'); } catch { /* gone */ }
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('reports a startup timeout as worker unavailability, never as a missing bundle', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-mcp-startup-'));
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-fakehome-'));
+    fs.mkdirSync(path.join(home, 'kb'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'kb', 'forge-mcp-all.mjs'), `
+import readline from 'node:readline';
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let m; try { m = JSON.parse(line); } catch { return; }
+  if (m.method === 'initialize') {
+    setTimeout(() => process.stdout.write(JSON.stringify({
+      jsonrpc: '2.0', id: m.id,
+      result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'slow', version: '0' } },
+    }) + '\\n'), 1000);
+  }
+});
+setInterval(() => {}, 1 << 30);
+`);
+    const server = startServer({
+      RUVNET_BRAIN_HOME: home,
+      RUVNET_BRAIN_KB: path.join(home, 'kb'),
+      RUVNET_BRAIN_INIT_TIMEOUT_MS: '100',
+      HOME: fakeHome,
+      USERPROFILE: fakeHome,
+      NTFY_TOPIC: '',
+      RUVNET_BRAIN_TEST: '1',
+    });
+
+    try {
+      server.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      await waitFor(() => server.lines.some((l) => l.includes('"id":1')), 5000, 'initialize response');
+      server.send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: 'startup state' } } });
+      const reply = await waitFor(() => server.lines.find((l) => l.includes('"id":2')), 10000, 'startup failure response');
+      expect(reply).toContain('temporarily unavailable');
+      expect(reply).toContain('failed to initialize');
+      expect(reply).not.toContain('bundle is not installed');
+    } finally {
+      try { server.proc.kill('SIGKILL'); } catch { /* gone */ }
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
+  }, 20000);
 });

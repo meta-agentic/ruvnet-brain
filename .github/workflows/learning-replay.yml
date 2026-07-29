@@ -35,6 +35,7 @@ on:
     paths:
       - 'scripts/learning-replay.mjs'
       - 'scripts/ci/learning-replay-recorder.mjs'
+      - 'scripts/ci/learning-replay-codex-adapter.mjs'
       - 'data/learning-replay-result.json'
       - '.github/workflows/learning-replay.yml'
   workflow_dispatch:
@@ -100,7 +101,7 @@ jobs:
           RUVNET_RUFLO_BIN: ruflo
         run: |
           npm i --no-audit --no-fund --loglevel=error
-          npm run learning:replay -- --n 3 --model haiku
+          npm run learning:replay -- --n 3 --host claude-code --model haiku
       - name: Archive the transcripts (the trap's evidence, not its conclusion)
         if: always()
         uses: actions/upload-artifact@v4

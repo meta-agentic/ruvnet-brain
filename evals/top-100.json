@@ -1,0 +1,3259 @@
+{
+  "version": 2,
+  "purpose": "100-question RuvNet Brain recall, latency, and experience benchmark across five user levels.",
+  "composition": {
+    "frozenHeldOut": 80,
+    "deepProductQuestions": 20,
+    "levels": [
+      "naive",
+      "beginner",
+      "intermediate",
+      "advanced",
+      "expert"
+    ]
+  },
+  "questions": [
+    {
+      "id": "top-001",
+      "sourceId": "n-01",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does ruvector support HNSW indexing stored in a single file on disk?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "index",
+          "anyOf": [
+            "hnsw",
+            "hierarchical navigable small world"
+          ]
+        },
+        {
+          "label": "single-file storage",
+          "anyOf": [
+            "single file",
+            "one file",
+            ".rvf"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-002",
+      "sourceId": "n-02",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can AgentDB explain why it recalled a particular memory?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "named; causal/explainable recall is its pitch",
+      "requiredEvidence": [
+        {
+          "label": "explanation",
+          "anyOf": [
+            "feature attribution",
+            "causal chain",
+            "explainable recall"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-003",
+      "sourceId": "n-03",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What swarm topologies does agentic-flow ship?",
+      "expectRepo": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "named; mesh/hierarchical/ring",
+      "requiredEvidence": [
+        {
+          "label": "swarm topology",
+          "anyOf": [
+            "mesh",
+            "hierarchical",
+            "ring"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-004",
+      "sourceId": "n-04",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does agentic-qe generate tests automatically?",
+      "expectRepo": [
+        "agentic-qe",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "named; generator also vendored in ruflo",
+      "requiredEvidence": [
+        {
+          "label": "automatic test generation",
+          "anyOf": [
+            "generate tests",
+            "test generation",
+            "automatically write tests"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-005",
+      "sourceId": "n-05",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can agenticow branch an agent's vector memory like git branches code?",
+      "expectRepo": [
+        "agenticow",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "branching mechanism",
+          "anyOf": [
+            "copy-on-write",
+            "cow branch",
+            "fork a vector store"
+          ]
+        },
+        {
+          "label": "recovery",
+          "anyOf": [
+            "roll back",
+            "rollback",
+            "discard a branch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-006",
+      "sourceId": "n-06",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What does RuLake cache, and what is a witness?",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "cache role",
+          "anyOf": [
+            "vector cache",
+            "read cache",
+            "cached vector"
+          ]
+        },
+        {
+          "label": "witness role",
+          "anyOf": [
+            "witness-anchored",
+            "witness chain",
+            "verifiable retrieval"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-007",
+      "sourceId": "n-07",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is SAFLA's self-aware feedback loop architecture?",
+      "expectRepo": [
+        "safla",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "feedback loop",
+          "anyOf": [
+            "self-aware feedback loop",
+            "meta-cognitive",
+            "self-monitoring"
+          ]
+        },
+        {
+          "label": "behavior change",
+          "anyOf": [
+            "self-modification",
+            "policy adaptation",
+            "strategy adaptation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-008",
+      "sourceId": "n-08",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does QuDAG use post-quantum cryptography?",
+      "expectRepo": [
+        "qudag",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "post-quantum cryptography",
+          "anyOf": [
+            "ml-kem",
+            "ml-dsa",
+            "post-quantum cryptography",
+            "quantum-resistant"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-009",
+      "sourceId": "n-09",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is DAA's approach to decentralized autonomous agents?",
+      "expectRepo": [
+        "daa",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "autonomy",
+          "anyOf": [
+            "autonomous agents",
+            "self-governing agents",
+            "autonomy loop"
+          ]
+        },
+        {
+          "label": "governance",
+          "anyOf": [
+            "rule-based governance",
+            "spending limits",
+            "risk thresholds"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-010",
+      "sourceId": "n-10",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does dspy.ts bring DSPy-style declarative pipelines to TypeScript?",
+      "expectRepo": [
+        "dspy.ts",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "declarative programming",
+          "anyOf": [
+            "declarative framework",
+            "composable modules",
+            "llm signatures"
+          ]
+        },
+        {
+          "label": "typescript runtime",
+          "anyOf": [
+            "typescript",
+            "javascript implementation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-011",
+      "sourceId": "n-11",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What problem does FACT solve?",
+      "expectRepo": [
+        "fact",
+        "concepts"
+      ],
+      "why": "named; tautological routing on the name",
+      "requiredEvidence": [
+        {
+          "label": "low-latency tools",
+          "anyOf": [
+            "aggressive caching",
+            "cached access",
+            "low-latency ai tool"
+          ]
+        },
+        {
+          "label": "resilience",
+          "anyOf": [
+            "circuit-breaker",
+            "graceful degradation",
+            "dependable under failure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-012",
+      "sourceId": "n-12",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can SynthLang compress prompts to reduce token usage?",
+      "expectRepo": [
+        "synthlang",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "prompt compression",
+          "anyOf": [
+            "compress prompts",
+            "prompt compression",
+            "shrink prompts"
+          ]
+        },
+        {
+          "label": "token reduction",
+          "anyOf": [
+            "token reduction",
+            "reduce token usage",
+            "lower token costs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-013",
+      "sourceId": "n-13",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What are the five phases of SPARC?",
+      "expectRepo": [
+        "sparc",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "specification phase",
+          "anyOf": [
+            "specification"
+          ]
+        },
+        {
+          "label": "pseudocode phase",
+          "anyOf": [
+            "pseudocode"
+          ]
+        },
+        {
+          "label": "architecture phase",
+          "anyOf": [
+            "architecture"
+          ]
+        },
+        {
+          "label": "refinement phase",
+          "anyOf": [
+            "refinement"
+          ]
+        },
+        {
+          "label": "completion phase",
+          "anyOf": [
+            "completion"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-014",
+      "sourceId": "n-14",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Is ruv-fann usable from WebAssembly?",
+      "expectRepo": [
+        "ruv-fann",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "webassembly support",
+          "anyOf": [
+            "webassembly",
+            "wasm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-015",
+      "sourceId": "n-15",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "How does cve-bench keep solvers from seeing the gold fix?",
+      "expectRepo": [
+        "cve-bench",
+        "concepts"
+      ],
+      "why": "named; conformance firewall",
+      "requiredEvidence": [
+        {
+          "label": "hidden solution",
+          "anyOf": [
+            "conformance firewall",
+            "never sees the gold fix",
+            "without the gold fix"
+          ]
+        },
+        {
+          "label": "verification",
+          "anyOf": [
+            "security regression test",
+            "fail-to-pass",
+            "project-specific test"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-016",
+      "sourceId": "n-16",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is open-claude-code?",
+      "expectRepo": [
+        "open-claude-code",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "open implementation",
+          "anyOf": [
+            "open-source implementation",
+            "open source implementation"
+          ]
+        },
+        {
+          "label": "cli compatibility",
+          "anyOf": [
+            "claude-code-compatible cli",
+            "claude code cli"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-017",
+      "sourceId": "n-17",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What does rupixel do?",
+      "expectRepo": [
+        "rupixel",
+        "concepts"
+      ],
+      "why": "named; routing on the name",
+      "requiredEvidence": [
+        {
+          "label": "visual retrieval",
+          "anyOf": [
+            "visual retrieval",
+            "image semantic search",
+            "text-to-image search"
+          ]
+        },
+        {
+          "label": "local execution",
+          "anyOf": [
+            "on-device clip",
+            "client-side",
+            "no data upload"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-018",
+      "sourceId": "n-18",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What tooling lives in ruv-dev?",
+      "expectRepo": [
+        "ruv-dev",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "project scaffolding",
+          "anyOf": [
+            "create-sparc",
+            "project scaffolding"
+          ]
+        },
+        {
+          "label": "agent tooling",
+          "anyOf": [
+            "roo code",
+            "clinerules",
+            "mcp wizard"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-019",
+      "sourceId": "n-19",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can RVM partition hardware into isolated guest partitions?",
+      "expectRepo": [
+        "rvm",
+        "concepts"
+      ],
+      "why": "named; hypervisor",
+      "requiredEvidence": [
+        {
+          "label": "hypervisor isolation",
+          "anyOf": [
+            "microhypervisor",
+            "hardware-grade partition",
+            "secure hardware partition"
+          ]
+        },
+        {
+          "label": "tenant boundary",
+          "anyOf": [
+            "multi-tenant",
+            "isolated guest",
+            "untrusted agent workload"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-020",
+      "sourceId": "n-20",
+      "level": "naive",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What does ruview do?",
+      "expectRepo": [
+        "ruview",
+        "concepts"
+      ],
+      "why": "named; routing on the name",
+      "requiredEvidence": [
+        {
+          "label": "radio sensing",
+          "anyOf": [
+            "channel state information",
+            "wifi sensing",
+            "csi"
+          ]
+        },
+        {
+          "label": "camera-free detection",
+          "anyOf": [
+            "camera-free",
+            "without a camera",
+            "radio alone"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-021",
+      "sourceId": "n-21",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What does Darwin mode in agent-harness-generator actually mutate?",
+      "expectRepo": [
+        "agent-harness-generator",
+        "concepts"
+      ],
+      "why": "named; structured policies, not prompts",
+      "requiredEvidence": [
+        {
+          "label": "mutation target",
+          "anyOf": [
+            "planner",
+            "retry policy",
+            "model routing",
+            "structured policies"
+          ]
+        },
+        {
+          "label": "fixed model",
+          "anyOf": [
+            "freeze the model",
+            "without swapping out the model",
+            "harness around it"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-022",
+      "sourceId": "n-22",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does metaharness retrain the model or evolve the harness around it?",
+      "expectRepo": [
+        "agent-harness-generator",
+        "concepts"
+      ],
+      "why": "metaharness = agent-harness-generator",
+      "requiredEvidence": [
+        {
+          "label": "harness evolution",
+          "anyOf": [
+            "evolve the harness",
+            "harness variants",
+            "darwin mode"
+          ]
+        },
+        {
+          "label": "model remains fixed",
+          "anyOf": [
+            "model remains fixed",
+            "freeze the model",
+            "does not retrain the model",
+            "without swapping out the model"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-023",
+      "sourceId": "n-23",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can ruflo persist memory across sessions in a project?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "cross-session persistence",
+          "anyOf": [
+            "across sessions",
+            "survives restarts",
+            "persistent memory"
+          ]
+        },
+        {
+          "label": "project memory store",
+          "anyOf": [
+            ".swarm/memory.db",
+            "project memory",
+            "memory store"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-024",
+      "sourceId": "n-24",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does ruvector ship WASM bindings for in-browser vector search?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "browser binding",
+          "anyOf": [
+            "wasm bindings",
+            "in-browser",
+            "webassembly"
+          ]
+        },
+        {
+          "label": "vector search",
+          "anyOf": [
+            "vector search",
+            "nearest-neighbor",
+            "similarity search"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-025",
+      "sourceId": "n-25",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Can agentic-flow route work across Anthropic, OpenRouter, and Gemini providers?",
+      "expectRepo": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "anthropic provider",
+          "anyOf": [
+            "anthropic"
+          ]
+        },
+        {
+          "label": "openrouter provider",
+          "anyOf": [
+            "openrouter"
+          ]
+        },
+        {
+          "label": "gemini provider",
+          "anyOf": [
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-026",
+      "sourceId": "n-26",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "Does AgentDB support graph queries over agent memory?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "named",
+      "requiredEvidence": [
+        {
+          "label": "graph memory",
+          "anyOf": [
+            "graph queries",
+            "causal graph",
+            "n-ary hyperedge",
+            "relationship queries"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-027",
+      "sourceId": "n-27",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is cognitum-cogs?",
+      "expectRepo": [
+        "cognitum-cogs",
+        "concepts"
+      ],
+      "why": "named; public by design",
+      "requiredEvidence": [
+        {
+          "label": "cog architecture",
+          "anyOf": [
+            "cog-as-plugin",
+            "one crate per capability",
+            "self-contained apps"
+          ]
+        },
+        {
+          "label": "target runtime",
+          "anyOf": [
+            "rust cog",
+            "arm cross-compile",
+            "aarch64",
+            "armv7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-028",
+      "sourceId": "n-28",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What does cognitum-support cover?",
+      "expectRepo": [
+        "cognitum-support",
+        "concepts"
+      ],
+      "why": "named; public by design",
+      "requiredEvidence": [
+        {
+          "label": "public support scope",
+          "anyOf": [
+            "firmware downloads",
+            "installation",
+            "upgrade instructions",
+            "onboarding"
+          ]
+        },
+        {
+          "label": "issue path",
+          "anyOf": [
+            "issue tracker",
+            "report issues"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-029",
+      "sourceId": "agentdb-q1",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is AgentDB and who is it for?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "1. what is this product (newcomer)",
+      "requiredEvidence": [
+        {
+          "label": "durable agent memory",
+          "anyOf": [
+            "persistent memory",
+            "survives across sessions",
+            "long-term agent memory"
+          ]
+        },
+        {
+          "label": "query model",
+          "anyOf": [
+            "vector search",
+            "graph relationships",
+            "structured agent state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-030",
+      "sourceId": "agentdb-q2",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What are AgentDB's core concepts — the .rvf cognitive container, Reflexion episodic memory, causal graph, skill library, ReasoningBank, and the self-learning bandit?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "2. concepts (practitioner vocabulary)",
+      "requiredEvidence": [
+        {
+          "label": "cognitive container",
+          "anyOf": [
+            ".rvf cognitive container",
+            "single-file .rvf"
+          ]
+        },
+        {
+          "label": "episodic memory",
+          "anyOf": [
+            "reflexion",
+            "episodic memory"
+          ]
+        },
+        {
+          "label": "causal graph",
+          "anyOf": [
+            "causal graph",
+            "graph relationships"
+          ]
+        },
+        {
+          "label": "skill library",
+          "anyOf": [
+            "skill library"
+          ]
+        },
+        {
+          "label": "learning system",
+          "anyOf": [
+            "reasoningbank",
+            "self-learning bandit",
+            "thompson sampling"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-031",
+      "sourceId": "agentdb-q7",
+      "level": "beginner",
+      "axis": "how-to",
+      "specificity": "explicit",
+      "query": "How do I get self-learning vector search working in AgentDB in three lines of code?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "6. end-to-end usage playbook",
+      "requiredEvidence": [
+        {
+          "label": "self-learning search",
+          "anyOf": [
+            "self-learning vector search",
+            "feedback learning",
+            "learning rate"
+          ]
+        },
+        {
+          "label": "working example",
+          "anyOf": [
+            "three lines",
+            "create database",
+            "vector search"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-032",
+      "sourceId": "ruflo-q1",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is ruflo and who is it for?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "1. what is this product (newcomer)",
+      "requiredEvidence": [
+        {
+          "label": "orchestration purpose",
+          "anyOf": [
+            "agent orchestration",
+            "coordinate swarms",
+            "multi-agent coordination"
+          ]
+        },
+        {
+          "label": "developer audience",
+          "anyOf": [
+            "coding agents",
+            "software development",
+            "developers"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-033",
+      "sourceId": "ruflo-q2",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is a swarm in ruflo and what topologies does it support?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "2. concepts (practitioner)",
+      "requiredEvidence": [
+        {
+          "label": "swarm definition",
+          "anyOf": [
+            "agents working",
+            "coordinated agents",
+            "agent swarm"
+          ]
+        },
+        {
+          "label": "topologies",
+          "anyOf": [
+            "mesh",
+            "hierarchical",
+            "ring",
+            "star"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-034",
+      "sourceId": "ruflo-q8",
+      "level": "beginner",
+      "axis": "how-to",
+      "specificity": "explicit",
+      "query": "How do I initialize and use ruflo's memory in a project end-to-end?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "6. end-to-end usage playbook",
+      "requiredEvidence": [
+        {
+          "label": "project store",
+          "anyOf": [
+            ".swarm/memory.db",
+            "project memory"
+          ]
+        },
+        {
+          "label": "store operation",
+          "anyOf": [
+            "memory store",
+            "store memory"
+          ]
+        },
+        {
+          "label": "search operation",
+          "anyOf": [
+            "memory search",
+            "search memory"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-035",
+      "sourceId": "rulake-q1",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is ruLake and who is it for?",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "1. what is this product (newcomer)",
+      "requiredEvidence": [
+        {
+          "label": "cache layer",
+          "anyOf": [
+            "vector cache",
+            "working-memory layer",
+            "read cache"
+          ]
+        },
+        {
+          "label": "verifiable recall",
+          "anyOf": [
+            "witness-anchored",
+            "provenance-verifiable",
+            "deterministic recall"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-036",
+      "sourceId": "rulake-q2",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What are ruLake's core concepts — witness-anchored bundles, the RaBitQ 1-bit cache, BackendAdapter federation, and the three freshness modes?",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "2. concepts (practitioner vocabulary)",
+      "requiredEvidence": [
+        {
+          "label": "witness bundle",
+          "anyOf": [
+            "witness-anchored bundle",
+            "witness anchored bundle"
+          ]
+        },
+        {
+          "label": "one-bit cache",
+          "anyOf": [
+            "rabitq",
+            "1-bit cache",
+            "one-bit cache"
+          ]
+        },
+        {
+          "label": "backend federation",
+          "anyOf": [
+            "backendadapter",
+            "backend adapter",
+            "federation"
+          ]
+        },
+        {
+          "label": "freshness",
+          "anyOf": [
+            "freshness mode",
+            "fresh",
+            "eventual",
+            "frozen"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-037",
+      "sourceId": "ruvector-q1",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is RuVector and who is it for?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "1. what is this product (newcomer)",
+      "requiredEvidence": [
+        {
+          "label": "vector database",
+          "anyOf": [
+            "vector database",
+            "similarity search",
+            "nearest-neighbor"
+          ]
+        },
+        {
+          "label": "local storage",
+          "anyOf": [
+            ".rvf",
+            "on-disk store",
+            "zero-server"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-038",
+      "sourceId": "ruvector-q2",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What are RuVector's core concepts — SONA self-learning, the RVF format, HNSW indexing, quantization tiers, and graph intelligence?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "2. concepts (practitioner vocabulary)",
+      "requiredEvidence": [
+        {
+          "label": "self-learning",
+          "anyOf": [
+            "sona",
+            "self-learning"
+          ]
+        },
+        {
+          "label": "binary format",
+          "anyOf": [
+            "rvf format",
+            ".rvf"
+          ]
+        },
+        {
+          "label": "index",
+          "anyOf": [
+            "hnsw"
+          ]
+        },
+        {
+          "label": "quantization",
+          "anyOf": [
+            "quantization tier",
+            "int8",
+            "sq8"
+          ]
+        },
+        {
+          "label": "graph intelligence",
+          "anyOf": [
+            "graph intelligence",
+            "graph relationship"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-039",
+      "sourceId": "ruview-q1",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What is RuView and what problem does it solve?",
+      "expectRepo": [
+        "ruview",
+        "concepts"
+      ],
+      "why": "1. what is this product (newcomer)",
+      "requiredEvidence": [
+        {
+          "label": "wifi sensing",
+          "anyOf": [
+            "wifi sensing",
+            "channel state information",
+            "csi"
+          ]
+        },
+        {
+          "label": "human signal",
+          "anyOf": [
+            "human presence",
+            "pose",
+            "breathing",
+            "heart rate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-040",
+      "sourceId": "ruview-q2",
+      "level": "beginner",
+      "axis": "capability",
+      "specificity": "explicit",
+      "query": "What are RuView's core concepts — CSI (Channel State Information), ESP32 sensors, WiFi-DensePose pose estimation, and RVF cognitive containers?",
+      "expectRepo": [
+        "ruview",
+        "concepts"
+      ],
+      "why": "2. concepts (practitioner vocabulary)",
+      "requiredEvidence": [
+        {
+          "label": "csi",
+          "anyOf": [
+            "channel state information",
+            "csi"
+          ]
+        },
+        {
+          "label": "sensor",
+          "anyOf": [
+            "esp32"
+          ]
+        },
+        {
+          "label": "pose estimation",
+          "anyOf": [
+            "wifi-densepose",
+            "pose estimation"
+          ]
+        },
+        {
+          "label": "container",
+          "anyOf": [
+            "rvf cognitive container",
+            "cognitive container"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-041",
+      "sourceId": "ho-01",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "I need to search a million embeddings on a laptop with no database server running.",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "zero-server on-disk ANN search is ruvector/RVF's defining claim",
+      "requiredEvidence": [
+        {
+          "label": "on-disk approximate search",
+          "anyOf": [
+            "hnsw",
+            "approximate-nearest-neighbor",
+            "ann search"
+          ]
+        },
+        {
+          "label": "no database server",
+          "anyOf": [
+            "zero-server",
+            "no server",
+            "single file"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-042",
+      "sourceId": "ho-02",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "I want to try a risky change to an agent's memory and throw it away if it goes wrong.",
+      "expectRepo": [
+        "agenticow",
+        "concepts"
+      ],
+      "why": "copy-on-write branch + rollback of a vector store is agenticow's whole purpose",
+      "requiredEvidence": [
+        {
+          "label": "isolated experiment",
+          "anyOf": [
+            "copy-on-write",
+            "sandbox risky",
+            "branch memory"
+          ]
+        },
+        {
+          "label": "discard or recover",
+          "anyOf": [
+            "discard",
+            "roll back",
+            "rollback"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-043",
+      "sourceId": "ho-03",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "What can generate tests for my code and tell me which parts are untested?",
+      "expectRepo": [
+        "agentic-qe",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "test generation + coverage is agentic-qe; its generator is also vendored inside ruflo (recorded corpus fact)",
+      "requiredEvidence": [
+        {
+          "label": "test generation",
+          "anyOf": [
+            "generate tests",
+            "test generation"
+          ]
+        },
+        {
+          "label": "coverage analysis",
+          "anyOf": [
+            "coverage gap",
+            "untested code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-044",
+      "sourceId": "ho-04",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "How do I spend less money on model calls without getting dumber answers?",
+      "expectRepo": [
+        "agentic-flow",
+        "agent-harness-generator",
+        "agentic-qe",
+        "concepts"
+      ],
+      "why": "cost routing lives in agentic-flow; the cascade in metaharness; qe's cheaper-model eval lanes doc is a legitimate hit",
+      "requiredEvidence": [
+        {
+          "label": "cost-aware routing",
+          "anyOf": [
+            "cost routing",
+            "cheapest model",
+            "reduce model cost"
+          ]
+        },
+        {
+          "label": "quality protection",
+          "anyOf": [
+            "quality bar",
+            "without sacrificing quality",
+            "escalate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-045",
+      "sourceId": "ho-05",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Is there a step-by-step method that takes me from a written spec to finished code?",
+      "expectRepo": [
+        "sparc",
+        "concepts"
+      ],
+      "why": "SPARC is the named specification-to-completion methodology",
+      "requiredEvidence": [
+        {
+          "label": "spec-to-code phases",
+          "anyOf": [
+            "specification",
+            "pseudocode",
+            "architecture",
+            "refinement",
+            "completion"
+          ]
+        },
+        {
+          "label": "quality gates",
+          "anyOf": [
+            "quality gate",
+            "review gate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-046",
+      "sourceId": "ho-06",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "I want to keep structured agent state and ask questions about how facts relate to each other.",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "AgentDB owns structured agent memory incl. the causal/graph layer",
+      "requiredEvidence": [
+        {
+          "label": "structured state",
+          "anyOf": [
+            "structured agent state",
+            "persistent structured storage"
+          ]
+        },
+        {
+          "label": "relationships",
+          "anyOf": [
+            "graph relationships",
+            "causal graph",
+            "relationship queries"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-047",
+      "sourceId": "ho-07",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "How do I make repeated vector lookups instant instead of recomputing them?",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "RuLake is the read cache in front of vector stores",
+      "requiredEvidence": [
+        {
+          "label": "read cache",
+          "anyOf": [
+            "vector cache",
+            "read cache",
+            "cached reads"
+          ]
+        },
+        {
+          "label": "repeated lookup speed",
+          "anyOf": [
+            "sub-millisecond",
+            "faster repeated",
+            "cache hit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-048",
+      "sourceId": "ho-08",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Can I train a small neural network in Rust without dragging in Python?",
+      "expectRepo": [
+        "ruv-fann",
+        "concepts"
+      ],
+      "why": "ruv-fann is the Rust neural network library",
+      "requiredEvidence": [
+        {
+          "label": "rust neural network",
+          "anyOf": [
+            "neural network library written in rust",
+            "in-rust ml",
+            "rust neural"
+          ]
+        },
+        {
+          "label": "no python",
+          "anyOf": [
+            "without shipping python",
+            "no python"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-049",
+      "sourceId": "ho-09",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "I need messages between nodes to stay secure even against a future quantum computer.",
+      "expectRepo": [
+        "qudag",
+        "concepts"
+      ],
+      "why": "QuDAG is the quantum-resistant DAG communication layer",
+      "requiredEvidence": [
+        {
+          "label": "post-quantum security",
+          "anyOf": [
+            "post-quantum",
+            "quantum-resistant",
+            "ml-kem",
+            "ml-dsa"
+          ]
+        },
+        {
+          "label": "node communication",
+          "anyOf": [
+            "secure messaging",
+            "agent-to-agent messaging",
+            "peer-to-peer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-050",
+      "sourceId": "ho-10",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "How do I improve my agent's scaffolding without swapping out the model itself?",
+      "expectRepo": [
+        "agent-harness-generator",
+        "concepts",
+        "metaharness"
+      ],
+      "why": "'freeze the model, evolve the harness' is metaharness",
+      "requiredEvidence": [
+        {
+          "label": "harness evolution",
+          "anyOf": [
+            "evolve the harness",
+            "harness variants",
+            "darwin mode"
+          ]
+        },
+        {
+          "label": "fixed model",
+          "anyOf": [
+            "model remains fixed",
+            "freeze the model",
+            "without swapping out the model"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-051",
+      "sourceId": "ho-11",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "What coordinates several coding agents working at the same time on one task?",
+      "expectRepo": [
+        "ruflo",
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "ruflo orchestrates; agentic-flow ships the swarm topologies — both are correct answers",
+      "requiredEvidence": [
+        {
+          "label": "multi-agent coordination",
+          "anyOf": [
+            "coordinate swarms",
+            "multi-agent coordination",
+            "agents working in parallel"
+          ]
+        },
+        {
+          "label": "shared work",
+          "anyOf": [
+            "share state",
+            "shared state",
+            "shared memory"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-052",
+      "sourceId": "ho-12",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "How would I measure whether an AI actually fixed a real security vulnerability?",
+      "expectRepo": [
+        "cve-bench",
+        "concepts"
+      ],
+      "why": "cve-bench grades a patch against the project's own security regression test",
+      "requiredEvidence": [
+        {
+          "label": "real vulnerability",
+          "anyOf": [
+            "real cve",
+            "real security vulnerabilities",
+            "publicly disclosed"
+          ]
+        },
+        {
+          "label": "proof of fix",
+          "anyOf": [
+            "security regression test",
+            "fail-to-pass",
+            "project-specific test"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-053",
+      "sourceId": "d-01",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "I want a vector database that lives in one binary file I can copy around.",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "RVF container",
+      "requiredEvidence": [
+        {
+          "label": "binary container",
+          "anyOf": [
+            ".rvf",
+            "binary container"
+          ]
+        },
+        {
+          "label": "portable single file",
+          "anyOf": [
+            "single file",
+            "one binary file",
+            "copy around"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-054",
+      "sourceId": "d-02",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Agent memory that can tell me the causal chain behind a recall.",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "causal memory",
+      "requiredEvidence": [
+        {
+          "label": "causal explanation",
+          "anyOf": [
+            "causal chain",
+            "explainable recall",
+            "feature attribution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-055",
+      "sourceId": "d-03",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Run a fleet of specialized coding agents that share state while they work.",
+      "expectRepo": [
+        "ruflo",
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "orchestration; both own it",
+      "requiredEvidence": [
+        {
+          "label": "specialized fleet",
+          "anyOf": [
+            "specialized agents",
+            "agent roles",
+            "agent swarm"
+          ]
+        },
+        {
+          "label": "shared state",
+          "anyOf": [
+            "share state",
+            "shared state",
+            "persistent context"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-056",
+      "sourceId": "d-04",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Automatically write unit tests for the riskiest parts of my codebase.",
+      "expectRepo": [
+        "agentic-qe",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "QE fleet; vendored copy in ruflo",
+      "requiredEvidence": [
+        {
+          "label": "automatic unit tests",
+          "anyOf": [
+            "generate tests",
+            "unit test generation",
+            "automatically write tests"
+          ]
+        },
+        {
+          "label": "risk focus",
+          "anyOf": [
+            "risk-based",
+            "riskiest",
+            "risk-weighted"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-057",
+      "sourceId": "d-05",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Checkpoint my agent's memory before a risky step and roll back instantly if it fails.",
+      "expectRepo": [
+        "agenticow",
+        "concepts"
+      ],
+      "why": "COW checkpoints",
+      "requiredEvidence": [
+        {
+          "label": "checkpoint",
+          "anyOf": [
+            "checkpoint",
+            "copy-on-write",
+            "cow branch"
+          ]
+        },
+        {
+          "label": "instant recovery",
+          "anyOf": [
+            "roll back instantly",
+            "instantly roll back",
+            "instant rollback",
+            "discard a branch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-058",
+      "sourceId": "d-06",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "A read-through cache so my agents get sub-millisecond vector answers.",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "the cache layer",
+      "requiredEvidence": [
+        {
+          "label": "read-through vector cache",
+          "anyOf": [
+            "read-through cache",
+            "vector cache",
+            "read cache"
+          ]
+        },
+        {
+          "label": "latency",
+          "anyOf": [
+            "sub-millisecond",
+            "cached access"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-059",
+      "sourceId": "d-07",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "An agent architecture with divergence detection and self-modification safeguards.",
+      "expectRepo": [
+        "safla",
+        "agent-harness-generator",
+        "concepts"
+      ],
+      "why": "SAFLA's components; metaharness overlaps legitimately",
+      "requiredEvidence": [
+        {
+          "label": "divergence detection",
+          "anyOf": [
+            "divergence detection",
+            "novelty detection"
+          ]
+        },
+        {
+          "label": "self-modification safety",
+          "anyOf": [
+            "self-modification",
+            "meta-cognitive",
+            "safeguard"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-060",
+      "sourceId": "d-08",
+      "level": "intermediate",
+      "axis": "expectation",
+      "specificity": "implicit",
+      "query": "Communication between distributed nodes that stays safe in a post-quantum world.",
+      "expectRepo": [
+        "qudag",
+        "concepts"
+      ],
+      "why": "post-quantum DAG",
+      "requiredEvidence": [
+        {
+          "label": "post-quantum communication",
+          "anyOf": [
+            "post-quantum",
+            "quantum-resistant",
+            "ml-kem",
+            "ml-dsa"
+          ]
+        },
+        {
+          "label": "distributed routing",
+          "anyOf": [
+            "dag-based communication",
+            "anonymous routing",
+            "multi-hop routing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-061",
+      "sourceId": "d-09",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Write declarative, optimizable LLM pipelines in TypeScript instead of Python.",
+      "expectRepo": [
+        "dspy.ts",
+        "concepts"
+      ],
+      "why": "DSPy port",
+      "requiredEvidence": [
+        {
+          "label": "declarative llm programs",
+          "anyOf": [
+            "declarative framework",
+            "composable modules",
+            "llm signatures"
+          ]
+        },
+        {
+          "label": "typescript",
+          "anyOf": [
+            "typescript",
+            "javascript implementation"
+          ]
+        },
+        {
+          "label": "optimization",
+          "anyOf": [
+            "automatically optimized",
+            "optimizer",
+            "auto-tune prompts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-062",
+      "sourceId": "d-10",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Shrink my system prompts without losing their meaning.",
+      "expectRepo": [
+        "synthlang",
+        "concepts"
+      ],
+      "why": "prompt compression",
+      "requiredEvidence": [
+        {
+          "label": "instruction compression",
+          "anyOf": [
+            "compress system prompts",
+            "compress instructions",
+            "prompt compression"
+          ]
+        },
+        {
+          "label": "meaning preservation",
+          "anyOf": [
+            "preserving their meaning",
+            "without changing behavior",
+            "without losing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-063",
+      "sourceId": "d-11",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "A phased engineering method with quality gates between each phase.",
+      "expectRepo": [
+        "sparc",
+        "concepts"
+      ],
+      "why": "SPARC gates",
+      "requiredEvidence": [
+        {
+          "label": "phased method",
+          "anyOf": [
+            "specification",
+            "pseudocode",
+            "architecture",
+            "refinement",
+            "completion"
+          ]
+        },
+        {
+          "label": "phase gates",
+          "anyOf": [
+            "quality gates",
+            "review gates"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-064",
+      "sourceId": "d-12",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "A lightweight neural network library for an embedded device with no Python runtime.",
+      "expectRepo": [
+        "ruv-fann",
+        "concepts"
+      ],
+      "why": "Rust NN",
+      "requiredEvidence": [
+        {
+          "label": "embedded classifier",
+          "anyOf": [
+            "small neural network",
+            "small trainable",
+            "embedded classifier"
+          ]
+        },
+        {
+          "label": "rust runtime",
+          "anyOf": [
+            "written in rust",
+            "in-rust ml"
+          ]
+        },
+        {
+          "label": "no python",
+          "anyOf": [
+            "without shipping python",
+            "no python"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-065",
+      "sourceId": "d-13",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "A benchmark where the AI must pass the project's own security regression test to score.",
+      "expectRepo": [
+        "cve-bench",
+        "concepts"
+      ],
+      "why": "FAIL_TO_PASS security tests",
+      "requiredEvidence": [
+        {
+          "label": "security benchmark",
+          "anyOf": [
+            "real cve",
+            "security vulnerabilities"
+          ]
+        },
+        {
+          "label": "passing criterion",
+          "anyOf": [
+            "security regression test",
+            "fail-to-pass",
+            "project-specific test"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-066",
+      "sourceId": "d-14",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Send easy tasks to a cheap model and only pay for the expensive one when the cheap one gives up.",
+      "expectRepo": [
+        "agent-harness-generator",
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "the cascade; runtime routing in agentic-flow",
+      "requiredEvidence": [
+        {
+          "label": "cheap-first routing",
+          "anyOf": [
+            "cheap model",
+            "cheapest model",
+            "cost-aware escalation"
+          ]
+        },
+        {
+          "label": "failure escalation",
+          "anyOf": [
+            "when the cheaper model gives up",
+            "demonstrable failure",
+            "escalate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-067",
+      "sourceId": "d-15",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Rank my untested code by how risky it is, not just what's uncovered.",
+      "expectRepo": [
+        "agentic-qe",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "coverage gaps by risk",
+      "requiredEvidence": [
+        {
+          "label": "risk ranking",
+          "anyOf": [
+            "rank untested code by risk",
+            "risk-based test prioritization",
+            "risk-weighted"
+          ]
+        },
+        {
+          "label": "coverage gap",
+          "anyOf": [
+            "coverage gap",
+            "untested code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-068",
+      "sourceId": "d-16",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "A hypervisor layer that gives each tenant an isolated hardware partition.",
+      "expectRepo": [
+        "rvm",
+        "concepts"
+      ],
+      "why": "RVM partitions",
+      "requiredEvidence": [
+        {
+          "label": "hypervisor partition",
+          "anyOf": [
+            "microhypervisor",
+            "hardware-grade partition",
+            "secure hardware partition"
+          ]
+        },
+        {
+          "label": "tenant isolation",
+          "anyOf": [
+            "multi-tenant",
+            "isolated guest",
+            "strict isolation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-069",
+      "sourceId": "d-17",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Prebuilt agent roles — coder, reviewer, architect — I can spawn without writing prompts.",
+      "expectRepo": [
+        "agentic-flow",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "54+ agents; ruflo spawns them too",
+      "requiredEvidence": [
+        {
+          "label": "prebuilt roles",
+          "anyOf": [
+            "ready-to-run specialized agents",
+            "coder",
+            "reviewer",
+            "architect"
+          ]
+        },
+        {
+          "label": "spawnable fleet",
+          "anyOf": [
+            "spawn agents",
+            "agent swarm",
+            "54+"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-070",
+      "sourceId": "d-18",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Self-improvement where every promotion has replayable evidence and can be rolled back.",
+      "expectRepo": [
+        "agent-harness-generator",
+        "ruflo",
+        "ruv-gists",
+        "concepts"
+      ],
+      "why": "receipt-backed evolution (ADR-176) + darwin gates; announced in gists",
+      "requiredEvidence": [
+        {
+          "label": "evidence-backed promotion",
+          "anyOf": [
+            "replayable receipt",
+            "receipt-backed",
+            "independently benchmarked"
+          ]
+        },
+        {
+          "label": "reversibility",
+          "anyOf": [
+            "roll back",
+            "rollback",
+            "reversible"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-071",
+      "sourceId": "d-19",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Stop my assistant from starting every session cold — carry decisions across sessions.",
+      "expectRepo": [
+        "agentdb",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "persistent project memory; both surface it",
+      "requiredEvidence": [
+        {
+          "label": "cross-session state",
+          "anyOf": [
+            "across sessions",
+            "persistent memory",
+            "survives restarts"
+          ]
+        },
+        {
+          "label": "decisions retained",
+          "anyOf": [
+            "project memory",
+            "reasoning memory",
+            "carry decisions"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-072",
+      "sourceId": "d-20",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "implicit",
+      "query": "Retrieval that tunes its own ranking weights over time but only keeps proven improvements.",
+      "expectRepo": [
+        "ruflo",
+        "ruv-gists",
+        "concepts"
+      ],
+      "why": "the self-learning flywheel",
+      "requiredEvidence": [
+        {
+          "label": "ranking adaptation",
+          "anyOf": [
+            "tunes its own ranking",
+            "self-learning",
+            "ranking weights"
+          ]
+        },
+        {
+          "label": "proof gate",
+          "anyOf": [
+            "proven improvements",
+            "benchmark",
+            "quality gate"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-073",
+      "sourceId": "s-01",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "We're building an offline-first field app that must semantically search 100k manuals with zero server round-trips. What's the on-device index?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "on-device ANN",
+      "requiredEvidence": [
+        {
+          "label": "local semantic index",
+          "anyOf": [
+            "on-device semantic search",
+            "local vector",
+            "hnsw"
+          ]
+        },
+        {
+          "label": "offline operation",
+          "anyOf": [
+            "zero-server",
+            "zero server round-trips",
+            "no server"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-074",
+      "sourceId": "s-02",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "Our support bot forgets everything between sessions and customers repeat themselves; we need memory that survives restarts and can justify its recalls.",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "persistent explainable memory",
+      "requiredEvidence": [
+        {
+          "label": "durability",
+          "anyOf": [
+            "survives restarts",
+            "persistent memory",
+            "across sessions"
+          ]
+        },
+        {
+          "label": "recall justification",
+          "anyOf": [
+            "explainable recall",
+            "feature attribution",
+            "causal chain"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-075",
+      "sourceId": "s-03",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "CI takes three hours. We want tests generated and prioritized only for the riskiest changed code.",
+      "expectRepo": [
+        "agentic-qe",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "QE prioritization",
+      "requiredEvidence": [
+        {
+          "label": "generated tests",
+          "anyOf": [
+            "generate tests",
+            "test generation"
+          ]
+        },
+        {
+          "label": "changed-code risk",
+          "anyOf": [
+            "risk-based",
+            "riskiest changed code",
+            "risk-weighted"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-076",
+      "sourceId": "s-04",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "Five agents work the same repo and clobber each other's context; we need coordinated roles with shared state.",
+      "expectRepo": [
+        "ruflo",
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "swarm coordination",
+      "requiredEvidence": [
+        {
+          "label": "coordinated agents",
+          "anyOf": [
+            "coordinate swarms",
+            "multi-agent coordination",
+            "coordinated roles"
+          ]
+        },
+        {
+          "label": "shared state",
+          "anyOf": [
+            "shared state",
+            "share state",
+            "persistent context"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-077",
+      "sourceId": "s-05",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "Our agent ingests untrusted web content; if an ingest poisons memory we need instant rollback without replaying the whole day.",
+      "expectRepo": [
+        "agenticow",
+        "concepts"
+      ],
+      "why": "rollback without replay",
+      "requiredEvidence": [
+        {
+          "label": "isolated ingest",
+          "anyOf": [
+            "sandbox risky ingest",
+            "copy-on-write",
+            "branch memory"
+          ]
+        },
+        {
+          "label": "instant rollback",
+          "anyOf": [
+            "instant rollback",
+            "roll back",
+            "discard a branch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-078",
+      "sourceId": "s-06",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "The same vector queries hit our store thousands of times an hour; we want cached reads we can cryptographically verify.",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "witness-verified cache",
+      "requiredEvidence": [
+        {
+          "label": "cached vector reads",
+          "anyOf": [
+            "vector cache",
+            "read cache",
+            "cached reads"
+          ]
+        },
+        {
+          "label": "cryptographic verification",
+          "anyOf": [
+            "witness",
+            "provenance-verifiable",
+            "cryptographically verifiable"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-079",
+      "sourceId": "s-07",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "Compliance says our device mesh must stay secure even if quantum computers break RSA. What's the comms layer?",
+      "expectRepo": [
+        "qudag",
+        "concepts"
+      ],
+      "why": "post-quantum comms",
+      "requiredEvidence": [
+        {
+          "label": "quantum resistance",
+          "anyOf": [
+            "post-quantum",
+            "quantum-resistant",
+            "ml-kem",
+            "ml-dsa"
+          ]
+        },
+        {
+          "label": "mesh communications",
+          "anyOf": [
+            "secure mesh",
+            "secure messaging",
+            "agent-to-agent messaging"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-080",
+      "sourceId": "s-08",
+      "level": "advanced",
+      "axis": "architecture-choice",
+      "specificity": "contextual",
+      "query": "Our prompt bill doubled this quarter; we want to compress instructions without changing behavior.",
+      "expectRepo": [
+        "synthlang",
+        "concepts"
+      ],
+      "why": "compression",
+      "requiredEvidence": [
+        {
+          "label": "instruction compression",
+          "anyOf": [
+            "compress instructions",
+            "compress system prompts",
+            "prompt compression"
+          ]
+        },
+        {
+          "label": "behavior preserved",
+          "anyOf": [
+            "without changing behavior",
+            "preserving their meaning",
+            "without losing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-081",
+      "sourceId": "s-09",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "The team ships code with no specs and QA finds the gaps too late; we want a phased method with hard gates from requirements to completion.",
+      "expectRepo": [
+        "sparc",
+        "concepts"
+      ],
+      "why": "SPARC",
+      "requiredEvidence": [
+        {
+          "label": "requirements-to-completion",
+          "anyOf": [
+            "specification",
+            "requirements",
+            "completion"
+          ]
+        },
+        {
+          "label": "hard gates",
+          "anyOf": [
+            "quality gates",
+            "review gates"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-082",
+      "sourceId": "s-10",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "Leadership wants proof our patching agent actually closes vulnerabilities, not vibes. How do we measure it?",
+      "expectRepo": [
+        "cve-bench",
+        "concepts"
+      ],
+      "why": "measured CVE resolution",
+      "requiredEvidence": [
+        {
+          "label": "real vulnerability patches",
+          "anyOf": [
+            "real cve",
+            "real security vulnerabilities",
+            "patching agent"
+          ]
+        },
+        {
+          "label": "objective closure",
+          "anyOf": [
+            "security regression test",
+            "resolve-per-dollar",
+            "fail-to-pass"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-083",
+      "sourceId": "s-11",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "A sensor box with 256MB RAM needs a small trainable classifier, and we can't ship Python.",
+      "expectRepo": [
+        "ruv-fann",
+        "concepts"
+      ],
+      "why": "embedded NN",
+      "requiredEvidence": [
+        {
+          "label": "small classifier",
+          "anyOf": [
+            "small trainable classifier",
+            "small neural network",
+            "embedded classifier"
+          ]
+        },
+        {
+          "label": "low-memory rust",
+          "anyOf": [
+            "written in rust",
+            "low-memory embedded",
+            "in-rust ml"
+          ]
+        },
+        {
+          "label": "no python",
+          "anyOf": [
+            "without shipping python",
+            "no python"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-084",
+      "sourceId": "s-12",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "We want our harness's planner and retry policies to improve week over week, with receipts an auditor could replay.",
+      "expectRepo": [
+        "agent-harness-generator",
+        "ruflo",
+        "concepts"
+      ],
+      "why": "darwin/flywheel",
+      "requiredEvidence": [
+        {
+          "label": "policy evolution",
+          "anyOf": [
+            "planner",
+            "retry policies",
+            "model routing"
+          ]
+        },
+        {
+          "label": "replayable evidence",
+          "anyOf": [
+            "replayable receipts",
+            "receipt-backed",
+            "auditor could replay"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-085",
+      "sourceId": "s-13",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "Route the easy 80% of tickets to a cheap model and escalate only the ones it demonstrably fails.",
+      "expectRepo": [
+        "agent-harness-generator",
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "measured-failure escalation",
+      "requiredEvidence": [
+        {
+          "label": "cheap first",
+          "anyOf": [
+            "cheap model",
+            "cheapest model",
+            "cost-aware escalation"
+          ]
+        },
+        {
+          "label": "measured escalation",
+          "anyOf": [
+            "demonstrable failure",
+            "demonstrably fails",
+            "quality bar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-086",
+      "sourceId": "s-14",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "TypeScript shop, tired of prompt spaghetti — we want composable LLM programs with optimizers.",
+      "expectRepo": [
+        "dspy.ts",
+        "concepts"
+      ],
+      "why": "dspy.ts",
+      "requiredEvidence": [
+        {
+          "label": "composable programs",
+          "anyOf": [
+            "composable modules",
+            "declarative framework",
+            "llm signatures"
+          ]
+        },
+        {
+          "label": "optimizers",
+          "anyOf": [
+            "optimizer",
+            "automatically optimized",
+            "auto-tune prompts"
+          ]
+        },
+        {
+          "label": "typescript",
+          "anyOf": [
+            "typescript",
+            "javascript implementation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-087",
+      "sourceId": "s-15",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "We need dozens of ready agent roles orchestrated in a mesh with cost tracking across model providers.",
+      "expectRepo": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "agentic-flow core pitch",
+      "requiredEvidence": [
+        {
+          "label": "ready roles",
+          "anyOf": [
+            "ready-to-run specialized agents",
+            "coder",
+            "reviewer",
+            "architect"
+          ]
+        },
+        {
+          "label": "mesh orchestration",
+          "anyOf": [
+            "mesh",
+            "agent swarm",
+            "swarm coordination"
+          ]
+        },
+        {
+          "label": "provider cost",
+          "anyOf": [
+            "multiple model providers",
+            "cost tracking",
+            "openrouter",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-088",
+      "sourceId": "s-16",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "Bare-metal box, multiple tenants, strict isolation — we want hypervisor partitions, not containers.",
+      "expectRepo": [
+        "rvm",
+        "concepts"
+      ],
+      "why": "RVM",
+      "requiredEvidence": [
+        {
+          "label": "bare-metal isolation",
+          "anyOf": [
+            "microhypervisor",
+            "hardware-grade partition",
+            "secure hardware partition"
+          ]
+        },
+        {
+          "label": "tenant boundary",
+          "anyOf": [
+            "multi-tenant",
+            "strict isolation",
+            "untrusted workload"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-089",
+      "sourceId": "s-17",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "Our ADRs say one thing and the code does another; we want decision records treated as living plans and checked against reality.",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "ruflo-adr tooling",
+      "requiredEvidence": [
+        {
+          "label": "living decisions",
+          "anyOf": [
+            "living plans",
+            "architecture decision record",
+            "adr tooling"
+          ]
+        },
+        {
+          "label": "implementation drift",
+          "anyOf": [
+            "match implementation",
+            "code does another",
+            "checked against reality"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-090",
+      "sourceId": "s-18",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "A thousand users each need their own agent memory, but full copies are killing our storage bill.",
+      "expectRepo": [
+        "agenticow",
+        "concepts"
+      ],
+      "why": "162-byte COW branches",
+      "requiredEvidence": [
+        {
+          "label": "copy-on-write tenants",
+          "anyOf": [
+            "copy-on-write",
+            "cow branch",
+            "fork a vector store"
+          ]
+        },
+        {
+          "label": "tiny branch cost",
+          "anyOf": [
+            "162 bytes",
+            "constant time and size",
+            "tiny storage overhead"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-091",
+      "sourceId": "s-19",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "We'll only accept a self-optimizing system if every change is independently benchmarked, signed, and reversible.",
+      "expectRepo": [
+        "ruflo",
+        "agent-harness-generator",
+        "ruv-gists",
+        "concepts"
+      ],
+      "why": "receipt-backed evolution",
+      "requiredEvidence": [
+        {
+          "label": "independent benchmark",
+          "anyOf": [
+            "independently benchmarked",
+            "fixed benchmark",
+            "quality gate"
+          ]
+        },
+        {
+          "label": "signed evidence",
+          "anyOf": [
+            "signed",
+            "witness",
+            "receipt-backed"
+          ]
+        },
+        {
+          "label": "reversible change",
+          "anyOf": [
+            "reversible",
+            "roll back",
+            "rollback"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-092",
+      "sourceId": "s-20",
+      "level": "expert",
+      "axis": "tradeoff-expectation",
+      "specificity": "contextual",
+      "query": "Same agent program, three model vendors, one bill we can actually attribute per task.",
+      "expectRepo": [
+        "agentic-flow",
+        "concepts"
+      ],
+      "why": "multi-provider + billing",
+      "requiredEvidence": [
+        {
+          "label": "multiple providers",
+          "anyOf": [
+            "multiple model providers",
+            "anthropic",
+            "openrouter",
+            "gemini"
+          ]
+        },
+        {
+          "label": "task-level attribution",
+          "anyOf": [
+            "cost tracking",
+            "per task",
+            "billing",
+            "cost attribution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-093",
+      "sourceId": "agentdb-q9",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What does the @ruvector/rvf TypeScript SDK expose (RvfDatabase, backends), and how is the backend resolved at runtime?",
+      "expectRepo": [
+        "agentdb",
+        "ruvector",
+        "concepts"
+      ],
+      "why": "deep implementation lookup",
+      "requiredEvidence": [
+        {
+          "label": "database class",
+          "anyOf": [
+            "rvfdatabase"
+          ]
+        },
+        {
+          "label": "node backend",
+          "anyOf": [
+            "nodebackend",
+            "node backend",
+            "native (n-api)",
+            "native n-api"
+          ]
+        },
+        {
+          "label": "wasm backend",
+          "anyOf": [
+            "wasmbackend",
+            "wasm backend"
+          ]
+        },
+        {
+          "label": "runtime resolution",
+          "anyOf": [
+            "resolvebackend('auto')",
+            "resolvebackend(\"auto\")",
+            "backend resolved at runtime",
+            "auto-detects native or wasm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-094",
+      "sourceId": "agentdb-q12",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "How does AgentDB validate its performance claims like '150x faster than SQLite' and '+36% search quality from feedback'?",
+      "expectRepo": [
+        "agentdb",
+        "concepts"
+      ],
+      "why": "benchmark / evidence",
+      "requiredEvidence": [
+        {
+          "label": "speed claim",
+          "anyOf": [
+            "150x faster",
+            "150× faster"
+          ]
+        },
+        {
+          "label": "quality claim",
+          "anyOf": [
+            "36% search quality",
+            "+36%",
+            "feedback learning"
+          ]
+        },
+        {
+          "label": "benchmark method",
+          "anyOf": [
+            "hnsw vs brute force",
+            "backend comparison",
+            "benchmark harness"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-095",
+      "sourceId": "ruflo-q10",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "How are MCP tools defined and registered in ruflo v3 — where is the code?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "deep implementation lookup",
+      "requiredEvidence": [
+        {
+          "label": "mcp definition",
+          "anyOf": [
+            "mcp tool",
+            "tool definition",
+            "tools/list"
+          ]
+        },
+        {
+          "label": "registration code",
+          "anyOf": [
+            "register tool",
+            "registertool",
+            "tools/call",
+            "tool registry"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-096",
+      "sourceId": "ruflo-q12",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What does the @claude-flow/neural package implement — which algorithms?",
+      "expectRepo": [
+        "ruflo",
+        "concepts"
+      ],
+      "why": "contributor-depth / subsystem",
+      "requiredEvidence": [
+        {
+          "label": "neural algorithms",
+          "anyOf": [
+            "actor-critic",
+            "a2c",
+            "decision transformer",
+            "q-learning",
+            "ppo"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-097",
+      "sourceId": "rulake-q9",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What does ADR-007 decide about rvDNA v2 as a ruLake substrate, and what is its implementation status?",
+      "expectRepo": [
+        "rulake",
+        "concepts"
+      ],
+      "why": "ADR-specific decision + maturity",
+      "requiredEvidence": [
+        {
+          "label": "substrate decision",
+          "anyOf": [
+            "rvdna v2",
+            "rvdna substrate",
+            "rvdna-backend"
+          ]
+        },
+        {
+          "label": "accepted status",
+          "anyOf": [
+            "status: accepted",
+            "accepted"
+          ]
+        },
+        {
+          "label": "implementation scope",
+          "anyOf": [
+            "scaffolded",
+            "t0 hot-tier",
+            "hot-tier only",
+            "v0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-098",
+      "sourceId": "ruvector-q10",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What does ADR-029 decide about RVF being the canonical binary format across RuVector libraries, and which earlier ADRs does it supersede?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "ADR-specific decision + supersession",
+      "requiredEvidence": [
+        {
+          "label": "canonical format",
+          "anyOf": [
+            "canonical binary format",
+            "rvf is canonical"
+          ]
+        },
+        {
+          "label": "first superseded decision",
+          "anyOf": [
+            "adr-001"
+          ]
+        },
+        {
+          "label": "second superseded decision",
+          "anyOf": [
+            "adr-018"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-099",
+      "sourceId": "ruvector-q12",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What are RuVector's npm package and core crate names, and roughly how large is the Rust workspace?",
+      "expectRepo": [
+        "ruvector",
+        "concepts"
+      ],
+      "why": "manifest / config detail",
+      "requiredEvidence": [
+        {
+          "label": "npm package",
+          "anyOf": [
+            "npm ruvector",
+            "package ruvector",
+            "npm install ruvector",
+            "ruvector npm package"
+          ]
+        },
+        {
+          "label": "core crate",
+          "anyOf": [
+            "ruvector-core"
+          ]
+        },
+        {
+          "label": "workspace size",
+          "anyOf": [
+            "100+ crates",
+            "more than 100 crates",
+            "over 100 crates",
+            "~110 directories",
+            "about 110 directories"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-100",
+      "sourceId": "ruview-q9",
+      "level": "expert",
+      "axis": "implementation-evidence",
+      "specificity": "surgical",
+      "query": "What does ADR-003 propose about using RVF cognitive containers for CSI data, and what problem does it target?",
+      "expectRepo": [
+        "ruview",
+        "concepts"
+      ],
+      "why": "ADR-specific decision + maturity",
+      "requiredEvidence": [
+        {
+          "label": "proposal status",
+          "anyOf": [
+            "status: proposed",
+            "proposal stage",
+            "proposed"
+          ]
+        },
+        {
+          "label": "csi persistence",
+          "anyOf": [
+            "persist ephemeral csi",
+            "csi data",
+            "csi features"
+          ]
+        },
+        {
+          "label": "cognitive container",
+          "anyOf": [
+            "rvf cognitive container",
+            "cognitive containers"
+          ]
+        }
+      ]
+    }
+  ],
+  "sha256": "115b6b942f08c46b0e7939e592a501c4fbd6f42c289fcb01cbd25325dd90e7be"
+}

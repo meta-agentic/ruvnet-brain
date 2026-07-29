@@ -309,7 +309,16 @@ async function handle(msg) {
             },
           }));
         }
-        const { results: rawResults, repos, perRepo, corpusAge, evidence, adrCollision, implementation } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        const {
+          results: rawResults,
+          repos,
+          perRepo,
+          corpusAge,
+          evidence,
+          adrCollision,
+          implementation,
+          routing,
+        } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
         // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
@@ -411,6 +420,7 @@ async function handle(msg) {
           body,
           grounding: receipt?.sources?.length ? receipt : null,
           implementation,
+          extra: routing ? { routing } : {},
         }));
       } catch (e) {
         const body = `search_ruvnet error: ${e.message}`;

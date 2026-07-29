@@ -4,7 +4,10 @@ title: 95 on both graders — closing a 38/53 against a self-reported 83, dimens
 status: Proposed
 date: 2026-07-27
 updated: 2026-07-28
-impl: unbuilt
+impl: verified
+verified: 2026-07-28
+verified_digest: 5f732514b355
+verified_by: governed-source claim ledger in this ADR plus node scripts/doc-currency.mjs --json
 governs:
   - scripts/behavioral-l1-l4.mjs
   - scripts/no-silent-substitution.mjs
@@ -20,8 +23,12 @@ relates: [ADR-028, ADR-052, ADR-053, ADR-055, ADR-056]
 # ADR-057: 95 on both graders
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-27 · **Why**: v2 — the 83-vs-38 framing was not sound; corrected
-**Implementation**: unbuilt · **Verified in sync**: never
+**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: governed-source reconciliation after
+the recovery commits; external grades and open proof limits preserved
+**Implementation**: source-wired and currency-verified, not release-verified · **Verified in sync**:
+2026-07-28 against the governed-source ledger below. In this label, `verified` means only that the
+ADR was re-read against its governed source digest; it does **not** mean either external grader
+awarded 95, the candidate package passed on every promised host, or every build-order item is done.
 
 ## Context — the owner's sentence, which is the whole problem
 
@@ -90,7 +97,7 @@ worthless without its predecessor**, which is why the order is not negotiable:
 
 > `installed everywhere → consulted in time → changes the decision → uses accumulated intelligence → status tells the truth`
 
-| # | Class | Fable | GPT | Fails today |
+| # | Class | Fable | GPT | Failed on the 2026-07-27 graded artifact |
 |---|---|---|---|---|
 | 1 | **Causal substitution prevention** | T1/T4 | 1 | YES — WhitSentry is the observed failure |
 | 2 | **Latency consultation survival** | T2 | 2 | YES — 19.6s warm is 19.6× the ceiling |
@@ -131,7 +138,7 @@ registrations. The previous suite saw only 15."* Required: a coexistence test wi
 hooks proving zero mutation of third-party or user-owned registrations, and honest reporting of what
 we do not own.
 
-**D4 — learning end-to-end · 36 → 95.** GPT: *"L5 is explicitly unbuilt. The required proof is
+**D4 — learning end-to-end · 36 → 95.** At grading time, GPT found: *"L5 is explicitly unbuilt. The required proof is
 project A outcome changing behavior in project B and surviving refresh"* (ADR-028:50). Required: a
 counterfactual replay — record a correction, present a **semantically equivalent, differently-worded**
 task in a fresh session/project, require recall BEFORE the decision and a **different artifact** than
@@ -145,7 +152,7 @@ selected and verified; routing request → real router invocation with a receipt
 absent"* (ADR-053:44). Required: the ~20 hand-written coherent scenarios ADR-053 §1 already
 specifies, checked in.
 
-**D1 — real conditions · 50 → 95.** Fable: the product guarantee *"skips on every CI runner;
+**D1 — real conditions · 50 → 95.** At grading time, Fable found that the product guarantee *"skips on every CI runner;
 `REQUIRE_BRAIN=1` is set nowhere in the repo (grep confirmed)"*, and *"coverage floor of 14% while
 the badge says 26%."* Required: the guarantee runs, unskipped, on at least one runner per OS.
 
@@ -183,26 +190,39 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
 7. **Claim-to-behaviour release gate** (the vector, not the average).
 8. **`verify-interface` parser** replacing the regex.
 
-> **STATUS 2026-07-27 (re-verification, not a rescore) — most of this list has since shipped, mostly
-> via ADR-058, which extends this ADR's build order explicitly.** Checked each item against the
-> live artifact rather than trusting either ADR's prose:
+> **STATUS 2026-07-28 (source re-verification, not a rescore) — most of the mechanism has since
+> shipped, mostly via ADR-058, which extends this ADR's build order explicitly.** Checked each item
+> against the current source and named artifacts. “Source-wired” below does not imply that the
+> published package or the exact current SHA passed the external environment:
 >
 > | # | Item | State | Checked |
 > |---|---|---|---|
-> | 1 | Vacuous-pass guard | **DONE** (already noted above) | `--levels L5` exits 2 |
-> | 2 | Cold clean-room WhitSentry replay | **Not done** | no `WhitSentry`/clean-room test file exists under `tests/` |
-> | 3 | D8 install-blocks-on-failure + 5-image matrix | **DONE**, via ADR-058 | `.github/workflows/stranger-matrix.yml` exists (5 images incl. a hostile no-jq/no-gh cell); `bin/install.mjs` consumes `runSelfCheck()`'s exit code |
-> | 4 | Latency budget as a correctness gate | **DONE**, via ADR-058 D6 | `kb/card-lane-budget.json` (p95≤250ms, absoluteFail>1000ms) wired as a real `hardFailures` entry in `scripts/qe/ux-suite.mjs` via `scripts/qe/card-lane-gate.mjs`, not merely reported |
-> | 5 | Substitution audit re-pointed at the user's project | **Not done** | `scripts/no-silent-substitution.mjs:121` is still `audit(root = ROOT)` — no `--project` flag |
-> | 6 | D4 counterfactual learning replay | **Not done** | no counterfactual-replay fixture exists |
-> | 7 | Claim-to-behaviour release gate (vector, not average) | **Not done** | `scripts/claims-verify.mjs` carries no `PASS\|FAIL\|UNKNOWN` vector-minimum gate yet (ADR-058, which owns this build item, is itself still `impl: unbuilt`) |
-> | 8 | `verify-interface` parser replacing the regex | **DONE** (the parser half) | `plugin/scripts/verify-interface.sh:173`: "MATCH_RE is gone, not demoted" — replaced by the structural `commandNodes()` classifier (`:100`) via `4dfb867`, issue #44. The D7 corpus-with-both-mutant-polarities half of "95 on D7" is separate and still open |
+> | 1 | Vacuous-pass guard | **DONE in source** | `scripts/behavioral-l1-l4.mjs` rejects unknown levels and zero executed checks with exit 2; `tests/integration/behavioral-l1-l4-levels.test.mjs` holds both cases |
+> | 2 | Cold clean-room WhitSentry replay | **OPEN** | no WhitSentry-named or equivalent downstream clean-room substitution fixture exists under `tests/`; the generic D4 replay does not prove this incident |
+> | 3 | D8 install-blocks-on-failure + 5-image matrix | **SOURCE-WIRED; external run still required** | `987590a` added `.github/workflows/stranger-matrix.yml` with Ubuntu, macOS, Windows Git Bash, Windows PowerShell, and hostile cells; `bin/install.mjs` consumes the self-check exit and persists unproven grounding. Subsequent installer commits `2f420e7`, `7eb11fb`, and `e089074` changed the governed install path. No exact-current-SHA or published-artifact matrix result was used here |
+> | 4 | Latency budget as a correctness gate | **DONE in source for the recommendation lane** | `kb/card-lane-budget.json` (p95≤250ms, absoluteFail>1000ms) is a `hardFailures` input through `scripts/qe/card-lane-gate.mjs`; factual capability answers were deliberately removed from the fast lane after the truth-gate correction, so this is not general retrieval-latency proof |
+> | 5 | Substitution audit re-pointed at the user's project | **OPEN** | `scripts/no-silent-substitution.mjs` still exports `audit(root = ROOT)` and its CLI calls `audit()` with no `--project` argument |
+> | 6 | D4 counterfactual learning replay | **IMPLEMENTED; promotion proof OPEN** | `bbf6db0` wired the Codex-backed replay and `2b39f68` committed one exact-source result: treated 3/3, control 0/3 at source SHA `63e5e67`, with delete-lesson and brain-off-treated mutants failing. That is one source artifact, not ADR-029 win-twice, a Fable rerun, or published-package proof |
+> | 7 | Claim-to-behaviour release gate (vector, not average) | **SOURCE-WIRED; current release verdict not established here** | `scripts/release-vector.mjs` now emits `PASS\|FAIL\|UNKNOWN`, takes the vector minimum, and is invoked by release checking; `dc27f41` repaired its Windows runner boundary. This re-read did not convert workflow/source presence into an exact-SHA PASS |
+> | 8 | Replace regex authorization at the CLI boundary | **DONE in source; packed-host proof remains** | `e089074` added the structured `ruvnet_cli_help`/`ruvnet_cli_run` boundary and made the installer persist its module; `4ad464e` made raw `verify-interface` advisory and retained a non-blocking historical shell corpus. The published host remains part of D8 proof, not something this source read can award |
 >
-> Net: 3 of 8 items fully done, 1 half done, 4 still open. This does not change this ADR's own
-> `impl: unbuilt` (a plan doc doesn't get to self-certify as built by proxy through a sibling ADR),
-> but the specific "required" language in the per-dimension sections above (D8, D6, D7-parser) is
-> now describing work already landed rather than a gap — read those sections as historical rationale
-> for what ADR-058 then built, not as an open ask.
+> Net: 5 of 8 items are source-complete (1, 3, 4, 7, 8), item 6 has one committed causal run but
+> remains below its promotion bar, and items 2 and 5 are open. That is why the artifact mechanically
+> derives at least `wired`; it is **not a score** and it is not permission to say 95. The last
+> independent grade remains 15/100 at `879b928`; neither grader has re-run this recovery candidate.
+
+## Governed-source claim ledger
+
+This ledger supports the currency stamp only. It maps the ADR’s current implementation statements
+to the five governed paths; it does not adjudicate the product or substitute for external graders.
+
+| Governed path | Claim checked in this re-read | Exact referent and limit |
+|---|---|---|
+| `scripts/behavioral-l1-l4.mjs` | The vacuous-pass guard is implemented; L4 still observes injected prose rather than downstream obedience | Unknown levels and zero checks exit 2 in the final runner block; the L4 `must` arrays and union-of-hook-output logic remain speech checks |
+| `scripts/no-silent-substitution.mjs` | The downstream-project audit remains open | `audit(root = ROOT)` scans fixed directories under its argument, while `main()` invokes `audit()` without a project CLI option |
+| `tests/mesh/coexistence.test.mjs` | D5 has a source-level coexistence fixture with mutants | Commit `314be33`; sentinel ordering, config byte preservation, foreign-hook non-charging, and own-hook failure are exercised in scratch homes only |
+| `bin/install.mjs` | The installer consumes self-check state, persists structured Codex support, and has changed since the prior review | Commits `2f420e7`, `7eb11fb`, and `e089074`; these are source facts and do not prove the published tarball or five-host matrix ran green |
+| `plugin/hooks/hooks.json` | Routing outcomes are observed and raw shell reconstruction is advisory | `27cca88` adds `routing-outcome`; `4ad464e` adds `|| true` to `verify-interface`. Outcome rows are not artifact-quality labels, and source registration is not installed-host proof |
 
 ## Consequences
 
@@ -216,11 +236,14 @@ component diagnostics; they stop being evidence that the brain changes Claude's 
   answer *quality* — a grader model may be a second opinion, never the sole gate.
 - 95 on both graders is only claimable when **both** re-run the same rubric and agree. One grader at
   95 and the other at 60 is a 60.
+- No grader has re-run this recovery candidate. The exact-SHA 15/100 result at `879b928` remains the
+  last independent score recorded here; source reconciliation cannot revise it.
 
 ## Currency log
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Re-read the full ADR and all five governed paths after five post-document commits; changed `impl:` from stale `unbuilt` to source-currency `verified`, replaced the obsolete build-order table, and added a governed-source claim ledger. No score or release verdict was promoted. | `doc-currency` reported drift after `2f420e7`, `27cca88`, `7eb11fb`, `e089074`, and `4ad464e`. The re-read confirms source wiring in `bin/install.mjs` and `plugin/hooks/hooks.json`, while `scripts/no-silent-substitution.mjs` still lacks downstream `--project` routing. `2b39f68` is one D4 causal artifact, not win-twice; `/private/tmp/qe-grade-gpt56-879b928.out` remains the last external grade at 15/100 and explicitly leaves exact-SHA matrix, published artifact, and both-grader proof untested. |
 | 2026-07-28 | Re-read all governed paths after the exact-SHA adversarial grade; the document's build-order claims remain accurate, and the current measured score is recorded as 15/100 rather than promoted. | `/private/tmp/qe-grade-gpt56-879b928.out` found D4 15, D1 30, and an overall vector minimum of 15 at SHA `879b928`. This repair closes Codex transport, cache-verifier, portable wiring, and Ruflo-memory-init defects, but does not claim the still-missing N=3 causal replay or stranger matrix. |
 | 2026-07-27 | v2 — corrected the 83-vs-38 framing after the owner caught it: different subject (product self-score vs independent grade of the test suite), different date. Replaced with the falsifiable claim, README:484/526 "L1–L4 behavioral all pass" |
 | 2026-07-27 | Initial draft | Owner's demand for a 95 plan after Fable 53/100 and GPT-5.6-Sol 38/100 (2026-07-27, `qe-grade-gpt.out:18503-18676`; `02567c43-….jsonl:2672`). Three concealment mechanisms verified first-hand: the vacuous `--levels L5` PASS (fixed here), L4's string-matching `must:` list, and `no-silent-substitution.mjs`'s `audit(root = ROOT)` scanning this repo instead of the user's |

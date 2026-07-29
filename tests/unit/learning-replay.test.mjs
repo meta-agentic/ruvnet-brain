@@ -20,8 +20,88 @@ import {
   verdictForRun, aggregate, checkArtifact, LOAD_BEARING,
   assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
+  replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
+  checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
+  TRAP, classifyPostTaskCommand, postTaskSubcommandCorrect, verifyPostTaskContract,
+  assertPostTaskPersisted,
+  cleanupFixtureDaemons,
 } from '../../scripts/learning-replay.mjs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+
+describe('CLI help is side-effect free', () => {
+  it('--help prints usage, exits zero, and does not overwrite the replay artifact', () => {
+    const artifact = path.resolve(import.meta.dirname, '../../data/learning-replay-result.json');
+    const before = fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null;
+    const r = spawnSync(process.execPath, ['scripts/learning-replay.mjs', '--help'], {
+      cwd: path.resolve(import.meta.dirname, '../..'),
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('Usage:');
+    expect(fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null).toBe(before);
+  });
+});
+
+describe('executor failures remain visible in replay evidence', () => {
+  it('preserves a subscription rate-limit result as the arm error', () => {
+    const events = [{
+      type: 'result',
+      is_error: true,
+      api_error_status: 429,
+      terminal_reason: 'api_error',
+      result: "You've hit your weekly limit",
+    }];
+    expect(replayRunError(events, {})).toContain("HTTP 429");
+    expect(replayRunError(events, {})).toContain("weekly limit");
+  });
+
+  it('preserves a Codex turn failure instead of treating an empty artifact as model behavior', () => {
+    const events = [
+      { type: 'turn.started' },
+      { type: 'item.completed', item: { type: 'error', message: 'capacity exhausted' } },
+      { type: 'turn.failed', error: { message: 'capacity exhausted' } },
+    ];
+    expect(parseCodexRunError(events, { status: 1 })).toContain('capacity exhausted');
+  });
+
+  it('does not mistake Codex advisory hook notices for a failed completed turn', () => {
+    const events = [
+      { type: 'item.completed', item: { type: 'error', message: 'hook trust bypass is enabled' } },
+      { type: 'turn.started' },
+      { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } },
+    ];
+    expect(parseCodexRunError(events, { status: 0 })).toBeNull();
+  });
+});
+
+describe('Codex subscription replay host', () => {
+  it('runs Codex read-only with the installed Brain plugin hooks trusted', () => {
+    const args = buildCodexArgv({ model: 'gpt-5.6-sol', prompt: 'fixture prompt' });
+    expect(args.slice(0, 2)).toEqual(['exec', '--ephemeral']);
+    expect(args).toContain('--sandbox');
+    expect(args).toContain('read-only');
+    expect(args).toContain('--json');
+    expect(args).not.toContain('--ignore-user-config');
+    expect(args).toContain('--dangerously-bypass-hook-trust');
+    expect(args).toContain('shell_environment_policy.inherit="all"');
+    expect(args).toContain('gpt-5.6-sol');
+    expect(args.at(-1)).toBe('fixture prompt');
+    expect(args.join(' ')).not.toMatch(/max-budget-usd|permission-mode|include-hook-events/);
+  });
+
+  it('proves lesson delivery happened before the first recorded tool attempt', () => {
+    expect(codexLessonBeforeTool([
+      { kind: 'lesson', atNs: '100' },
+      { kind: 'tool', atNs: '200' },
+    ])).toBe(true);
+    expect(codexLessonBeforeTool([
+      { kind: 'tool', atNs: '100' },
+      { kind: 'lesson', atNs: '200' },
+    ])).toBe(false);
+    expect(codexLessonBeforeTool([{ kind: 'tool', atNs: '100' }])).toBe(false);
+  });
+});
 
 // A PASSING run under the CURRENT oracle: the token, the real subcommand, a command that executed
 // and retrieved, and the lesson before the first tool call. Every test below removes exactly one.
@@ -79,6 +159,125 @@ describe('the oracle is a PARSE, not a grep', () => {
     // The token IS carried by the wrong-subcommand form — which is exactly why the token alone was
     // never sufficient, and why `ruflo recall -q` was certified as a PASS until 2026-07-28.
     expect(carriesToken(classifyCommand('ruflo recall -q "x"'))).toBe(true);
+  });
+});
+
+function writePostTaskFixtureBinary(dir) {
+  // A shebang-only executable cannot be launched by child_process on Windows. The production
+  // helper runs injected .cjs fixtures through process.execPath while leaving the real Ruflo
+  // binary path untouched, so this contract test exercises the same JavaScript fixture everywhere.
+  const file = path.join(dir, 'ruflo-fixture.cjs');
+  fs.writeFileSync(file, `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+if (args.includes('--help')) {
+  console.log('--task Task description. Without this + --agent, no routing outcome is recorded.');
+  console.log('--agent Agent that executed the task');
+  console.log('--store-results Also persist the routing decision');
+  process.exit(0);
+}
+const value = (short, long) => {
+  const i = args.findIndex((arg) => arg === short || arg === long);
+  return i >= 0 ? args[i + 1] : null;
+};
+const id = value('-i', '--task-id') || 'fixture-auto';
+const task = value('-t', '--task');
+const agent = value('-a', '--agent');
+console.log('[INFO] Recording outcome for task: ' + id);
+console.log('[OK] Task outcome recorded: SUCCESS');
+if (task && agent) {
+  const flow = path.join(process.cwd(), '.claude-flow');
+  fs.mkdirSync(flow, { recursive: true });
+  fs.writeFileSync(path.join(flow, 'routing-outcomes.json'), JSON.stringify({
+    outcomes: [{ task, agent, success: true, quality: 0.85 }],
+  }));
+  if (args.includes('--store-results')) {
+    const memory = path.join(flow, 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'store.json'), JSON.stringify({
+      entries: {
+        ['routing-decision:' + id]: {
+          value: JSON.stringify({ task, agent, success: true, quality: 0.85 }),
+        },
+      },
+    }));
+  }
+}
+`);
+  fs.chmodSync(file, 0o755);
+  return file;
+}
+
+describe('the independent hooks post-task persistence trap', () => {
+  it('scores the token only when task, agent, and store-results are all present', () => {
+    const full = 'ruflo hooks post-task -i d4-one --success true --task "stabilize retry budget" --agent tester --store-results';
+    expect(classifyPostTaskCommand(full)).toBe('flagged');
+    expect(classifyPostTaskCommand('ruflo hooks post-task -i d4-one --success true')).toBe('partial');
+    expect(classifyPostTaskCommand('ruflo hooks post-task --task "x" --agent tester')).toBe('partial');
+    expect(classifyPostTaskCommand(`echo "${full}"`)).toBe('none');
+  });
+
+  it('requires the real hooks post-task command tree', () => {
+    expect(postTaskSubcommandCorrect('ruflo hooks post-task -i d4-one --success true')).toBe(true);
+    expect(postTaskSubcommandCorrect('ruflo hooks pre-task -i d4-one')).toBe(false);
+  });
+
+  it('verifies the three-part persistence contract through an injected CLI fixture', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-contract-'));
+    try {
+      const verified = verifyPostTaskContract(writePostTaskFixtureBinary(base));
+      expect(verified.ok, verified.why).toBe(true);
+      expect(verified.missingExit).toBe(0);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('executes the safe treated form and reads back both persistence layers', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-'));
+    try {
+      const fixture = writePostTaskFixtureBinary(base);
+      const result = executeProducedCommand(
+        'ruflo hooks post-task -i d4-post-live --success true --task "stabilize retry budget" --agent tester --store-results',
+        { cwd: base, base, trap: TRAP.POST_TASK, ruflo: fixture },
+      );
+      expect(result.exit, result.output).toBe(0);
+      expect(result.retrieved, result.why).toBe(true);
+      expect(result.why).toMatch(/routing outcome.*routing-decision/i);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('MUTANT: stdout success without store-results is not persistence', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-no-store-'));
+    try {
+      const fixture = writePostTaskFixtureBinary(base);
+      const result = executeProducedCommand(
+        'ruflo hooks post-task -i d4-post-no-store --success true --task "stabilize retry budget" --agent tester',
+        { cwd: base, base, trap: TRAP.POST_TASK, ruflo: fixture },
+      );
+      expect(result.exit, result.output).toBe(0);
+      expect(result.retrieved).toBe(false);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('MUTANT: fabricated stdout cannot replace the persisted rows', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-fake-'));
+    try {
+      const evidence = assertPostTaskPersisted({
+        args: ['hooks', 'post-task', '-i', 'd4-fake', '--success', 'true', '--task', 'stabilize retry budget', '--agent', 'tester', '--store-results'],
+        output: '[OK] Task outcome recorded: SUCCESS',
+        cwd: base,
+      });
+      expect(evidence.retrieved).toBe(false);
+      expect(evidence.why).toMatch(/stores were not readable/);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 
@@ -231,7 +430,9 @@ describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checke
     spawnSync(RUFLO_BIN, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { encoding: 'utf8', timeout: 120_000, cwd: dir });
     spawnSync(RUFLO_BIN, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', db], { encoding: 'utf8', timeout: 120_000, cwd: dir });
   });
-  afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  });
 
   t('the CORRECT command retrieves', () => {
     const e = executeProducedCommand('ruflo memory search -q "caching strategy"', { cwd: dir, base: dir });
@@ -306,6 +507,7 @@ describe('the three PASS conditions are each load-bearing', () => {
 
   it('a harness error is UNKNOWN and UNKNOWN is never PASS', () => {
     expect(verdictForRun(run({ error: 'spawn failed' })).verdict).toBe(VERDICT.UNKNOWN);
+    expect(aggregate([run({ error: 'HTTP 429: weekly limit' })]).why).toContain('HTTP 429: weekly limit');
     expect(EXIT[VERDICT.UNKNOWN]).not.toBe(0);
     expect(EXIT[VERDICT.INCONCLUSIVE]).not.toBe(0);
     expect(EXIT[VERDICT.FAIL]).not.toBe(0);
@@ -362,6 +564,131 @@ describe('--check gates on a STATED SHA, and UNKNOWN is never PASS', () => {
     expect(LOAD_BEARING).toContain('scripts/learning-replay.mjs');
     expect(LOAD_BEARING).toContain('scripts/lesson-gate.mjs');
     expect(LOAD_BEARING).toContain('plugin/scripts/hook-shim.mjs');
+  });
+});
+
+describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-mutants-')); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  const head = () => spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: path.resolve(import.meta.dirname, '../..'),
+    encoding: 'utf8',
+  }).stdout.trim();
+  const write = (trap, name, body) => {
+    const file = path.join(dir, `${trap}-${name}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      invariant: INVARIANT,
+      verdict: VERDICT.FAIL,
+      sha: head(),
+      at: new Date().toISOString(),
+      trap,
+      mutant: name,
+      n: 1,
+      passes: 0,
+      controlTokenRuns: 0,
+      runs: [{
+        verdict: VERDICT.FAIL,
+        treated: {
+          class: 'positional',
+          lessonBeforeFirstToolCall: false,
+          lessonDelivered: false,
+        },
+        control: { class: 'positional', lessonDelivered: false },
+      }],
+      ...body,
+    }));
+    return file;
+  };
+  const filesForBoth = (overrides = {}) => Object.fromEntries(
+    [TRAP.MEMORY_SEARCH, TRAP.POST_TASK].map((trap) => [trap, {
+      'delete-lesson': write(trap, 'delete-lesson', overrides[`${trap}/delete-lesson`]),
+      'brain-off-treated': write(trap, 'brain-off-treated', overrides[`${trap}/brain-off-treated`]),
+    }]),
+  );
+
+  it('accepts only a delete-lesson red and a brain-off treated/control match', () => {
+    const files = filesForBoth();
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.PASS);
+    expect(result.checked).toEqual([
+      `${TRAP.MEMORY_SEARCH}/delete-lesson`,
+      `${TRAP.MEMORY_SEARCH}/brain-off-treated`,
+      `${TRAP.POST_TASK}/delete-lesson`,
+      `${TRAP.POST_TASK}/brain-off-treated`,
+    ]);
+  });
+
+  it('rejects a delete-lesson mutant that still received the lesson', () => {
+    const files = filesForBoth({
+      [`${TRAP.MEMORY_SEARCH}/delete-lesson`]: {
+        runs: [{
+          verdict: VERDICT.PASS,
+          treated: { class: 'flagged', lessonBeforeFirstToolCall: true, lessonDelivered: true },
+          control: { class: 'positional', lessonDelivered: false },
+        }],
+      },
+    });
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.FAIL);
+    expect(result.why).toMatch(/delete-lesson.*lesson/i);
+  });
+
+  it('rejects a brain-off treated arm that differs from its control', () => {
+    const files = filesForBoth({
+      [`${TRAP.MEMORY_SEARCH}/brain-off-treated`]: {
+        runs: [{
+          verdict: VERDICT.FAIL,
+          treated: { class: 'flagged', lessonBeforeFirstToolCall: false, lessonDelivered: false },
+          control: { class: 'positional', lessonDelivered: false },
+        }],
+      },
+    });
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.FAIL);
+    expect(result.why).toMatch(/brain-off-treated.*control/i);
+  });
+
+  it('declares stable default result paths so the CLI and CI cannot disagree', () => {
+    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.POST_TASK]);
+    expect(MUTANT_RESULT_FILES[TRAP.MEMORY_SEARCH]['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
+    expect(MUTANT_RESULT_FILES[TRAP.POST_TASK]['brain-off-treated']).toMatch(/post-task-brain-off-result\.json$/);
+  });
+});
+
+describe('parallel replay fixture allocation', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-allocate-')); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('allocates different directories even when two runs start in the same millisecond', () => {
+    const first = allocateRunBase(dir);
+    const second = allocateRunBase(dir);
+    expect(first).not.toBe(second);
+    expect(fs.existsSync(first)).toBe(true);
+    expect(fs.existsSync(second)).toBe(true);
+  });
+});
+
+describe('fixture process containment', () => {
+  it.skipIf(process.platform === 'win32')('reaps only a daemon whose explicit workspace is under this replay run', async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-daemon-cleanup-'));
+    const child = spawn(process.execPath, [
+      '-e', 'setInterval(() => {}, 1000)',
+      'daemon', 'start', '--foreground', '--workspace', path.join(base, 'fixture-project-a'),
+    ], { stdio: 'ignore' });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      const result = cleanupFixtureDaemons({ base });
+      expect(result.found).toBe(1);
+      expect(result.stopped).toBe(1);
+      await new Promise((resolve) => child.once('exit', resolve));
+      expect(() => process.kill(child.pid, 0)).toThrow();
+    } finally {
+      try { process.kill(child.pid, 'SIGKILL'); } catch { /* already stopped */ }
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 

@@ -46,6 +46,16 @@ function runOrDie(label, cmd, args, opts = {}) {
 
 console.log(`\n${c.b('RuvNet Brain — release / definition-of-done')} ${c.dim('· ' + (PUBLISH ? 'PUBLISH' : 'check-only') + ' · shipping ' + V())}\n`);
 
+// A verdict is only about the exact committed candidate. Check-only used to permit a dirty tree
+// while publish checked cleanliness much later, so preflight could certify bytes that would never
+// ship. Both modes now bind to the same committed tree before any expensive gate runs.
+const initialDirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
+if (initialDirty) {
+  console.error(`\n${c.r('✗ GATE FAILED: working tree not clean')} ${c.dim('— preflight and publish both certify committed bytes only.')}`);
+  console.error(initialDirty.split('\n').slice(0, 10).map((l) => '    ' + l).join('\n'));
+  process.exit(1);
+}
+
 // A. version single source of truth
 step('A', 'version single-source-of-truth agrees across every surface');
 runOrDie('version sync', process.execPath, ['scripts/sync-version.mjs', '--check']);
@@ -66,6 +76,11 @@ runOrDie('wired (no orphan modules)', process.execPath, ['scripts/wired-check.mj
 // This is the real ship path, not an npm alias or a test import: every check-only preflight and
 // every publish attempt executes the eight D1-D8 detectors on the candidate SHA.
 runOrDie('release vector (all critical invariants PASS)', process.execPath, ['scripts/release-vector.mjs']);
+
+// The Top-100 corpus spans naive through expert prompts and grades semantic clauses, citations,
+// abstention, and latency. A manual-only benchmark is a report; a release-path benchmark is a
+// guarantee. The benchmark itself fails closed unless all 100 canonical questions run.
+runOrDie('Top-100 source-grounded recall contract', process.execPath, ['scripts/top100-benchmark.mjs', '--no-write']);
 
 // A2. Stable Spine restart classifier (ADR-023, red-team finding 18): diff the boot-frozen SHELL
 // (hooks.json, hook-shim, MCP server, .mcp.json, skills/, commands/) against the previous release
@@ -138,12 +153,6 @@ if (PUBLISH) {
   }
 
   step('C+', 'push to origin/main — safe now that A–C passed');
-  const dirty = execFileSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim();
-  if (dirty) {
-    console.error(`\n${c.r('✗ GATE FAILED: working tree not clean')} ${c.dim('— commit (or stash) everything before publishing; we ship exactly what is committed + pushed.')}`);
-    console.error(dirty.split('\n').slice(0, 10).map((l) => '    ' + l).join('\n'));
-    process.exit(1);
-  }
   let ahead = '0';
   try { ahead = execFileSync('git', ['-C', ROOT, 'rev-list', '--count', 'origin/main..HEAD'], { encoding: 'utf8' }).trim(); } catch { /* origin/main ref missing — push will resolve */ ahead = '?'; }
   if (ahead === '0') console.log(c.dim('  nothing to push — HEAD already on origin/main'));
@@ -217,4 +226,8 @@ step('D+', 'deploy-surface sweep — what GitHub and Vercel think about what we 
 step('E', 'verify-channels — the live walk of every user path');
 runOrDie('verify-channels', process.execPath, ['scripts/verify-channels.mjs']);
 
-console.log(`\n${c.g(c.b('✓✓✓ SHIPPED'))} — every gate passed and every live channel is current. ${c.dim('A user on any path (npm, npx, explainer, --update) gets the working, current build.')}\n`);
+if (PUBLISH) {
+  console.log(`\n${c.g(c.b('✓✓✓ SHIPPED'))} — every gate passed and every live channel is current. ${c.dim('A user on any path (npm, npx, explainer, --update) gets the working, current build.')}\n`);
+} else {
+  console.log(`\n${c.g(c.b('✓✓✓ PREFLIGHT PASS — NOT PUBLISHED'))} — the committed candidate passed every check-only gate.\n`);
+}

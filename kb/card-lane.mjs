@@ -138,6 +138,77 @@ const MIN_COVERAGE = 0.34;   // at least a third of the query's own content word
 const MIN_MARGIN = 1;        // the winner must beat the runner-up by at least one more overlapping word
 
 /**
+ * Use the card index as a source-search router when a generic card cannot honestly answer.
+ * Candidate repo names are routing hints only; the caller still has to retrieve source evidence.
+ */
+export function routeReposFromCards(query, dir, availableRepos, { limit = 3 } = {}) {
+  const q = String(query || '').trim();
+  const available = new Set(Array.isArray(availableRepos) ? availableRepos : []);
+  const cards = loadCards(dir);
+  if (!q || !cards?.length || !available.size) {
+    return { repos: [], confidence: 'none', reason: !q ? 'empty query' : 'card index unavailable' };
+  }
+
+  const qTokens = contentTokens(q);
+  const qIdentity = wholeTokens(q);
+  const scopedPackage = /@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/i.test(q);
+  const aliases = new Map([['metaharness', 'agent-harness-generator']]);
+  const explicitlyNamed = new Set();
+  for (const repo of available) {
+    if (qIdentity.has(repo.toLowerCase())) explicitlyNamed.add(repo);
+  }
+  for (const [alias, repo] of aliases) {
+    if (qIdentity.has(alias) && available.has(repo)) explicitlyNamed.add(repo);
+  }
+
+  const scored = cards
+    .filter((card) => available.has(card.repo))
+    .map((card) => {
+      const named = explicitlyNamed.has(card.repo);
+      const tokens = qTokens.filter((token) => token !== card.repoIdentity);
+      let overlap = 0;
+      for (const token of tokens) if (card.tokenSet.has(token)) overlap++;
+      return { repo: card.repo, named, overlap, coverage: tokens.length ? overlap / tokens.length : 0 };
+    })
+    .sort((a, b) => Number(b.named) - Number(a.named) || b.overlap - a.overlap || b.coverage - a.coverage);
+
+  const named = scored.filter((candidate) => candidate.named);
+  const first = scored[0];
+  const second = scored[1];
+  const described = !named.length
+    && first?.overlap >= MIN_OVERLAP
+    && first.coverage >= MIN_COVERAGE
+    && first.overlap - (second?.overlap || 0) >= MIN_MARGIN;
+  if (!named.length && !described) {
+    return {
+      repos: [],
+      confidence: 'none',
+      reason: `card router was ambiguous (closest=${first?.repo || 'none'} overlap=${first?.overlap || 0})`,
+    };
+  }
+
+  const selected = [];
+  const candidates = named.length
+    ? (scopedPackage ? named : [...named, ...scored.filter((candidate) => !candidate.named)])
+    : scored;
+  for (const candidate of candidates) {
+    if (candidate.overlap <= 0 && !candidate.named) continue;
+    if (!selected.includes(candidate.repo)) selected.push(candidate.repo);
+    if (selected.length >= Math.max(1, limit)) break;
+  }
+  if (!scopedPackage && available.has('concepts') && !selected.includes('concepts')) {
+    selected.push('concepts');
+  }
+  return {
+    repos: selected,
+    confidence: named.length ? 'named' : 'described',
+    reason: named.length
+      ? `query explicitly names ${named.map((candidate) => candidate.repo).join(', ')}`
+      : `card evidence favors ${first.repo} (${first.overlap} matching concepts)`,
+  };
+}
+
+/**
  * The fast lane's one entry point. Returns a usable, cited answer when the cards confidently cover
  * the query, or { hit: false, reason } when they do not — never a guess dressed as an answer.
  */
@@ -146,6 +217,20 @@ export function answerFromCards(query, dir) {
   if (!q) return { hit: false, reason: 'empty query' };
   if (requiresImplementationProof(q)) {
     return { hit: false, reason: 'implementation evidence required; curated cards cannot prove built or shipped state' };
+  }
+  // Capability cards answer product-level selection and concepts. Package APIs, registration code,
+  // ADR status, and benchmark claims require the source-bearing lane even when a generic card has
+  // overlapping words.
+  const scopedPackage = q.match(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/i)?.[0];
+  if (scopedPackage) {
+    return { hit: false, reason: `scoped package detail requires source retrieval (${scopedPackage})` };
+  }
+  const sourceDetail =
+    /\b(?:adr[-\s_]?\d+|api|sdk|backends?|exports?|registered|source code|package names?|crate names?|workspace|supersedes?)\b/i;
+  const claimValidation =
+    /\b(?:validate|benchmark(?:ed|ing)?)\b[\s\S]{0,80}\b(?:claim|performance)\b|\b(?:claim|performance)\b[\s\S]{0,80}\b(?:validate|benchmark(?:ed|ing)?)\b/i;
+  if (sourceDetail.test(q) || claimValidation.test(q)) {
+    return { hit: false, reason: 'implementation/source detail requires source retrieval' };
   }
   const cards = loadCards(dir);
   if (!cards || !cards.length) return { hit: false, reason: 'no capability-cards.md in this bundle' };

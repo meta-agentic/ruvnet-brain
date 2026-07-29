@@ -33,12 +33,39 @@ export function verdictOf(results) {
   return results.reduce((worst, r) => (RANK.indexOf(r.state) < RANK.indexOf(worst) ? r.state : worst), 'PASS');
 }
 
+export function candidateLineage() {
+  const git = (args) => {
+    const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : '';
+  };
+  return {
+    sha: git(['rev-parse', 'HEAD']) || 'UNKNOWN-SHA',
+    tree: git(['rev-parse', 'HEAD^{tree}']) || 'UNKNOWN-TREE',
+    dirty: Boolean(git(['status', '--porcelain'])),
+  };
+}
+
+export function verdictWithLineage(results, lineage) {
+  return lineage?.dirty ? 'FAIL' : verdictOf(results);
+}
+
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch { return null; } };
 
 /** Run a command; UNKNOWN (not FAIL) when the runner itself could not execute. */
 function run(cmd, args, timeoutMs = 120_000) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', timeout: timeoutMs });
+  // npm installs `npm.cmd` / `npx.cmd` command shims on Windows. Direct spawn does not resolve the
+  // extension through PATHEXT, and .cmd files require cmd.exe, so a healthy detector otherwise
+  // reads UNKNOWN with ENOENT. Invoke the command interpreter explicitly rather than `shell:true`;
+  // the latter concatenates arguments into a shell string and is deprecated for that reason.
+  const windowsCommandShim = process.platform === 'win32' && /^(?:npm|npx)$/i.test(cmd);
+  const executable = windowsCommandShim ? (process.env.ComSpec || 'cmd.exe') : cmd;
+  const spawnArgs = windowsCommandShim ? ['/d', '/c', `${cmd}.cmd`, ...args] : args;
+  const r = spawnSync(executable, spawnArgs, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: timeoutMs,
+  });
   if (r.error || r.status === null) return { state: 'UNKNOWN', why: `runner did not complete: ${r.error?.code || 'killed/timeout'}` };
   return { state: r.status === 0 ? 'PASS' : 'FAIL', why: r.status === 0 ? 'exit 0' : `exit ${r.status}`, out: r.stdout };
 }
@@ -106,7 +133,7 @@ export const INVARIANTS = [
       try { mod = await import(new URL('./learning-replay.mjs', import.meta.url).href); }
       catch { return { state: 'UNKNOWN', why: 'counterfactual replay harness absent' }; }
       let r;
-      try { r = mod.checkArtifact(); } catch (e) { return { state: 'UNKNOWN', why: `replay artifact unreadable: ${e.message}` }; }
+      try { r = mod.checkPortfolio(); } catch (e) { return { state: 'UNKNOWN', why: `replay portfolio unreadable: ${e.message}` }; }
       // `.status` is the field checkArtifact() actually returns — read, not assumed. Reaching for
       // `.verdict` (the name used INSIDE the nested artifact) silently yielded undefined and made a
       // real PASS read UNKNOWN: the delegation "worked" while reporting the opposite of the truth.
@@ -142,9 +169,30 @@ export const INVARIANTS = [
         .map((h) => String(h?.command || ''));
       // the shim dispatches by a bare handler id, so match the id as a WHOLE argument token
       const fires = commands.some((c) => /(^|[\s"'/])signal-watch($|[\s"'|;])/.test(c));
-      return fires
-        ? { state: 'PASS', why: `watcher registered as a dispatchable handler in ${commands.length} shipped registration(s)` }
-        : { state: 'FAIL', why: 'watcher exists but is not registered as a dispatchable handler — it will never fire' };
+      if (!fires) {
+        return { state: 'FAIL', why: 'watcher exists but is not registered as a dispatchable handler — it will never fire' };
+      }
+
+      // Registration is necessary but not sufficient. The first release gate stopped here and
+      // certified a named handler without proving that a real red verdict reached the maintainer.
+      // Execute the whole shipped path: push debt → poller → red surface → dedupe → green close →
+      // silence. The paired mutation suite deletes the consumer, breaks dedupe, converts UNKNOWN
+      // to green, and blinds the observer; every mutant must remain killed for D3 to pass.
+      const behavior = run('npx', [
+        'vitest', 'run',
+        'tests/unit/signal-lifecycle.test.mjs',
+        'tests/mutation/signal-watch-mutation.test.mjs',
+        '--reporter=dot',
+      ]);
+      return behavior.state === 'PASS'
+        ? {
+            state: 'PASS',
+            why: `registered in ${commands.length} shipped registration(s); executable red→surface→green→silence lifecycle and 4 mutants pass`,
+          }
+        : {
+            state: behavior.state,
+            why: `signal-watch behavioral lifecycle or mutant proof failed (${behavior.why})`,
+          };
     },
   },
   {
@@ -178,26 +226,28 @@ export function headSha() {
 export const BANNED_WHEN_DEGRADED = ['healthy', 'proven', 'all pass'];
 
 export async function evaluate(invariants = INVARIANTS) {
-  const sha = headSha();
+  const lineage = candidateLineage();
+  const sha = lineage.sha;
   const results = [];
   for (const inv of invariants) {
     const r = await inv.detect();
     results.push({ name: inv.name, dimension: inv.dimension, state: r.state, why: r.why, sha });
   }
-  return { sha, results, verdict: verdictOf(results) };
+  return { sha, lineage, results, verdict: verdictWithLineage(results, lineage) };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const { sha, results, verdict } = await evaluate();
+  const { sha, lineage, results, verdict } = await evaluate();
   const json = process.argv.includes('--json');
   if (json) {
-    console.log(JSON.stringify({ sha, verdict, results }, null, 2));
+    console.log(JSON.stringify({ sha, lineage, verdict, results }, null, 2));
   } else {
     const mark = { PASS: '✓', FAIL: '✗', UNKNOWN: '?' };
     console.log(`\n  release vector @ ${sha.slice(0, 7)}\n`);
     for (const r of results) {
       console.log(`  ${mark[r.state]} ${r.state.padEnd(7)} ${r.dimension.padEnd(3)} ${r.name.padEnd(22)} ${r.why}`);
     }
+    console.log(`  lineage: tree ${lineage.tree.slice(0, 12)} · ${lineage.dirty ? 'DIRTY (release-blocking)' : 'clean'}`);
     console.log(`\n  verdict: ${verdict}   (vector MINIMUM over ${results.length} invariants — never an average)`);
     if (verdict !== 'PASS') {
       console.log(`  release metadata must read DEGRADED; these strings are banned: ${BANNED_WHEN_DEGRADED.map((s) => `"${s}"`).join(', ')}\n`);

@@ -39,20 +39,41 @@ const CONSOLE_MJS = path.join(REPO, 'scripts', 'onboarding-console.mjs');
 function waitForReady(port, timeoutMs = 20000) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
     const tick = () => {
+      if (settled) return;
       const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 800 }, (res) => {
         let b = '';
-        res.on('data', (c) => { b += c; if (b.length > 8192) res.destroy(); });
+        res.on('data', (c) => {
+          if (settled) return;
+          b += c;
+          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) {
+            finish(resolve, Date.now() - start);
+            res.destroy();
+          } else if (b.length > 65536) {
+            b = b.slice(-65536);
+          }
+        });
         res.on('end', () => {
-          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) resolve(Date.now() - start);
+          if (settled) return;
+          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) finish(resolve, Date.now() - start);
           else retry();
         });
-        res.on('error', retry);
+        res.on('error', () => { if (!settled) retry(); });
       });
-      req.on('error', retry);
-      req.on('timeout', () => { req.destroy(); retry(); });
+      req.on('error', () => { if (!settled) retry(); });
+      req.on('timeout', () => { req.destroy(); if (!settled) retry(); });
     };
-    const retry = () => { if (Date.now() - start > timeoutMs) reject(new Error('server never became ready')); else setTimeout(tick, 150); };
+    const retry = () => {
+      if (settled) return;
+      if (Date.now() - start > timeoutMs) finish(reject, new Error('server never became ready'));
+      else setTimeout(tick, 150);
+    };
     tick();
   });
 }
@@ -61,7 +82,11 @@ function waitForReady(port, timeoutMs = 20000) {
 function startConsole(port, home) {
   const env = { ...process.env, HOME: home, CONSOLE_PORT: String(port) };
   const child = spawn(process.execPath, [CONSOLE_MJS, '--serve'], { env, stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO });
-  child.stdout.on('data', () => {}); child.stderr.on('data', () => {});   // drain, don't block
+  // Drain and mirror the isolated fixture's startup output to stderr. The parent UX runner captures
+  // only the last stages on failure, so a bind/import crash is diagnosable without polluting JSON.
+  child.stdout.on('data', (chunk) => process.stderr.write(`[render-console:stdout] ${String(chunk)}`));
+  child.stderr.on('data', (chunk) => process.stderr.write(`[render-console:stderr] ${String(chunk)}`));
+  child.on('exit', (code, signal) => process.stderr.write(`[render-console:exit] code=${code} signal=${signal}\n`));
   return child;
 }
 
@@ -70,9 +95,16 @@ function prewarm(home) {
   return new Promise((resolve) => {
     const env = { ...process.env, HOME: home };
     const child = spawn(process.execPath, [CONSOLE_MJS, '--refresh-cache'], { env, stdio: 'ignore', cwd: REPO });
-    child.on('exit', () => resolve());
-    child.on('error', () => resolve());
-    setTimeout(() => { try { child.kill(); } catch {} resolve(); }, 60000);   // cap the warm-up
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    child.on('exit', finish);
+    child.on('error', finish);
+    const timer = setTimeout(() => { try { child.kill(); } catch {} finish(); }, 60000);
   });
 }
 
@@ -87,6 +119,7 @@ async function timeToSelector(browser, url, selector, label) {
 }
 
 export async function runRenderProbe() {
+  const stage = (name) => process.stderr.write(`[render-probe] ${name}\n`);
   if (!chromium) {
     return { results: [], notes: [`playwright not loadable (${playwrightLoadError}) — render probe NOT RUN, never faked as pass`] };
   }
@@ -97,24 +130,42 @@ export async function runRenderProbe() {
   const results = [];
   const notes = [];
   try {
+    stage('prewarm:start');
     await prewarm(home);   // make the render measure the WARM common case
+    stage('prewarm:done');
     server = startConsole(port, home);
+    stage('server:spawned');
     const readyMs = await waitForReady(port);
+    stage('server:ready');
     results.push({ label: 'server-ready', selector: 'GET / → 200', ms: readyMs });
     const base = `http://127.0.0.1:${port}`;
 
     browser = await chromium.launch({ headless: true });
+    stage('browser:launched');
+    // Chromium's first renderer process is a browser-startup cost, not console render time. On a
+    // loaded Windows runner it added 7.9s to one otherwise 376–1031ms page series. Prime one blank
+    // renderer before starting the user-facing clock, matching the real "open this in my already
+    // running browser" path this warm-console probe claims to measure.
+    const warmPage = await browser.newPage();
+    await warmPage.goto('about:blank');
+    await warmPage.close();
+    stage('browser:warmed');
     // 1a — console time-to-visible: #card-capabilities painted
     results.push(await timeToSelector(browser, `${base}/`, '#card-capabilities', 'console time-to-visible'));
+    stage('console:visible');
     // 1b — tips time-to-visible: hero + first section painted (grounded selectors from console/tips.html)
     results.push(await timeToSelector(browser, `${base}/tips`, '.hero-scene', 'tips time-to-visible (hero)'));
+    stage('tips-hero:visible');
     results.push(await timeToSelector(browser, `${base}/tips`, '#inventory', 'tips first-section'));
+    stage('tips-inventory:visible');
   } catch (e) {
     notes.push(`render probe error: ${e.message}`);
   } finally {
+    stage('cleanup:start');
     try { if (browser) await browser.close(); } catch {}
     try { if (server) server.kill(); } catch {}
     try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
+    stage('cleanup:done');
   }
   return { results, notes };
 }

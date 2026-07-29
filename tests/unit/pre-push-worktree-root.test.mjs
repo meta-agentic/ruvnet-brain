@@ -17,10 +17,12 @@ describe('pre-push gate worktree routing', () => {
   it('validates the repository being pushed even when the hook file lives in another checkout', () => {
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'pre-push-repo-'));
     const foreign = fs.mkdtempSync(path.join(os.tmpdir(), 'pre-push-foreign-'));
-    temps.push(repo, foreign);
+    const remote = fs.mkdtempSync(path.join(os.tmpdir(), 'pre-push-remote-'));
+    temps.push(repo, foreign, remote);
     const foreignHook = path.join(foreign, 'scripts', 'git-hooks', 'pre-push');
     fs.mkdirSync(path.dirname(foreignHook), { recursive: true });
     fs.copyFileSync(HOOK, foreignHook);
+    fs.chmodSync(foreignHook, 0o755);
     fs.mkdirSync(path.join(repo, 'scripts'), { recursive: true });
     fs.writeFileSync(
       path.join(repo, 'scripts', 'verify-channels.mjs'),
@@ -35,14 +37,18 @@ describe('pre-push gate worktree routing', () => {
       '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
       'commit', '-qm', 'fixture',
     ], { cwd: repo }).status).toBe(0);
-    const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).stdout.trim();
-    const result = spawnSync('/bin/sh', [foreignHook], {
+    expect(spawnSync('git', ['init', '--bare', '-q'], { cwd: remote }).status).toBe(0);
+    expect(spawnSync('git', ['remote', 'add', 'origin', remote], { cwd: repo }).status).toBe(0);
+    expect(spawnSync('git', ['config', 'core.hooksPath', path.dirname(foreignHook)], { cwd: repo }).status).toBe(0);
+
+    // Drive the hook through Git itself. Manually guessing `sh` is not the user path and failed on
+    // Windows runners where Git for Windows can execute hooks but does not expose `sh.exe` on PATH.
+    const result = spawnSync('git', ['push', 'origin', 'HEAD:refs/heads/main'], {
       cwd: repo,
-      input: `refs/heads/main ${sha} refs/heads/main 0000000000000000000000000000000000000000\n`,
       encoding: 'utf8',
     });
 
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain(`verified:${fs.realpathSync(repo)}`);
+    expect(result.status, result.error?.message || result.stderr).toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain(`verified:${fs.realpathSync(repo)}`);
   });
 });

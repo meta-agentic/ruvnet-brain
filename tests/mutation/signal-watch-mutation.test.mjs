@@ -20,6 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { rmHome } from '../helpers/reap-detached.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pollOnce } from '../../scripts/signal-watch.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SESSION_HOOK = path.join(REPO_ROOT, 'plugin/scripts/session-start.sh');
@@ -74,22 +75,32 @@ function writeGhFixture(name, content) {
   return p;
 }
 
-/** Run the (real or mutant) session-start.sh — SAME invocation shape hook-shim.mjs uses
- * (`bash <file>`), which is why hook-battery.test.mjs and this file both run it this way. */
-function runSessionHook(hookFile, { fixturePath } = {}) {
-  const r = spawnSync('bash', [hookFile], {
-    cwd: tmp,
-    encoding: 'utf8',
-    timeout: 15000,
-    env: {
-      ...process.env,
-      HOME: tmpHome,
-      CLAUDE_PLUGIN_ROOT: path.join(REPO_ROOT, 'plugin'),
-      CLAUDE_PROJECT_DIR: REPO_ROOT, // so ${CLAUDE_PROJECT_DIR}/scripts/signal-watch.mjs resolves
-      RUVNET_BRAIN_METER: '0',
-      RUVNET_AUTONOMOUS: '',
-      ...(fixturePath ? { SIGNAL_WATCH_GH_FIXTURE: fixturePath } : {}),
-    },
+/**
+ * Execute the exact node surfacer embedded in session-start.sh after driving the real poller.
+ * The product's shell launch is covered by the stranger matrix; this mutation oracle targets the
+ * signal lifecycle itself and therefore remains runnable on native Windows without assuming bash
+ * is on PATH. An absent block is deliberate silence for M-W1, not a harness crash.
+ */
+function extractSurfacer(hookFile) {
+  const sh = fs.readFileSync(hookFile, 'utf8');
+  const anchor = sh.indexOf('SIGNAL_SURFACED=');
+  const open = sh.indexOf("node -e '", anchor);
+  const close = sh.indexOf('\' "$SIGNAL_STATUS" "$SIGNAL_SURFACED"', open);
+  return anchor < 0 || open < 0 || close < 0 ? null : sh.slice(open + "node -e '".length, close);
+}
+
+function runSignalSurface(hookFile, { fixturePath } = {}) {
+  const statusFile = path.join(signalDir(), 'ci-status.json');
+  const surfacedFile = path.join(signalDir(), 'surfaced.json');
+  pollOnce({
+    pendingFile: path.join(signalDir(), 'pending.jsonl'),
+    statusFile,
+    fixturePath,
+  });
+  const surfacer = extractSurfacer(hookFile);
+  if (surfacer === null) return { status: 0, stdout: '', stderr: '' };
+  const r = spawnSync(process.execPath, ['-e', surfacer, statusFile, surfacedFile], {
+    cwd: tmp, encoding: 'utf8', timeout: 15000,
   });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
@@ -98,7 +109,7 @@ describe('M-W1 (headline) — delete the session-start.sh consumer block', () =>
   it('BASELINE: real session-start.sh surfaces the CI-red line with ZERO user input', () => {
     seedPushDebt('stuinfla/ruvnet-brain', 'a'.repeat(40));
     const fixturePath = writeGhFixture('gh-failure.json', [{ status: 'completed', conclusion: 'failure', workflowName: 'ci' }]);
-    const out = runSessionHook(SESSION_HOOK, { fixturePath });
+    const out = runSignalSurface(SESSION_HOOK, { fixturePath });
     expect(out.status).toBe(0);
     expect(out.stdout).toContain('EXTERNAL SIGNAL: CI is RED');
   });
@@ -112,7 +123,7 @@ describe('M-W1 (headline) — delete the session-start.sh consumer block', () =>
     });
     seedPushDebt('stuinfla/ruvnet-brain', 'a'.repeat(40));
     const fixturePath = writeGhFixture('gh-failure.json', [{ status: 'completed', conclusion: 'failure', workflowName: 'ci' }]);
-    const out = runSessionHook(MUTANT_SESSION_HOOK, { fixturePath });
+    const out = runSignalSurface(MUTANT_SESSION_HOOK, { fixturePath });
     expect(out.status).toBe(0); // still never blocks a session — the mutant only silences the alarm
     expect(out.stdout).not.toContain('EXTERNAL SIGNAL');
   });
@@ -122,7 +133,7 @@ describe('M-W2 — break transition-dedupe so green speaks', () => {
   it('BASELINE: a fresh all-green fixture (never surfaced red before) emits ZERO bytes', () => {
     seedPushDebt('stuinfla/ruvnet-brain', 'b'.repeat(40));
     const fixturePath = writeGhFixture('gh-success.json', [{ status: 'completed', conclusion: 'success', workflowName: 'ci' }]);
-    const out = runSessionHook(SESSION_HOOK, { fixturePath });
+    const out = runSignalSurface(SESSION_HOOK, { fixturePath });
     expect(out.status).toBe(0);
     expect(out.stdout).not.toContain('EXTERNAL SIGNAL');
     expect(out.stdout).not.toContain('external signal');
@@ -136,7 +147,7 @@ describe('M-W2 — break transition-dedupe so green speaks', () => {
     });
     seedPushDebt('stuinfla/ruvnet-brain', 'b'.repeat(40));
     const fixturePath = writeGhFixture('gh-success.json', [{ status: 'completed', conclusion: 'success', workflowName: 'ci' }]);
-    const out = runSessionHook(MUTANT_SESSION_HOOK, { fixturePath });
+    const out = runSignalSurface(MUTANT_SESSION_HOOK, { fixturePath });
     expect(out.status).toBe(0);
     // The broken guard now prints a CLOSE line for a debt that was NEVER surfaced red — exactly the
     // "green speaks" defect the anti-nag law exists to forbid.

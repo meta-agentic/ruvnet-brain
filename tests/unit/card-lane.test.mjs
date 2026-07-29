@@ -25,7 +25,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { parseCards, loadCards, answerFromCards, renderCardHit } from '../../kb/card-lane.mjs';
+import {
+  parseCards,
+  loadCards,
+  answerFromCards,
+  renderCardHit,
+  routeReposFromCards,
+} from '../../kb/card-lane.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const KB = path.join(REPO, 'kb');
@@ -176,6 +182,17 @@ describe('answerFromCards — NEGATIVE: silence-or-fallthrough, NEVER a fabricat
     expect(hit.reason).toMatch(/implementation evidence/i);
   });
 
+  it('scoped package and source-registration questions fall through to implementation evidence', () => {
+    for (const query of [
+      'What does the @ruvector/rvf TypeScript SDK expose?',
+      'How are MCP tools defined and registered in ruflo v3 — where is the code?',
+    ]) {
+      const hit = answerFromCards(query, KB);
+      expect(hit.hit, query).toBe(false);
+      expect(hit.reason, query).toMatch(/source|implementation/i);
+    }
+  });
+
   it('no card in this bundle ever cites a privately-fenced repo, even under adversarial phrasing', () => {
     for (const term of PRIVATE_STORES) {
       const hit = answerFromCards(`what does ${term} do and how do I use it`, KB);
@@ -194,5 +211,32 @@ describe('renderCardHit — the answer must be usable and cited on its own', () 
     expect(text).toContain('ruflo');
     expect(text).toBe(text); // sanity: renders without throwing
     expect(text.length).toBeGreaterThan(hit.text.length); // more than just the bare card body
+  });
+});
+
+describe('routeReposFromCards — routing never masquerades as a card answer', () => {
+  const available = ['agentdb', 'agentic-flow', 'concepts', 'ruflo', 'rulake', 'ruvector'];
+
+  it('routes an exact scoped-package ask to its owning repo first', () => {
+    const route = routeReposFromCards(
+      'What does the @ruvector/rvf TypeScript SDK expose, and how is its backend resolved at runtime?',
+      KB,
+      available,
+    );
+    expect(route.confidence).toBe('named');
+    expect(route.repos).toEqual(['ruvector']);
+  });
+
+  it('routes strong described evidence but preserves full-fanout for ambiguity', () => {
+    const route = routeReposFromCards(
+      'I need cached vector reads with a cryptographic witness and freshness modes',
+      KB,
+      available,
+    );
+    expect(route.confidence).toBe('described');
+    expect(route.repos[0]).toBe('rulake');
+    expect(route.repos.at(-1)).toBe('concepts');
+    expect(route.repos.length).toBeLessThanOrEqual(4);
+    expect(routeReposFromCards('How do I center a div?', KB, available).repos).toEqual([]);
   });
 });
