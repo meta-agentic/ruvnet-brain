@@ -110,10 +110,13 @@ function (`mergeCodexConfig`) precisely so that idempotency is testable without 
 `args` gets a **resolved absolute path**, and it may not be the npx checkout: that directory is
 ephemeral, and registering it would rot the moment it vanished. The installer already solved this
 twice — the spend watchdog and the router tools are copied under `~/.claude` for exactly this reason
-("stable path — the npx dir vanishes"). `plugin/mcp/server.mjs` is self-contained (node builtins
-only), so it is copied to `~/.claude/ruvnet-brain/mcp/server.mjs` and *that* path is registered. This
-also means the wiring does not depend on Claude Code being installed, which matters because the whole
-point is Codex-only hosts.
+("stable path — the npx dir vanishes"). `plugin/mcp/server.mjs` and its local, Node-builtins-only
+`managed-cli-interface.mjs` sibling are copied under `~/.claude/ruvnet-brain/mcp/`; only the stable
+absolute `server.mjs` path is registered. `wireCodexHost()` copies the dependency first and swaps
+the server second, both atomically. The sibling implements the structured `ruvnet_cli_help` /
+`ruvnet_cli_run` boundary; it is an implementation dependency at the same persistent boundary, not
+a second registration or an ephemeral npx path. This also means the wiring does not depend on
+Claude Code being installed, which matters because the whole point is Codex-only hosts.
 
 ### 4. The doctor probes; it does not assert
 
@@ -192,12 +195,14 @@ Neither is a leak, and a guard that forbids documenting a defect is a guard that
 rule flags a concrete home directory and allows a short, explicit placeholder list (`me`, `<maintainer>`,
 `<user>`, …); `stuartkerr` is not on it.
 
-**Costs, honestly.** `server.mjs` now exists at two paths, so the registered copy can drift from the
-plugin's. The drift is bounded by design — the shell is a supervisor whose only job is to proxy to
-`~/.cache/ruvnet-brain/kb/forge-mcp-all.mjs`, and its tool schema is the frozen contract (ADR-023),
-so the self-updating half is the brain, not the copy. Each reinstall refreshes it. `~/.codex` existing
-is treated as "a Codex host", which is a heuristic: a leftover directory would get an entry it never
-asked for, inside a clearly marked and removable block.
+**Costs, honestly.** The stable MCP shell and its structured-interface sibling now each exist at the
+plugin path and the registered persistent path, so either copy can drift from the plugin's. The
+drift is bounded by design — the shell proxies search to
+`~/.cache/ruvnet-brain/kb/forge-mcp-all.mjs`, while the sibling exposes a small allowlisted CLI
+boundary; their schemas are part of the frozen contract (ADR-023), and the self-updating knowledge
+half remains the brain. Each reinstall refreshes both files, dependency first, with atomic
+replacement. `~/.codex` existing is treated as "a Codex host", which is a heuristic: a leftover
+directory would get an entry it never asked for, inside a clearly marked and removable block.
 
 The wrapper is a second stable shell alongside the MCP supervisor. That duplication is intentional:
 the command must survive plugin-cache replacement, while behavior continues to hot-swap through
@@ -225,6 +230,7 @@ native Windows.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-28 | Re-read all governed Codex wiring after three later installer commits; corrected the persistent MCP boundary from “one self-contained server file” to the server plus its local structured-interface dependency. | Commit `e089074` changes `bin/install.mjs`, `plugin/skills/ruvnet-brain/SKILL.md`, and `PLAYBOOK.md`: `wireCodexHost()` now refuses an incomplete pair, atomically copies `managed-cli-interface.mjs` before `server.mjs`, and the skill directs CLI-only gaps through `ruvnet_cli_help` then literal-argv `ruvnet_cli_run`. Commits `2f420e7` (test-only Release-resolution seam) and `7eb11fb` (assembled-directory local install, stale-store pruning, shared runtime model-cache path) also changed governed `bin/install.mjs` but do not alter the managed-block merge, doctor verdict, stable hook wrapper, native-skill discovery, or stated Windows/trust limitations. |
 | 2026-07-28 | Native `brain-console` and `whats-new` Codex skills replace the dropped-command and absent-sibling failure; obsolete `skill.toml` manifests are removed. | The real isolated-home plugin install showed `rvbc` and `whats-new` were omitted at migration while `brain-console` and `rvcb` referenced `rvbc.md`, which was not copied. `tests/integration/codex-skill-discovery.test.mjs` pins the installed boundary. |
 | 2026-07-28 | Codex shell events now normalize `exec_command`, `functions.exec_command`, and `functions__exec_command` into the shared Bash contract; custom `codexDir` installs keep the stable wrapper inside the matching isolated home. | Exact installed-boundary tests in `tests/unit/codex-lifecycle-hooks.test.mjs` reproduce the previously missed raw Codex tool names and prove the wrong Ruflo command is blocked. `tests/unit/codex-wiring.test.mjs` proves a temporary Codex home causes no write to the maintainer's `~/.cache`. |
 | 2026-07-28 | **Issue #52 lifecycle wiring added and verified through live Codex 0.145.0.** | Commit `c466c2a` adds the Codex manifest, dedicated schema-valid registration, stable wrapper, and host adapter. Before the fix, `codex exec --ephemeral --json --dangerously-bypass-hook-trust` reported `unknown field '_note'` for both the installed plugin and project hook file, so no Brain lifecycle handler loaded; it also clamped the user SessionEnd timeout from 30000s to 3s. After installing the candidate files, the same fresh-session command completed without either hook error. Direct real-path proofs then invoked the installed `~/.cache/ruvnet-brain/codex-hook.mjs`: SessionStart returned valid developer context in 0.527s, and a Stop event with one real open ledger item returned `{"decision":"block","reason":"..."}` in 1.172s. `tests/unit/codex-lifecycle-hooks.test.mjs`, `codex-wiring.test.mjs`, and `npm-tarball-codex.test.mjs` pass 52/52. |
@@ -240,8 +246,10 @@ against the source checkout, the one place the file always exists.
 
 Fixed in 3.9.77-dev, three parts, matching #43's acceptance verbatim:
 
-- `package.json` `files` now ships exactly `plugin/mcp/server.mjs` (plus `!plugin/README.md`, which
-  npm's always-include README rule would otherwise drag in). The rest of `plugin/` stays excluded.
+- At the 3.9.77-dev fix, `package.json` `files` shipped exactly `plugin/mcp/server.mjs` (plus
+  `!plugin/README.md`, which npm's always-include README rule would otherwise drag in). Commit
+  `e089074` later added the server's required `plugin/mcp/managed-cli-interface.mjs` sibling to the
+  whitelist; the rest of `plugin/` stays excluded.
 - Both writes in `wireCodexHost()` are now atomic (write-beside + `rename()` via `atomicReplace`):
   an interrupted copy can no longer leave a torn `server.mjs` at a path an existing config already
   names, and a failed config write leaves the previous bytes intact. Because `rename()` swaps
