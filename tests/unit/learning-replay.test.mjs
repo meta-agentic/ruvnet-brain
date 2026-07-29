@@ -22,6 +22,7 @@ import {
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
   checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
+  TRAP, classifyModelRouteCommand, modelRouteSubcommandCorrect, verifyModelRouteFlag,
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -156,6 +157,26 @@ describe('the oracle is a PARSE, not a grep', () => {
     // The token IS carried by the wrong-subcommand form — which is exactly why the token alone was
     // never sufficient, and why `ruflo recall -q` was certified as a PASS until 2026-07-28.
     expect(carriesToken(classifyCommand('ruflo recall -q "x"'))).toBe(true);
+  });
+});
+
+describe('the independent hooks model-route trap', () => {
+  it('recognizes -t/--task only on an executable Ruflo invocation', () => {
+    expect(classifyModelRouteCommand('ruflo hooks model-route -t "triage release failures"')).toBe('flagged');
+    expect(classifyModelRouteCommand('ruflo hooks model-route --task "triage release failures"')).toBe('flagged');
+    expect(classifyModelRouteCommand('ruflo hooks model-route "triage release failures"')).toBe('positional');
+    expect(classifyModelRouteCommand('echo "ruflo hooks model-route -t x"')).toBe('none');
+  });
+
+  it('requires the real hooks model-route command tree', () => {
+    expect(modelRouteSubcommandCorrect('ruflo hooks model-route -t "x"')).toBe(true);
+    expect(modelRouteSubcommandCorrect('ruflo route -t "x"')).toBe(false);
+  });
+
+  it('re-verifies live that -t/--task is required and positional is rejected', () => {
+    const verified = verifyModelRouteFlag();
+    expect(verified.ok, verified.why).toBe(true);
+    expect(verified.positionalExit).not.toBe(0);
   });
 });
 
@@ -454,13 +475,14 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     cwd: path.resolve(import.meta.dirname, '../..'),
     encoding: 'utf8',
   }).stdout.trim();
-  const write = (name, body) => {
-    const file = path.join(dir, `${name}.json`);
+  const write = (trap, name, body) => {
+    const file = path.join(dir, `${trap}-${name}.json`);
     fs.writeFileSync(file, JSON.stringify({
       invariant: INVARIANT,
       verdict: VERDICT.FAIL,
       sha: head(),
       at: new Date().toISOString(),
+      trap,
       mutant: name,
       n: 1,
       passes: 0,
@@ -478,53 +500,59 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     }));
     return file;
   };
+  const filesForBoth = (overrides = {}) => Object.fromEntries(
+    [TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE].map((trap) => [trap, {
+      'delete-lesson': write(trap, 'delete-lesson', overrides[`${trap}/delete-lesson`]),
+      'brain-off-treated': write(trap, 'brain-off-treated', overrides[`${trap}/brain-off-treated`]),
+    }]),
+  );
 
   it('accepts only a delete-lesson red and a brain-off treated/control match', () => {
-    const files = {
-      'delete-lesson': write('delete-lesson'),
-      'brain-off-treated': write('brain-off-treated'),
-    };
+    const files = filesForBoth();
     const result = checkMutantArtifacts({ files });
     expect(result.status).toBe(VERDICT.PASS);
-    expect(result.checked).toEqual(['delete-lesson', 'brain-off-treated']);
+    expect(result.checked).toEqual([
+      `${TRAP.MEMORY_SEARCH}/delete-lesson`,
+      `${TRAP.MEMORY_SEARCH}/brain-off-treated`,
+      `${TRAP.MODEL_ROUTE}/delete-lesson`,
+      `${TRAP.MODEL_ROUTE}/brain-off-treated`,
+    ]);
   });
 
   it('rejects a delete-lesson mutant that still received the lesson', () => {
-    const files = {
-      'delete-lesson': write('delete-lesson', {
+    const files = filesForBoth({
+      [`${TRAP.MEMORY_SEARCH}/delete-lesson`]: {
         runs: [{
           verdict: VERDICT.PASS,
           treated: { class: 'flagged', lessonBeforeFirstToolCall: true, lessonDelivered: true },
           control: { class: 'positional', lessonDelivered: false },
         }],
-      }),
-      'brain-off-treated': write('brain-off-treated'),
-    };
+      },
+    });
     const result = checkMutantArtifacts({ files });
     expect(result.status).toBe(VERDICT.FAIL);
     expect(result.why).toMatch(/delete-lesson.*lesson/i);
   });
 
   it('rejects a brain-off treated arm that differs from its control', () => {
-    const files = {
-      'delete-lesson': write('delete-lesson'),
-      'brain-off-treated': write('brain-off-treated', {
+    const files = filesForBoth({
+      [`${TRAP.MEMORY_SEARCH}/brain-off-treated`]: {
         runs: [{
           verdict: VERDICT.FAIL,
           treated: { class: 'flagged', lessonBeforeFirstToolCall: false, lessonDelivered: false },
           control: { class: 'positional', lessonDelivered: false },
         }],
-      }),
-    };
+      },
+    });
     const result = checkMutantArtifacts({ files });
     expect(result.status).toBe(VERDICT.FAIL);
     expect(result.why).toMatch(/brain-off-treated.*control/i);
   });
 
   it('declares stable default result paths so the CLI and CI cannot disagree', () => {
-    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual(['delete-lesson', 'brain-off-treated']);
-    expect(MUTANT_RESULT_FILES['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
-    expect(MUTANT_RESULT_FILES['brain-off-treated']).toMatch(/brain-off-result\.json$/);
+    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE]);
+    expect(MUTANT_RESULT_FILES[TRAP.MEMORY_SEARCH]['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
+    expect(MUTANT_RESULT_FILES[TRAP.MODEL_ROUTE]['brain-off-treated']).toMatch(/model-route-brain-off-result\.json$/);
   });
 });
 

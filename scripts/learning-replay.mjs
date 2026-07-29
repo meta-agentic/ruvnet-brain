@@ -164,6 +164,43 @@ export const EXIT = Object.freeze({ PASS: 0, FAIL: 1, INCONCLUSIVE: 3, UNKNOWN: 
 
 /** The committed, machine-readable result artifact. */
 export const RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-result.json');
+export const MODEL_ROUTE_RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-model-route-result.json');
+
+export const TRAP = Object.freeze({
+  MEMORY_SEARCH: 'memory-search-query',
+  MODEL_ROUTE: 'hooks-model-route-task',
+});
+
+export const MODEL_ROUTE_PROMPT =
+  'A release candidate has intermittent integration failures and rising latency. '
+  + 'Use the ruflo hooks model router to choose the appropriate Claude model for investigating it. '
+  + 'Run the routing command now, then tell me what you ran.';
+export const MODEL_ROUTE_LESSON =
+  'When asking the ruflo hooks model router to choose a model, pass the task description with '
+  + 'the -t/--task option; a bare task placed after `hooks model-route` is rejected.';
+
+function trapSpec(id = TRAP.MEMORY_SEARCH) {
+  if (id === TRAP.MODEL_ROUTE) {
+    return {
+      id,
+      lessonId: 'FX-D4-ruflo-hooks-model-route-task',
+      prompt: MODEL_ROUTE_PROMPT,
+      lesson: MODEL_ROUTE_LESSON,
+      memoryKey: 'lesson-ruflo-hooks-model-route-task',
+      recordQuery: 'ruflo hooks model route task flag',
+      check: 'the produced ruflo hooks model-route command delivers its task through -t/--task',
+    };
+  }
+  return {
+    id: TRAP.MEMORY_SEARCH,
+    lessonId: 'FX-D4-ruflo-memory-search-flag',
+    prompt: REPLAY_PROMPT,
+    lesson: LESSON_STATEMENT,
+    memoryKey: 'lesson-ruflo-memory-search-flag',
+    recordQuery: 'ruflo CLI memory query flag',
+    check: 'the produced ruflo memory search command delivers its query through -q/--query',
+  };
+}
 
 /**
  * The files whose change invalidates a recorded result. `--check` refuses to call a result CURRENT
@@ -267,6 +304,29 @@ export function subcommandCorrect(cmd) {
 /** The token test, isolated so every caller asks it the same way. */
 export const carriesToken = (cls) => cls === 'flagged';
 
+/** The second trap is deliberately a different Ruflo surface and a different required option. */
+export function classifyModelRouteCommand(cmd) {
+  const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
+  if (!invocations.length) return 'none';
+  let sawPositional = false;
+  for (const inv of invocations) {
+    const args = inv.args.filter(Boolean);
+    if (args.some((a) => a === '-t' || a === '--task' || a.startsWith('--task='))) return 'flagged';
+    const mi = args.indexOf('model-route');
+    if (mi !== -1 && args.slice(mi + 1).some((a) => !a.startsWith('-'))) sawPositional = true;
+  }
+  return sawPositional ? 'positional' : 'other';
+}
+
+export function modelRouteSubcommandCorrect(cmd) {
+  return findInvocations(String(cmd || ''), ['ruflo', 'claude-flow'])
+    .some((inv) => {
+      const words = inv.args.filter((a) => a !== '' && !a.startsWith('-'));
+      const hi = words.indexOf('hooks');
+      return hi !== -1 && words[hi + 1] === 'model-route';
+    });
+}
+
 // ── THE EXECUTION GATE ──────────────────────────────────────────────────────────────────────────
 /**
  * The note project B's prompt already claimed was there. Seeding it makes the FIXTURE match the
@@ -326,7 +386,12 @@ const MUTATING_SUBCOMMANDS = new Set(['store', 'delete', 'rm', 'purge', 'cleanup
  * string, so shell metacharacters cannot survive into execution. Two refusals bound the blast
  * radius, and both report NOT-RETRIEVED, so neither can ever raise the rate.
  */
-export function executeProducedCommand(cmd, { cwd, ruflo = RUFLO_BIN, base = null } = {}) {
+export function executeProducedCommand(cmd, {
+  cwd,
+  ruflo = RUFLO_BIN,
+  base = null,
+  trap = TRAP.MEMORY_SEARCH,
+} = {}) {
   const nope = (why, extra = {}) => ({ ran: false, argv: null, exit: null, exitOk: false, retrieved: false, why, output: '', ...extra });
   const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
   if (!invocations.length) return nope('no ruflo invocation in the produced command — there was nothing to execute');
@@ -352,14 +417,23 @@ export function executeProducedCommand(cmd, { cwd, ruflo = RUFLO_BIN, base = nul
   const r = spawnSync(ruflo, args, { cwd, encoding: 'utf8', timeout: 120_000, env, maxBuffer: 8 * 1024 * 1024 });
   if (r.error) return nope(`spawn failed: ${r.error.message}`, { argv: ['ruflo', ...args] });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
-  const { retrieved, why } = assertRetrieved(out);
+  const routed = trap === TRAP.MODEL_ROUTE
+    ? {
+        retrieved: /Selected Model:/i.test(out)
+          && /Implementation:/i.test(out)
+          && !/Required option missing|\[ERROR\]/i.test(out),
+        why: /Selected Model:/i.test(out) && /Implementation:/i.test(out)
+          ? 'the output carries a concrete selected model and routing implementation'
+          : 'the output carries no concrete model-routing decision',
+      }
+    : assertRetrieved(out);
   return {
     ran: true,
     argv: ['ruflo', ...args],
     exit: r.status,
     exitOk: r.status === 0,
-    retrieved,
-    why: `exit ${r.status}; ${why}`,
+    retrieved: routed.retrieved,
+    why: `exit ${r.status}; ${routed.why}`,
     output: out.slice(0, 1200),
   };
 }
@@ -506,6 +580,30 @@ export function verifyRufloFlag(bin = RUFLO_BIN) {
   return { ok: true, flag: '-q, --query', required, evidence: out.split('\n').find((l) => /-q,\s*--query/.test(l))?.trim() || '' };
 }
 
+export function verifyModelRouteFlag(bin = RUFLO_BIN) {
+  if (!fs.existsSync(bin)) return { ok: false, why: `ruflo binary not found at ${bin} (Rule 21: the GLOBAL binary, never npx)` };
+  const help = spawnSync(bin, ['hooks', 'model-route', '--help'], { encoding: 'utf8', timeout: 30_000 });
+  const out = `${help.stdout || ''}${help.stderr || ''}`;
+  if (!/-t,\s*--task[^\n]*required/i.test(out)) {
+    return { ok: false, why: 'live `ruflo hooks model-route --help` does not declare `-t, --task` required', help: out };
+  }
+  const positional = spawnSync(bin, ['hooks', 'model-route', 'fixture release diagnosis'], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  const positionalOut = `${positional.stdout || ''}${positional.stderr || ''}`;
+  if (positional.status === 0 || !/Required option missing:\s*--task/i.test(positionalOut)) {
+    return { ok: false, why: 'live positional model-route form was not rejected as the trap requires', positionalExit: positional.status, positionalOut };
+  }
+  return {
+    ok: true,
+    flag: '-t, --task',
+    required: true,
+    evidence: out.split('\n').find((line) => /-t,\s*--task/.test(line))?.trim() || '',
+    positionalExit: positional.status,
+  };
+}
+
 // ── the fixture world ───────────────────────────────────────────────────────────────────────────
 const CLAUDE_BIN = process.env.RUVNET_CLAUDE_BIN || path.join(os.homedir(), '.npm-global', 'bin', 'claude');
 const CODEX_BIN = process.env.RUVNET_CODEX_BIN || 'codex';
@@ -547,6 +645,7 @@ export function buildFixtures(baseDir) {
   const dirs = {
     base: baseDir,
     projectA: path.join(baseDir, 'fixture-project-a'),
+    projectA2: path.join(baseDir, 'fixture-project-a-independent'),
     projectB: path.join(baseDir, 'fixture-project-b'),
     brainHome: path.join(baseDir, 'brain-home'),
     stateOn: path.join(baseDir, 'state-on'),
@@ -560,7 +659,7 @@ export function buildFixtures(baseDir) {
   fs.writeFileSync(path.join(dirs.stateOff, 'brain-off'), JSON.stringify({ since: new Date().toISOString() }));
   // Each fixture project is its own git repo so lesson-gate's project-scope resolution (which walks
   // up to the nearest .git) sees `fixture-project-b`, not the harness's own repo.
-  for (const p of [dirs.projectA, dirs.projectB]) {
+  for (const p of [dirs.projectA, dirs.projectA2, dirs.projectB]) {
     sh('git', ['init', '-q'], { cwd: p });
     fs.mkdirSync(path.join(p, '.swarm'), { recursive: true });
   }
@@ -586,21 +685,30 @@ export function buildFixtures(baseDir) {
  * win-twice promotion bar; it exercises delivery, ratification, refresh-survival and the artifact
  * change. That gap is real and is recorded here rather than hidden.
  */
-export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
-  const dbA = path.join(dirs.projectA, '.swarm', 'memory.db');
-  const key = 'lesson-ruflo-memory-search-flag';
-  const init = initMemoryDb(ruflo, dbA, dirs.projectA);
-  const store = sh(ruflo, ['memory', 'store', '-k', key, '--value', LESSON_STATEMENT, '-n', 'default', '--path', dbA],
-    { cwd: dirs.projectA });
-  // Read it back through the interface under test. If this cannot find the row, the record step did
-  // not happen and everything downstream would be measuring a fixture bug.
-  const back = sh(ruflo, ['memory', 'search', '-q', 'ruflo CLI memory query flag', '-n', 'default', '--path', dbA, '-t', 'keyword'],
-    { cwd: dirs.projectA });
-  const recorded = fs.existsSync(dbA);
+export function recordInProjectA(dirs, { ruflo = RUFLO_BIN, trap = TRAP.MEMORY_SEARCH } = {}) {
+  const spec = trapSpec(trap);
+  const sources = [dirs.projectA, dirs.projectA2].map((project, index) => {
+    const db = path.join(project, '.swarm', 'memory.db');
+    const key = `${spec.memoryKey}-${index + 1}`;
+    const init = initMemoryDb(ruflo, db, project);
+    const store = sh(ruflo, ['memory', 'store', '-k', key, '--value', spec.lesson, '-n', 'default', '--path', db],
+      { cwd: project });
+    const back = sh(ruflo, ['memory', 'search', '-q', spec.recordQuery, '-n', 'default', '--path', db, '-t', 'keyword'],
+      { cwd: project });
+    return {
+      project: path.basename(project),
+      db,
+      key,
+      initExit: init.status,
+      storeExit: store.status,
+      readBackExit: back.status,
+      recorded: fs.existsSync(db),
+    };
+  });
 
   const lesson = makeLesson({
-    id: 'FX-D4-ruflo-memory-search-flag',
-    statement: LESSON_STATEMENT,
+    id: spec.lessonId,
+    statement: spec.lesson,
     // `assert-fact` is the decision point the real dispatcher requests at UserPromptSubmit
     // (plugin/scripts/lesson-hooks.sh) — i.e. before any tool call, which is PASS-condition (a).
     trigger: 'assert-fact',
@@ -609,22 +717,27 @@ export function recordInProjectA(dirs, { ruflo = RUFLO_BIN } = {}) {
     status: 'ratified',
     severity: 'high',
     repeatCount: 4,
-    projects: [],
-    check: 'the produced ruflo memory search command delivers its query through -q/--query',
+    projects: sources.map((source) => source.project),
+    check: spec.check,
     evidence: [
-      { observed: `recorded in fixture-project-A as memory key "${key}" in ${path.relative(dirs.base, dbA)}` },
-      { observed: 'live `ruflo memory search --help` prints "-q, --query   Search query (required)"' },
+      ...sources.map((source) => ({
+        observed: `independently recorded in ${source.project} as memory key "${source.key}" in ${path.relative(dirs.base, source.db)}`,
+      })),
+      { observed: `live premise for ${spec.id} was re-verified before replay` },
     ],
   });
   saveLessons([lesson], dirs.lessons);
+  const sourcesOk = sources.every((source) =>
+    source.initExit === 0 && source.storeExit === 0 && source.readBackExit === 0 && source.recorded);
   return {
-    ok: init.status === 0 && store.status === 0 && back.status === 0
-      && recorded && loadLessons(dirs.lessons).length === 1,
-    dbA,
-    key,
-    initExit: init.status,
-    storeExit: store.status,
-    readBackExit: back.status,
+    ok: sourcesOk && loadLessons(dirs.lessons).length === 1 && lesson.projects.length >= 2,
+    trap: spec.id,
+    sources,
+    projectCount: lesson.projects.length,
+    promoted: lesson.projects.length >= 2,
+    key: sources[0].key,
+    storeExit: sources[0].storeExit,
+    readBackExit: sources[0].readBackExit,
     lesson,
   };
 }
@@ -778,7 +891,18 @@ export function codexLessonBeforeTool(sequence) {
   return Boolean(lesson && tool && BigInt(lesson.atNs) < BigInt(tool.atNs));
 }
 
-export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appendSystemPrompt = null, tag, forceCommand = null }) {
+export function runArm({
+  dirs,
+  arm,
+  stateDir,
+  model,
+  host = 'claude-code',
+  appendSystemPrompt = null,
+  tag,
+  forceCommand = null,
+  trap = TRAP.MEMORY_SEARCH,
+}) {
+  const spec = trapSpec(trap);
   const attempts = path.join(dirs.transcripts, `${tag}.attempts.jsonl`);
   const sequenceFile = path.join(dirs.transcripts, `${tag}.sequence.jsonl`);
   const streamFile = path.join(dirs.transcripts, `${tag}.stream.jsonl`);
@@ -786,12 +910,12 @@ export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appen
   let argv;
   if (host === 'codex') {
     binary = CODEX_BIN;
-    argv = buildCodexArgv({ model, appendSystemPrompt });
+    argv = buildCodexArgv({ model, prompt: spec.prompt, appendSystemPrompt });
   } else {
     const settings = writeSettings(path.join(dirs.base, `settings-${tag}.json`), { dirs, stateDir, attemptsFile: attempts });
     binary = CLAUDE_BIN;
     argv = [
-      '-p', REPLAY_PROMPT,
+      '-p', spec.prompt,
       '--model', model,
       '--tools', 'Bash',
       '--permission-mode', 'bypassPermissions',
@@ -820,7 +944,7 @@ export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appen
       RUVNET_LESSON_GATE_STATE: dirs.gateState,
       RUVNET_REPLAY_ATTEMPTS_FILE: attempts,
       RUVNET_REPLAY_SEQUENCE_FILE: sequenceFile,
-      RUVNET_REPLAY_LESSON_PROBE: LESSON_STATEMENT.slice(0, 60),
+      RUVNET_REPLAY_LESSON_PROBE: spec.lesson.slice(0, 60),
       RUVNET_REPLAY_RECORDER: path.join(ROOT, 'scripts', 'ci', 'learning-replay-recorder.mjs'),
       CLAUDE_PLUGIN_ROOT: path.join(ROOT, 'plugin'),
     },
@@ -831,7 +955,7 @@ export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appen
 
   const events = (r.stdout || '').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
 
-  const probe = LESSON_STATEMENT.slice(0, 60);
+  const probe = spec.lesson.slice(0, 60);
   let lessonIndex = -1, firstToolIndex = -1, lessonDelivered = false;
   const sequence = fs.existsSync(sequenceFile)
     ? fs.readFileSync(sequenceFile, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
@@ -859,10 +983,14 @@ export function runArm({ dirs, arm, stateDir, model, host = 'claude-code', appen
   // how mutant 1 ("right flag, wrong subcommand") is proven end-to-end without waiting for a
   // stochastic model to happen to emit it.
   const firstCommand = forceCommand != null ? forceCommand : (attemptLines.length ? attemptLines[0].command : '');
-  const cls = classifyCommand(firstCommand);
-  const subOk = subcommandCorrect(firstCommand);
+  const cls = trap === TRAP.MODEL_ROUTE
+    ? classifyModelRouteCommand(firstCommand)
+    : classifyCommand(firstCommand);
+  const subOk = trap === TRAP.MODEL_ROUTE
+    ? modelRouteSubcommandCorrect(firstCommand)
+    : subcommandCorrect(firstCommand);
   // THE EXECUTION GATE. Out of band, after the arm is over, never through a shell — see the header.
-  const exec = executeProducedCommand(firstCommand, { cwd: dirs.projectB, base: dirs.base });
+  const exec = executeProducedCommand(firstCommand, { cwd: dirs.projectB, base: dirs.base, trap });
 
   const result = events.find((e) => e.type === 'result');
   return {
@@ -896,8 +1024,9 @@ const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const usage = () => `Usage:
-  node scripts/learning-replay.mjs [--n N] [--host codex|claude-code] [--model MODEL]
+  node scripts/learning-replay.mjs [--trap ${TRAP.MEMORY_SEARCH}|${TRAP.MODEL_ROUTE}] [--n N] [--host codex|claude-code] [--model MODEL]
   node scripts/learning-replay.mjs --check
+  node scripts/learning-replay.mjs --check-portfolio
   node scripts/learning-replay.mjs --check-mutants
   node scripts/learning-replay.mjs --dry-run
   node scripts/learning-replay.mjs --mutant <${Object.keys(MUTANTS).join('|')}>
@@ -918,8 +1047,19 @@ export const MUTANTS = Object.freeze({
 
 /** Committed real-model evidence for ADR-058's two named falsification traps. */
 export const MUTANT_RESULT_FILES = Object.freeze({
-  'delete-lesson': path.join(ROOT, 'data', 'learning-replay-delete-lesson-result.json'),
-  'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-brain-off-result.json'),
+  [TRAP.MEMORY_SEARCH]: Object.freeze({
+    'delete-lesson': path.join(ROOT, 'data', 'learning-replay-delete-lesson-result.json'),
+    'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-brain-off-result.json'),
+  }),
+  [TRAP.MODEL_ROUTE]: Object.freeze({
+    'delete-lesson': path.join(ROOT, 'data', 'learning-replay-model-route-delete-lesson-result.json'),
+    'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-model-route-brain-off-result.json'),
+  }),
+});
+
+export const PORTFOLIO_RESULT_FILES = Object.freeze({
+  [TRAP.MEMORY_SEARCH]: RESULT_FILE,
+  [TRAP.MODEL_ROUTE]: MODEL_ROUTE_RESULT_FILE,
 });
 
 function headSha() {
@@ -971,23 +1111,24 @@ export function checkMutantArtifacts({
   maxAgeDays = 14,
 } = {}) {
   const checked = [];
-  for (const mutant of ['delete-lesson', 'brain-off-treated']) {
-    const file = files[mutant];
+  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE]) {
+    for (const mutant of ['delete-lesson', 'brain-off-treated']) {
+    const file = files[trap]?.[mutant];
     if (!file || !fs.existsSync(file)) {
-      return { status: VERDICT.UNKNOWN, why: `${mutant}: no committed execution artifact`, checked };
+      return { status: VERDICT.UNKNOWN, why: `${trap}/${mutant}: no committed execution artifact`, checked };
     }
 
     const currency = checkArtifact({ file, repo, maxAgeDays });
     if (currency.status === VERDICT.UNKNOWN) {
-      return { status: VERDICT.UNKNOWN, why: `${mutant}: ${currency.why}`, checked };
+      return { status: VERDICT.UNKNOWN, why: `${trap}/${mutant}: ${currency.why}`, checked };
     }
 
     let artifact;
     try { artifact = JSON.parse(fs.readFileSync(file, 'utf8')); }
     catch (e) { return { status: VERDICT.UNKNOWN, why: `${mutant}: artifact unparseable: ${e.message}`, checked }; }
 
-    if (artifact.mutant !== mutant) {
-      return { status: VERDICT.FAIL, why: `${mutant}: artifact names mutant "${artifact.mutant || 'none'}"`, checked };
+    if (artifact.mutant !== mutant || artifact.trap !== trap) {
+      return { status: VERDICT.FAIL, why: `${trap}/${mutant}: artifact identity mismatch`, checked };
     }
     if (artifact.verdict !== VERDICT.FAIL || artifact.passes !== 0 || !(artifact.n >= 1)) {
       return { status: VERDICT.FAIL, why: `${mutant}: mutant did not go red with zero passes`, checked };
@@ -1014,12 +1155,52 @@ export function checkMutantArtifacts({
         return { status: VERDICT.FAIL, why: 'brain-off-treated: treated arm did not collapse to the brain-off control artifact', checked };
       }
     }
-    checked.push(mutant);
+    checked.push(`${trap}/${mutant}`);
+    }
   }
   return {
     status: VERDICT.PASS,
-    why: 'delete-lesson and brain-off-treated both went red on current real-model execution evidence',
+    why: 'delete-lesson and brain-off-treated both went red for both independent traps on current real-model execution evidence',
     checked,
+  };
+}
+
+export function checkPortfolio({
+  files = PORTFOLIO_RESULT_FILES,
+  mutantFiles = MUTANT_RESULT_FILES,
+  repo = ROOT,
+  maxAgeDays = 14,
+} = {}) {
+  const artifacts = [];
+  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE]) {
+    const checked = checkArtifact({ file: files[trap], repo, maxAgeDays });
+    if (checked.status !== VERDICT.PASS) {
+      return { status: checked.status, why: `${trap}: ${checked.why}`, artifacts };
+    }
+    const a = checked.artifact;
+    if (a.trap !== trap || a.n < 3 || a.passes < 2 || a.controlTokenRuns !== 0 || a.controlWorkedRuns !== 0) {
+      return { status: VERDICT.FAIL, why: `${trap}: artifact does not prove N>=3 treated/control causal separation`, artifacts };
+    }
+    if (a.promotion?.projectCount < 2 || a.promotion?.promoted !== true
+      || new Set(a.promotion?.sourceProjects || []).size < 2) {
+      return { status: VERDICT.FAIL, why: `${trap}: lesson did not earn the real win-twice cross-project scope`, artifacts };
+    }
+    if (a.refresh?.lessonSurvived !== true) {
+      return { status: VERDICT.FAIL, why: `${trap}: learned lesson did not survive refresh`, artifacts };
+    }
+    artifacts.push(a);
+  }
+  if (artifacts[0].record?.lessonId === artifacts[1].record?.lessonId
+    || artifacts[0].task === artifacts[1].task) {
+    return { status: VERDICT.FAIL, why: 'portfolio traps are not independent lesson/task classes', artifacts };
+  }
+  const mutants = checkMutantArtifacts({ files: mutantFiles, repo, maxAgeDays });
+  if (mutants.status !== VERDICT.PASS) return { ...mutants, why: `portfolio mutants: ${mutants.why}`, artifacts };
+  return {
+    status: VERDICT.PASS,
+    why: 'two independent Ruflo CLI lessons each passed N>=3 treated/control, earned win-twice scope in two source projects, survived refresh, executed a meaningful outcome, and failed both causal mutants',
+    artifacts,
+    mutants,
   };
 }
 
@@ -1029,23 +1210,39 @@ async function main() {
     return;
   }
   const check = has('--check');
+  const checkPortfolioFlag = has('--check-portfolio');
   const checkMutants = has('--check-mutants');
   const dryRun = has('--dry-run');
   const mutant = arg('--mutant', null);
+  const trap = arg('--trap', TRAP.MEMORY_SEARCH);
+  const spec = trapSpec(trap);
   const n = Math.max(1, parseInt(arg('--n', mutant ? '1' : '3'), 10) || 1);
   const host = arg('--host', 'codex');
   const model = arg('--model', host === 'codex' ? 'gpt-5.6-sol' : 'haiku');
-  const outFile = arg('--out', RESULT_FILE);
+  const defaultOut = mutant
+    ? MUTANT_RESULT_FILES[trap]?.[mutant]
+    : PORTFOLIO_RESULT_FILES[trap];
+  const outFile = arg('--out', defaultOut);
   const keep = has('--keep-fixtures');
 
   if (mutant && !MUTANTS[mutant]) {
     console.error(`unknown mutant "${mutant}". known: ${Object.keys(MUTANTS).join(', ')}`);
     process.exit(EXIT.UNKNOWN);
   }
+  if (![TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE].includes(trap) || !outFile) {
+    console.error(`unknown or unsupported trap/mutant combination: ${trap}/${mutant || 'normal'}`);
+    process.exit(EXIT.UNKNOWN);
+  }
 
   if (check) {
-    const res = checkArtifact();
+    const res = checkArtifact({ file: PORTFOLIO_RESULT_FILES[trap] });
     console.log(`\n  ${INVARIANT}: ${res.status}\n  ${res.why}\n`);
+    process.exit(EXIT[res.status] ?? EXIT.UNKNOWN);
+  }
+
+  if (checkPortfolioFlag) {
+    const res = checkPortfolio();
+    console.log(`\n  ${INVARIANT}-PORTFOLIO: ${res.status}\n  ${res.why}\n`);
     process.exit(EXIT[res.status] ?? EXIT.UNKNOWN);
   }
 
@@ -1056,8 +1253,9 @@ async function main() {
   }
 
   console.log(`\n=== ${INVARIANT} — counterfactual replay (ADR-058 §D4) ===`);
-  const flag = verifyRufloFlag();
-  console.log(`  premise: ruflo memory search flag — ${flag.ok ? `VERIFIED live: ${flag.evidence}` : `NOT VERIFIED: ${flag.why}`}`);
+  const flag = trap === TRAP.MODEL_ROUTE ? verifyModelRouteFlag() : verifyRufloFlag();
+  console.log(`  trap:    ${trap}`);
+  console.log(`  premise: ${flag.ok ? `VERIFIED live: ${flag.evidence}` : `NOT VERIFIED: ${flag.why}`}`);
   if (!flag.ok) {
     const artifact = writeArtifact(outFile, {
       verdict: VERDICT.UNKNOWN, why: `premise not verified: ${flag.why}`, n: 0, passes: 0, fails: 0, unknowns: 0, controlTokenRuns: 0, rate: 0, runs: [],
@@ -1068,8 +1266,8 @@ async function main() {
 
   const base = allocateRunBase();
   const dirs = buildFixtures(base);
-  const rec = recordInProjectA(dirs);
-  console.log(`  record  (fixture-project-A): memory row ${rec.storeExit === 0 ? 'stored' : `store exit ${rec.storeExit}`}, lesson ${rec.ok ? 'derived + ratified' : 'NOT recorded'}`);
+  const rec = recordInProjectA(dirs, { trap });
+  console.log(`  record  (two independent source projects): ${rec.projectCount} sources, win-twice=${rec.promoted}, lesson ${rec.ok ? 'derived + ratified' : 'NOT recorded'}`);
   const seed = seedProjectBMemory(dirs);
   console.log(`  seed    (fixture-project-B): note "${seed.key}" ${seed.ok ? 'stored — the task\'s premise is now TRUE of the fixture' : `NOT stored (exit ${seed.storeExit})`}`);
   const refresh = nightlyRefresh(dirs);
@@ -1093,7 +1291,7 @@ async function main() {
     // Prove the WIRE without a token: fire the real hook chain in both states and report the bytes.
     const probe = (stateDir) => {
       const r = spawnSync(process.execPath, [path.join(ROOT, 'plugin', 'scripts', 'hook-shim.mjs'), 'unprompted-speech', 'UserPromptSubmit'], {
-        input: JSON.stringify({ prompt: REPLAY_PROMPT, session_id: `dry-${Date.now()}`, cwd: dirs.projectB }),
+        input: JSON.stringify({ prompt: spec.prompt, session_id: `dry-${Date.now()}`, cwd: dirs.projectB }),
         encoding: 'utf8',
         cwd: dirs.projectB,
         env: {
@@ -1122,14 +1320,14 @@ async function main() {
   for (let i = 1; i <= n; i++) {
     const treatedState = mutant === 'brain-off-treated' ? dirs.stateOff : dirs.stateOn;
     const treated = runArm({
-      dirs, arm: 'treated', stateDir: treatedState, model, host, tag: `run${i}-treated`,
+      dirs, arm: 'treated', stateDir: treatedState, model, host, tag: `run${i}-treated`, trap,
       forceCommand: mutant === 'wrong-subcommand' ? WRONG_SUBCOMMAND_COMMAND : null,
     });
     const control = runArm({
-      dirs, arm: 'control', stateDir: dirs.stateOff, model, host, tag: `run${i}-control`,
+      dirs, arm: 'control', stateDir: dirs.stateOff, model, host, tag: `run${i}-control`, trap,
       // MUTANT seed-control: the control is handed the lesson through a channel the brain does not
       // own. Its artifact then carries the token, and invariant 6 must fire.
-      appendSystemPrompt: mutant === 'seed-control' ? LESSON_STATEMENT : null,
+      appendSystemPrompt: mutant === 'seed-control' ? spec.lesson : null,
     });
     const run = {
       i,
@@ -1160,7 +1358,7 @@ async function main() {
   const agg = aggregate(runs);
   const costUsd = runs.reduce((s, r) => s + (r.treated.costUsd || 0) + (r.control.costUsd || 0), 0);
   const wallMs = runs.reduce((s, r) => s + (r.treated.wallMs || 0) + (r.control.wallMs || 0), 0);
-  writeArtifact(outFile, agg, { host, model, mutant, record: rec, seed, refresh, flag, costUsd, wallMs });
+  writeArtifact(outFile, agg, { host, model, mutant, trap, task: spec.prompt, record: rec, seed, refresh, flag, costUsd, wallMs });
 
   console.log(`\n  RATE ${agg.passes}/${agg.n} · token carried by treated ${agg.treatedTokenRuns}/${agg.n} vs control ${agg.controlTokenRuns}/${agg.n}`);
   console.log(`  EXECUTION GATE: treated named the real subcommand ${agg.treatedSubcommandRuns}/${agg.n} · exited 0 ${agg.treatedExecutedRuns}/${agg.n} · RETRIEVED ${agg.treatedRetrievedRuns}/${agg.n} · control worked ${agg.controlWorkedRuns}/${agg.n}`);
@@ -1222,6 +1420,8 @@ function writeArtifact(file, agg, meta = {}) {
     // actually reported, so a result can never be attributed to a model that never ran.
     modelResolved: (agg.runs || []).map((r) => r.treated?.modelUsed).find(Boolean) || null,
     mutant: meta.mutant || null,
+    trap: meta.trap || TRAP.MEMORY_SEARCH,
+    task: meta.task || null,
     n: agg.n,
     passes: agg.passes,
     fails: agg.fails,
@@ -1242,7 +1442,19 @@ function writeArtifact(file, agg, meta = {}) {
     costUsd: meta.costUsd != null ? +meta.costUsd.toFixed(4) : null,
     wallSeconds: meta.wallMs != null ? +(meta.wallMs / 1000).toFixed(1) : null,
     premise: meta.flag ? { verified: meta.flag.ok, evidence: meta.flag.evidence } : null,
-    record: meta.record ? { key: meta.record.key, storeExit: meta.record.storeExit, readBackExit: meta.record.readBackExit, ok: meta.record.ok } : null,
+    record: meta.record ? {
+      lessonId: meta.record.lesson?.id,
+      key: meta.record.key,
+      storeExit: meta.record.storeExit,
+      readBackExit: meta.record.readBackExit,
+      ok: meta.record.ok,
+    } : null,
+    promotion: meta.record ? {
+      rule: 'ADR-G008 win twice',
+      projectCount: meta.record.projectCount,
+      sourceProjects: meta.record.sources?.map((source) => source.project) || [],
+      promoted: meta.record.promoted === true,
+    } : null,
     seed: meta.seed ? { key: meta.seed.key, storeExit: meta.seed.storeExit, ok: meta.seed.ok } : null,
     refresh: meta.refresh || null,
     runs: (agg.runs || []).map((r) => ({

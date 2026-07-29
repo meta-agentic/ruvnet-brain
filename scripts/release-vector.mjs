@@ -133,7 +133,7 @@ export const INVARIANTS = [
       try { mod = await import(new URL('./learning-replay.mjs', import.meta.url).href); }
       catch { return { state: 'UNKNOWN', why: 'counterfactual replay harness absent' }; }
       let r;
-      try { r = mod.checkArtifact(); } catch (e) { return { state: 'UNKNOWN', why: `replay artifact unreadable: ${e.message}` }; }
+      try { r = mod.checkPortfolio(); } catch (e) { return { state: 'UNKNOWN', why: `replay portfolio unreadable: ${e.message}` }; }
       // `.status` is the field checkArtifact() actually returns — read, not assumed. Reaching for
       // `.verdict` (the name used INSIDE the nested artifact) silently yielded undefined and made a
       // real PASS read UNKNOWN: the delegation "worked" while reporting the opposite of the truth.
