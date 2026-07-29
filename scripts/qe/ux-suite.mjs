@@ -251,7 +251,7 @@ export async function runUxSuite() {
     const ss = await runSessionStartGate();
     const b = ss.budget;
     const tag = (ok) => (ok ? '✓' : '✗ HARD FAIL');
-    console.log(`  ${'session-start warm-up'.padEnd(30)} ${ss.warmupMs.toFixed(0).padStart(10)}ms  (first-ever fire in a virgin HOME — reported, not gated)`);
+    console.log(`  ${'session-start cold first fire'.padEnd(30)} ${ss.warmupMs.toFixed(0).padStart(10)}ms  ${ss.warmupTimedOut ? '✗ HARD FAIL (declared timeout exceeded)' : '✓ inside declared timeout'}`);
     console.log(`  ${'session-start p50'.padEnd(30)} ${ss.p50.toFixed(0).padStart(10)}ms  (reported, not gated)`);
     console.log(`  ${'session-start p95'.padEnd(30)} ${ss.p95.toFixed(0).padStart(10)}ms  budget ${b.p95BudgetMs}ms  ${tag(ss.p95 <= b.p95BudgetMs)}`);
     console.log(`  ${'session-start max'.padEnd(30)} ${ss.max.toFixed(0).padStart(10)}ms  absolute-fail ${b.absoluteFailMs}ms  ${tag(ss.max <= b.absoluteFailMs)}`);
