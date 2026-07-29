@@ -6,7 +6,7 @@ date: 2026-07-27
 updated: 2026-07-29
 impl: verified
 verified: 2026-07-29
-verified_digest: 334ff86499fe
+verified_digest: 1602b6437902
 verified_by: governed-source claim ledger in this ADR plus node scripts/doc-currency.mjs --json
 governs:
   - scripts/behavioral-l1-l4.mjs
@@ -23,8 +23,8 @@ relates: [ADR-028, ADR-052, ADR-053, ADR-055, ADR-056]
 # ADR-057: 95 on both graders
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: governed-source reconciliation after
-the recovery commits; external grades and open proof limits preserved
+**Date**: 2026-07-27 · **Last updated**: 2026-07-29 · **Why**: governed-source reconciliation after
+the prompt-hook timeout repair; external grades and open proof limits preserved
 **Implementation**: source-wired and currency-verified, not release-verified · **Verified in sync**:
 2026-07-28 against the governed-source ledger below. In this label, `verified` means only that the
 ADR was re-read against its governed source digest; it does **not** mean either external grader
@@ -127,9 +127,10 @@ defect class is a design verdict, not a run of bad luck.
 
 **D6 — experience · 28 → 95.** GPT: *"latency breaches only warn… timing regressions do not block
 shipping."* Required: the fast capability-selection lane at **p95 ≤ 250ms**, absolute max **1,000ms**,
-and at 1,001ms the correctness test FAILS. Justification is the product's own constant: every hook in
-`hooks.json` is given 5s, and those hooks instruct the model to consult `search_ruvnet` before
-writing — a product may not order a tool that costs 4× the budget it grants its own interventions.
+and at 1,001ms the correctness test FAILS. Justification is the product's declared envelope: fast
+pre-tool hooks retain 5s while the two UserPromptSubmit hooks have 10s host deadlines around an
+internal 4s runtime bound, and those hooks instruct the model to consult `search_ruvnet` before
+writing — a product may not order a tool whose cost consumes the intervention envelope.
 *The card lane merged 2026-07-27 measures 0.1158ms warm (verified first-hand), so the budget is met
 on the selection path; the heavy path must be removed from the decision, not merely sped up.*
 
@@ -243,6 +244,7 @@ to the five governed paths; it does not adjudicate the product or substitute for
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Re-read all five governed surfaces after the UserPromptSubmit timeout repair; the architecture and open score/proof limits remain unchanged, while the D6 envelope wording now matches the actual split deadlines. | PR #65 / commit `6734597` changes only the two UserPromptSubmit declarations in `plugin/hooks/hooks.json` from 5s to 10s; pre-tool declarations remain 5s and the inner unprompted runtime remains bounded at 4s. The exact candidate passed the GitHub macOS/Ubuntu/Windows stranger matrix, full Windows units, UX/QE, and warm-brain battery; neither external grader re-ran, so no score is promoted. |
 | 2026-07-29 | Reviewed the complete governed-path history since `8325510` and re-read the only changed governed path; the architecture and open proof limits are unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
 | 2026-07-28 | Re-read the full ADR and all five governed paths after five post-document commits; changed `impl:` from stale `unbuilt` to source-currency `verified`, replaced the obsolete build-order table, and added a governed-source claim ledger. No score or release verdict was promoted. | `doc-currency` reported drift after `2f420e7`, `27cca88`, `7eb11fb`, `e089074`, and `4ad464e`. The re-read confirms source wiring in `bin/install.mjs` and `plugin/hooks/hooks.json`, while `scripts/no-silent-substitution.mjs` still lacks downstream `--project` routing. `2b39f68` is one D4 causal artifact, not win-twice; `/private/tmp/qe-grade-gpt56-879b928.out` remains the last external grade at 15/100 and explicitly leaves exact-SHA matrix, published artifact, and both-grader proof untested. |
 | 2026-07-28 | Re-read all governed paths after the exact-SHA adversarial grade; the document's build-order claims remain accurate, and the current measured score is recorded as 15/100 rather than promoted. | `/private/tmp/qe-grade-gpt56-879b928.out` found D4 15, D1 30, and an overall vector minimum of 15 at SHA `879b928`. This repair closes Codex transport, cache-verifier, portable wiring, and Ruflo-memory-init defects, but does not claim the still-missing N=3 causal replay or stranger matrix. |

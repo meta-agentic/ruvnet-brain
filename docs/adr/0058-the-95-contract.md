@@ -192,10 +192,11 @@ a corpus that only catches misses recreates the one-sided fix pattern.* **1.5 da
 Two-tier `ux-suite.mjs`: environment-sensitive timings stay **advisory** (a flaky gate trains
 overrides); the deterministic **decision lane** becomes a **hard gate** — card lane p95 ≤ **250ms**
 over 100 firings, absolute fail >**1,000ms**. 1,000ms is ~8,600× the measured 0.1158ms, so a breach
-is a correctness event, not jitter. Justification is the product's own constant: hooks get 5s and
-those hooks *order* the model to consult the brain — a product may not order a consultation it
-prices above its own budget. **Mutants** — insert a 1,100ms sleep → **fails**, not warns · raise the
-threshold without a currency stamp → doc-currency red. **1 day. Cap ≤50.**
+is a correctness event, not jitter. Justification is the product's declared envelope: fast pre-tool
+hooks retain 5s while the two UserPromptSubmit hooks use 10s host deadlines around an internal 4s
+runtime bound, and those hooks *order* the model to consult the brain — a product may not order a
+consultation it prices above its own budget. **Mutants** — insert a 1,100ms sleep → **fails**, not
+warns · raise the threshold without a currency stamp → doc-currency red. **1 day. Cap ≤50.**
 
 ### D5 · 35 → 95
 `tests/mesh/coexistence.test.mjs` with sentinel foreign hooks (slow, failing, garbage-printing;
@@ -295,6 +296,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Re-read the complete governed set after the prompt-hook timeout repair; the vector-minimum contract is unchanged, and D6 now states the real 5s pre-tool / 10s prompt-host envelope rather than the obsolete uniform-5s claim. | PR #65 / commit `6734597` changes only the two UserPromptSubmit declarations in `plugin/hooks/hooks.json` and `plugin/hooks/codex-hooks.json`; their inner runtime remains bounded at 4s and the new regression caps the host declaration at 10s. The exact candidate's release vector and cross-platform CI passed before merge; this is release evidence, not a two-grader 95 claim. |
 | 2026-07-29 | Reviewed the complete governed-path history since `7709c67` and re-read the only changed governed path; both post-document installer fixes strengthen D8 and leave the 95 contract unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
 | 2026-07-29 | The `cmd start /b` candidate also retained the inherited capture handle, so the launcher now uses PowerShell's native `Start-Process` boundary with arguments outside the command string. The unchanged cold hard gate remains the acceptance test. | PR #58 run `30424023167`, Windows job `90486434201`; governed source `plugin/scripts/detach.mjs`; acceptance `scripts/qe/session-start-gate.mjs`. |
 | 2026-07-29 | The packed Windows PowerShell stranger run found an unrelated valid prompt timing out while cold maintenance was active. `ground-ruvnet.sh` now takes a conservative quiet-prompt fast path only when neither prompt intent nor project state can produce output; the stranger gate and 5s declaration remain unchanged. | PR #58 run `30424223276`, Windows PowerShell job `90487025753`; governed source `plugin/scripts/ground-ruvnet.sh`; acceptance `scripts/ci/stranger-scenario.mjs`. |
