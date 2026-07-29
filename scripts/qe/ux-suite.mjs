@@ -256,7 +256,7 @@ export async function runUxSuite() {
     console.log(`  ${'session-start p95'.padEnd(30)} ${ss.p95.toFixed(0).padStart(10)}ms  budget ${b.p95BudgetMs}ms  ${tag(ss.p95 <= b.p95BudgetMs)}`);
     console.log(`  ${'session-start max'.padEnd(30)} ${ss.max.toFixed(0).padStart(10)}ms  absolute-fail ${b.absoluteFailMs}ms  ${tag(ss.max <= b.absoluteFailMs)}`);
     console.log(`  firings: ${ss.n} sequential fires of the REAL registered command via selfcheck.mjs's watchdog, from ${ss.surface.source}`);
-    if (ss.warmupTimedOut && ss.warmupStderr) {
+    if (ss.warmupStderr) {
       console.log(`  cold trace: ${ss.warmupStderr.trim().split('\n').join(' | ')}`);
     }
     if (!ss.pass) for (const r of ss.reasons) hardFailures.push(`session-start wall time: ${r}`);
