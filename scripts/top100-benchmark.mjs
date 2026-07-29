@@ -220,9 +220,11 @@ Options:
   --ids top-001,top-093   Run an exact diagnostic subset of corpus IDs
   --limit N               Run only the first N selected questions
   --out FILE              Write the JSON artifact to FILE
+  --no-write              Verify and print the summary without writing an artifact
   -h, --help              Print this help without starting the MCP worker
 
-The acceptance artifact always records whether the run covered all 100 questions.`);
+The acceptance result always records whether the run covered all 100 questions.
+Use --out when a durable evidence artifact is intentional; release checks are pure.`);
     return;
   }
   const arg = (name, fallback) => {
@@ -231,7 +233,9 @@ The acceptance artifact always records whether the run covered all 100 questions
   };
   const limit = Number(arg('--limit', 0));
   const selectedIds = new Set(String(arg('--ids', '')).split(',').map((s) => s.trim()).filter(Boolean));
-  const outPath = path.resolve(arg('--out', DEFAULT_OUT));
+  const noWrite = argv.includes('--no-write');
+  if (noWrite && argv.includes('--out')) throw new Error('--no-write and --out are mutually exclusive');
+  const outPath = noWrite ? null : path.resolve(arg('--out', DEFAULT_OUT));
   if (!fs.existsSync(CORPUS)) throw new Error(`missing ${CORPUS}; run node scripts/top100-corpus.mjs`);
   if (!fs.existsSync(path.join(KB, 'verify-citation.mjs'))) throw new Error(`brain verifier absent at ${KB}`);
   const corpus = JSON.parse(fs.readFileSync(CORPUS, 'utf8'));
@@ -330,8 +334,10 @@ The acceptance artifact always records whether the run covered all 100 questions
     acceptance: acceptanceGates(metrics, { semanticAssertionsPresent }),
     rows,
   };
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, JSON.stringify(result, null, 2) + '\n');
+  if (outPath) {
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, JSON.stringify(result, null, 2) + '\n');
+  }
   console.log(JSON.stringify({ out: outPath, ...result.metrics, acceptance: result.acceptance }, null, 2));
 }
 
