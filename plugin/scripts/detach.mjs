@@ -86,6 +86,11 @@ if (!SUPERVISOR) {
     const child = spawn(process.execPath, [SELF, ...process.argv.slice(2)], {
       detached: true, // POSIX setsid() — the child leads its OWN process group, not the session's
       stdio: 'ignore',
+      // On Windows, detached:true allocates a separate console unless this is set. That console
+      // kept the hook's inherited process handles alive after session-start.sh itself had finished
+      // (~0.9s body, 7.1s watchdog verdict on run 30423673957). A hidden independent console plus
+      // ignored stdio is the documented no-handle-inheritance launch shape.
+      windowsHide: true,
       env: { ...process.env, RUVNET_DETACH_SUPERVISOR: '1' },
     });
     child.on('error', () => {});
@@ -100,6 +105,7 @@ const out = openLog();
 const job = spawn(cmd[0], cmd.slice(1), {
   detached: true, // its own group again, so the TTL kill reaches ITS children too (npm, git, node)
   stdio: ['ignore', out, out],
+  windowsHide: true,
   env: process.env,
 });
 
