@@ -2,8 +2,8 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "FAIL",
   "why": "0/1 runs passed — below the 1/1 bar",
-  "sha": "245c4fc29a74989d24a6d0a8a6aaf8d42edd550d",
-  "at": "2026-07-29T04:17:33.089Z",
+  "sha": "79573ff460606595c2cbaf04e9049c22735118c3",
+  "at": "2026-07-29T05:25:31.912Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
@@ -25,7 +25,7 @@
   "rate": 0,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 36.1,
+  "wallSeconds": 40.5,
   "premise": {
     "verified": true,
     "evidence": "live help names all three flags; success/task-id-only probe exited 0 and created neither routing outcome nor routing-decision store"
@@ -52,8 +52,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785298615772",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-iJLyR7/brain-home/versions/d4-refresh-1785298615772",
+    "generation": "d4-refresh-1785302690083",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-zVuwhR/brain-home/versions/d4-refresh-1785302690083",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -93,12 +93,12 @@
         "firstToolIndex": 0,
         "lessonBeforeFirstToolCall": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-iJLyR7/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-zVuwhR/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
         "class": "partial",
         "subcommandCorrect": true,
-        "command": "ruflo hooks post-task --task-id \"release-retry-budget-investigation\" --success true --agent \"tester\" --store-results true",
+        "command": "ruflo hooks post-task --task-id release-retry-budget-investigation --success true --agent tester --store-results true",
         "exec": {
           "ran": true,
           "argv": [
@@ -122,7 +122,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-iJLyR7/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-zVuwhR/transcripts/run1-control.stream.jsonl"
       }
     }
   ]
