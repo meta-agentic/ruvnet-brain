@@ -13,8 +13,7 @@ describe('installer replacement semantics — stale stores never survive an over
       path.resolve(import.meta.dirname, '../../scripts/ci/stranger-scenario.mjs'),
       'utf8',
     );
-    expect(harness).toContain("path.join(INSTALLED, 'dist', 'ruvnet-brain')");
-    expect(harness).toContain('fs.cpSync(fixtureDir, localBundleDir, { recursive: true })');
+    expect(harness).toContain('stageLocalBundle(fixtureDir, INSTALLED)');
     expect(harness).not.toContain("path.join(INSTALLED, 'dist', 'ruvnet-brain.zip')");
   });
 

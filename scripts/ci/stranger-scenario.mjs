@@ -31,6 +31,7 @@ import os from 'node:os';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { selfCheckOuterTimeoutMs } from './stranger-timeout.mjs';
+import { stageLocalBundle } from './stranger-fixture-stage.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const argv = process.argv.slice(2);
@@ -157,9 +158,7 @@ if (fs.existsSync(authorSettings)) fail(`author-local settings.json must not exi
 
 const dropMcp = SCENARIO === 'seeded-broken';
 const fixtureDir = buildKbFixture({ dropMcp, noRvf: false });
-const localBundleDir = path.join(INSTALLED, 'dist', 'ruvnet-brain');
-fs.mkdirSync(path.dirname(localBundleDir), { recursive: true });
-fs.cpSync(fixtureDir, localBundleDir, { recursive: true });
+stageLocalBundle(fixtureDir, INSTALLED);
 
 const strictEnv = SCENARIO === 'strict-ungrounded' ? { RUVNET_STRICT_INSTALL: '1' } : {};
 const install = runInstaller(
