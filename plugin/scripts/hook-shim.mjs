@@ -150,6 +150,64 @@ if (!entry) {
 // forgets to declare one fails toward the pre-ADR-054 behaviour rather than toward silent death.
 if (BRAIN_OFF && entry.offBehavior === 'silence') process.exit(0);
 
+// The ground hook is registered on every prompt. On Windows, starting Git Bash and then jq can
+// consume most of the hook's five-second declaration before an unrelated prompt reaches the
+// shell body's "emit nothing" verdict. Read a bounded copy here, in the Node process that is
+// already running, and skip the interpreter entirely only when BOTH prompt intent and project
+// state prove that no advisory can fire. The regex deliberately over-approximates the shell gates:
+// false positives take the established body; false negatives would be a product defect.
+let groundInput = null;
+const GROUND_RELEVANT = /ruvnet|ruflo|ruvector|\brvf\b|agentdb|agenticow|rulake|ruview|rupixel|ruv-fann|agentic-flow|synthlang|dspy|qudag|safla|metaharness|cve-bench|sparc|swarm|claude-flow|pinecone|pgvector|chroma|weaviate|faiss|milvus|qdrant|hnswlib|annoy|vector|langchain|llama|autogen|crew-ai|semantic-kernel|embedding|retrieval|prompt compression|token cost|post-quantum|quantum-resistant|\badr\b|decision|architect|design|plan|spec|refactor|migrat|implement|build|write|add|change|fix|update|deploy|create|enhance|set up|setup|wire|integrate|test|coverage|audit|review|benchmark|lint|scan|debug|optimi|app|feature|service|system|backend|frontend|\bapi\b|module|pipeline|infra|database|schema|workflow|roadmap|milestone|autonomous|unattended|do not stop|keep working|keep going|soak run|harness|quality|readiness|evolve|self-improv|hardening|cheaper|cheap|lower cost|compute arbitrage|cascade|scorecard|score .*repo/i;
+
+function projectCanSpeakWithoutPrompt() {
+  if (process.env.RUVNET_AUTONOMOUS === '1') return true;
+  try {
+    if (fs.existsSync(path.join(process.cwd(), '.claude-flow')) ||
+        fs.existsSync(path.join(process.cwd(), '.swarm'))) return true;
+    for (const name of ['package.json', '.mcp.json']) {
+      try {
+        if (/claude-flow|ruflo/i.test(fs.readFileSync(path.join(process.cwd(), name), 'utf8'))) return true;
+      } catch { /* absent/unreadable project metadata cannot create an advisory */ }
+    }
+  } catch { /* fail toward running the body below */ return true; }
+  return false;
+}
+
+function readGroundInput() {
+  return new Promise((resolve) => {
+    const chunks = [];
+    let bytes = 0;
+    let settled = false;
+    let idle;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(idle);
+      process.stdin.pause();
+      resolve(Buffer.concat(chunks));
+    };
+    const armIdle = () => {
+      clearTimeout(idle);
+      // Claude closes stdin immediately. The short idle boundary exists for malformed hosts and
+      // selfcheck's intentionally-held pipe, so neither can freeze this already-running shim.
+      idle = setTimeout(finish, 100);
+      idle.unref?.();
+    };
+    process.stdin.on('data', (chunk) => {
+      if (bytes < 32768) {
+        const kept = chunk.subarray(0, 32768 - bytes);
+        chunks.push(kept);
+        bytes += kept.length;
+      }
+      armIdle();
+    });
+    process.stdin.once('end', finish);
+    process.stdin.once('error', finish);
+    armIdle();
+    process.stdin.resume();
+  });
+}
+
 /** Resolve the active code root. Returns { root, source } or null (→ fallback). */
 function resolveCodeRoot() {
   // Dev mode wins when explicitly declared and the target still looks like the checkout it names.
@@ -196,7 +254,10 @@ function runHook(file) {
   const env = (BRAIN_OFF && entry.offBehavior === 'partial')
     ? { ...process.env, RUVNET_BRAIN_OFF: '1' }
     : process.env;
-  const r = spawnSync(cmd, [file, ...extraArgs], { stdio: 'inherit', env });
+  const io = hookId === 'ground-ruvnet' && groundInput !== null
+    ? { stdio: ['pipe', 'inherit', 'inherit'], input: groundInput }
+    : { stdio: 'inherit' };
+  const r = spawnSync(cmd, [file, ...extraArgs], { ...io, env });
   if (r.error) {
     process.stderr.write(`[hook-shim] ${entry.file}: ${r.error.message}\n`);
     return entry.mode === 'blocking' ? 1 : 0;
@@ -205,22 +266,38 @@ function runHook(file) {
   return entry.mode === 'blocking' ? (r.status ?? 0) : 0;
 }
 
-const FALLBACK_FILE = path.join(PLUGIN_ROOT, 'scripts', entry.file);
-const spine = resolveCodeRoot();
-if (spine) {
-  // codeRoot IS a plugin-payload root (versions/<v>/ mirrors the plugin dir: scripts/, hooks/, mcp/).
-  const spineFile = path.join(spine.root, 'scripts', entry.file);
-  if (fs.existsSync(spineFile)) {
-    process.exit(runHook(spineFile));
+function dispatchHook() {
+  const fallbackFile = path.join(PLUGIN_ROOT, 'scripts', entry.file);
+  const spine = resolveCodeRoot();
+  if (spine) {
+    // codeRoot IS a plugin-payload root (versions/<v>/ mirrors the plugin dir: scripts/, hooks/, mcp/).
+    const spineFile = path.join(spine.root, 'scripts', entry.file);
+    if (fs.existsSync(spineFile)) {
+      return runHook(spineFile);
+    }
+    // Spine resolved but the body file is missing — fall back LOUDLY (finding 25).
+    process.stderr.write(`[hook-shim] spine (${spine.source}) missing ${entry.file} — falling back to frozen plugin\n`);
+    return runHook(fallbackFile);
   }
-  // Spine resolved but the body file is missing — fall back LOUDLY (finding 25).
-  process.stderr.write(`[hook-shim] spine (${spine.source}) missing ${entry.file} — falling back to frozen plugin\n`);
-  process.exit(runHook(FALLBACK_FILE));
-} else {
   // No spine at all. First-install is the normal quiet case; a previously-seeded-but-broken spine
   // still lands here — the seed marker distinguishes them so breakage is loud, first-run silent.
   if (fs.existsSync(path.join(BRAIN_HOME, '.spine-seeded'))) {
     process.stderr.write(`[hook-shim] spine unreadable — running frozen plugin fallback (run: node scripts/update-apply.mjs --doctor)\n`);
   }
-  process.exit(runHook(FALLBACK_FILE));
+  return runHook(fallbackFile);
+}
+
+if (hookId === 'ground-ruvnet') {
+  readGroundInput().then((input) => {
+    groundInput = input;
+    let text = input.toString('utf8');
+    try {
+      const parsed = JSON.parse(text);
+      text = parsed?.prompt ?? parsed?.user_prompt ?? parsed?.input ?? text;
+    } catch { /* raw/malformed input is classified as-is */ }
+    if (!GROUND_RELEVANT.test(String(text)) && !projectCanSpeakWithoutPrompt()) process.exit(0);
+    process.exit(dispatchHook());
+  }).catch(() => process.exit(dispatchHook()));
+} else {
+  process.exit(dispatchHook());
 }
