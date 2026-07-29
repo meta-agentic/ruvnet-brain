@@ -227,7 +227,7 @@
       "id": "S21",
       "host": "both",
       "os": "all",
-      "artifact": "local clone (`node bin/install.mjs --local`, dist/ruvnet-brain.zip)",
+      "artifact": "local clone (`node bin/install.mjs --local`, assembled dist/ruvnet-brain/ directory)",
       "stage": "install — the from-a-repo-clone path a contributor building the bundle locally takes",
       "user-state": "fresh-home",
       "classification": "manual",

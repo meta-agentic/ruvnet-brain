@@ -100,6 +100,15 @@ test('the installer file exists at bin/install.mjs', () => {
   assert.ok(fs.existsSync(INSTALLER), `installer missing at ${INSTALLER}`);
 });
 
+test('the install smoke warms the same model cache used by the stable MCP runtime', () => {
+  const source = fs.readFileSync(INSTALLER, 'utf8');
+  assert.match(
+    source,
+    /spawnSync\('node',\s*\['forge-ask-all\.mjs'[\s\S]*?env:\s*\{\s*\.\.\.process\.env,\s*KB_MODEL_CACHE:\s*resolveRuntimeModelCache\(\)\s*\}/,
+    'smokeQuery must pass the runtime model cache to the real reader process',
+  );
+});
+
 test('`--help` exits 0 and prints usage + flags', () => {
   const r = runInstaller(['--help']);
   assertClean(r, '--help');
@@ -378,6 +387,16 @@ test('nightly prompt parsing: ENTER and y/yes accept (the default); ONLY an expl
     delete process.env.RUVNET_BRAIN_IMPORT_ONLY;
   }
   assert.equal(typeof mod.parseNightlyAnswer, 'function', 'install.mjs must export parseNightlyAnswer');
+  assert.equal(
+    mod.resolveRuntimeModelCache({ RUVNET_BRAIN_HOME: '/tmp/brain-home' }, '/ignored-home'),
+    path.join('/tmp/brain-home', 'models'),
+    'installer warm-up must target the stable MCP runtime cache',
+  );
+  assert.equal(
+    mod.resolveRuntimeModelCache({ KB_MODEL_CACHE: '/explicit-models' }, '/ignored-home'),
+    '/explicit-models',
+    'an explicit KB_MODEL_CACHE must win for both warm-up and runtime',
+  );
   // Default YES: empty string (plain ENTER), whitespace, y/yes in any case — and anything that
   // is not an explicit no ("only explicit n/no declines" is the contract).
   for (const yes of ['', '   ', 'y', 'Y', 'yes', 'YES', 'Yes', ' y ', 'sure']) {
