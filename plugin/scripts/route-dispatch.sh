@@ -88,6 +88,8 @@ SUBTYPE=$(field subagent_type)
 
 MODEL=$(field model)
 DESC=$(field description)
+TOOL_USE_ID=$(field tool_use_id)
+SESSION_ID=$(field session_id)
 DESC="${DESC// /_}"; DESC="${DESC:0:40}"   # builtin substitution — no `tr`, no `cut`
 
 if [ -n "$MODEL" ]; then
@@ -102,8 +104,8 @@ if [ -n "$MODEL" ]; then
   {
     TS=$(date -u +%FT%TZ) || TS="unknown"   # the one external command, and only on the allow path
     mkdir -p "$HOME/.claude/metaharness"
-    printf '{"ts":"%s","event":"dispatch","model":"%s","agent":"%s","task":"%s"}\n' \
-      "$TS" "$MODEL" "${SUBTYPE:-unknown}" "${DESC:-unlabeled}" \
+    printf '{"ts":"%s","event":"dispatch","model":"%s","agent":"%s","task":"%s","toolUseId":"%s","sessionId":"%s"}\n' \
+      "$TS" "$MODEL" "${SUBTYPE:-unknown}" "${DESC:-unlabeled}" "${TOOL_USE_ID:-}" "${SESSION_ID:-}" \
       >> "$HOME/.claude/metaharness/dispatch-log.jsonl"
   } 2>/dev/null || true
   exit 0

@@ -29,14 +29,21 @@ const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
  *   hostile. It now enforces ONLY for users who opted in (they answered the two subscription
  *   questions, so profile.json exists). Everyone else is untouched — not even warned.
  */
-function dispatch(toolInput, toolName = 'Task', env = {}, optedIn = true, profileContent = '{"harnesses":{}}') {
+function dispatch(
+  toolInput,
+  toolName = 'Task',
+  env = {},
+  optedIn = true,
+  profileContent = '{"harnesses":{}}',
+  envelope = {},
+) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rd-'));
   if (optedIn) {
     fs.mkdirSync(path.join(home, '.claude/model-router'), { recursive: true });
     fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), profileContent);
   }
   const r = spawnSync('bash', [GATE], {
-    input: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
+    input: JSON.stringify({ ...envelope, tool_name: toolName, tool_input: toolInput }),
     env: { ...process.env, HOME: home, ...env },
     encoding: 'utf8',
   });
@@ -88,11 +95,23 @@ describe.skipIf(!hasBash || process.platform === 'win32')('route-dispatch.sh —
   });
 
   it('ALLOWS a dispatch that declares its model, and LOGS it so routing is auditable', () => {
-    const r = dispatch({ description: 'sweep tests', subagent_type: 'general-purpose', model: 'haiku' });
+    const r = dispatch(
+      { description: 'sweep tests', subagent_type: 'general-purpose', model: 'haiku' },
+      'Task',
+      {},
+      true,
+      '{"harnesses":{}}',
+      { tool_use_id: 'toolu_route_123', session_id: 'session_456' },
+    );
     expect(r.status).toBe(0);
     // The log is the scoreboard. Claiming "I route" is worth nothing; a growing ledger is worth something.
     const log = fs.readFileSync(path.join(r.home, '.claude/metaharness/dispatch-log.jsonl'), 'utf8');
-    expect(JSON.parse(log.trim())).toMatchObject({ event: 'dispatch', model: 'haiku' });
+    expect(JSON.parse(log.trim())).toMatchObject({
+      event: 'dispatch',
+      model: 'haiku',
+      toolUseId: 'toolu_route_123',
+      sessionId: 'session_456',
+    });
   });
 
   it('lets a FORK through — a fork inherits the parent model BY DESIGN; blocking it would be wrong', () => {

@@ -125,6 +125,16 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "^(Task|Agent)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hook-shim.mjs\" routing-outcome || true",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "^(?:.*__)?search_ruvnet$",
         "hooks": [
           {

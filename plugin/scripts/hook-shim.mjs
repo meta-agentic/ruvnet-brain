@@ -105,6 +105,7 @@ const TABLE = {
   // honesty on its own — the git-push debt it opens is only ever SURFACED (never gated) by
   // session-start.sh, and that surfacing already lives under session-start's own 'partial' contract.
   'signal-watch':     { file: 'signal-watch.mjs',    interpreter: 'node', mode: 'advisory', offBehavior: 'silence' },
+  'routing-outcome':  { file: 'routing-outcome-capture.mjs', interpreter: 'node', mode: 'advisory', offBehavior: 'run' },
   // The unprompted-speech chokepoint (ADR-040 / DDD-0004). ONE runtime is the sole writer of
   // user-facing bytes for every unprompted hook: it spawns the real producers (anticipate, lesson)
   // in candidate mode, applies the per-channel policy, and writes the final envelope itself. `channel`
