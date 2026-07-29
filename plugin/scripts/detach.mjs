@@ -48,7 +48,15 @@ const SELF = fileURLToPath(import.meta.url);
 const SUPERVISOR = process.env.RUVNET_DETACH_SUPERVISOR === '1';
 const GRACE_MS = 3000; // SIGTERM → this long → SIGKILL. Matches selfcheck's own watchdog shape.
 
-const [ttlRaw, logPath, ...cmd] = process.argv.slice(2);
+let inputArgs = process.argv.slice(2);
+if (SUPERVISOR && inputArgs.length === 1 && inputArgs[0] === '--payload-env') {
+  try {
+    inputArgs = JSON.parse(Buffer.from(process.env.RUVNET_DETACH_PAYLOAD_B64 || '', 'base64').toString('utf8'));
+  } catch {
+    inputArgs = [];
+  }
+}
+const [ttlRaw, logPath, ...cmd] = inputArgs;
 const ttlSec = Number(ttlRaw);
 if (!cmd.length || !Number.isFinite(ttlSec) || ttlSec <= 0) {
   process.stderr.write('usage: detach.mjs <ttlSeconds> <logPath|-> <cmd> [args...]\n');
@@ -83,16 +91,34 @@ if (!SUPERVISOR) {
   // before the hook does, so the group is empty at exit. Everything with a real duration is on the
   // far side of the setsid boundary below.
   try {
-    const child = spawn(process.execPath, [SELF, ...process.argv.slice(2)], {
-      detached: true, // POSIX setsid() — the child leads its OWN process group, not the session's
-      stdio: 'ignore',
-      // On Windows, detached:true allocates a separate console unless this is set. That console
-      // kept the hook's inherited process handles alive after session-start.sh itself had finished
-      // (~0.9s body, 7.1s watchdog verdict on run 30423673957). A hidden independent console plus
-      // ignored stdio is the documented no-handle-inheritance launch shape.
-      windowsHide: true,
-      env: { ...process.env, RUVNET_DETACH_SUPERVISOR: '1' },
-    });
+    const supervisorEnv = {
+      ...process.env,
+      RUVNET_DETACH_SUPERVISOR: '1',
+      RUVNET_DETACH_PAYLOAD_B64: Buffer.from(JSON.stringify(process.argv.slice(2))).toString('base64'),
+    };
+    let child;
+    if (process.platform === 'win32') {
+      // detached:true alone did not sever the console/handle tree on Windows: session-start.sh
+      // reached `exit 0` in ~0.9s, yet cmd.exe kept its capture pipe open until the 5s watchdog.
+      // `start` is Windows' native "launch and do not wait" boundary. All variable arguments travel
+      // in a base64 environment payload, leaving only trusted executable paths in cmd's command
+      // string and avoiding cmd metacharacter/quoting ambiguity in job arguments and log paths.
+      const comspec = process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+      const launch = `start "" /b "${process.execPath}" "${SELF}" --payload-env`;
+      child = spawn(comspec, ['/d', '/s', '/c', `"${launch}"`], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        windowsVerbatimArguments: true,
+        env: supervisorEnv,
+      });
+    } else {
+      child = spawn(process.execPath, [SELF, ...process.argv.slice(2)], {
+        detached: true, // POSIX setsid() — the child leads its OWN process group, not the session's
+        stdio: 'ignore',
+        env: supervisorEnv,
+      });
+    }
     child.on('error', () => {});
     child.unref();
   } catch { /* nothing to report — the session must start regardless */ }
