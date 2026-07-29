@@ -61,7 +61,11 @@ function waitForReady(port, timeoutMs = 20000) {
 function startConsole(port, home) {
   const env = { ...process.env, HOME: home, CONSOLE_PORT: String(port) };
   const child = spawn(process.execPath, [CONSOLE_MJS, '--serve'], { env, stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO });
-  child.stdout.on('data', () => {}); child.stderr.on('data', () => {});   // drain, don't block
+  // Drain and mirror the isolated fixture's startup output to stderr. The parent UX runner captures
+  // only the last stages on failure, so a bind/import crash is diagnosable without polluting JSON.
+  child.stdout.on('data', (chunk) => process.stderr.write(`[render-console:stdout] ${String(chunk)}`));
+  child.stderr.on('data', (chunk) => process.stderr.write(`[render-console:stderr] ${String(chunk)}`));
+  child.on('exit', (code, signal) => process.stderr.write(`[render-console:exit] code=${code} signal=${signal}\n`));
   return child;
 }
 
@@ -94,6 +98,7 @@ async function timeToSelector(browser, url, selector, label) {
 }
 
 export async function runRenderProbe() {
+  const stage = (name) => process.stderr.write(`[render-probe] ${name}\n`);
   if (!chromium) {
     return { results: [], notes: [`playwright not loadable (${playwrightLoadError}) — render probe NOT RUN, never faked as pass`] };
   }
@@ -104,24 +109,34 @@ export async function runRenderProbe() {
   const results = [];
   const notes = [];
   try {
+    stage('prewarm:start');
     await prewarm(home);   // make the render measure the WARM common case
+    stage('prewarm:done');
     server = startConsole(port, home);
+    stage('server:spawned');
     const readyMs = await waitForReady(port);
+    stage('server:ready');
     results.push({ label: 'server-ready', selector: 'GET / → 200', ms: readyMs });
     const base = `http://127.0.0.1:${port}`;
 
     browser = await chromium.launch({ headless: true });
+    stage('browser:launched');
     // 1a — console time-to-visible: #card-capabilities painted
     results.push(await timeToSelector(browser, `${base}/`, '#card-capabilities', 'console time-to-visible'));
+    stage('console:visible');
     // 1b — tips time-to-visible: hero + first section painted (grounded selectors from console/tips.html)
     results.push(await timeToSelector(browser, `${base}/tips`, '.hero-scene', 'tips time-to-visible (hero)'));
+    stage('tips-hero:visible');
     results.push(await timeToSelector(browser, `${base}/tips`, '#inventory', 'tips first-section'));
+    stage('tips-inventory:visible');
   } catch (e) {
     notes.push(`render probe error: ${e.message}`);
   } finally {
+    stage('cleanup:start');
     try { if (browser) await browser.close(); } catch {}
     try { if (server) server.kill(); } catch {}
     try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
+    stage('cleanup:done');
   }
   return { results, notes };
 }

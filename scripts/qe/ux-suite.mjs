@@ -32,17 +32,78 @@
 //    `aqe status`, but the MEASUREMENT is a plain deterministic probe, NOT aqe-internal. Verified live
 //    2026-07-24: `aqe domain` supports only list/health (not create), so inventing an "onboarding-ux"
 //    domain would be fiction. We do not. If aqe isn't present, the suite runs identically and says so.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { runRenderProbe } from '../../tests/ux/render-probe.mjs';
 import { runCommandProbe } from '../../tests/ux/command-probe.mjs';
 import { runCardLaneGate } from './card-lane-gate.mjs';
 import { runSessionStartGate } from './session-start-gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const RENDER_PROBE = path.resolve(HERE, '../../tests/ux/render-probe.mjs');
+const RENDER_PROBE_TIMEOUT_MS = 30_000;
+
+function stopProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
+    return;
+  }
+  try { process.kill(-child.pid, 'SIGTERM'); } catch {}
+  try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+}
+
+/**
+ * Browser drivers can wedge below JavaScript, so an in-process Promise timeout is not a bound.
+ * Run the render probe in its own process group and kill the whole group at the deadline.
+ */
+export function runRenderProbeIsolated({
+  probeFile = RENDER_PROBE,
+  timeoutMs = RENDER_PROBE_TIMEOUT_MS,
+} = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [probeFile], {
+      cwd: path.resolve(HERE, '../..'),
+      env: process.env,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      stopProcessTree(child);
+      const trace = stderr.trim().split('\n').filter(Boolean).slice(-4).join(' | ');
+      finish({
+        results: [],
+        notes: [`render probe exceeded ${timeoutMs}ms process deadline${trace ? `; last stages: ${trace}` : ''}`],
+      });
+    }, timeoutMs);
+
+    child.on('error', (error) => finish({ results: [], notes: [`render probe spawn failed: ${error.message}`] }));
+    child.on('close', () => {
+      try {
+        const parsed = JSON.parse(stdout);
+        finish(parsed);
+      } catch {
+        const trace = stderr.trim().split('\n').filter(Boolean).slice(-4).join(' | ');
+        finish({ results: [], notes: [`render probe returned no readable JSON${trace ? `; last stages: ${trace}` : ''}`] });
+      }
+    });
+  });
+}
 
 // Darwin values are frozen from the measured 2026-07-24 baseline in docs/qe/ux-first-run.md.
 // Linux and Windows receive bounded hosted-runner startup headroom; the visible-paint and dead-air
@@ -137,7 +198,7 @@ export async function runUxSuite() {
 
   // ── Probe 1: render time-to-visible ──────────────────────────────────────────────────────────
   console.log('  ── time-to-visible (console + tips) ──');
-  const render = await runRenderProbe();
+  const render = await runRenderProbeIsolated();
   for (const r of render.results) {
     console.log(line(r.label, r.ms, 'ms', budgets[r.label]));
     const failure = timingFailure(r.label, r.ms, budgets[r.label]);

@@ -1,7 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   PLATFORM_BUDGETS,
   budgetsForPlatform,
+  runRenderProbeIsolated,
   timingFailure,
 } from '../../scripts/qe/ux-suite.mjs';
 
@@ -31,4 +35,19 @@ describe('UX QE hard budgets', () => {
     expect(() => budgetsForPlatform('plan9')).toThrow(/unsupported/);
     expect(Object.keys(PLATFORM_BUDGETS)).toEqual(['darwin', 'linux', 'win32']);
   });
+
+  it('bounds a browser probe that never returns and preserves its last stage', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ux-render-bound-'));
+    const probe = path.join(dir, 'hang.mjs');
+    fs.writeFileSync(probe, 'process.stderr.write("[render-probe] fixture:wedged\\n"); setInterval(() => {}, 1000);');
+    try {
+      const started = Date.now();
+      const result = await runRenderProbeIsolated({ probeFile: probe, timeoutMs: 250 });
+      expect(Date.now() - started).toBeLessThan(3000);
+      expect(result.results).toEqual([]);
+      expect(result.notes.join('\n')).toMatch(/exceeded 250ms.*fixture:wedged/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, 5000);
 });
