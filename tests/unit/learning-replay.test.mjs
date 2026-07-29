@@ -21,7 +21,7 @@ import {
   assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
-  checkMutantArtifacts, MUTANT_RESULT_FILES,
+  checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -525,6 +525,20 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     expect(Object.keys(MUTANT_RESULT_FILES)).toEqual(['delete-lesson', 'brain-off-treated']);
     expect(MUTANT_RESULT_FILES['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
     expect(MUTANT_RESULT_FILES['brain-off-treated']).toMatch(/brain-off-result\.json$/);
+  });
+});
+
+describe('parallel replay fixture allocation', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-allocate-')); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('allocates different directories even when two runs start in the same millisecond', () => {
+    const first = allocateRunBase(dir);
+    const second = allocateRunBase(dir);
+    expect(first).not.toBe(second);
+    expect(fs.existsSync(first)).toBe(true);
+    expect(fs.existsSync(second)).toBe(true);
   });
 });
 

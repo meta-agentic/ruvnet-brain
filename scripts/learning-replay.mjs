@@ -525,6 +525,12 @@ const sh = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', ti
 
 function rmrf(p) { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* nothing to remove */ } }
 
+/** Allocate one collision-proof fixture root; Date.now() alone collides under parallel CI. */
+export function allocateRunBase(root = path.join(ROOT, '.ruvnet-brain', 'learning-replay')) {
+  fs.mkdirSync(root, { recursive: true });
+  return fs.mkdtempSync(path.join(root, 'run-'));
+}
+
 function initMemoryDb(ruflo, db, cwd) {
   return sh(ruflo, ['memory', 'init', '--path', db, '--backend', 'hybrid'], { cwd });
 }
@@ -1060,7 +1066,7 @@ async function main() {
     process.exit(EXIT.UNKNOWN);
   }
 
-  const base = path.join(ROOT, '.ruvnet-brain', 'learning-replay', `run-${Date.now()}`);
+  const base = allocateRunBase();
   const dirs = buildFixtures(base);
   const rec = recordInProjectA(dirs);
   console.log(`  record  (fixture-project-A): memory row ${rec.storeExit === 0 ? 'stored' : `store exit ${rec.storeExit}`}, lesson ${rec.ok ? 'derived + ratified' : 'NOT recorded'}`);
