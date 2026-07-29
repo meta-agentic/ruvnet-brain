@@ -41,6 +41,9 @@ the exact lie that makes people distrust rUv's code.
   token exchange", not "does RuvNet apply") — the useful hit can be in ANY of the 32 repos, never
   trust memory about what the corpus does or doesn't have.
 - Check project memory (ruflo memory search / AgentDB) for prior decisions on this area.
+- Invoke Ruflo MCP tools first for capabilities they already expose. For a CLI-only interface,
+  use the brain's `ruvnet_cli_help` then `ruvnet_cli_run` tools with literal argv; never guess flags
+  by reconstructing a raw shell command.
 
 ### A. THEN RESPOND — one voice, these beats, nothing else
 

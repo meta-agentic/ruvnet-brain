@@ -68,11 +68,13 @@ function isolatedHome() {
 describe('the published artifact carries the persistent Codex host files, and no more of plugin/', () => {
   it('plugin/mcp/server.mjs is in the tarball', () => {
     expect(packed.files.map((f) => f.path)).toContain('plugin/mcp/server.mjs');
+    expect(packed.files.map((f) => f.path)).toContain('plugin/mcp/managed-cli-interface.mjs');
   });
 
-  it('ships only the MCP server and generation-independent hook wrapper from plugin/', () => {
+  it('ships only the MCP server, its structured-interface module, and the generation-independent hook wrapper from plugin/', () => {
     const pluginFiles = packed.files.map((f) => f.path).filter((p) => p.startsWith('plugin/'));
     expect(pluginFiles).toEqual([
+      'plugin/mcp/managed-cli-interface.mjs',
       'plugin/mcp/server.mjs',
       'plugin/scripts/codex-hook-wrapper.mjs',
     ]);
@@ -81,6 +83,8 @@ describe('the published artifact carries the persistent Codex host files, and no
   it('the packed server is byte-identical to the source of truth', () => {
     const shippedBytes = fs.readFileSync(path.join(unpackedRoot, 'plugin', 'mcp', 'server.mjs'), 'utf8');
     expect(shippedBytes).toBe(fs.readFileSync(path.join(ROOT, 'plugin', 'mcp', 'server.mjs'), 'utf8'));
+    const interfaceBytes = fs.readFileSync(path.join(unpackedRoot, 'plugin', 'mcp', 'managed-cli-interface.mjs'), 'utf8');
+    expect(interfaceBytes).toBe(fs.readFileSync(path.join(ROOT, 'plugin', 'mcp', 'managed-cli-interface.mjs'), 'utf8'));
   });
 });
 
@@ -93,6 +97,7 @@ describe('wireCodexHost from the unpacked tarball — the exact path issue #43 p
     const r1 = wireCodexHost({ codexDir, serverDir, announce: false });
     expect(r1.action).toBe('added');
     expect(fs.existsSync(r1.serverPath)).toBe(true);
+    expect(fs.existsSync(path.join(serverDir, 'managed-cli-interface.mjs'))).toBe(true);
     expect(codexStatus({ codexDir, configPath })).toMatchObject({ host: true, wired: true });
 
     const bytes1 = fs.readFileSync(configPath, 'utf8');

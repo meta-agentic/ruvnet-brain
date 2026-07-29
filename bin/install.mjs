@@ -682,9 +682,9 @@ function wirePlugin() {
 //      it and touch nothing. Their hand-written config outranks our convenience.
 //
 // The registered path must also OUTLIVE the install. The npx checkout is ephemeral (the same reason
-// the spend watchdog and the router tools get copied under ~/.claude), and plugin/mcp/server.mjs is
-// self-contained — node builtins only — so it is copied to a persistent home and THAT absolute path
-// is what gets registered. Registering the npx dir would rot the moment the temp dir vanished.
+// the spend watchdog and the router tools get copied under ~/.claude). The MCP shell and its one
+// local structured-interface module use node builtins only; both are copied to a persistent home and
+// THAT absolute server path is registered. Registering the npx dir would rot when the temp dir vanished.
 const CODEX_BLOCK_START = '# --- ruvnet-brain (managed block, installer-rewritten) ---';
 const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
 const codexHomeDir = () => path.join(os.homedir(), '.codex');
@@ -788,11 +788,20 @@ export function wireCodexHost({
     if (announce) warn('MCP server missing from this bundle — Codex left untouched (non-fatal)');
     return { host: true, action: 'no-source' };
   }
+  const managedCliSource = path.join(path.dirname(source), 'managed-cli-interface.mjs');
+  if (!fs.existsSync(managedCliSource)) {
+    if (announce) warn('MCP structured-interface module missing from this bundle — Codex left untouched (non-fatal)');
+    return { host: true, action: 'no-source' };
+  }
   const serverPath = path.join(serverDir, 'server.mjs');
+  const managedCliPath = path.join(serverDir, 'managed-cli-interface.mjs');
   fs.mkdirSync(serverDir, { recursive: true });
   // Write-beside-then-rename, both here and for the config below (issue #43): an interrupted plain
   // copy leaves a TORN server.mjs at the exact path a prior install's config already points at, so
   // Codex spawns half a file. rename() over the target is atomic; a failure leaves the old bytes.
+  // Copy the dependency first. If the later server swap fails, the previously registered server
+  // remains byte-intact and continues to import a backward-compatible module at the same path.
+  atomicReplace(managedCliPath, (tmp) => fs.copyFileSync(managedCliSource, tmp));
   atomicReplace(serverPath, (tmp) => fs.copyFileSync(source, tmp));
   if (fs.existsSync(hookWrapperSource)) {
     fs.mkdirSync(path.dirname(hookWrapperPath), { recursive: true });
@@ -807,7 +816,7 @@ export function wireCodexHost({
       ok('Codex already declares ruvnet-brain in your own config — left exactly as you wrote it');
       info(`  to hand it to us instead, delete that ${c.bold('[mcp_servers.ruvnet-brain]')} block and re-run this installer`);
     }
-    return { host: true, action, serverPath, hookWrapperPath };
+    return { host: true, action, serverPath, managedCliPath, hookWrapperPath };
   }
   if (text !== before) {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -818,7 +827,7 @@ export function wireCodexHost({
     info(`  server: ${serverPath} ${c.dim('(persistent copy — the npx dir vanishes)')}`);
     info(`  ${c.dim('only our marked block is written; every other section is byte-preserved')}`);
   }
-  return { host: true, action, serverPath, hookWrapperPath, changed: text !== before };
+  return { host: true, action, serverPath, managedCliPath, hookWrapperPath, changed: text !== before };
 }
 
 const CODEX_PLUGIN_ID = 'ruvnet-brain@ruvnet-brain';

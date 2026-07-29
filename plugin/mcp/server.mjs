@@ -33,6 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import { callManagedCli, MANAGED_CLI_TOOLS } from './managed-cli-interface.mjs';
 
 const BRAIN_HOME = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
 const KB = process.env.RUVNET_BRAIN_KB || path.join(BRAIN_HOME, 'kb');
@@ -43,9 +44,9 @@ const LEASE = path.join(LEASES, `mcp-${process.pid}.json`);
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = { name: 'ruvnet-brain', version: '2.0.0' };
-// Static fallback tool declaration — same name + inputSchema the brain declares (the SCHEMA is the
-// frozen contract; the description is data and is refreshed from the live child when one is up).
-const FALLBACK_TOOLS = [{
+// Local frozen tool declarations. search_ruvnet is only a fallback: a live child's declaration wins
+// so its description can refresh. The two managed-CLI schemas are owned by this protocol shell.
+const SEARCH_TOOL = {
   name: 'search_ruvnet',
   description: 'Source-grounded knowledge base for the RuvNet ecosystem. (Brain bundle not installed on this machine — calls will return install guidance.)',
   inputSchema: {
@@ -56,7 +57,19 @@ const FALLBACK_TOOLS = [{
     },
     required: ['query'],
   },
-}];
+};
+const FALLBACK_TOOLS = [SEARCH_TOOL, ...MANAGED_CLI_TOOLS];
+
+function withLocalTools(tools) {
+  const merged = new Map();
+  for (const tool of Array.isArray(tools) ? tools : []) {
+    if (tool?.name) merged.set(tool.name, tool);
+  }
+  for (const tool of FALLBACK_TOOLS) {
+    if (!merged.has(tool.name)) merged.set(tool.name, tool);
+  }
+  return [...merged.values()];
+}
 
 const out = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 const clientOk = (id, result) => out({ jsonrpc: '2.0', id, result });
@@ -210,13 +223,19 @@ async function handleClient(msg) {
       try {
         const c = await ensureChild();
         if (c) {
-          try { const r = await childRequest(c, 'tools/list', {}, 15_000); if (r.result?.tools?.length) return clientOk(id, r.result); }
+          try {
+            const r = await childRequest(c, 'tools/list', {}, 15_000);
+            if (r.result?.tools?.length) return clientOk(id, { ...r.result, tools: withLocalTools(r.result.tools) });
+          }
           catch { /* fall through to the static declaration */ }
         }
       } catch { /* fall through to the static declaration during a transient startup outage */ }
       return clientOk(id, { tools: FALLBACK_TOOLS });
     }
     case 'tools/call': {
+      if (params?.name === 'ruvnet_cli_help' || params?.name === 'ruvnet_cli_run') {
+        return clientOk(id, await callManagedCli(params.name, params.arguments || {}));
+      }
       if (params?.name !== 'search_ruvnet') return clientErr(id, -32602, `unknown tool: ${params?.name}`);
       refreshLease();
       let c;
