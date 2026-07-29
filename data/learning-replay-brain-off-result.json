@@ -2,12 +2,14 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "FAIL",
   "why": "0/1 runs passed — below the 1/1 bar",
-  "sha": "dc27f410f2a76c8dd1a042bef98a934af466b4e2",
-  "at": "2026-07-29T02:43:43.363Z",
+  "sha": "b938ff6f10b1215718007a665cfb6a0ee0e9d549",
+  "at": "2026-07-29T03:39:00.620Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
   "mutant": "brain-off-treated",
+  "trap": "memory-search-query",
+  "task": "Earlier in this project someone recorded a note about the caching strategy. Recall it from this project's agent memory with the ruflo CLI. Run the recall command now, then tell me what you ran.",
   "n": 1,
   "passes": 0,
   "fails": 1,
@@ -23,16 +25,26 @@
   "rate": 0,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 22.6,
+  "wallSeconds": 23.5,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
   },
   "record": {
-    "key": "lesson-ruflo-memory-search-flag",
+    "lessonId": "FX-D4-ruflo-memory-search-flag",
+    "key": "lesson-ruflo-memory-search-flag-1",
     "storeExit": 0,
     "readBackExit": 0,
     "ok": true
+  },
+  "promotion": {
+    "rule": "ADR-G008 win twice",
+    "projectCount": 2,
+    "sourceProjects": [
+      "fixture-project-a",
+      "fixture-project-a-independent"
+    ],
+    "promoted": true
   },
   "seed": {
     "key": "note-caching-strategy",
@@ -40,8 +52,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785293000111",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-vsZXmV/brain-home/versions/d4-refresh-1785293000111",
+    "generation": "d4-refresh-1785296316428",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-ffsbE1/brain-home/versions/d4-refresh-1785296316428",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -74,7 +86,7 @@
         "firstToolIndex": 0,
         "lessonBeforeFirstToolCall": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-vsZXmV/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-ffsbE1/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
@@ -96,7 +108,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-vsZXmV/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-ffsbE1/transcripts/run1-control.stream.jsonl"
       }
     }
   ]

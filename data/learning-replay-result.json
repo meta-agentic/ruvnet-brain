@@ -2,12 +2,14 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "PASS",
   "why": "3/3 runs passed (bar 2/3)",
-  "sha": "fb3783b42f0e455a1903ac8eb9da10a0e19c7144",
-  "at": "2026-07-29T02:44:59.249Z",
+  "sha": "b938ff6f10b1215718007a665cfb6a0ee0e9d549",
+  "at": "2026-07-29T03:37:51.434Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
   "mutant": null,
+  "trap": "memory-search-query",
+  "task": "Earlier in this project someone recorded a note about the caching strategy. Recall it from this project's agent memory with the ruflo CLI. Run the recall command now, then tell me what you ran.",
   "n": 3,
   "passes": 3,
   "fails": 0,
@@ -23,16 +25,26 @@
   "rate": 1,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 67.8,
+  "wallSeconds": 73.6,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
   },
   "record": {
-    "key": "lesson-ruflo-memory-search-flag",
+    "lessonId": "FX-D4-ruflo-memory-search-flag",
+    "key": "lesson-ruflo-memory-search-flag-1",
     "storeExit": 0,
     "readBackExit": 0,
     "ok": true
+  },
+  "promotion": {
+    "rule": "ADR-G008 win twice",
+    "projectCount": 2,
+    "sourceProjects": [
+      "fixture-project-a",
+      "fixture-project-a-independent"
+    ],
+    "promoted": true
   },
   "seed": {
     "key": "note-caching-strategy",
@@ -40,8 +52,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785293029317",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-6AAqri/brain-home/versions/d4-refresh-1785293029317",
+    "generation": "d4-refresh-1785296195486",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-fX0OgF/brain-home/versions/d4-refresh-1785296195486",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -50,11 +62,11 @@
     {
       "i": 1,
       "verdict": "PASS",
-      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
+      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and returned the required meaningful outcome; lesson delivered before the first tool call",
       "treated": {
         "class": "flagged",
         "subcommandCorrect": true,
-        "command": "ruflo memory search -q \"caching strategy\"",
+        "command": "~/.npm-global/bin/ruflo memory search -q \"caching strategy\"",
         "forcedCommand": false,
         "exec": {
           "ran": true,
@@ -75,7 +87,7 @@
         "firstToolIndex": 1,
         "lessonBeforeFirstToolCall": true,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
@@ -97,17 +109,17 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run1-control.stream.jsonl"
       }
     },
     {
       "i": 2,
       "verdict": "PASS",
-      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
+      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and returned the required meaningful outcome; lesson delivered before the first tool call",
       "treated": {
         "class": "flagged",
         "subcommandCorrect": true,
-        "command": "~/.npm-global/bin/ruflo memory search -q \"caching strategy\"",
+        "command": "ruflo memory search -q \"caching strategy\"",
         "forcedCommand": false,
         "exec": {
           "ran": true,
@@ -122,13 +134,13 @@
           "exitOk": true,
           "retrieved": true,
           "why": "exit 0; the output carries the seeded memory (matched \"note-caching\")",
-          "output": "[INFO] Searching: \"caching strategy\" (semantic)\n\n  Search time: 4ms\n\n+----------------------+-------+-----------+-------------------------------------+\n| Key                  | Score | Namespace | Preview                             |\n+----------------------+-------+-----------+-------------------------------------+\n| note-caching-stra... |  0.79 | default   | The caching strategy for this pr... |"
+          "output": "[INFO] Searching: \"caching strategy\" (semantic)\n\n  Search time: 5ms\n\n+----------------------+-------+-----------+-------------------------------------+\n| Key                  | Score | Namespace | Preview                             |\n+----------------------+-------+-----------+-------------------------------------+\n| note-caching-stra... |  0.79 | default   | The caching strategy for this pr... |"
         },
         "lessonIndex": 0,
         "firstToolIndex": 1,
         "lessonBeforeFirstToolCall": true,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run2-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run2-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
@@ -150,13 +162,13 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run2-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run2-control.stream.jsonl"
       }
     },
     {
       "i": 3,
       "verdict": "PASS",
-      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
+      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and returned the required meaningful outcome; lesson delivered before the first tool call",
       "treated": {
         "class": "flagged",
         "subcommandCorrect": true,
@@ -181,7 +193,7 @@
         "firstToolIndex": 1,
         "lessonBeforeFirstToolCall": true,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run3-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run3-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
@@ -203,7 +215,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run3-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-fX0OgF/transcripts/run3-control.stream.jsonl"
       }
     }
   ]
