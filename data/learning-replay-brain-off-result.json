@@ -1,0 +1,103 @@
+{
+  "invariant": "LEARNING-REPLAY",
+  "verdict": "FAIL",
+  "why": "0/1 runs passed — below the 1/1 bar",
+  "sha": "63e5e67db0d860cb806768e0b619aa1bae88a54a",
+  "at": "2026-07-29T01:28:14.982Z",
+  "host": "codex",
+  "model": "gpt-5.6-sol",
+  "modelResolved": "gpt-5.6-sol",
+  "mutant": "brain-off-treated",
+  "n": 1,
+  "passes": 0,
+  "fails": 1,
+  "unknowns": 0,
+  "controlTokenRuns": 0,
+  "controlWorkedRuns": 0,
+  "treatedTokenRuns": 0,
+  "executionGate": {
+    "treatedSubcommandRuns": 1,
+    "treatedExecutedRuns": 0,
+    "treatedRetrievedRuns": 0
+  },
+  "rate": 0,
+  "threshold": ">=2/3",
+  "costUsd": 0,
+  "wallSeconds": 43.9,
+  "premise": {
+    "verified": true,
+    "evidence": "-q, --query               Search query (required)"
+  },
+  "record": {
+    "key": "lesson-ruflo-memory-search-flag",
+    "storeExit": 0,
+    "readBackExit": 0,
+    "ok": true
+  },
+  "seed": {
+    "key": "note-caching-strategy",
+    "storeExit": 0,
+    "ok": true
+  },
+  "refresh": {
+    "generation": "d4-refresh-1785288450212",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-nZQ42B/brain-home/versions/d4-refresh-1785288450212",
+    "distillExit": 0,
+    "backupExit": 0,
+    "lessonSurvived": true
+  },
+  "runs": [
+    {
+      "i": 1,
+      "verdict": "FAIL",
+      "why": "treated arm produced \"positional\", not the token",
+      "treated": {
+        "class": "positional",
+        "subcommandCorrect": true,
+        "command": "ruflo memory search \"caching strategy\"",
+        "forcedCommand": false,
+        "exec": {
+          "ran": true,
+          "argv": [
+            "ruflo",
+            "memory",
+            "search",
+            "caching strategy"
+          ],
+          "exit": 1,
+          "exitOk": false,
+          "retrieved": false,
+          "why": "exit 1; the command's own output matched a known FAILURE shape /Required option missing/i",
+          "output": "[ERROR] Required option missing: --query\n"
+        },
+        "lessonIndex": -1,
+        "firstToolIndex": 0,
+        "lessonBeforeFirstToolCall": false,
+        "model": "gpt-5.6-sol",
+        "transcript": ".ruvnet-brain/learning-replay/run-nZQ42B/transcripts/run1-treated.stream.jsonl"
+      },
+      "control": {
+        "class": "positional",
+        "subcommandCorrect": true,
+        "command": "ruflo memory search \"caching strategy\"",
+        "exec": {
+          "ran": true,
+          "argv": [
+            "ruflo",
+            "memory",
+            "search",
+            "caching strategy"
+          ],
+          "exit": 1,
+          "exitOk": false,
+          "retrieved": false,
+          "why": "exit 1; the command's own output matched a known FAILURE shape /Required option missing/i",
+          "output": "[ERROR] Required option missing: --query\n"
+        },
+        "lessonDelivered": false,
+        "model": "gpt-5.6-sol",
+        "transcript": ".ruvnet-brain/learning-replay/run-nZQ42B/transcripts/run1-control.stream.jsonl"
+      }
+    }
+  ]
+}
