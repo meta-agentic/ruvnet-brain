@@ -340,14 +340,30 @@ STAMP="$STATE_DIR/.last-update-check"
 PREF_FILE="$STATE_DIR/.auto-update-pref"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
+# Parse the tiny plugin manifest once with shell builtins. The former grep|sed pipelines read the
+# same file three times per session; on Git-for-Windows each pipeline launches two processes.
+PLUGIN_VERSION=""
+PLUGIN_UPDATED=""
+PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT:-}/.claude-plugin/plugin.json"
+if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$PLUGIN_JSON" ]; then
+  while IFS= read -r PLUGIN_LINE; do
+    case "$PLUGIN_LINE" in
+      *'"version"'*)
+        PLUGIN_VALUE="${PLUGIN_LINE#*:}"; PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"
+        PLUGIN_VERSION="${PLUGIN_VALUE%%\"*}" ;;
+      *'"updated"'*)
+        PLUGIN_VALUE="${PLUGIN_LINE#*:}"; PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"
+        PLUGIN_UPDATED="${PLUGIN_VALUE%%\"*}" ;;
+    esac
+  done < "$PLUGIN_JSON"
+fi
+
 # ── what's-new: the FIRST session after a version change surfaces ONE positive line about what the
 # new version ADDS — users should learn what improved, not just that something updated. Fires once per
 # new version (tracked in .last-announced-version), EVERY session (not rate-limited like the heartbeat
 # below, so it lands the moment a user restarts onto a new version), non-blocking. To announce a
 # release, add a line to the case. Keep it upbeat and benefit-first — this is the good-news channel.
-RUNNING_V=""
-[ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-  RUNNING_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+RUNNING_V="$PLUGIN_VERSION"
 ANNOUNCED_FILE="$STATE_DIR/.last-announced-version"
 LAST_ANNOUNCED=""
 [ -f "$ANNOUNCED_FILE" ] && IFS= read -r LAST_ANNOUNCED < "$ANNOUNCED_FILE"
@@ -481,11 +497,17 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
   else
     # The ONE honest nag (replaces the old every-session "restart to load"): fires ONLY when the
     # active generation changed boot-frozen declarations vs what this CC process booted with.
-    SPINE_V=$(grep -m1 '"version"' "$SPINE_HOME/active.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
-    SHELL_CHANGED=$(grep -m1 '"shellChanged"' "$SPINE_HOME/active.json" 2>/dev/null | grep -c 'true' || true)
-    BOOT_V=""
-    [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-      BOOT_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+    SPINE_V=""
+    SHELL_CHANGED=0
+    while IFS= read -r SPINE_LINE; do
+      case "$SPINE_LINE" in
+        *'"version"'*)
+          SPINE_VALUE="${SPINE_LINE#*:}"; SPINE_VALUE="${SPINE_VALUE#*\"}"
+          SPINE_V="${SPINE_VALUE%%\"*}" ;;
+        *'"shellChanged"'*true*) SHELL_CHANGED=1 ;;
+      esac
+    done < "$SPINE_HOME/active.json"
+    BOOT_V="$PLUGIN_VERSION"
     if [ "$SHELL_CHANGED" = "1" ] && [ -n "$BOOT_V" ] && [ -n "$SPINE_V" ] && [ "$BOOT_V" != "$SPINE_V" ]; then
       echo "[RuvNet Brain — v$SPINE_V changed boot-level declarations (the rare case); this session booted v$BOOT_V's]"
       echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V changed a boot-level declaration — one restart picks it up (\`claude --continue\` keeps this whole conversation). Everything else already updated live.\""
@@ -592,9 +614,9 @@ fi
 
 # ── read the ACTUAL installed versions (plugin AND brain bundle), live, never hardcoded ──
 BANNER_V="unknown"; BANNER_D=""; BANNER_KB=""
-if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ]; then
-  BANNER_V="$RUNNING_V"
-  BANNER_D=$(grep -m1 '"updated"'  "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"updated": *"([^"]+)".*/\1/')
+if [ -n "$PLUGIN_VERSION" ]; then
+  BANNER_V="$PLUGIN_VERSION"
+  BANNER_D="$PLUGIN_UPDATED"
 fi
 [ -z "$BANNER_V" ] && BANNER_V="unknown"
 # Record what THIS session actually loaded. The statusline (and anything else) must report the
