@@ -3,7 +3,7 @@ id: ADR-060
 title: The two-stage cross-encoder cascade — reading every passage, cheaply, before reading a few properly
 status: Accepted
 date: 2026-07-27
-updated: 2026-07-27
+updated: 2026-07-28
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, cascade, measurement]
 supersedes: [ADR-059]
@@ -15,18 +15,24 @@ governs:
   - scripts/rerank-cap-eval.mjs
 ---
 
-Updated: 2026-07-27 | Version 1.0.0
+Updated: 2026-07-28 | Version 1.0.1
 Created: 2026-07-27
 
 # ADR-060 — The two-stage cross-encoder cascade
 
 **Status**: Accepted
 
-ADR-057 built a pool cap, measured it, and shipped it **OFF** because at the budget that bought the
+ADR-059 built a pool cap, measured it, and shipped it **OFF** because at the budget that bought the
 time it dropped one answer in 24. This ADR keeps the time and keeps the answer, by changing *what
 orders the cut* rather than *how deep the cut goes*.
 
-## Context — what ADR-057 established, and must not be re-derived
+> **Current evidence boundary (2026-07-28):** the completed evidence remains the 24-question paired
+> run recorded below. A final `--cascade 64 --n 120` run was started but **interrupted before a
+> complete result artifact was produced**. Partial rows are not a result and are not used here.
+> Later retrieval commits also changed candidate generation and routing. No default change was
+> accepted: live source still has `CE_CASCADE_K_DEFAULT = 0`.
+
+## Context — what ADR-059 established, and must not be re-derived
 
 | fact | value |
 |---|---|
@@ -36,7 +42,7 @@ orders the cut* rather than *how deep the cut goes*.
 | flat cap at its best budget (B=408), warm paired A/B | 37.05s → 25.78s (−30.4%) |
 | ~~two ONNX model loads (cold)~~ | ~~53,350 ms~~ — **corrected below to 1,670 ms** |
 
-One inherited number does not survive re-measurement. ADR-057's "53,350 ms of model load" was
+One inherited number does not survive re-measurement. ADR-059's "53,350 ms of model load" was
 obtained by subtracting a warm all-repos query from a **cold one-repo k=2 query** — two different
 workloads — and was never measured directly. Measured directly, twice, two ways, with the models
 on local disk: **1,670 ms** (cold-minus-warm, end to end) and **1,762 ms** (timing each load). The
@@ -50,9 +56,9 @@ replaying the whole day") went from the worked example `agenticow/examples/rollb
 worse and below the abstention threshold. Every frozen metric passed, because the frozen set grades
 the **repo** and the user is handed a **file**.
 
-## The diagnosis ADR-057 stopped one step short of
+## The diagnosis ADR-059 stopped one step short of
 
-ADR-057 concluded the cap was too aggressive. It was not. It was **ordered by the wrong signal**.
+ADR-059 concluded the cap was too aggressive. It was not. It was **ordered by the wrong signal**.
 
 Measured on s-05's recorded 608-candidate pool:
 
@@ -63,7 +69,7 @@ Measured on s-05's recorded 608-candidate pool:
 
 The bi-encoder is not a weak proxy for the cross-encoder on this question; it is very nearly an
 inverted one. A distance-ordered cascade would have to keep **594 of 608** pairs to retain that
-answer — it saves nothing. No budget could have rescued ADR-057's design, and no amount of raising
+answer — it saves nothing. No budget could have rescued ADR-059's design, and no amount of raising
 `B` was ever going to be the fix.
 
 This also disposes of the cheapest idea on the table. "Use the bi-encoder distances you already
@@ -76,7 +82,7 @@ Two stages of **the same cross-encoder**, distinguished only by how much of each
 1. **Stage 1** scores all ~607 pooled pairs at `KB_CE_CASCADE_TOKENS` (default **192**) tokens.
 2. **Stage 2** re-reads the top **K** survivors (`KB_CE_CASCADE_K`) at the full 512 tokens.
 
-The exempt lanes of ADR-057 are inherited unchanged (`rescue` and `bm25` always survive — a boost
+The exempt lanes of ADR-059 are inherited unchanged (`rescue` and `bm25` always survive — a boost
 cannot rescue what was never a candidate, and a transcript store's answer is BM25-only). The
 **per-store floor is dropped**: it existed only because the flat cap had to choose before any score
 existed, and the cascade has a score for every candidate from the very model that will make the
@@ -90,9 +96,10 @@ L-6. Three measurements argue against it and none argue for it:
 - **rUv already answered this one.** ruflo ADR-080 ships this exact model for this exact job and
   records the conclusion: *"Larger cross-encoder (ms-marco-MiniLM-L-12-v2, etc.) — int8 v6 is the
   speed/quality sweet spot for now."* The L-6 int8 choice is not ours to re-litigate for free.
-- **A second model is a second cold load.** The cold path is already 53s of ONNX init and is the
-  worst number this product has. A second model makes the *cold* case worse to make the *warm*
-  case better. A prefix pass costs **zero** additional model load, because it is the same session.
+- **A second model is a second cold load.** Direct measurement put the existing two-model local
+  load at 1,762 ms and the proposed additional L-2 load at 802 ms. A second model therefore makes
+  the cold case worse to make the warm case better. A prefix pass costs **zero** additional model
+  load, because it is the same session.
 - **A prefix is a genuine approximation; a different model is a different opinion.** Same weights,
   same head, a subset of the same input. That is the property agentic-qe's `rabitq.ts` names as the
   cascade contract — *"a cheap ranking proxy to shrink the candidate pool, then run exact … on the
@@ -127,7 +134,7 @@ mostly truncated anyway.
 
 ### The headline — real warm paired A/B
 
-Same protocol as ADR-057's `-30.4%`, so the numbers are comparable: the frozen held-out set,
+Same protocol as ADR-059's `-30.4%`, so the numbers are comparable: the frozen held-out set,
 n=24 questions, paired, order-alternated, one warm process, `scripts/rerank-cap-warm-ab.mjs`.
 
 | | full reads (median) | warm wall median | warm wall mean | routed | abstain | banner |
@@ -142,7 +149,7 @@ top-3 cited paths retained : 39/42 (92.9%)
 stage-1 prefilter: 607 pairs at 192 tokens, median 11.95s of the 16.39s
 ```
 
-Against ADR-057's flat cap at its best budget: **−59.3% vs −30.4%**, top-1 **23/24 vs 22/24**,
+Against ADR-059's flat cap at its best budget: **−59.3% vs −30.4%**, top-1 **23/24 vs 22/24**,
 top-3 **39/42 vs 33/42**. Better on every axis, including the one that killed it.
 
 An unrelated nightly rebuild held load average at 113–138 throughout, so absolute times are
@@ -159,7 +166,7 @@ on : 14.9s   64 full reads   #1  ce +1.770  agenticow/examples/rollback-quaranti
 
 Held, above threshold, at 64 full reads instead of 608. The path is pinned as a literal token in
 `tests/unit/rerank-cascade.test.mjs`, and mutant M1 — re-ordering the selector by distance, which
-is precisely ADR-057's design — turns that guard red.
+is precisely ADR-059's design — turns that guard red.
 
 ### The one answer that changed
 
@@ -170,22 +177,25 @@ failure mode wearing a different hat; s-05 crossed **from +1.717 to −2.869**, 
 
 ## What ships, and what stays off
 
-`CE_CASCADE_K_DEFAULT = 0` — **the cascade ships OFF**, and this is not the same verdict ADR-057
+`CE_CASCADE_K_DEFAULT = 0` — **the cascade ships OFF**, and this is not the same verdict ADR-059
 reached about the cap.
 
-ADR-057 shipped off because it had found a regression. This ships off because it has not yet
+ADR-059 shipped off because it had found a regression. This ships off because it has not yet
 looked in enough places to say there is none. The distinction matters, and so does not blurring it.
 
-The house rule is that a default flip must be *measurably better on both time and answers*. Time is
-settled: −59.3%, paired, load-independent. Answers are **equal** — every ground-truth metric
-identical, the named regression held, the single top-1 change sub-threshold on a question that
-abstains. Equal is not better, and 24 of the frozen 120 questions is exactly the sample size in
-which ADR-057's cap also looked clean on every graded metric while carrying s-05 inside it.
+The house rule is that a default flip must be *measurably better on both time and answers*. On the
+measured checkout, the 24-question time arm was −59.3%, paired and load-independent. The measured
+answers were **equal** — every ground-truth metric identical, the named regression held, the single
+top-1 change sub-threshold on a question that abstains. Equal is not better, and 24 of the frozen
+120 questions is exactly the sample size in which ADR-059's cap also looked clean on every graded
+metric while carrying s-05 inside it. The interrupted n=120 attempt settles nothing beyond that.
 
-**The condition to flip it is named and cheap:** `node scripts/rerank-cap-warm-ab.mjs --cascade 64
---n 120` (~2 hours unattended, the harness already supports it). If no cited path regresses from
-above the abstention threshold to below it, the evidence for `CE_CASCADE_K_DEFAULT = 64` is
-complete. Until then operators take it with `KB_CE_CASCADE_K=64`, with the curve in front of them.
+**The condition to reconsider the default is named but not completed:** `node
+scripts/rerank-cap-warm-ab.mjs --cascade 64 --n 120`. The attempted final run was interrupted, so
+it supplied no complete acceptance result. It must be rerun against the then-current candidate
+generation and finish with no cited path regressing from above the abstention threshold to below
+it before any proposal to change `CE_CASCADE_K_DEFAULT = 0` is evaluated. Until then operators can
+opt in with `KB_CE_CASCADE_K=64`; this ADR does not accept that value as the default.
 
 ## What was rejected, and the measurement that killed each
 
@@ -196,7 +206,7 @@ complete. Until then operators take it with `KB_CE_CASCADE_K=64`, with the curve
 | **a second, distilled CE (`L-2-v2`) as stage 1** | **rejected on the cold path.** Measured: a second model load costs 802 ms that the prefix design costs zero, and it is a different opinion rather than an approximation of the score it is filtering for. |
 | **preloading models at session start / keeping them warm** | **rejected — the premise was wrong.** The one-time cost is 1,670 ms (cold-minus-warm) / 1,762 ms (direct), not 53,350 ms. See the run record §6. |
 | **per-store floor in the cascade selector** | **dropped.** It exists to avoid muting a store before any score exists; stage 1 gives every candidate a score, so the floor only spends 69 slots re-confirming what stage 1 already ranked. |
-| **length-sorted batching** | **stays rejected** (ADR-057): 19.8% less padded compute, but it perturbs every score. |
+| **length-sorted batching** | **stays rejected** (ADR-059): 19.8% less padded compute, but it perturbs every score. |
 
 ## Consequences
 
@@ -206,9 +216,16 @@ complete. Until then operators take it with `KB_CE_CASCADE_K=64`, with the curve
 - `kb/forge-ask-all.mjs` gains `cascadeRerankPool(candidates, { limit, s1 })`, a pure function with
   the same contract as `capRerankPool` and a different ordering signal.
 - `searchAll` returns `prefiltered` / `prefilterTokens` / `prefilterMs`, and the CLI's pool line
-  says *"all 608 read at 192 tokens; the top 64 re-read in full"* rather than ADR-057's
+  says *"all 608 read at 192 tokens; the top 64 re-read in full"* rather than ADR-059's
   *"544 beyond the pair budget"*. Under a cascade nothing was skipped, and a count that quietly
   changed meaning is the failure mode this repo gates against.
-- The determinism note from ADR-057 stands and now applies twice: batch composition moves scores,
+- The determinism note from ADR-059 stands and now applies twice: batch composition moves scores,
   so the cascade's survivors are re-batched in stage 2 and their full scores are their own. Every
   number in this ADR is therefore a **real** measurement, never a replay.
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-28 | Re-read every governed path, recorded the interrupted 120-question attempt, and explicitly retained the off-by-default decision. The completed n=24 table remains historical evidence; it was not relabeled as a current n=120 result. | Live `kb/forge-ask-all.mjs` still defines `CE_CASCADE_K_DEFAULT = 0`, `CE_CASCADE_TOKENS_DEFAULT = 192`, runs `cePrefilterScores` only for an explicit positive K, and selects survivors through `cascadeRerankPool`. Commits `2de0c58` and `859a16d` later added implementation-evidence checks, query-scoped routing, and exact-evidence rescue lanes, which can change the candidate pool; neither constitutes a cascade remeasurement. `kb/forge-rerank.mjs`, `scripts/rerank-cap-eval.mjs`, and `scripts/rerank-cap-warm-ab.mjs` did not move after the prior stamp. Known governed-source comment debt remains in `kb/forge-ask-all.mjs` and `scripts/rerank-cap-warm-ab.mjs`: comments still use the pre-renumber ADR-057/058 labels, and the warm-A/B header still describes the corrected 53s download as model loading; executable defaults and harness behavior are as described here. |
+| 2026-07-28 | Corrected predecessor references from ADR-057 to ADR-059 and corrected the cold-load rationale. | Commit `d117234` renumbered the pool-cap decision to ADR-059. The run record in `evals/runs/2026-07-27-cross-encoder-cascade.md` reports 1,670 ms cold-minus-warm, 1,762 ms direct two-model load, and 802 ms for the rejected additional L-2 model; 53,350 ms was a first-run download/cache-path defect, not ONNX initialization. |

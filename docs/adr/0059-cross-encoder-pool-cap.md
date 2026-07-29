@@ -1,10 +1,9 @@
 ---
-| 2026-07-27 | Re-verified, and **superseded by ADR-060** | `capRerankPool` is still present and `CE_MAX_PAIRS_DEFAULT` is still 0 — every claim in this document still describes the code. What changed is that ADR-060's cascade achieves −59.3% where this achieved −30.4% **and keeps s-05**, by fixing the thing this document got wrong: the cut was not too deep, it was ordered by the wrong signal (s-05's answer is rank 593/608 by distance, 1/608 by cross-encoder). This document stays as the negative result that made that diagnosis possible. |
 id: ADR-059
 title: Bounding the cross-encoder pool — the measurement, and why the cap ships OFF
-status: Accepted
+status: Superseded
 date: 2026-07-27
-updated: 2026-07-27
+updated: 2026-07-28
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, measurement, negative-result]
 supersedes: []
@@ -15,25 +14,35 @@ governs:
   - scripts/rerank-cap-warm-ab.mjs
 ---
 
+Updated: 2026-07-28 | Version 1.0.1
+Created: 2026-07-27
+
 # ADR-059 — Bounding the cross-encoder pool
 
-**Status**: Accepted
+**Status**: Superseded
+
+Superseded by ADR-060.
 
 The mechanism is built, tested and wired. **Its default is OFF**, and the reason is a measurement,
 not a preference.
 
 ## Context
 
-`search_ruvnet` is slow enough that it does not get consulted. The prior session established where
-the time goes, on a quiet machine, and the numbers are not in dispute:
+`search_ruvnet` is slow enough that it does not get consulted. The prior session recorded this
+breakdown on a quiet machine:
 
 | stage | cost |
 |---|---|
 | cold query (one repo, k=2) | 72,970 ms |
 | warm query (same process) | 19,620 ms |
-| therefore: two ONNX model loads | 53,350 ms |
+| ~~therefore: two ONNX model loads~~ | ~~53,350 ms~~ — corrected by ADR-060 |
 | cross-encoder share of the WARM query | 84.7% |
 | HNSW vector search share | 3.0% |
+
+ADR-060 later measured the local two-model load directly at 1,762 ms (1,670 ms by cold-minus-warm).
+The 53,350 ms subtraction compared different workloads and represented a first-run download/cache
+path defect, not ONNX initialization. That correction removes model preloading from the follow-up
+priority list; it does not rescue the cap, whose warm A/B still lost s-05.
 
 It is not vector search. RuVector's HNSW is sub-millisecond. The cost is the
 `ms-marco-MiniLM-L-6-v2` cross-encoder, which reads **607 (query, passage) pairs per question at the
@@ -153,8 +162,9 @@ metric scores it a pass, because `concepts` is an accepted repo. One answer in t
 where the frozen gate cannot see it.
 
 And the payoff is bounded by arithmetic no budget escapes. The cross-encoder is 84.7% of a warm
-query, and the cap does nothing at all for the 53s cold model load, which is 73% of what a
-first-call user actually waits for. Separately, 82 of the 120 recorded cold queries (68.3%, at
+query, and the cap did nothing for the 53s first-run download/cache-path delay then present, which
+was 73% of what that first-call user waited for. ADR-060 later corrected its cause and measured
+local model initialization at 1.7s. Separately, 82 of the 120 recorded cold queries (68.3%, at
 3-way concurrency) already exceed the 120s proxy timeout in `plugin/mcp/server.mjs` — and on
 expiry `childRequest` deletes the pending waiter (`:121`), so the child's completed answer arrives
 to no reader (`:105-106`) and is discarded. A 30% cut does not rescue that; it is a different bug.
@@ -172,11 +182,11 @@ to no reader (`:105-106`) and is discarded. A 30% cut does not rescue that; it i
    of them. B=408 is the recommended value for anyone who takes it: it is the largest cut that
    changed no graded outcome in either direction on 120 questions.
 4. **Length-sorted batching is rejected** for now, on the measurement in finding 2.
-5. **The latency work goes where the time is.** In descending order of what a user actually waits
-   for: the 53s cold model load (a warm/preloaded worker, not a cap); the 120s proxy timeout in
-   `plugin/mcp/server.mjs`, which on expiry deletes the pending waiter so the child's *completed*
-   answer arrives and is dropped on the floor; and query-scoped store selection, which is the only
-   lever that attacks the 69× fan-out at its root instead of rationing it.
+5. **The latency work goes where the time is.** At this decision’s measured checkout that meant the
+   53s first-run download/cache mismatch (then misidentified as model load), the 120s proxy timeout
+   in `plugin/mcp/server.mjs`, and query-scoped store selection. ADR-060 corrected the first cause;
+   later commits added query-scoped routing. Neither follow-up turns the distance cap into a safe
+   default.
 
 ## Consequences
 
@@ -184,3 +194,10 @@ to no reader (`:105-106`) and is discarded. A 30% cut does not rescue that; it i
 - The repo now owns a reusable answer-quality harness for any future change to the candidate pool:
   collect once, replay every policy, and a warm paired A/B to check the replay against reality.
 - A future ADR that wants to turn the cap on must beat this table, not argue with it.
+
+## Currency log
+
+| Date | What changed | Why (with referents) |
+|---|---|---|
+| 2026-07-28 | Re-read all governed paths; retained this as a superseded negative result and kept `CE_MAX_PAIRS_DEFAULT = 0`. The numeric tables remain the historical measurements from the recorded 2026-07-27 run, not a fresh benchmark of today’s candidate pool. | Commits `2de0c58` and `859a16d` changed `kb/forge-ask-all.mjs` after the prior stamp by adding implementation-evidence checks, query-scoped routing, and exact-evidence rescue lanes. Those additions can change pool composition and selected results, so the old timing and identity ratios are not claimed as freshly reproduced. `capRerankPool` and the opt-in `KB_CE_MAX_PAIRS` path remain wired; `scripts/rerank-cap-eval.mjs` and `scripts/rerank-cap-warm-ab.mjs` did not move in that range. Known governed-source comment debt remains: the header of `scripts/rerank-cap-eval.mjs` calls subset replay “EXACT” while its collection path correctly records the measured ±0.26-logit batch-composition effect; this ADR retains the honest “approximation” classification. |
+| 2026-07-27 | Re-verified, and superseded by ADR-060. | `capRerankPool` remained present and `CE_MAX_PAIRS_DEFAULT` remained 0. ADR-060’s completed 24-question cascade run measured −59.3% rather than this cap’s −30.4% and retained s-05 by ordering the cut with a prefix cross-encoder score; s-05’s answer was rank 593/608 by distance and 1/608 by cross-encoder. |
