@@ -70,9 +70,16 @@ function prewarm(home) {
   return new Promise((resolve) => {
     const env = { ...process.env, HOME: home };
     const child = spawn(process.execPath, [CONSOLE_MJS, '--refresh-cache'], { env, stdio: 'ignore', cwd: REPO });
-    child.on('exit', () => resolve());
-    child.on('error', () => resolve());
-    setTimeout(() => { try { child.kill(); } catch {} resolve(); }, 60000);   // cap the warm-up
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    child.on('exit', finish);
+    child.on('error', finish);
+    const timer = setTimeout(() => { try { child.kill(); } catch {} finish(); }, 60000);
   });
 }
 

@@ -1,6 +1,6 @@
-# UX QE suite — first real run (thresholds frozen from these numbers)
+# UX QE suite — measured baseline and hard release budgets
 
-Updated: 2026-07-24
+Updated: 2026-07-28
 
 Run 2026-07-24 on the dev Mac (Darwin arm64, M3 Max), `npm run qe:ux`. Every number below was MEASURED
 on a real run — Playwright chromium 1228 driving the real console server, and a real cold launch parsed
@@ -9,16 +9,28 @@ browser and a local HTTP server, calls no LLM, uses no API key, and touches no a
 
 ## Measured (across several runs — timing varies, reported honestly as a range)
 
-| Signal | Measured | Frozen WARN threshold | Basis |
+| Signal | Measured | Darwin HARD budget | Basis |
 |---|---|---|---|
-| server-ready (GET / → 200) | 1199–1234 ms | 2000 ms | cold node boot + listen |
+| server-ready (GET / → 200) | 1199–1234 ms | 2500 ms | cold node boot + listen |
 | console time-to-visible (`#card-capabilities` painted) | 279–336 ms | 2500 ms | warm cache; first paint is cheap |
 | tips time-to-visible (`.hero-scene`) | 237–269 ms | 2000 ms | static page |
 | tips first-section (`#inventory`) | 202–208 ms | 2000 ms | static page |
-| command→explanation (first explanatory line) | 840–1256 ms | 1300 ms | dominated by node boot; "near-instant" for a CLI |
+| command→explanation (first explanatory line) | 840–1256 ms | 1500 ms | dominated by node boot; "near-instant" for a CLI |
 | command→"it's live" (completion signal) | 3444–5218 ms | reported, not gated | varies with the cold scan; the point is it ARRIVES |
 | max dead-air gap | 2030 ms (after countdown ticks) | 3000 ms | see note below |
-| completion signal present | YES | must be present (HARD) | the `announceWhenLive` line |
+| completion signal present | YES | must be present | the `announceWhenLive` line |
+
+The suite now hard-fails every render, explanation, and dead-air budget. Linux and Windows run as
+separate required workflow jobs with bounded hosted-runner startup headroom:
+
+| Platform | Server-ready | Console paint | Tips paint | Explanation | Dead air |
+|---|---:|---:|---:|---:|---:|
+| macOS | 2500 ms | 2500 ms | 2000 ms | 1500 ms | 3000 ms |
+| Linux | 4000 ms | 3000 ms | 2500 ms | 2500 ms | 3000 ms |
+| Windows | 6000 ms | 4000 ms | 3500 ms | 3000 ms | 3000 ms |
+
+These are release budgets, not claims about runner speed. Each CI job uploads its actual measurements
+as `ux-qe-<os>.json`; a missing browser, missing receipt, missing measurement, or budget breach is red.
 
 ## Two real product changes this run drove out (measurement → fix, not measurement → number)
 
@@ -37,8 +49,8 @@ browser and a local HTTP server, calls no LLM, uses no API key, and touches no a
 
 ## What is NOT covered by this first run (stated, never faked as "passed")
 
-- **Linux / Windows**: the timing probes are written to run anywhere, but a Mac cannot execute the
-  Linux/Windows runs — they belong in CI runners. Not yet added to `.github/workflows`. Status: **not run.**
+- **Linux / Windows from this document's local run**: not run locally. They execute independently in
+  `.github/workflows/ux-qe.yml`; do not treat the Mac numbers above as evidence for those jobs.
 - **Codex host**: the command→explanation path under Codex needs a Codex runner present. Status:
   **not run** — CI-gated on Codex availability, never faked from the Mac/Claude path.
 - **aqe orchestration**: the run registers an `aqe task submit quality-assessment` (grounded flags,
@@ -48,5 +60,5 @@ browser and a local HTTP server, calls no LLM, uses no API key, and touches no a
 
 ## Re-freezing
 
-If this doc is regenerated on a different machine, update the `WARN` map in `scripts/qe/ux-suite.mjs`
-to the new measured × ~1.5. A threshold nobody measured is a guess; these were all measured here.
+Do not loosen `PLATFORM_BUDGETS` from one noisy run. Use the uploaded per-platform receipts to show a
+repeatable distribution, document the user impact of the proposed change, then update the hard budget.
