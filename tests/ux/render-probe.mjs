@@ -142,6 +142,14 @@ export async function runRenderProbe() {
 
     browser = await chromium.launch({ headless: true });
     stage('browser:launched');
+    // Chromium's first renderer process is a browser-startup cost, not console render time. On a
+    // loaded Windows runner it added 7.9s to one otherwise 376–1031ms page series. Prime one blank
+    // renderer before starting the user-facing clock, matching the real "open this in my already
+    // running browser" path this warm-console probe claims to measure.
+    const warmPage = await browser.newPage();
+    await warmPage.goto('about:blank');
+    await warmPage.close();
+    stage('browser:warmed');
     // 1a — console time-to-visible: #card-capabilities painted
     results.push(await timeToSelector(browser, `${base}/`, '#card-capabilities', 'console time-to-visible'));
     stage('console:visible');

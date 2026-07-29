@@ -10,7 +10,8 @@ set +e
 # ── WHERE THIS HOOK'S OWN FILES LIVE. Resolved once: every background job below launches through
 # scripts/detach.mjs, a sibling in whichever payload root is executing this body (the spine version
 # dir or the frozen plugin — both mirror plugin/, see update-apply.mjs's stagePayload).
-HOOK_DIR="$(dirname "$0")"
+HOOK_DIR="${0%/*}"
+[ "$HOOK_DIR" = "$0" ] && HOOK_DIR="."
 DETACH="$HOOK_DIR/detach.mjs"
 
 # ── TOKEN METER (ADR-0011 token_cost_efficiency) — same meter as ground-ruvnet.sh. Everything this
@@ -117,6 +118,10 @@ fi
 GONG_KB="$HOME/.cache/ruvnet-brain/kb"
 GONG_HEALTH="$HOME/.cache/ruvnet-brain/health.json"
 BRAIN_PROBLEM=""
+GONG_HAS_RVF=0
+for GONG_RVF in "$GONG_KB"/*.rvf; do
+  if [ -f "$GONG_RVF" ]; then GONG_HAS_RVF=1; break; fi
+done
 # ADR-054 §3 (Health): an ABSENT knowledge bundle on a machine where the user switched the brain OFF
 # is "disabled by choice", never "THE BRAIN IS DOWN". Screaming a red alarm at someone for the exact
 # state they asked for is the product lying about its own condition — and it would train them to
@@ -124,14 +129,14 @@ BRAIN_PROBLEM=""
 # bundle that IS present but broken (missing reader deps, a failed real search) still rings, because
 # that is a genuine breakage waiting for them the moment they switch back on.
 GONG_ABSENT_BY_CHOICE=0
-if [ "$BRAIN_OFF" = "1" ] && { [ ! -d "$GONG_KB" ] || ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; }; then
+if [ "$BRAIN_OFF" = "1" ] && { [ ! -d "$GONG_KB" ] || [ "$GONG_HAS_RVF" != "1" ]; }; then
   GONG_ABSENT_BY_CHOICE=1
 fi
 if [ "$GONG_ABSENT_BY_CHOICE" = "1" ]; then
   BRAIN_PROBLEM=""
 elif [ ! -d "$GONG_KB" ]; then
   BRAIN_PROBLEM="the brain cache directory is MISSING ($GONG_KB) — reinstall: npx github:stuinfla/ruvnet-brain"
-elif ! ls "$GONG_KB"/*.rvf >/dev/null 2>&1; then
+elif [ "$GONG_HAS_RVF" != "1" ]; then
   BRAIN_PROBLEM="NO vector stores (.rvf) found in $GONG_KB — the brain is empty; reinstall: npx github:stuinfla/ruvnet-brain --force"
 elif [ ! -f "$GONG_KB/node_modules/@xenova/transformers/package.json" ]; then
   BRAIN_PROBLEM="reader dependencies are MISSING (node_modules gone) — every search WILL fail. Fix: cd $GONG_KB && npm i"
@@ -344,7 +349,8 @@ RUNNING_V=""
 [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
   RUNNING_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
 ANNOUNCED_FILE="$STATE_DIR/.last-announced-version"
-LAST_ANNOUNCED=$(cat "$ANNOUNCED_FILE" 2>/dev/null)
+LAST_ANNOUNCED=""
+[ -f "$ANNOUNCED_FILE" ] && IFS= read -r LAST_ANNOUNCED < "$ANNOUNCED_FILE"
 # ── MAJOR-LINE milestone: the "what's new in the big release" first-run experience (owner, 2026-07-25:
 # "people will wake up and it's 4.0 — they won't see the web explainer; the brain has to introduce
 # itself and bring up the console"). This fires ONCE per major line, not per patch: the first session a
@@ -374,7 +380,8 @@ if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ]; then
        elif [ "$V_INT" -ge 3009071 ]; then MILESTONE="4.0-line"; fi ;;
   esac
   MILESTONE_FILE="$STATE_DIR/.last-major-milestone"
-  LAST_MILESTONE=$(cat "$MILESTONE_FILE" 2>/dev/null)
+  LAST_MILESTONE=""
+  [ -f "$MILESTONE_FILE" ] && IFS= read -r LAST_MILESTONE < "$MILESTONE_FILE"
   if [ -n "$MILESTONE" ] && [ "$MILESTONE" != "$LAST_MILESTONE" ]; then
     MILESTONE_SHOWN=1
     echo "[RuvNet Brain — MAJOR-LINE welcome ($MILESTONE), show ONCE near the top of your first response]"
@@ -494,7 +501,9 @@ fi
 # before launching the next check. This adds at most one 15-minute interval of detection latency
 # while keeping SessionStart independent of GitHub/network health.
 NOW=$(date +%s 2>/dev/null || echo 0)
-LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
+LAST=0
+[ -f "$STAMP" ] && IFS= read -r LAST < "$STAMP"
+[ -n "$LAST" ] || LAST=0
 if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   echo "$NOW" > "$STAMP" 2>/dev/null
 
@@ -526,15 +535,14 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
     [ -f "$DETACH" ] && node "$DETACH" 60 "$STATE_DIR/.last-kb-check.log" \
       /bin/sh -c "cd '$KB_DIR' && node forge-update.mjs --check"
   fi
-  LOCAL_V=""
-  [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
-    LOCAL_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+  LOCAL_V="$RUNNING_V"
   VERSION_LOG="$STATE_DIR/.last-version-check.log"
   REMOTE_V=$(grep -m1 -E '^[0-9]+(\.[0-9]+){2}(-[A-Za-z0-9.-]+)?$' "$VERSION_LOG" 2>/dev/null | head -1)
   [ -f "$DETACH" ] && node "$DETACH" 10 "$VERSION_LOG" \
     /bin/sh -c "curl -fsS --max-time 3 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json' 2>/dev/null | grep -m1 '\"version\"' | sed -E 's/.*\"version\": *\"([^\"]+)\".*/\\1/'"
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
-    AUTO_PREF=$(cat "$PREF_FILE" 2>/dev/null || echo "")
+    AUTO_PREF=""
+    [ -f "$PREF_FILE" ] && IFS= read -r AUTO_PREF < "$PREF_FILE"
     if [ "$AUTO_PREF" = "yes" ] && command -v claude >/dev/null 2>&1; then
       # STABLE SPINE (ADR-023): download via CC's trusted marketplace path as before, then hand the
       # staged payload to the ONE update engine — gate, atomic active.json flip, receipt. Hook
@@ -585,7 +593,7 @@ fi
 # ── read the ACTUAL installed versions (plugin AND brain bundle), live, never hardcoded ──
 BANNER_V="unknown"; BANNER_D=""; BANNER_KB=""
 if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ]; then
-  BANNER_V=$(grep -m1 '"version"'  "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+  BANNER_V="$RUNNING_V"
   BANNER_D=$(grep -m1 '"updated"'  "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"updated": *"([^"]+)".*/\1/')
 fi
 [ -z "$BANNER_V" ] && BANNER_V="unknown"
@@ -769,7 +777,7 @@ fi
 # text one Read away for the turn that actually needs it, which the per-turn Gate-3 reminder is
 # already the precedent for. This is the ADR-level call tests/unit/hook-hardening.test.mjs §4 said
 # was owed — a human should sanity-check that judgement, which is why it is written down here.
-PLAYBOOK_DOC="$(dirname "$0")/../skills/ruvnet-brain/PLAYBOOK.md"
+PLAYBOOK_DOC="$HOOK_DIR/../skills/ruvnet-brain/PLAYBOOK.md"
 cat <<EOF
 [RuvNet Brain — standing build playbook for this session (referenced by later turns as THE PLAYBOOK)]
 Full text: $PLAYBOOK_DOC — read it before your first build response this session. Condensed:
