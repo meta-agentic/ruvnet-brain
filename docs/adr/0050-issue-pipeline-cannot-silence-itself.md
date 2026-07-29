@@ -3,7 +3,7 @@ id: ADR-050
 title: The issue pipeline may never manufacture its own acknowledgment — awareness, escalation, and a fixer that knows when to stop
 status: Implemented
 date: 2026-07-24
-updated: 2026-07-27
+updated: 2026-07-29
 authors: [Stuart Kerr, Claude Code]
 tags: [issues, automation, alerting, sla, security, circuit-breaker]
 supersedes: []
@@ -177,5 +177,7 @@ The four parallel agents working tonight support this distinction. They show tha
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Re-read the issue surfacer after opt-in cold-start tracing was added around unrelated spine, heartbeat, and metering stages. The issue block and its acknowledgment/escalation semantics are unchanged. | Commit `66589f4`; governed path `plugin/scripts/session-start.sh`; PR #58 Windows job `90484507774`. |
+| 2026-07-29 | Re-read the issue watcher, fixer, and SessionStart issue surfacer after PR #57. The later hook edits change manifest parsing, Windows path resolution, latency measurement, and lifecycle transport; they do not change the issue acknowledgment predicate, escalation state, or banner semantics. | Exact reviewed source head `989e19a`; governed paths `scripts/issue-watch.mjs`, `scripts/issue-fix.mjs`, and `plugin/scripts/session-start.sh`. GitHub PR #57 merged as `802886a`. |
 | 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** Re-stamped to record that the reading happened | Flagged `presumed-stale` by `doc-currency`: 3 commits / 2 days after this document's last commit (`b4eed42`, 2026-07-24). The drift is real but lands entirely in `plugin/scripts/session-start.sh`, a hub file many ADRs govern — **`scripts/issue-watch.mjs` and `scripts/issue-fix.mjs` did not change at all.** The one issue-related line in that diff *upholds* this ADR rather than eroding it: ADR-054's off-switch explicitly lists "the open-issue SLA banner" among the things that **keep running while the brain is off**, because the issue pipeline must not be silenceable — this document's whole thesis, honoured by a later decision |
 | 2026-07-27 | **Re-read again — same verdict, NO change required.** `scripts/issue-watch.mjs` / `scripts/issue-fix.mjs` are STILL unchanged since `b4eed42` (confirmed via `git rev-list`). `plugin/scripts/session-start.sh` moved 4 more commits (`19509f8` ASCII→SVG detector, `1978088` external-signal watch plane, `987590a` ADR-058 D8 stranger-matrix, `a285fcd` its merge) — all four append NEW, unrelated surfacer blocks (ascii-drift, CI-signal-watch, grounding-unproven) after the existing open-issue SLA block; none of them touch or restructure the open-issue counting/banner logic I1-I3 describe | Flagged `presumed-stale` again, 4 commits (0d) after this document's own last commit (`24b65ad`) |

@@ -35,10 +35,10 @@
 //   2. HOME — a fresh temp dir per run. The hook writes once-per-machine marker files; pointing it
 //      at the developer's real HOME would both perturb the measurement and silently consume their
 //      real first-run offers.
-//   3. WARM-UP — ONE untimed fire before the timed window. The first-ever fire in a virgin HOME also
-//      emits the once-per-machine offers and is measurably slower (301ms vs a 148ms steady p50).
-//      The timed window is the STEADY STATE: what every session after the first costs. Same reason
-//      card-lane-gate.mjs warms the lane's memo cache before timing it.
+//   3. COLD + STEADY — ONE cold fire before the steady-state window. The first-ever fire in a virgin
+//      HOME emits once-per-machine offers, but it is still a real user wait: it must finish inside
+//      the hook's declared timeout and a timeout hard-fails the gate. The following samples measure
+//      the common steady state without allowing a failed cold start to disappear into a percentile.
 //   4. SEQUENTIAL — never concurrent. Concurrency would measure the runner's core count.
 //
 // THE THRESHOLDS ARE NOT HARDCODED HERE. They live in kb/card-lane-budget.json under `sessionStart`,
@@ -105,11 +105,25 @@ export function resolveSessionStart({ repo = REPO_ROOT, home = null } = {}) {
 export async function measureFirings({ n = 30, repo = REPO_ROOT, fireFn = fireHook, resolved = null } = {}) {
   const r = resolved ?? resolveSessionStart({ repo });
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ssgate-home-'));
-  const env = { HOME: home, XDG_CACHE_HOME: path.join(home, '.cache'), CLAUDE_PLUGIN_ROOT: r.surface.root };
+  const brainHome = path.join(home, '.cache', 'ruvnet-brain');
+  const stateDir = path.join(home, '.config', 'ruvnet-brain');
+  // HOME alone is not isolation on Windows: os.homedir() follows USERPROFILE there, while Git Bash
+  // follows HOME. The old gate therefore let hook-shim.mjs read the runner's real spine while the
+  // shell body wrote to the fixture home. Keep every authority on one root, exactly as the shipped
+  // Windows installer/host tests do.
+  const env = {
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CACHE_HOME: path.join(home, '.cache'),
+    RUVNET_BRAIN_HOME: brainHome,
+    RUVNET_BRAIN_STATE_DIR: stateDir,
+    RUVNET_SESSION_TRACE: '1',
+    CLAUDE_PLUGIN_ROOT: r.surface.root,
+  };
   const timeoutSec = typeof r.reg.timeout === 'number' ? r.reg.timeout : 5;
   const fire = () => fireFn({ command: r.command, event: 'SessionStart', regime: 'valid', timeoutSec, cwd: os.tmpdir(), env });
 
-  const warmup = await fire(); // untimed: the once-per-machine offers are a different regime
+  const warmup = await fire(); // separate regime, but its declared-timeout result is still gated
   const samplesMs = [];
   for (let i = 0; i < n; i++) {
     const m = await fire();
@@ -118,7 +132,17 @@ export async function measureFirings({ n = 30, repo = REPO_ROOT, fireFn = fireHo
     // ever make the verdict worse, and name it in the verdict below.
     samplesMs.push(m.timedOut ? timeoutSec * 1000 : m.elapsedMs);
   }
-  return { samplesMs, warmupMs: warmup.elapsedMs, warmupStdoutBytes: warmup.stdoutBytes, timeoutSec, surface: r.surface, home };
+  return {
+    samplesMs,
+    warmupMs: warmup.elapsedMs,
+    warmupStdoutBytes: warmup.stdoutBytes,
+    warmupTimedOut: Boolean(warmup.timedOut),
+    warmupStatus: warmup.status,
+    warmupStderr: String(warmup.stderr || '').slice(-1000),
+    timeoutSec,
+    surface: r.surface,
+    home,
+  };
 }
 
 /**
@@ -128,7 +152,10 @@ export async function measureFirings({ n = 30, repo = REPO_ROOT, fireFn = fireHo
  */
 export async function runSessionStartGate(opts = {}) {
   const budget = loadBudget(opts.budgetPath);
-  const { samplesMs, warmupMs, warmupStdoutBytes, timeoutSec, surface } = await measureFirings({
+  const {
+    samplesMs, warmupMs, warmupStdoutBytes, warmupTimedOut, warmupStatus, warmupStderr,
+    timeoutSec, surface,
+  } = await measureFirings({
     n: budget.sampleSize, repo: opts.repo, fireFn: opts.fireFn, resolved: opts.resolved,
   });
   const sorted = [...samplesMs].sort((a, b) => a - b);
@@ -137,13 +164,32 @@ export async function runSessionStartGate(opts = {}) {
   const max = sorted[sorted.length - 1];
 
   const reasons = [];
+  if (warmupTimedOut) {
+    reasons.push(`COLD-START FAIL — the first SessionStart fire exceeded its declared ${timeoutSec}s timeout (${warmupMs.toFixed(0)}ms); first-run latency is user-felt and may not be hidden as an untimed warm-up`);
+  }
   if (p95 > budget.absoluteFailMs || max > budget.absoluteFailMs) {
     reasons.push(`ABSOLUTE FAIL — the hook has no margin left inside its own declared ${timeoutSec}s timeout: max=${max.toFixed(0)}ms p95=${p95.toFixed(0)}ms > absoluteFailMs=${budget.absoluteFailMs}ms (= TIMEOUT_MARGIN 0.8 x ${timeoutSec}s, the same wall scripts/selfcheck.mjs already enforces on a stranger's machine)`);
   } else if (p95 > budget.p95BudgetMs) {
     reasons.push(`BUDGET BREACH: p95=${p95.toFixed(0)}ms > p95BudgetMs=${budget.p95BudgetMs}ms over ${budget.sampleSize} real firings of the registered SessionStart command (measured baseline p95 ${budget.measuredBaseline?.worstRunP95Ms ?? '?'}ms)`);
   }
 
-  return { pass: reasons.length === 0, n: samplesMs.length, p50, p95, max, warmupMs, warmupStdoutBytes, timeoutSec, surface, budget, reasons, samplesMs };
+  return {
+    pass: reasons.length === 0,
+    n: samplesMs.length,
+    p50,
+    p95,
+    max,
+    warmupMs,
+    warmupStdoutBytes,
+    warmupTimedOut,
+    warmupStatus,
+    warmupStderr,
+    timeoutSec,
+    surface,
+    budget,
+    reasons,
+    samplesMs,
+  };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────────
@@ -160,8 +206,8 @@ async function main() {
   }
   console.log(`  budget source   kb/card-lane-budget.json → sessionStart`);
   console.log(`  surface         ${result.surface.source} (${result.surface.root})`);
-  console.log(`  firings         ${result.n} sequential, fresh temp HOME, after 1 untimed warm-up`);
-  console.log(`  warm-up         ${fmt(result.warmupMs)} / ${result.warmupStdoutBytes} bytes  (first-ever fire — reported, not gated)`);
+  console.log(`  firings         1 cold + ${result.n} steady-state, sequential, fresh isolated HOME`);
+  console.log(`  cold first fire ${fmt(result.warmupMs)} / ${result.warmupStdoutBytes} bytes  (${result.warmupTimedOut ? 'TIMED OUT — HARD FAIL' : 'inside declared timeout'})`);
   console.log(`  p50             ${fmt(result.p50)}`);
   console.log(`  p95             ${fmt(result.p95)}   (budget ${result.budget.p95BudgetMs}ms)`);
   console.log(`  max             ${fmt(result.max)}   (absolute fail ${result.budget.absoluteFailMs}ms = 0.8 x the ${result.timeoutSec}s declared timeout)`);

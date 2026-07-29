@@ -50,6 +50,26 @@ fi
 TEXT=$(printf '%s' "$INPUT" | jq -r '.prompt // .user_prompt // .input // empty' 2>/dev/null)
 [ -z "$TEXT" ] && TEXT="$INPUT"
 
+# ── QUIET-PROMPT FAST PATH. ────────────────────────────────────────────────────────────────────
+# A hook whose output contract is silence must not pay the full stack-currency/project-state scan
+# before discovering that nothing can fire. This mattered on a packed Windows install: immediately
+# after the cold SessionStart seed began, an unrelated `selfcheck probe` could spend its whole 5s
+# budget competing with that maintenance I/O even though every gate ultimately stayed silent.
+#
+# This is deliberately an OVER-approximation: a false positive merely takes the established path;
+# a false negative would suppress a real advisory. Ruflo-shaped projects also take the full path
+# because the once-per-day flywheel offer is project-state-driven, not prompt-driven. Autonomous
+# mode likewise always takes the full path.
+QUICK_RUFLO=0
+{ [ -d ".claude-flow" ] || [ -d ".swarm" ] || grep -qs 'claude-flow\|ruflo' package.json .mcp.json 2>/dev/null; } && QUICK_RUFLO=1
+QUICK_RELEVANT=0
+if printf '%s' "$TEXT" | grep -qiE 'ruvnet|ruflo|ruvector|rvf|agentdb|agenticow|rulake|ruview|rupixel|ruv-fann|agentic-flow|synthlang|dspy|qudag|safla|metaharness|cve-bench|sparc|swarm|claude-flow|pinecone|pgvector|chroma|weaviate|faiss|milvus|qdrant|hnswlib|annoy|vector|langchain|llama|autogen|crew-ai|semantic-kernel|embedding|retrieval|prompt compression|token cost|post-quantum|quantum-resistant|adr|decision|architect|design|plan|spec|refactor|migrat|implement|build|write|add|change|fix|update|deploy|create|enhance|set up|setup|wire|integrate|test|coverage|audit|review|benchmark|lint|scan|debug|optimi|app|feature|service|system|backend|frontend|api|module|pipeline|infra|database|schema|workflow|roadmap|milestone|autonomous|unattended|do not stop|keep working|keep going|soak run|harness|quality|readiness|evolve|self-improv|hardening|cheaper|cheap|lower cost|compute arbitrage|cascade|scorecard|score .*repo'; then
+  QUICK_RELEVANT=1
+fi
+if [ "$QUICK_RUFLO" -eq 0 ] && [ "$QUICK_RELEVANT" -eq 0 ] && [ "${RUVNET_AUTONOMOUS:-0}" != "1" ]; then
+  exit 0
+fi
+
 # ── TOKEN METER (ADR-0011 token_cost_efficiency) — measure what this hook ACTUALLY injects. ─────
 # Nothing in the stack measured Claude Code spend; this is the honest fix. Everything the hook
 # prints to stdout is captured into a temp file, replayed verbatim at the very end (so the harness

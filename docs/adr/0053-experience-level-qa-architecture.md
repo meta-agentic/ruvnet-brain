@@ -3,7 +3,7 @@ id: ADR-053
 title: Experience-level QA — test the journey a user actually has, on every host, OS, and install path
 status: Accepted
 date: 2026-07-26
-updated: 2026-07-28
+updated: 2026-07-29
 authors: [Stuart Kerr, Claude Code]
 tags: [qa, testing, experience, cross-platform, codex, agentic-qe, ci]
 supersedes: []
@@ -202,6 +202,8 @@ budgets (500ms vs 1s prompt-path), the stricter number won. v1's matrix section 
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Added opt-in, builtin-only stage tracing to the cold SessionStart measurement after the first corrected Windows run still exceeded the declared timeout. The trace is silent outside the isolated QE environment and identifies the product stage to fix; it does not relax the budget. | PR #58 run `30423370117`, Windows job `90484507774`; governed paths `plugin/scripts/session-start.sh`, `scripts/qe/session-start-gate.mjs`, and `scripts/qe/ux-suite.mjs`. |
+| 2026-07-29 | Re-read the experience gate after the Windows SessionStart incident. The cold first fire is now a separately reported hard result, the steady-state distribution remains separate, and every shell/Node home authority points at the same isolated fixture root. This strengthens §2’s process-watchdog and real-user-wait requirements without changing the journey architecture. | Main UX run `30422743294` exposed the defect; governed paths `scripts/qe/session-start-gate.mjs`, `scripts/qe/ux-suite.mjs`, and `kb/card-lane-budget.json`; regression `tests/unit/session-start-gate.test.mjs`. |
 | 2026-07-28 | Re-read the governed experience paths after the recovery candidate bound every scheduled scenario to the exact workflow job and executable path, added three-OS user-felt UX budgets, and fixed the command-probe timer lifecycle. The one remaining manual scenario is still explicit and owned; no architecture decision changed. | Commits `d065f49`, `a7af965`, and `cf5bc24`; `tests/experience/report.test.mjs` passes 8/8 including missing/uninvoked-path mutants, and `scripts/qe/ux-suite.mjs` completes with every hard budget green. |
 | 2026-07-28 | Re-read every governed experience surface after the two later scenario-list commits; S18 now names the real native Codex plugin-skill boundary, and S21 names the assembled-directory `--local` contract. The architecture and its unbuilt limitations are otherwise unchanged. | Commit `ac8c978` changes only `tests/experience/scenarios.json` S18 from retired `.codex/skills/*/skill.toml` manifests to installed `plugin/skills/*/SKILL.md` discovery, backed by `tests/integration/codex-skill-discovery.test.mjs`. Commit `7eb11fb` changes only S21's artifact from `dist/ruvnet-brain.zip` to assembled `dist/ruvnet-brain/`. Neither commit implements §3's candidate-dist-tag promotion, §4's exact-SHA/all-workflow gate, or rollout items 9–10; those remain planned rather than claimed. |
 | 2026-07-28 | The warm-brain CI lane now derives its required query embedders from installed RVF sidecars and asserts every exact model leaf. | The independent grade of SHA `879b928` found all 62 heavy repositories unavailable because canonical stores require `Xenova/bge-base-en-v1.5`, while `.github/workflows/ci.yml` warmed and asserted only MiniLM. The lane can no longer report a warm adjacent model as proof of the real reader. |

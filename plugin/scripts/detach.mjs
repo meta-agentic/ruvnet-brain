@@ -48,7 +48,15 @@ const SELF = fileURLToPath(import.meta.url);
 const SUPERVISOR = process.env.RUVNET_DETACH_SUPERVISOR === '1';
 const GRACE_MS = 3000; // SIGTERM → this long → SIGKILL. Matches selfcheck's own watchdog shape.
 
-const [ttlRaw, logPath, ...cmd] = process.argv.slice(2);
+let inputArgs = process.argv.slice(2);
+if (SUPERVISOR && inputArgs.length === 1 && inputArgs[0] === '--payload-env') {
+  try {
+    inputArgs = JSON.parse(Buffer.from(process.env.RUVNET_DETACH_PAYLOAD_B64 || '', 'base64').toString('utf8'));
+  } catch {
+    inputArgs = [];
+  }
+}
+const [ttlRaw, logPath, ...cmd] = inputArgs;
 const ttlSec = Number(ttlRaw);
 if (!cmd.length || !Number.isFinite(ttlSec) || ttlSec <= 0) {
   process.stderr.write('usage: detach.mjs <ttlSeconds> <logPath|-> <cmd> [args...]\n');
@@ -83,11 +91,41 @@ if (!SUPERVISOR) {
   // before the hook does, so the group is empty at exit. Everything with a real duration is on the
   // far side of the setsid boundary below.
   try {
-    const child = spawn(process.execPath, [SELF, ...process.argv.slice(2)], {
-      detached: true, // POSIX setsid() — the child leads its OWN process group, not the session's
-      stdio: 'ignore',
-      env: { ...process.env, RUVNET_DETACH_SUPERVISOR: '1' },
-    });
+    const supervisorEnv = {
+      ...process.env,
+      RUVNET_DETACH_SUPERVISOR: '1',
+      RUVNET_DETACH_PAYLOAD_B64: Buffer.from(JSON.stringify(process.argv.slice(2))).toString('base64'),
+    };
+    let child;
+    if (process.platform === 'win32') {
+      // detached:true and `cmd start /b` both left the cold hook's capture pipe open on
+      // windows-latest after session-start.sh itself had finished. Start-Process crosses a native
+      // process-launch boundary without `/b`'s same-console inheritance. All variable arguments
+      // still travel in a base64 environment payload, so the PowerShell command contains only
+      // trusted executable paths and no job/log-path metacharacters.
+      const powershell = process.env.SystemRoot
+        ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+        : 'powershell.exe';
+      const quotePs = (value) => `'${String(value).replaceAll("'", "''")}'`;
+      const launch = [
+        'Start-Process',
+        '-FilePath', quotePs(process.execPath),
+        '-ArgumentList', `@(${quotePs(SELF)},${quotePs('--payload-env')})`,
+        '-WindowStyle', 'Hidden',
+      ].join(' ');
+      child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', launch], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        env: supervisorEnv,
+      });
+    } else {
+      child = spawn(process.execPath, [SELF, ...process.argv.slice(2)], {
+        detached: true, // POSIX setsid() — the child leads its OWN process group, not the session's
+        stdio: 'ignore',
+        env: supervisorEnv,
+      });
+    }
     child.on('error', () => {});
     child.unref();
   } catch { /* nothing to report — the session must start regardless */ }
@@ -100,6 +138,7 @@ const out = openLog();
 const job = spawn(cmd[0], cmd.slice(1), {
   detached: true, // its own group again, so the TTL kill reaches ITS children too (npm, git, node)
   stdio: ['ignore', out, out],
+  windowsHide: true,
   env: process.env,
 });
 

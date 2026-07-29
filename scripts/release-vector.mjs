@@ -93,10 +93,17 @@ export const INVARIANTS = [
   {
     name: 'INTERFACE-CORPUS',
     dimension: 'D7',
-    incident: 'the same shell-parsing defect class recurred across issues #12, #13, #41, #44 with no corpus between them',
-    detect: () => (exists('tests/regression/interface-gate-corpus.test.mjs')
-      ? run('npx', ['vitest', 'run', 'tests/regression/interface-gate-corpus.test.mjs', '--reporter=dot'])
-      : { state: 'FAIL', why: 'no incident corpus' }),
+    incident: 'shell-parsing defects recurred across issues #12/#13/#41/#44, then three stale ADRs reached main because document currency was outside every release gate',
+    detect() {
+      if (!exists('tests/regression/interface-gate-corpus.test.mjs')) return { state: 'FAIL', why: 'no incident corpus' };
+      if (!exists('scripts/doc-currency.mjs')) return { state: 'FAIL', why: 'no document-currency gate' };
+      const corpus = run('npx', ['vitest', 'run', 'tests/regression/interface-gate-corpus.test.mjs', '--reporter=dot']);
+      if (corpus.state !== 'PASS') return { ...corpus, why: `interface corpus: ${corpus.why}` };
+      const currency = run('node', ['scripts/doc-currency.mjs', '--check'], 180_000);
+      return currency.state === 'PASS'
+        ? { state: 'PASS', why: 'interface incident corpus and document currency both exit 0' }
+        : { ...currency, why: `document currency: ${currency.why}` };
+    },
   },
   {
     name: 'LATENCY-DECISION-LANE',

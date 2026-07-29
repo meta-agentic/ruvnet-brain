@@ -7,6 +7,13 @@
 # stdout is injected into the session context at startup; ALWAYS exit 0 so it can never block a session.
 set +e
 
+# Opt-in stage trace for the release gate. EPOCHREALTIME and printf are Bash builtins, so this adds
+# no subprocess and stays completely silent in real sessions unless the isolated QE harness enables it.
+trace_stage() {
+  [ "${RUVNET_SESSION_TRACE:-0}" = "1" ] && printf 'SESSION_TRACE %s %s\n' "${EPOCHREALTIME:-unknown}" "$1" >&2
+}
+trace_stage "body-start"
+
 # ── WHERE THIS HOOK'S OWN FILES LIVE. Resolved once: every background job below launches through
 # scripts/detach.mjs, a sibling in whichever payload root is executing this body (the spine version
 # dir or the frozen plugin — both mirror plugin/, see update-apply.mjs's stagePayload).
@@ -463,6 +470,7 @@ fi
 
 # ── STABLE SPINE (ADR-023): seed on first run; honest restart notice only when the SHELL changed ──
 SPINE_HOME="$HOME/.cache/ruvnet-brain"
+trace_stage "spine-block-start"
 if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
   if [ ! -f "$SPINE_HOME/active.json" ]; then
     # SPAWN 1 of 3 — Zero-step migration: seed the spine from THIS running plugin install,
@@ -502,6 +510,7 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
         echo "$SEED_NOW" > "$SEED_STAMP" 2>/dev/null
         [ -f "$DETACH" ] && node "$DETACH" 120 "$SPINE_HOME/.seed.log" \
           node "$HOOK_DIR/update-apply.mjs" --seed
+        trace_stage "seed-dispatch-returned"
       fi
     fi
   else
@@ -524,6 +533,7 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
     fi
   fi
 fi
+trace_stage "spine-block-finished"
 
 # Check EVERY session start, deduped to once per 15 min (a burst of window-opens = one check).
 # Network I/O NEVER runs in the hook's foreground. A 3s-capped curl was previously called
@@ -537,6 +547,7 @@ LAST=0
 [ -f "$STAMP" ] && IFS= read -r LAST < "$STAMP"
 [ -n "$LAST" ] || LAST=0
 if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
+  trace_stage "heartbeat-block-start"
   echo "$NOW" > "$STAMP" 2>/dev/null
 
   # ── KB (brain bundle) freshness — a SEPARATE store at ~/.cache/ruvnet-brain/kb.
@@ -572,6 +583,7 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   REMOTE_V=$(grep -m1 -E '^[0-9]+(\.[0-9]+){2}(-[A-Za-z0-9.-]+)?$' "$VERSION_LOG" 2>/dev/null | head -1)
   [ -f "$DETACH" ] && node "$DETACH" 10 "$VERSION_LOG" \
     /bin/sh -c "curl -fsS --max-time 3 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json' 2>/dev/null | grep -m1 '\"version\"' | sed -E 's/.*\"version\": *\"([^\"]+)\".*/\\1/'"
+  trace_stage "version-dispatch-returned"
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
     AUTO_PREF=""
     [ -f "$PREF_FILE" ] && IFS= read -r AUTO_PREF < "$PREF_FILE"
@@ -606,6 +618,7 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
     fi
   fi
 fi
+trace_stage "heartbeat-block-finished"
 
 # ── one-time star/feedback ask — printed ONCE EVER per machine, and only after the brain has
 # actually grounded something (.grounded-once is stamped by the bundle's forge-mcp-all.mjs on the
@@ -823,10 +836,13 @@ EOF
 # ── TOKEN METER finalize — replay the captured output, then log its TRUE size (see header block).
 # Fail-silent at every step: metering can never block a session start (still exit 0 regardless).
 if [ -n "$METER_TMP" ]; then
+  trace_stage "meter-finalize-start"
   exec 1>&3 3>&-
   # ONE fixed, user-level ledger — see the full note in ground-ruvnet.sh (issue #36, mamd69).
   # Writing relative to CWD scattered hidden .ruvnet-brain/ directories into users' project trees.
   METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
   node "$HOOK_DIR/finalize-token-meter.mjs" "$METER_TMP" "$METER_LEDGER_DIR" "$PWD" 2>/dev/null
+  trace_stage "meter-finalize-finished"
 fi
+trace_stage "body-finished"
 exit 0
