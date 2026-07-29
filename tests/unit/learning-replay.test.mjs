@@ -22,7 +22,7 @@ import {
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
   checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
-  TRAP, classifyModelRouteCommand, modelRouteSubcommandCorrect, verifyModelRouteFlag,
+  TRAP, classifyPreCommand, preCommandSubcommandCorrect, verifyPreCommandFlag,
   cleanupFixtureDaemons,
 } from '../../scripts/learning-replay.mjs';
 import { spawn, spawnSync } from 'node:child_process';
@@ -161,23 +161,39 @@ describe('the oracle is a PARSE, not a grep', () => {
   });
 });
 
-describe('the independent hooks model-route trap', () => {
-  it('recognizes -t/--task only on an executable Ruflo invocation', () => {
-    expect(classifyModelRouteCommand('ruflo hooks model-route -t "triage release failures"')).toBe('flagged');
-    expect(classifyModelRouteCommand('ruflo hooks model-route --task "triage release failures"')).toBe('flagged');
-    expect(classifyModelRouteCommand('ruflo hooks model-route "triage release failures"')).toBe('positional');
-    expect(classifyModelRouteCommand('echo "ruflo hooks model-route -t x"')).toBe('none');
+describe('the independent hooks pre-command trap', () => {
+  it('recognizes -c/--command only on an executable Ruflo invocation', () => {
+    expect(classifyPreCommand('ruflo hooks pre-command -c "git status --short"')).toBe('flagged');
+    expect(classifyPreCommand('ruflo hooks pre-command --command "git status --short"')).toBe('flagged');
+    expect(classifyPreCommand('ruflo hooks pre-command "git status --short"')).toBe('positional');
+    expect(classifyPreCommand('echo "ruflo hooks pre-command -c x"')).toBe('none');
   });
 
-  it('requires the real hooks model-route command tree', () => {
-    expect(modelRouteSubcommandCorrect('ruflo hooks model-route -t "x"')).toBe(true);
-    expect(modelRouteSubcommandCorrect('ruflo route -t "x"')).toBe(false);
+  it('requires the real hooks pre-command command tree', () => {
+    expect(preCommandSubcommandCorrect('ruflo hooks pre-command -c "x"')).toBe(true);
+    expect(preCommandSubcommandCorrect('ruflo hooks route -c "x"')).toBe(false);
   });
 
-  it('re-verifies live that -t/--task is required and positional is rejected', () => {
-    const verified = verifyModelRouteFlag();
+  it('re-verifies live that -c/--command is required and positional is rejected', () => {
+    const verified = verifyPreCommandFlag();
     expect(verified.ok, verified.why).toBe(true);
     expect(verified.positionalExit).not.toBe(0);
+  });
+
+  it('executes the safe treated form and requires a real risk/proceed decision', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-pre-command-'));
+    try {
+      const result = executeProducedCommand(
+        'ruflo hooks pre-command -c "git status --short"',
+        { cwd: base, base, trap: TRAP.PRE_COMMAND },
+      );
+      expect(result.exit, result.output).toBe(0);
+      expect(result.retrieved, result.why).toBe(true);
+      expect(result.output).toMatch(/Risk Level:/);
+      expect(result.output).toMatch(/Should Proceed:/);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 
@@ -502,7 +518,7 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     return file;
   };
   const filesForBoth = (overrides = {}) => Object.fromEntries(
-    [TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE].map((trap) => [trap, {
+    [TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND].map((trap) => [trap, {
       'delete-lesson': write(trap, 'delete-lesson', overrides[`${trap}/delete-lesson`]),
       'brain-off-treated': write(trap, 'brain-off-treated', overrides[`${trap}/brain-off-treated`]),
     }]),
@@ -515,8 +531,8 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     expect(result.checked).toEqual([
       `${TRAP.MEMORY_SEARCH}/delete-lesson`,
       `${TRAP.MEMORY_SEARCH}/brain-off-treated`,
-      `${TRAP.MODEL_ROUTE}/delete-lesson`,
-      `${TRAP.MODEL_ROUTE}/brain-off-treated`,
+      `${TRAP.PRE_COMMAND}/delete-lesson`,
+      `${TRAP.PRE_COMMAND}/brain-off-treated`,
     ]);
   });
 
@@ -551,9 +567,9 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
   });
 
   it('declares stable default result paths so the CLI and CI cannot disagree', () => {
-    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.MODEL_ROUTE]);
+    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND]);
     expect(MUTANT_RESULT_FILES[TRAP.MEMORY_SEARCH]['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
-    expect(MUTANT_RESULT_FILES[TRAP.MODEL_ROUTE]['brain-off-treated']).toMatch(/model-route-brain-off-result\.json$/);
+    expect(MUTANT_RESULT_FILES[TRAP.PRE_COMMAND]['brain-off-treated']).toMatch(/pre-command-brain-off-result\.json$/);
   });
 });
 
