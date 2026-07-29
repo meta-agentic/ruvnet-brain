@@ -19,12 +19,12 @@
           {
             "type": "command",
             "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" ground-ruvnet",
-            "timeout": 5
+            "timeout": 10
           },
           {
             "type": "command",
             "command": "node \"$HOME/.cache/ruvnet-brain/codex-hook.mjs\" unprompted-speech UserPromptSubmit",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }

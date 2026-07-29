@@ -14,6 +14,22 @@ const out = path.join(tmp, 'kb');
 fs.mkdirSync(repo);
 fs.mkdirSync(out);
 
+const BGE_MODEL = path.join(
+  'Xenova',
+  'bge-base-en-v1.5',
+  '4d6cd88e18e51a5e020c2c305726d76ada9c03cf',
+  'onnx',
+  'model_quantized.onnx',
+);
+const modelCache = [
+  process.env.KB_MODEL_CACHE,
+  path.join(os.homedir(), '.cache', 'ruvnet-brain', 'models'),
+  path.join(ROOT, 'kb', 'models-cache'),
+].filter(Boolean).find((candidate) => fs.existsSync(path.join(candidate, BGE_MODEL)));
+if (!modelCache) {
+  console.warn('[forge-refresh-real] SKIP — complete local BGE model unavailable; refusing a network-dependent test');
+}
+
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 function writeCorpus(alphaText) {
@@ -30,7 +46,7 @@ function refresh() {
     '--structural-only',
   ], {
     cwd: ROOT,
-    env: { ...process.env, RUVNET_BIG_SHARDS: '1' },
+    env: { ...process.env, RUVNET_BIG_SHARDS: '1', ...(modelCache ? { KB_MODEL_CACHE: modelCache } : {}) },
     encoding: 'utf8',
     timeout: 10 * 60 * 1000,
     maxBuffer: 16 * 1024 * 1024,
@@ -46,7 +62,7 @@ function passagesByPath() {
   );
 }
 
-describe('forge-refresh real full -> incremental path', () => {
+describe.skipIf(!modelCache)('forge-refresh real full -> incremental path', () => {
   it('embeds only the changed file on pass two and preserves the unchanged stable ID', () => {
     writeCorpus('Alpha generation one.');
     const first = refresh();

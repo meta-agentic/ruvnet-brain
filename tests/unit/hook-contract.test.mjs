@@ -292,11 +292,11 @@ describe('registry hygiene', () => {
     }
   });
 
-  it('prompt-path hooks (UserPromptSubmit / PreToolUse) cap at 5s — a user feels every one of these', () => {
-    for (const event of ['UserPromptSubmit', 'PreToolUse']) {
+  it('prompt-path hooks keep a bounded host timeout with cold-start headroom', () => {
+    for (const [event, cap] of [['UserPromptSubmit', 10], ['PreToolUse', 5]]) {
       for (const m of reg.hooks[event] ?? []) {
         for (const h of m.hooks ?? []) {
-          expect(h.timeout, `${event} "${m.matcher}" timeout ${h.timeout}s exceeds the 5s prompt-path budget`).toBeLessThanOrEqual(5);
+          expect(h.timeout, `${event} "${m.matcher}" timeout ${h.timeout}s exceeds the ${cap}s prompt-path budget`).toBeLessThanOrEqual(cap);
         }
       }
     }
