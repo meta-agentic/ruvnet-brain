@@ -164,31 +164,33 @@ export const EXIT = Object.freeze({ PASS: 0, FAIL: 1, INCONCLUSIVE: 3, UNKNOWN: 
 
 /** The committed, machine-readable result artifact. */
 export const RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-result.json');
-export const PRE_COMMAND_RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-pre-command-result.json');
+export const POST_TASK_RESULT_FILE = path.join(ROOT, 'data', 'learning-replay-post-task-result.json');
 
 export const TRAP = Object.freeze({
   MEMORY_SEARCH: 'memory-search-query',
-  PRE_COMMAND: 'hooks-pre-command-risk',
+  POST_TASK: 'hooks-post-task-persistence',
 });
 
-export const PRE_COMMAND_PROMPT =
-  'Before running `git status --short`, use the ruflo hooks command-risk checker to assess whether it is safe. '
+export const POST_TASK_PROMPT =
+  'Record successful completion of the release retry-budget investigation in ruflo hooks learning, '
+  + 'assign it to the tester agent, and persist the routing decision for later sessions. '
   + 'Use the terminal CLI, not an MCP tool. Do not inspect help or run any setup command. '
-  + 'Run exactly one risk-check command now, then tell me what you ran.';
-export const PRE_COMMAND_LESSON =
-  'When asking ruflo hooks to assess a command before execution, pass the command text with '
-  + 'the -c/--command option; a bare command placed after `hooks pre-command` is rejected.';
+  + 'Run exactly one post-task command now, then tell me what you ran.';
+export const POST_TASK_LESSON =
+  'A ruflo hooks post-task call persists a reusable routing outcome only when it includes all three: '
+  + '--task with the task description, --agent with the executor, and --store-results; a success/task-id alone '
+  + 'may print success but does not create the routing decision that later learning reads.';
 
 function trapSpec(id = TRAP.MEMORY_SEARCH) {
-  if (id === TRAP.PRE_COMMAND) {
+  if (id === TRAP.POST_TASK) {
     return {
       id,
-      lessonId: 'FX-D4-ruflo-hooks-pre-command-flag',
-      prompt: PRE_COMMAND_PROMPT,
-      lesson: PRE_COMMAND_LESSON,
-      memoryKey: 'lesson-ruflo-hooks-pre-command-flag',
-      recordQuery: 'ruflo hooks pre command risk flag',
-      check: 'the produced ruflo hooks pre-command invocation delivers its command through -c/--command',
+      lessonId: 'FX-D4-ruflo-hooks-post-task-persistence',
+      prompt: POST_TASK_PROMPT,
+      lesson: POST_TASK_LESSON,
+      memoryKey: 'lesson-ruflo-hooks-post-task-persistence',
+      recordQuery: 'ruflo hooks post task routing persistence',
+      check: 'the produced ruflo hooks post-task command includes --task, --agent, and --store-results',
     };
   }
   return {
@@ -305,25 +307,39 @@ export function subcommandCorrect(cmd) {
 export const carriesToken = (cls) => cls === 'flagged';
 
 /** The second trap is deliberately a different Ruflo surface and a different required option. */
-export function classifyPreCommand(cmd) {
-  const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
-  if (!invocations.length) return 'none';
-  let sawPositional = false;
-  for (const inv of invocations) {
-    const args = inv.args.filter(Boolean);
-    if (args.some((a) => a === '-c' || a === '--command' || a.startsWith('--command='))) return 'flagged';
-    const mi = args.indexOf('pre-command');
-    if (mi !== -1 && args.slice(mi + 1).some((a) => !a.startsWith('-'))) sawPositional = true;
+function optionValue(args, short, long) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === short || arg === long) return args[i + 1] && !args[i + 1].startsWith('-') ? args[i + 1] : null;
+    if (arg.startsWith(`${long}=`)) return arg.slice(long.length + 1);
   }
-  return sawPositional ? 'positional' : 'other';
+  return null;
 }
 
-export function preCommandSubcommandCorrect(cmd) {
+export function classifyPostTaskCommand(cmd) {
+  const invocations = findInvocations(String(cmd || ''), ['ruflo', 'claude-flow']);
+  if (!invocations.length) return 'none';
+  let sawPostTask = false;
+  for (const inv of invocations) {
+    const args = inv.args.filter(Boolean);
+    const hi = args.indexOf('hooks');
+    if (hi === -1 || args[hi + 1] !== 'post-task') continue;
+    sawPostTask = true;
+    const task = optionValue(args, '-t', '--task');
+    const agent = optionValue(args, '-a', '--agent');
+    const store = args.includes('--store-results')
+      || args.some((a) => a.startsWith('--store-results=') && !/=false$/i.test(a));
+    if (task && agent && store) return 'flagged';
+  }
+  return sawPostTask ? 'partial' : 'other';
+}
+
+export function postTaskSubcommandCorrect(cmd) {
   return findInvocations(String(cmd || ''), ['ruflo', 'claude-flow'])
     .some((inv) => {
       const words = inv.args.filter((a) => a !== '' && !a.startsWith('-'));
       const hi = words.indexOf('hooks');
-      return hi !== -1 && words[hi + 1] === 'pre-command';
+      return hi !== -1 && words[hi + 1] === 'post-task';
     });
 }
 
@@ -379,6 +395,40 @@ export function assertRetrieved(out) {
  */
 const MUTATING_SUBCOMMANDS = new Set(['store', 'delete', 'rm', 'purge', 'cleanup', 'compress', 'import', 'export', 'backup', 'init', 'configure']);
 
+export function assertPostTaskPersisted({ args, output, cwd }) {
+  const task = optionValue(args, '-t', '--task');
+  const agent = optionValue(args, '-a', '--agent');
+  const taskId = optionValue(args, '-i', '--task-id')
+    || String(output || '').match(/Recording outcome for task:\s*([a-zA-Z0-9_-]+)/)?.[1]
+    || null;
+  if (!task || !agent || !taskId || !args.includes('--store-results')) {
+    return { retrieved: false, why: 'the command did not carry --task, --agent, --store-results, and a resolvable task id' };
+  }
+  let outcomes;
+  let memory;
+  try {
+    outcomes = JSON.parse(fs.readFileSync(path.join(cwd, '.claude-flow', 'routing-outcomes.json'), 'utf8'));
+    memory = JSON.parse(fs.readFileSync(path.join(cwd, '.claude-flow', 'memory', 'store.json'), 'utf8'));
+  } catch (error) {
+    return { retrieved: false, why: `the expected persistence stores were not readable: ${error.message}` };
+  }
+  const outcome = (outcomes.outcomes || []).find((row) =>
+    row.task === task && row.agent === agent && row.success === true);
+  const decision = memory.entries?.[`routing-decision:${taskId}`];
+  let decisionValue = null;
+  try { decisionValue = decision ? JSON.parse(decision.value) : null; } catch { /* invalid evidence */ }
+  if (!outcome || !decision || decisionValue?.task !== task || decisionValue?.agent !== agent) {
+    return { retrieved: false, why: 'stdout said success, but no matching routing outcome plus routing-decision memory row persisted' };
+  }
+  if (!/\[OK\]\s*Task outcome recorded:\s*SUCCESS/i.test(String(output || ''))) {
+    return { retrieved: false, why: 'persistence rows exist but this invocation did not report successful task recording' };
+  }
+  return {
+    retrieved: true,
+    why: `matching routing outcome and routing-decision:${taskId} memory row persisted`,
+  };
+}
+
 /**
  * RUN the produced command and report what actually happened.
  *
@@ -417,15 +467,8 @@ export function executeProducedCommand(cmd, {
   const r = spawnSync(ruflo, args, { cwd, encoding: 'utf8', timeout: 120_000, env, maxBuffer: 8 * 1024 * 1024 });
   if (r.error) return nope(`spawn failed: ${r.error.message}`, { argv: ['ruflo', ...args] });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
-  const routed = trap === TRAP.PRE_COMMAND
-    ? {
-        retrieved: /Risk Level:/i.test(out)
-          && /Should Proceed:/i.test(out)
-          && !/Required option missing|\[ERROR\]/i.test(out),
-        why: /Risk Level:/i.test(out) && /Should Proceed:/i.test(out)
-          ? 'the output carries a concrete command risk and proceed decision'
-          : 'the output carries no concrete command-risk decision',
-      }
+  const routed = trap === TRAP.POST_TASK
+    ? assertPostTaskPersisted({ args, output: out, cwd })
     : assertRetrieved(out);
   return {
     ran: true,
@@ -580,27 +623,38 @@ export function verifyRufloFlag(bin = RUFLO_BIN) {
   return { ok: true, flag: '-q, --query', required, evidence: out.split('\n').find((l) => /-q,\s*--query/.test(l))?.trim() || '' };
 }
 
-export function verifyPreCommandFlag(bin = RUFLO_BIN) {
+export function verifyPostTaskContract(bin = RUFLO_BIN) {
   if (!fs.existsSync(bin)) return { ok: false, why: `ruflo binary not found at ${bin} (Rule 21: the GLOBAL binary, never npx)` };
-  const help = spawnSync(bin, ['hooks', 'pre-command', '--help'], { encoding: 'utf8', timeout: 30_000 });
+  const help = spawnSync(bin, ['hooks', 'post-task', '--help'], { encoding: 'utf8', timeout: 30_000 });
   const out = `${help.stdout || ''}${help.stderr || ''}`;
-  if (!/-c,\s*--command[^\n]*required/i.test(out)) {
-    return { ok: false, why: 'live `ruflo hooks pre-command --help` does not declare `-c, --command` required', help: out };
+  if (!/--task\b/.test(out) || !/--agent\b/.test(out) || !/--store-results\b/.test(out)
+    || !/Without this \+ --agent, no routing outcome is recorded/.test(out)) {
+    return { ok: false, why: 'live post-task help no longer states the three-part routing-persistence contract', help: out };
   }
-  const positional = spawnSync(bin, ['hooks', 'pre-command', 'git status --short'], {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-premise-'));
+  const missing = spawnSync(bin, ['hooks', 'post-task', '-i', 'd4-premise-missing', '--success', 'true'], {
+    cwd: dir,
     encoding: 'utf8',
     timeout: 30_000,
   });
-  const positionalOut = `${positional.stdout || ''}${positional.stderr || ''}`;
-  if (positional.status === 0 || !/Required option missing:\s*--command/i.test(positionalOut)) {
-    return { ok: false, why: 'live positional pre-command form was not rejected as the trap requires', positionalExit: positional.status, positionalOut };
+  const outcomeFile = path.join(dir, '.claude-flow', 'routing-outcomes.json');
+  const memoryFile = path.join(dir, '.claude-flow', 'memory', 'store.json');
+  const persisted = fs.existsSync(outcomeFile) || fs.existsSync(memoryFile);
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (missing.status !== 0 || persisted) {
+    return {
+      ok: false,
+      why: 'live post-task missing-contract probe did not stay non-persistent while returning success',
+      missingExit: missing.status,
+      persisted,
+    };
   }
   return {
     ok: true,
-    flag: '-c, --command',
+    flag: '--task + --agent + --store-results',
     required: true,
-    evidence: out.split('\n').find((line) => /-c,\s*--command/.test(line))?.trim() || '',
-    positionalExit: positional.status,
+    evidence: 'live help names all three flags; success/task-id-only probe exited 0 and created neither routing outcome nor routing-decision store',
+    missingExit: missing.status,
   };
 }
 
@@ -981,11 +1035,11 @@ export function runArm({
   // how mutant 1 ("right flag, wrong subcommand") is proven end-to-end without waiting for a
   // stochastic model to happen to emit it.
   const firstCommand = forceCommand != null ? forceCommand : (attemptLines.length ? attemptLines[0].command : '');
-  const cls = trap === TRAP.PRE_COMMAND
-    ? classifyPreCommand(firstCommand)
+  const cls = trap === TRAP.POST_TASK
+    ? classifyPostTaskCommand(firstCommand)
     : classifyCommand(firstCommand);
-  const subOk = trap === TRAP.PRE_COMMAND
-    ? preCommandSubcommandCorrect(firstCommand)
+  const subOk = trap === TRAP.POST_TASK
+    ? postTaskSubcommandCorrect(firstCommand)
     : subcommandCorrect(firstCommand);
   // THE EXECUTION GATE. Out of band, after the arm is over, never through a shell — see the header.
   const exec = executeProducedCommand(firstCommand, { cwd: dirs.projectB, base: dirs.base, trap });
@@ -1022,7 +1076,7 @@ const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const usage = () => `Usage:
-  node scripts/learning-replay.mjs [--trap ${TRAP.MEMORY_SEARCH}|${TRAP.PRE_COMMAND}] [--n N] [--host codex|claude-code] [--model MODEL]
+  node scripts/learning-replay.mjs [--trap ${TRAP.MEMORY_SEARCH}|${TRAP.POST_TASK}] [--n N] [--host codex|claude-code] [--model MODEL]
   node scripts/learning-replay.mjs --check
   node scripts/learning-replay.mjs --check-portfolio
   node scripts/learning-replay.mjs --check-mutants
@@ -1049,15 +1103,15 @@ export const MUTANT_RESULT_FILES = Object.freeze({
     'delete-lesson': path.join(ROOT, 'data', 'learning-replay-delete-lesson-result.json'),
     'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-brain-off-result.json'),
   }),
-  [TRAP.PRE_COMMAND]: Object.freeze({
-    'delete-lesson': path.join(ROOT, 'data', 'learning-replay-pre-command-delete-lesson-result.json'),
-    'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-pre-command-brain-off-result.json'),
+  [TRAP.POST_TASK]: Object.freeze({
+    'delete-lesson': path.join(ROOT, 'data', 'learning-replay-post-task-delete-lesson-result.json'),
+    'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-post-task-brain-off-result.json'),
   }),
 });
 
 export const PORTFOLIO_RESULT_FILES = Object.freeze({
   [TRAP.MEMORY_SEARCH]: RESULT_FILE,
-  [TRAP.PRE_COMMAND]: PRE_COMMAND_RESULT_FILE,
+  [TRAP.POST_TASK]: POST_TASK_RESULT_FILE,
 });
 
 function headSha() {
@@ -1109,7 +1163,7 @@ export function checkMutantArtifacts({
   maxAgeDays = 14,
 } = {}) {
   const checked = [];
-  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND]) {
+  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.POST_TASK]) {
     for (const mutant of ['delete-lesson', 'brain-off-treated']) {
     const file = files[trap]?.[mutant];
     if (!file || !fs.existsSync(file)) {
@@ -1170,7 +1224,7 @@ export function checkPortfolio({
   maxAgeDays = 14,
 } = {}) {
   const artifacts = [];
-  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND]) {
+  for (const trap of [TRAP.MEMORY_SEARCH, TRAP.POST_TASK]) {
     const checked = checkArtifact({ file: files[trap], repo, maxAgeDays });
     if (checked.status !== VERDICT.PASS) {
       return { status: checked.status, why: `${trap}: ${checked.why}`, artifacts };
@@ -1227,7 +1281,7 @@ async function main() {
     console.error(`unknown mutant "${mutant}". known: ${Object.keys(MUTANTS).join(', ')}`);
     process.exit(EXIT.UNKNOWN);
   }
-  if (![TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND].includes(trap) || !outFile) {
+  if (![TRAP.MEMORY_SEARCH, TRAP.POST_TASK].includes(trap) || !outFile) {
     console.error(`unknown or unsupported trap/mutant combination: ${trap}/${mutant || 'normal'}`);
     process.exit(EXIT.UNKNOWN);
   }
@@ -1251,7 +1305,7 @@ async function main() {
   }
 
   console.log(`\n=== ${INVARIANT} — counterfactual replay (ADR-058 §D4) ===`);
-  const flag = trap === TRAP.PRE_COMMAND ? verifyPreCommandFlag() : verifyRufloFlag();
+  const flag = trap === TRAP.POST_TASK ? verifyPostTaskContract() : verifyRufloFlag();
   console.log(`  trap:    ${trap}`);
   console.log(`  premise: ${flag.ok ? `VERIFIED live: ${flag.evidence}` : `NOT VERIFIED: ${flag.why}`}`);
   if (!flag.ok) {

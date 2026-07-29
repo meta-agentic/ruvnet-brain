@@ -22,7 +22,8 @@ import {
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
   checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
-  TRAP, classifyPreCommand, preCommandSubcommandCorrect, verifyPreCommandFlag,
+  TRAP, classifyPostTaskCommand, postTaskSubcommandCorrect, verifyPostTaskContract,
+  assertPostTaskPersisted,
   cleanupFixtureDaemons,
 } from '../../scripts/learning-replay.mjs';
 import { spawn, spawnSync } from 'node:child_process';
@@ -161,36 +162,116 @@ describe('the oracle is a PARSE, not a grep', () => {
   });
 });
 
-describe('the independent hooks pre-command trap', () => {
-  it('recognizes -c/--command only on an executable Ruflo invocation', () => {
-    expect(classifyPreCommand('ruflo hooks pre-command -c "git status --short"')).toBe('flagged');
-    expect(classifyPreCommand('ruflo hooks pre-command --command "git status --short"')).toBe('flagged');
-    expect(classifyPreCommand('ruflo hooks pre-command "git status --short"')).toBe('positional');
-    expect(classifyPreCommand('echo "ruflo hooks pre-command -c x"')).toBe('none');
+function writePostTaskFixtureBinary(dir) {
+  const file = path.join(dir, 'ruflo-fixture');
+  fs.writeFileSync(file, `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+if (args.includes('--help')) {
+  console.log('--task Task description. Without this + --agent, no routing outcome is recorded.');
+  console.log('--agent Agent that executed the task');
+  console.log('--store-results Also persist the routing decision');
+  process.exit(0);
+}
+const value = (short, long) => {
+  const i = args.findIndex((arg) => arg === short || arg === long);
+  return i >= 0 ? args[i + 1] : null;
+};
+const id = value('-i', '--task-id') || 'fixture-auto';
+const task = value('-t', '--task');
+const agent = value('-a', '--agent');
+console.log('[INFO] Recording outcome for task: ' + id);
+console.log('[OK] Task outcome recorded: SUCCESS');
+if (task && agent) {
+  const flow = path.join(process.cwd(), '.claude-flow');
+  fs.mkdirSync(flow, { recursive: true });
+  fs.writeFileSync(path.join(flow, 'routing-outcomes.json'), JSON.stringify({
+    outcomes: [{ task, agent, success: true, quality: 0.85 }],
+  }));
+  if (args.includes('--store-results')) {
+    const memory = path.join(flow, 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'store.json'), JSON.stringify({
+      entries: {
+        ['routing-decision:' + id]: {
+          value: JSON.stringify({ task, agent, success: true, quality: 0.85 }),
+        },
+      },
+    }));
+  }
+}
+`);
+  fs.chmodSync(file, 0o755);
+  return file;
+}
+
+describe('the independent hooks post-task persistence trap', () => {
+  it('scores the token only when task, agent, and store-results are all present', () => {
+    const full = 'ruflo hooks post-task -i d4-one --success true --task "stabilize retry budget" --agent tester --store-results';
+    expect(classifyPostTaskCommand(full)).toBe('flagged');
+    expect(classifyPostTaskCommand('ruflo hooks post-task -i d4-one --success true')).toBe('partial');
+    expect(classifyPostTaskCommand('ruflo hooks post-task --task "x" --agent tester')).toBe('partial');
+    expect(classifyPostTaskCommand(`echo "${full}"`)).toBe('none');
   });
 
-  it('requires the real hooks pre-command command tree', () => {
-    expect(preCommandSubcommandCorrect('ruflo hooks pre-command -c "x"')).toBe(true);
-    expect(preCommandSubcommandCorrect('ruflo hooks route -c "x"')).toBe(false);
+  it('requires the real hooks post-task command tree', () => {
+    expect(postTaskSubcommandCorrect('ruflo hooks post-task -i d4-one --success true')).toBe(true);
+    expect(postTaskSubcommandCorrect('ruflo hooks pre-task -i d4-one')).toBe(false);
   });
 
-  it('re-verifies live that -c/--command is required and positional is rejected', () => {
-    const verified = verifyPreCommandFlag();
-    expect(verified.ok, verified.why).toBe(true);
-    expect(verified.positionalExit).not.toBe(0);
-  });
-
-  it('executes the safe treated form and requires a real risk/proceed decision', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-pre-command-'));
+  it('verifies the three-part persistence contract through an injected CLI fixture', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-contract-'));
     try {
+      const verified = verifyPostTaskContract(writePostTaskFixtureBinary(base));
+      expect(verified.ok, verified.why).toBe(true);
+      expect(verified.missingExit).toBe(0);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('executes the safe treated form and reads back both persistence layers', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-'));
+    try {
+      const fixture = writePostTaskFixtureBinary(base);
       const result = executeProducedCommand(
-        'ruflo hooks pre-command -c "git status --short"',
-        { cwd: base, base, trap: TRAP.PRE_COMMAND },
+        'ruflo hooks post-task -i d4-post-live --success true --task "stabilize retry budget" --agent tester --store-results',
+        { cwd: base, base, trap: TRAP.POST_TASK, ruflo: fixture },
       );
       expect(result.exit, result.output).toBe(0);
       expect(result.retrieved, result.why).toBe(true);
-      expect(result.output).toMatch(/Risk Level:/);
-      expect(result.output).toMatch(/Should Proceed:/);
+      expect(result.why).toMatch(/routing outcome.*routing-decision/i);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('MUTANT: stdout success without store-results is not persistence', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-no-store-'));
+    try {
+      const fixture = writePostTaskFixtureBinary(base);
+      const result = executeProducedCommand(
+        'ruflo hooks post-task -i d4-post-no-store --success true --task "stabilize retry budget" --agent tester',
+        { cwd: base, base, trap: TRAP.POST_TASK, ruflo: fixture },
+      );
+      expect(result.exit, result.output).toBe(0);
+      expect(result.retrieved).toBe(false);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('MUTANT: fabricated stdout cannot replace the persisted rows', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-fake-'));
+    try {
+      const evidence = assertPostTaskPersisted({
+        args: ['hooks', 'post-task', '-i', 'd4-fake', '--success', 'true', '--task', 'stabilize retry budget', '--agent', 'tester', '--store-results'],
+        output: '[OK] Task outcome recorded: SUCCESS',
+        cwd: base,
+      });
+      expect(evidence.retrieved).toBe(false);
+      expect(evidence.why).toMatch(/stores were not readable/);
     } finally {
       fs.rmSync(base, { recursive: true, force: true });
     }
@@ -518,7 +599,7 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     return file;
   };
   const filesForBoth = (overrides = {}) => Object.fromEntries(
-    [TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND].map((trap) => [trap, {
+    [TRAP.MEMORY_SEARCH, TRAP.POST_TASK].map((trap) => [trap, {
       'delete-lesson': write(trap, 'delete-lesson', overrides[`${trap}/delete-lesson`]),
       'brain-off-treated': write(trap, 'brain-off-treated', overrides[`${trap}/brain-off-treated`]),
     }]),
@@ -531,8 +612,8 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
     expect(result.checked).toEqual([
       `${TRAP.MEMORY_SEARCH}/delete-lesson`,
       `${TRAP.MEMORY_SEARCH}/brain-off-treated`,
-      `${TRAP.PRE_COMMAND}/delete-lesson`,
-      `${TRAP.PRE_COMMAND}/brain-off-treated`,
+      `${TRAP.POST_TASK}/delete-lesson`,
+      `${TRAP.POST_TASK}/brain-off-treated`,
     ]);
   });
 
@@ -567,9 +648,9 @@ describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
   });
 
   it('declares stable default result paths so the CLI and CI cannot disagree', () => {
-    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.PRE_COMMAND]);
+    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual([TRAP.MEMORY_SEARCH, TRAP.POST_TASK]);
     expect(MUTANT_RESULT_FILES[TRAP.MEMORY_SEARCH]['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
-    expect(MUTANT_RESULT_FILES[TRAP.PRE_COMMAND]['brain-off-treated']).toMatch(/pre-command-brain-off-result\.json$/);
+    expect(MUTANT_RESULT_FILES[TRAP.POST_TASK]['brain-off-treated']).toMatch(/post-task-brain-off-result\.json$/);
   });
 });
 
