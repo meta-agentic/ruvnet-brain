@@ -86,9 +86,10 @@ brain. The contract, per plane:
   are a consent violation, and a PreToolUse guard blocks agent writes to the sentinel/settings
   paths). The soft result must carry machine-readable `disabled:true` so telemetry never counts
   it as success or outage.
-- **Hooks — per-entry `offBehavior` in the shim's table** (silence / run / partial): advertising
-  and grounding hooks go silent; the NON-brain safety walls (route-dispatch cost wall,
-  verify-interface, design-wall) STAY ON — they guard money and honesty, not retrieval.
+- **Hooks — per-entry `offBehavior` in the shim's table** (silence / run / partial): advertising,
+  grounding, and the advisory legacy `verify-interface` notice go silent; the NON-brain safety
+  walls (route-dispatch cost wall and design-wall) STAY ON — they guard money and honesty, not
+  retrieval. Issue #48 moved interface enforcement to structured MCP arguments.
 - **session-start splits internally**: auto-updater heartbeat, GONG health alarm and SLA banner
   keep running (an off machine must still receive fixes — otherwise the fix for an off-state bug
   can never arrive); ALL advertising dies; exactly ONE dim state line remains: "brain OFF by your
@@ -147,7 +148,7 @@ over scope plumbing, safety walls exempt from off.
 
 1. Skew round-trip: previous release's `saveSettings` cannot flip OFF back on (sentinel survives).
 2. Real-wiring gate disarm: brain off ⇒ a rUv-domain Write through the USER-wired
-   ground-before-write does not block — while route-dispatch/verify-interface/design-wall still do.
+   ground-before-write does not block; verify-interface is silent; route-dispatch/design-wall still do.
 3. Stamp-from-refusal: a disabled/out-of-scope soft-answer mints NO grounding stamp.
 4. session-start split: off ⇒ zero advertising bytes, one state line; updater + GONG demonstrably still run.
 5. Fail-polarity matrix: corrupt/absent/EACCES/future settings never silently re-enable; sentinel decides.

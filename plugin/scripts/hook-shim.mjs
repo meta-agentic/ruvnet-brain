@@ -72,10 +72,9 @@ catch (e) { BRAIN_OFF = !(e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')); }
 //   'silence' — this hook exists to advertise, ground, or learn. Off means it does not run at all
 //               and writes ZERO bytes. Nothing downstream can tell it apart from not being installed.
 //   'run'     — this is a SAFETY WALL that guards money or honesty, not retrieval. route-dispatch
-//               stops a subagent fan-out inheriting an expensive model; verify-interface stops a
-//               guessed CLI flag; design-wall stops an ungraded surface shipping; protect-state
-//               guards the user's own consent record. None of those become acceptable because the
-//               brain is off — turning retrieval off must not quietly disarm the product's walls.
+//               stops a subagent fan-out inheriting an expensive model; design-wall stops an
+//               ungraded surface shipping; protect-state guards the user's own consent record.
+//               None becomes acceptable because retrieval is off.
 //   'partial' — the hook splits INTERNALLY. session-start still runs the auto-updater heartbeat, the
 //               GONG health alarm and the SLA banner (an off machine must still receive fixes,
 //               otherwise the fix for an off-state bug can never arrive) while suppressing every
@@ -88,7 +87,7 @@ const TABLE = {
   'route-dispatch':   { file: 'route-dispatch.sh',   interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   'ground-before-write': { file: 'ground-before-write.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   'grounding-stamp': { file: 'grounding-stamp.sh', interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
-  'verify-interface': { file: 'verify-interface.sh', interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
+  'verify-interface': { file: 'verify-interface.sh', interpreter: 'bash', mode: 'advisory', offBehavior: 'silence' },
   'design-wall':      { file: 'design-wall.sh',      interpreter: 'bash', mode: 'blocking', offBehavior: 'run' },
   // The consent guard (ADR-054 §3): it protects the OFF state itself, so it is the one hook that
   // matters MORE while the brain is off. 'run', permanently.

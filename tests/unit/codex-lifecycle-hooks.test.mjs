@@ -322,7 +322,7 @@ describe('Codex lifecycle adapter', () => {
     },
   );
 
-  it('blocks an unverified Ruflo command through the real Codex exec_command boundary', () => {
+  it('advises without blocking an unverified Ruflo command through the real Codex exec_command boundary', () => {
     const { home, brain } = fixture();
     installInterfaceGeneration(brain, 'v1');
     const profile = path.join(home, '.claude', 'model-router', 'profile.json');
@@ -340,10 +340,10 @@ describe('Codex lifecycle adapter', () => {
       cwd: ROOT,
     });
 
-    expect(result.status).toBe(2);
-    expect(result.stdout).toBe('');
-    expect(result.stderr).toContain('BLOCKED — you have not read the interface for: ruflo memory search');
-    expect(result.stderr).toContain('ruflo memory search --help');
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('ruvnet_cli_help');
+    expect(result.stdout).toContain('ruvnet_cli_run');
   });
 
   it('blocks the founding remote-import contradiction through the installed Codex boundary', () => {
