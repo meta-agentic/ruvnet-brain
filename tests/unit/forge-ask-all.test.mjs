@@ -163,4 +163,198 @@ describe('searchAll — cross-repo pool + rerank + name-boost', () => {
     expect(conceptsCall[0].k).toBeGreaterThanOrEqual(24);
     expect(saflaCall[0].k).toBe(8);
   });
+
+  it('accepts a strong card-routed source search without touching unrelated stores', async () => {
+    const d = mkdirWith(['concepts.rvf', 'rulake.rvf', 'ruflo.rvf', 'ruvector.rvf']);
+    fs.writeFileSync(path.join(d, 'capability-cards.md'), [
+      '## ruvector',
+      'Single-file RVF vector search with HNSW and TypeScript SDK backends.',
+      '## ruflo',
+      'Agent orchestration and project memory.',
+      '## rulake',
+      'Witness-verified vector read cache.',
+    ].join('\n'));
+    // This query asks what the SDK exposes, so recovery's implementation-proof boundary requires
+    // source-bearing evidence before the router may accept the scoped result.
+    vi.mocked(searchKb).mockImplementation(async ({ name }) => [hit({
+      path: `${name}/source.ts`,
+      fullText: 'export class RvfDatabase {}',
+    })]);
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) =>
+      cands.map((candidate) => ({ ...candidate, ceScore: 7.5 })));
+
+    const out = await searchAll({
+      dir: d,
+      query: 'What does the @ruvector/rvf TypeScript SDK expose and how is its backend resolved at runtime?',
+    });
+    expect(out.repos).toEqual(['ruvector']);
+    expect(out.routing).toMatchObject({ attempted: true, accepted: true, confidence: 'named' });
+    expect(new Set(vi.mocked(searchKb).mock.calls.map(([args]) => args.name)))
+      .toEqual(new Set(['ruvector']));
+  });
+
+  it('falls back to the full corpus when the scoped stage has only thin evidence', async () => {
+    const d = mkdirWith(['concepts.rvf', 'rulake.rvf', 'ruflo.rvf', 'ruvector.rvf']);
+    fs.writeFileSync(path.join(d, 'capability-cards.md'), [
+      '## ruvector',
+      'Single-file RVF vector search with HNSW and TypeScript SDK backends.',
+      '## ruflo',
+      'Agent orchestration and project memory.',
+      '## rulake',
+      'Witness-verified vector read cache.',
+    ].join('\n'));
+    vi.mocked(searchKb).mockImplementation(async ({ name }) => [hit({ path: `${name}/source.md` })]);
+    let reranks = 0;
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) => {
+      reranks++;
+      return cands.map((candidate) => ({ ...candidate, ceScore: reranks === 1 ? 1.0 : 7.0 }));
+    });
+
+    const out = await searchAll({
+      dir: d,
+      query: 'What does the @ruvector/rvf TypeScript SDK expose and how is its backend resolved at runtime?',
+    });
+    expect(out.repos).toEqual(['concepts', 'ruflo', 'rulake', 'ruvector']);
+    expect(out.routing).toMatchObject({ attempted: true, accepted: false, fallback: 'full-corpus' });
+    expect(reranks).toBe(2);
+  });
+
+  it('lexically rescues an exact scoped-package source that dense retrieval buried', async () => {
+    const d = mkdirWith(['ruvector.rvf']);
+    fs.writeFileSync(path.join(d, 'ruvector.big.passages.jsonl'), [
+      JSON.stringify({
+        id: 'decoy',
+        path: 'docs/general.md',
+        title: 'General vectors',
+        text: 'General discussion of vector storage.',
+      }),
+      JSON.stringify({
+        id: 'sdk',
+        path: 'npm/packages/rvf/src/index.ts',
+        title: '@ruvector/rvf',
+        text: 'The @ruvector/rvf TypeScript SDK exports class RvfDatabase. Runtime backend resolution selects native N-API, WASM, or fallback.',
+      }),
+    ].join('\n'));
+    vi.mocked(searchKb).mockResolvedValue([hit({ path: 'docs/general.md', title: 'General vectors' })]);
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) =>
+      cands
+        .map((candidate) => ({
+          ...candidate,
+          ceScore: candidate.fullText.includes('RvfDatabase') ? 9 : 0,
+        }))
+        .sort((a, b) => b.ceScore - a.ceScore));
+
+    const out = await searchAll({
+      dir: d,
+      repos: ['ruvector'],
+      query: 'What does the @ruvector/rvf TypeScript SDK expose and how is its backend resolved at runtime?',
+    });
+    expect(out.results[0]).toMatchObject({
+      repo: 'ruvector',
+      path: 'npm/packages/rvf/src/index.ts',
+      title: '@ruvector/rvf',
+      _lane: 'rescue',
+    });
+  });
+
+  it('lexically rescues a named monorepo inventory survey and executable install guide', async () => {
+    const d = mkdirWith(['ruvector.rvf']);
+    fs.writeFileSync(path.join(d, 'ruvector.passages.jsonl'), [
+      JSON.stringify({
+        id: 'decoy',
+        path: 'crates/ruvector-core/fuzz/Cargo.toml',
+        title: 'ruvector-core-fuzz',
+        text: 'Rust crate manifest for an isolated fuzz workspace.',
+      }),
+      JSON.stringify({
+        id: 'survey',
+        path: 'docs/sdk/01-survey.md',
+        title: 'What ruvector Ships Today',
+        text: 'The crates directory contains about 110 directories. The Cargo workspace has 96 active members. npm packages include ruvector and @ruvector/core; core Rust crates include ruvector-core.',
+      }),
+      JSON.stringify({
+        id: 'install',
+        path: 'docs/guides/INSTALLATION.md',
+        title: 'Installation Guide',
+        text: 'Install the npm package with npm install ruvector. Add the Rust crate with cargo add ruvector-core. These are the workspace installation surfaces.',
+      }),
+    ].join('\n'));
+    vi.mocked(searchKb).mockResolvedValue([hit({
+      path: 'crates/ruvector-core/fuzz/Cargo.toml',
+      title: 'ruvector-core-fuzz',
+      fullText: 'Rust crate manifest for an isolated fuzz workspace.',
+    })]);
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) =>
+      cands
+        .map((candidate) => ({
+          ...candidate,
+          ceScore: candidate.path === 'docs/sdk/01-survey.md'
+            ? 5
+            : candidate.path === 'docs/guides/INSTALLATION.md' ? 4 : 8,
+        }))
+        .sort((a, b) => b.ceScore - a.ceScore));
+
+    const out = await searchAll({
+      dir: d,
+      repos: ['ruvector'],
+      query: "What are RuVector's npm package and core crate names, and roughly how large is the Rust workspace?",
+    });
+    expect(out.results[0]).toMatchObject({
+      repo: 'ruvector',
+      path: 'docs/sdk/01-survey.md',
+      _lane: 'rescue',
+      inventoryBoosted: true,
+    });
+  });
+
+  it('rescues a document that contains both quoted numeric performance claims', async () => {
+    const d = mkdirWith(['agentdb.rvf']);
+    fs.writeFileSync(path.join(d, 'agentdb.passages.jsonl'), [
+      JSON.stringify({ id: 'decoy', path: 'docs/perf.md', title: 'Performance', text: 'General benchmark discussion.' }),
+      JSON.stringify({
+        id: 'readme',
+        path: 'README.md',
+        title: 'AgentDB',
+        text: '150× faster than SQLite. Up to +36% search quality from feedback. Run the benchmark harness.',
+      }),
+    ].join('\n'));
+    vi.mocked(searchKb).mockResolvedValue([hit({ path: 'docs/perf.md', fullText: 'General benchmark discussion.' })]);
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) =>
+      cands.map((candidate) => ({ ...candidate, ceScore: candidate.path === 'README.md' ? 9 : 1 }))
+        .sort((a, b) => b.ceScore - a.ceScore));
+    const out = await searchAll({
+      dir: d,
+      repos: ['agentdb'],
+      query: "How does AgentDB validate '150x faster than SQLite' and '+36% search quality from feedback'?",
+    });
+    expect(out.results[0]).toMatchObject({ path: 'README.md', _lane: 'rescue' });
+  });
+
+  it('rescues the exact ADR instead of a different ADR that merely cites it', async () => {
+    const d = mkdirWith(['ruvector.rvf']);
+    fs.writeFileSync(path.join(d, 'ruvector.passages.jsonl'), [
+      JSON.stringify({ id: 'wrong', path: 'docs/adr/ADR-038.md', title: 'ADR-038: Witnesses', text: 'Related: ADR-029.' }),
+      JSON.stringify({
+        id: 'right',
+        path: 'docs/adr/ADR-029-rvf-canonical-format.md',
+        title: 'ADR-029: RVF as Canonical Binary Format',
+        text: 'RVF is the canonical binary format. Supersedes ADR-001 and ADR-018.',
+      }),
+    ].join('\n'));
+    vi.mocked(searchKb).mockResolvedValue([hit({ path: 'docs/adr/ADR-038.md', title: 'ADR-038: Witnesses' })]);
+    vi.mocked(rerankPairs).mockImplementation(async (_q, cands) =>
+      cands.map((candidate) => ({
+        ...candidate,
+        ceScore: candidate.path.includes('ADR-029-rvf') ? 9 : 3,
+      })).sort((a, b) => b.ceScore - a.ceScore));
+    const out = await searchAll({
+      dir: d,
+      repos: ['ruvector'],
+      query: 'What does ADR-029 decide about RVF canonical format, and what does it supersede?',
+    });
+    expect(out.results[0]).toMatchObject({
+      path: 'docs/adr/ADR-029-rvf-canonical-format.md',
+      _lane: 'rescue',
+    });
+  });
 });

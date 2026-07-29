@@ -189,6 +189,8 @@ export function extractFacts(doc) {
     symbols: [],
     posture: [],
     negatives: [],
+    capability: null,
+    enforceable: false,
     chars: 0,
     sha: '',
   };
@@ -197,6 +199,7 @@ export function extractFacts(doc) {
     rec.chars = text.length;
     rec.sha = sha12(text);
     if (!text) return rec;
+    if (/^capability-cards\.md#/i.test(rec.path) && rec.repo) rec.capability = rec.repo;
 
     // 1. Install commands → packages, each carrying the exact command a compliant write would run.
     const packages = new Map();
@@ -272,6 +275,9 @@ export function extractFacts(doc) {
         if (rec.negatives.length >= 8) break;
       }
     }
+    rec.enforceable = Boolean(
+      rec.packages.length || rec.origins.length || rec.symbols.length || rec.posture.length || rec.negatives.length
+    );
   } catch { /* a partial record is fine; a thrown query is not */ }
   return rec;
 }
@@ -289,7 +295,7 @@ export function buildReceipt({ query, repos, results }) {
       // Keep only documents that carry at least one fact worth binding to. A document with no
       // package, no origin, no symbol and no posture cannot contradict anything, and storing it
       // would only make the ledger bigger and the hot read slower.
-      if (f.packages.length || f.origins.length || f.symbols.length || f.posture.length || f.negatives.length) {
+      if (f.capability || f.enforceable) {
         sources.push(f);
       }
     }
@@ -354,6 +360,8 @@ export function recordAnswer({ query, repos, results }) {
         packages: s.packages.map((p) => p.name),
         installs: s.packages.map((p) => p.install),
         origins: s.origins.slice(0, 6),
+        capability: s.capability,
+        enforceable: s.enforceable,
       })),
     };
   } catch { return null; }

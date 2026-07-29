@@ -142,12 +142,32 @@ describe('the writer itself still writes — the guard above is about wiring, no
       const after = lineCount();
       expect(r?.receiptId, 'a successful answer must produce a receipt id').toBeTruthy();
       expect(r.sources.length).toBeGreaterThan(0);
+      expect(r.sources[0].enforceable).toBe(true);
       expect(after, 'exactly one JSONL record appended').toBe(before + 1);
     } finally {
       if (previous === undefined) delete process.env.RUVNET_EVIDENCE_FILE;
       else process.env.RUVNET_EVIDENCE_FILE = previous;
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('a factless capability card emits an honest non-enforceable recommendation receipt', () => {
+    const f = evidenceFile();
+    const before = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    const r = recordAnswer({
+      query: 'which tool should I use',
+      repos: ['agentdb'],
+      results: [{
+        repo: 'agentdb',
+        path: 'capability-cards.md#agentdb',
+        text: 'Use this building block for durable agent memory.',
+        score: 0.8,
+      }],
+    });
+    const after = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    expect(r.sources).toHaveLength(1);
+    expect(r.sources[0]).toMatchObject({ capability: 'agentdb', enforceable: false });
+    expect(after).toBe(before + 1);
   });
 
   it('a factless source mints a receipt but writes NO ledger line — extraction is deterministic', () => {
