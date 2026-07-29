@@ -11,7 +11,16 @@ set +e
 # scripts/detach.mjs, a sibling in whichever payload root is executing this body (the spine version
 # dir or the frozen plugin — both mirror plugin/, see update-apply.mjs's stagePayload).
 HOOK_DIR="${0%/*}"
-[ "$HOOK_DIR" = "$0" ] && HOOK_DIR="."
+if [ "$HOOK_DIR" = "$0" ]; then
+  # A native Node process passes this script to Git Bash as C:\...\session-start.sh. In that
+  # invocation $0 has backslashes, so the slash-only expansion above leaves the whole filename
+  # unchanged and every sibling helper silently disappears. Strip the final Windows component
+  # without spawning dirname/cygpath on the latency-critical startup path.
+  case "$0" in
+    *\\*) HOOK_DIR="${0%\\*}" ;;
+    *) HOOK_DIR="." ;;
+  esac
+fi
 DETACH="$HOOK_DIR/detach.mjs"
 
 # ── TOKEN METER (ADR-0011 token_cost_efficiency) — same meter as ground-ruvnet.sh. Everything this
