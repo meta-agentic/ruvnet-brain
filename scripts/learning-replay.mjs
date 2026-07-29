@@ -395,6 +395,14 @@ export function assertRetrieved(out) {
  */
 const MUTATING_SUBCOMMANDS = new Set(['store', 'delete', 'rm', 'purge', 'cleanup', 'compress', 'import', 'export', 'backup', 'init', 'configure']);
 
+/** Execute the real CLI, or an injected JavaScript fixture, without a shell on every platform. */
+function spawnRuflo(bin, args, options) {
+  if (/\.[cm]?js$/i.test(bin)) {
+    return spawnSync(process.execPath, [bin, ...args], options);
+  }
+  return spawnSync(bin, args, options);
+}
+
 export function assertPostTaskPersisted({ args, output, cwd }) {
   const task = optionValue(args, '-t', '--task');
   const agent = optionValue(args, '-a', '--agent');
@@ -464,7 +472,7 @@ export function executeProducedCommand(cmd, {
   const env = { ...process.env };
   delete env.CLAUDE_FLOW_DB_PATH;
   delete env.CLAUDE_FLOW_MEMORY_PATH;
-  const r = spawnSync(ruflo, args, { cwd, encoding: 'utf8', timeout: 120_000, env, maxBuffer: 8 * 1024 * 1024 });
+  const r = spawnRuflo(ruflo, args, { cwd, encoding: 'utf8', timeout: 120_000, env, maxBuffer: 8 * 1024 * 1024 });
   if (r.error) return nope(`spawn failed: ${r.error.message}`, { argv: ['ruflo', ...args] });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
   const routed = trap === TRAP.POST_TASK
@@ -625,14 +633,14 @@ export function verifyRufloFlag(bin = RUFLO_BIN) {
 
 export function verifyPostTaskContract(bin = RUFLO_BIN) {
   if (!fs.existsSync(bin)) return { ok: false, why: `ruflo binary not found at ${bin} (Rule 21: the GLOBAL binary, never npx)` };
-  const help = spawnSync(bin, ['hooks', 'post-task', '--help'], { encoding: 'utf8', timeout: 30_000 });
+  const help = spawnRuflo(bin, ['hooks', 'post-task', '--help'], { encoding: 'utf8', timeout: 30_000 });
   const out = `${help.stdout || ''}${help.stderr || ''}`;
   if (!/--task\b/.test(out) || !/--agent\b/.test(out) || !/--store-results\b/.test(out)
     || !/Without this \+ --agent, no routing outcome is recorded/.test(out)) {
     return { ok: false, why: 'live post-task help no longer states the three-part routing-persistence contract', help: out };
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-post-task-premise-'));
-  const missing = spawnSync(bin, ['hooks', 'post-task', '-i', 'd4-premise-missing', '--success', 'true'], {
+  const missing = spawnRuflo(bin, ['hooks', 'post-task', '-i', 'd4-premise-missing', '--success', 'true'], {
     cwd: dir,
     encoding: 'utf8',
     timeout: 30_000,

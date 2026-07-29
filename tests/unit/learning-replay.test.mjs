@@ -163,7 +163,10 @@ describe('the oracle is a PARSE, not a grep', () => {
 });
 
 function writePostTaskFixtureBinary(dir) {
-  const file = path.join(dir, 'ruflo-fixture');
+  // A shebang-only executable cannot be launched by child_process on Windows. The production
+  // helper runs injected .cjs fixtures through process.execPath while leaving the real Ruflo
+  // binary path untouched, so this contract test exercises the same JavaScript fixture everywhere.
+  const file = path.join(dir, 'ruflo-fixture.cjs');
   fs.writeFileSync(file, `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
