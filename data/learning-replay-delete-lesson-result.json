@@ -2,8 +2,8 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "FAIL",
   "why": "0/1 runs passed — below the 1/1 bar",
-  "sha": "63e5e67db0d860cb806768e0b619aa1bae88a54a",
-  "at": "2026-07-29T01:27:19.264Z",
+  "sha": "dc27f410f2a76c8dd1a042bef98a934af466b4e2",
+  "at": "2026-07-29T02:43:13.676Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
@@ -23,7 +23,7 @@
   "rate": 0,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 27.5,
+  "wallSeconds": 20.8,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
@@ -40,8 +40,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785288410986",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-ICxA2a/brain-home/versions/d4-refresh-1785288410986",
+    "generation": "d4-refresh-1785292972161",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-FqsI9d/brain-home/versions/d4-refresh-1785292972161",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -54,7 +54,7 @@
       "treated": {
         "class": "positional",
         "subcommandCorrect": true,
-        "command": "~/.npm-global/bin/ruflo memory search \"caching strategy\"",
+        "command": "ruflo memory search \"caching strategy\"",
         "forcedCommand": false,
         "exec": {
           "ran": true,
@@ -74,7 +74,7 @@
         "firstToolIndex": 0,
         "lessonBeforeFirstToolCall": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-ICxA2a/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-FqsI9d/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
@@ -96,7 +96,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-ICxA2a/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-FqsI9d/transcripts/run1-control.stream.jsonl"
       }
     }
   ]

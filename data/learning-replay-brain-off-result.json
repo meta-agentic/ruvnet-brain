@@ -2,8 +2,8 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "FAIL",
   "why": "0/1 runs passed — below the 1/1 bar",
-  "sha": "63e5e67db0d860cb806768e0b619aa1bae88a54a",
-  "at": "2026-07-29T01:28:14.982Z",
+  "sha": "dc27f410f2a76c8dd1a042bef98a934af466b4e2",
+  "at": "2026-07-29T02:43:43.363Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
@@ -23,7 +23,7 @@
   "rate": 0,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 43.9,
+  "wallSeconds": 22.6,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
@@ -40,8 +40,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785288450212",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-nZQ42B/brain-home/versions/d4-refresh-1785288450212",
+    "generation": "d4-refresh-1785293000111",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-vsZXmV/brain-home/versions/d4-refresh-1785293000111",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -74,12 +74,12 @@
         "firstToolIndex": 0,
         "lessonBeforeFirstToolCall": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-nZQ42B/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-vsZXmV/transcripts/run1-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
         "subcommandCorrect": true,
-        "command": "ruflo memory search \"caching strategy\"",
+        "command": "~/.npm-global/bin/ruflo memory search \"caching strategy\"",
         "exec": {
           "ran": true,
           "argv": [
@@ -96,7 +96,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-nZQ42B/transcripts/run1-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-vsZXmV/transcripts/run1-control.stream.jsonl"
       }
     }
   ]

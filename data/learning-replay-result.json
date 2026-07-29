@@ -2,8 +2,8 @@
   "invariant": "LEARNING-REPLAY",
   "verdict": "PASS",
   "why": "3/3 runs passed (bar 2/3)",
-  "sha": "63e5e67db0d860cb806768e0b619aa1bae88a54a",
-  "at": "2026-07-29T01:26:32.606Z",
+  "sha": "fb3783b42f0e455a1903ac8eb9da10a0e19c7144",
+  "at": "2026-07-29T02:44:59.249Z",
   "host": "codex",
   "model": "gpt-5.6-sol",
   "modelResolved": "gpt-5.6-sol",
@@ -23,7 +23,7 @@
   "rate": 1,
   "threshold": ">=2/3",
   "costUsd": 0,
-  "wallSeconds": 91.6,
+  "wallSeconds": 67.8,
   "premise": {
     "verified": true,
     "evidence": "-q, --query               Search query (required)"
@@ -40,8 +40,8 @@
     "ok": true
   },
   "refresh": {
-    "generation": "d4-refresh-1785288298879",
-    "codeRoot": ".ruvnet-brain/learning-replay/run-LJAL0K/brain-home/versions/d4-refresh-1785288298879",
+    "generation": "d4-refresh-1785293029317",
+    "codeRoot": ".ruvnet-brain/learning-replay/run-6AAqri/brain-home/versions/d4-refresh-1785293029317",
     "distillExit": 0,
     "backupExit": 0,
     "lessonSurvived": true
@@ -49,6 +49,59 @@
   "runs": [
     {
       "i": 1,
+      "verdict": "PASS",
+      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
+      "treated": {
+        "class": "flagged",
+        "subcommandCorrect": true,
+        "command": "ruflo memory search -q \"caching strategy\"",
+        "forcedCommand": false,
+        "exec": {
+          "ran": true,
+          "argv": [
+            "ruflo",
+            "memory",
+            "search",
+            "-q",
+            "caching strategy"
+          ],
+          "exit": 0,
+          "exitOk": true,
+          "retrieved": true,
+          "why": "exit 0; the output carries the seeded memory (matched \"note-caching\")",
+          "output": "[INFO] Searching: \"caching strategy\" (semantic)\n\n  Search time: 3ms\n\n+----------------------+-------+-----------+-------------------------------------+\n| Key                  | Score | Namespace | Preview                             |\n+----------------------+-------+-----------+-------------------------------------+\n| note-caching-stra... |  0.79 | default   | The caching strategy for this pr... |"
+        },
+        "lessonIndex": 0,
+        "firstToolIndex": 1,
+        "lessonBeforeFirstToolCall": true,
+        "model": "gpt-5.6-sol",
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run1-treated.stream.jsonl"
+      },
+      "control": {
+        "class": "positional",
+        "subcommandCorrect": true,
+        "command": "ruflo memory search \"caching strategy\"",
+        "exec": {
+          "ran": true,
+          "argv": [
+            "ruflo",
+            "memory",
+            "search",
+            "caching strategy"
+          ],
+          "exit": 1,
+          "exitOk": false,
+          "retrieved": false,
+          "why": "exit 1; the command's own output matched a known FAILURE shape /Required option missing/i",
+          "output": "[ERROR] Required option missing: --query\n"
+        },
+        "lessonDelivered": false,
+        "model": "gpt-5.6-sol",
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run1-control.stream.jsonl"
+      }
+    },
+    {
+      "i": 2,
       "verdict": "PASS",
       "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
       "treated": {
@@ -75,12 +128,12 @@
         "firstToolIndex": 1,
         "lessonBeforeFirstToolCall": true,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run1-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run2-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
         "subcommandCorrect": true,
-        "command": "ruflo memory search \"caching strategy\"",
+        "command": "~/.npm-global/bin/ruflo memory search \"caching strategy\"",
         "exec": {
           "ran": true,
           "argv": [
@@ -97,60 +150,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run1-control.stream.jsonl"
-      }
-    },
-    {
-      "i": 2,
-      "verdict": "PASS",
-      "why": "treated \"flagged\" vs control \"positional\"; the produced command executed (exit 0) and retrieved the memory; lesson delivered before the first tool call",
-      "treated": {
-        "class": "flagged",
-        "subcommandCorrect": true,
-        "command": "~/.npm-global/bin/ruflo memory search -q \"caching strategy\"",
-        "forcedCommand": false,
-        "exec": {
-          "ran": true,
-          "argv": [
-            "ruflo",
-            "memory",
-            "search",
-            "-q",
-            "caching strategy"
-          ],
-          "exit": 0,
-          "exitOk": true,
-          "retrieved": true,
-          "why": "exit 0; the output carries the seeded memory (matched \"note-caching\")",
-          "output": "[INFO] Searching: \"caching strategy\" (semantic)\n\n  Search time: 3ms\n\n+----------------------+-------+-----------+-------------------------------------+\n| Key                  | Score | Namespace | Preview                             |\n+----------------------+-------+-----------+-------------------------------------+\n| note-caching-stra... |  0.79 | default   | The caching strategy for this pr... |"
-        },
-        "lessonIndex": 0,
-        "firstToolIndex": 1,
-        "lessonBeforeFirstToolCall": true,
-        "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run2-treated.stream.jsonl"
-      },
-      "control": {
-        "class": "positional",
-        "subcommandCorrect": true,
-        "command": "ruflo memory search \"caching strategy\"",
-        "exec": {
-          "ran": true,
-          "argv": [
-            "ruflo",
-            "memory",
-            "search",
-            "caching strategy"
-          ],
-          "exit": 1,
-          "exitOk": false,
-          "retrieved": false,
-          "why": "exit 1; the command's own output matched a known FAILURE shape /Required option missing/i",
-          "output": "[ERROR] Required option missing: --query\n"
-        },
-        "lessonDelivered": false,
-        "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run2-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run2-control.stream.jsonl"
       }
     },
     {
@@ -181,12 +181,12 @@
         "firstToolIndex": 1,
         "lessonBeforeFirstToolCall": true,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run3-treated.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run3-treated.stream.jsonl"
       },
       "control": {
         "class": "positional",
         "subcommandCorrect": true,
-        "command": "~/.npm-global/bin/ruflo memory search \"caching strategy\"",
+        "command": "ruflo memory search \"caching strategy\"",
         "exec": {
           "ran": true,
           "argv": [
@@ -203,7 +203,7 @@
         },
         "lessonDelivered": false,
         "model": "gpt-5.6-sol",
-        "transcript": ".ruvnet-brain/learning-replay/run-LJAL0K/transcripts/run3-control.stream.jsonl"
+        "transcript": ".ruvnet-brain/learning-replay/run-6AAqri/transcripts/run3-control.stream.jsonl"
       }
     }
   ]
