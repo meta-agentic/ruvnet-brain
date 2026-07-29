@@ -23,8 +23,9 @@ import {
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
   checkMutantArtifacts, MUTANT_RESULT_FILES, allocateRunBase,
   TRAP, classifyModelRouteCommand, modelRouteSubcommandCorrect, verifyModelRouteFlag,
+  cleanupFixtureDaemons,
 } from '../../scripts/learning-replay.mjs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 describe('CLI help is side-effect free', () => {
   it('--help prints usage, exits zero, and does not overwrite the replay artifact', () => {
@@ -567,6 +568,27 @@ describe('parallel replay fixture allocation', () => {
     expect(first).not.toBe(second);
     expect(fs.existsSync(first)).toBe(true);
     expect(fs.existsSync(second)).toBe(true);
+  });
+});
+
+describe('fixture process containment', () => {
+  it('reaps only a daemon whose explicit workspace is under this replay run', async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-daemon-cleanup-'));
+    const child = spawn(process.execPath, [
+      '-e', 'setInterval(() => {}, 1000)',
+      'daemon', 'start', '--foreground', '--workspace', path.join(base, 'fixture-project-a'),
+    ], { stdio: 'ignore' });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      const result = cleanupFixtureDaemons({ base });
+      expect(result.found).toBe(1);
+      expect(result.stopped).toBe(1);
+      await new Promise((resolve) => child.once('exit', resolve));
+      expect(() => process.kill(child.pid, 0)).toThrow();
+    } finally {
+      try { process.kill(child.pid, 'SIGKILL'); } catch { /* already stopped */ }
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 

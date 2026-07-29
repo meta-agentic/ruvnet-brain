@@ -1265,6 +1265,9 @@ async function main() {
 
   const base = allocateRunBase();
   const dirs = buildFixtures(base);
+  // Ruflo may auto-start a workspace daemon while initializing a fixture memory DB. Reap only
+  // daemons whose explicit --workspace lives under THIS run, including on Ctrl-C or an exception.
+  process.once('exit', () => { cleanupFixtureDaemons(dirs); });
   const rec = recordInProjectA(dirs, { trap });
   console.log(`  record  (two independent source projects): ${rec.projectCount} sources, win-twice=${rec.promoted}, lesson ${rec.ok ? 'derived + ratified' : 'NOT recorded'}`);
   const seed = seedProjectBMemory(dirs);
@@ -1393,7 +1396,8 @@ export function cleanupFixtureDaemons(dirs) {
     if (!match) return [];
     const pid = Number(match[1]);
     const command = match[2];
-    return command.includes('ruflo daemon start')
+    return command.includes('daemon start --foreground')
+      && command.includes('--workspace')
       && command.includes(base)
       && pid !== process.pid
       ? [{ pid, command }]
