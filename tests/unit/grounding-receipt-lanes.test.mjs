@@ -21,7 +21,7 @@
 // looks EXACTLY like a capability that is working. So these assertions bind to the mechanism —
 // no shadowing, and an awaited promise rather than a hopeful mutable read — not to the outcome
 // on one lucky run.
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,6 +30,21 @@ import { recordAnswer, evidenceFile } from '../../kb/forge-evidence.mjs';
 const REPO = path.resolve(import.meta.dirname, '../..');
 const SERVER = path.join(REPO, 'kb/forge-mcp-all.mjs');
 const src = () => fs.readFileSync(SERVER, 'utf8');
+const lineCount = (file) => (fs.existsSync(file)
+  ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).length : 0);
+
+let evidenceDir;
+let previousEvidenceFile;
+beforeEach(() => {
+  evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grounding-receipt-'));
+  previousEvidenceFile = process.env.RUVNET_EVIDENCE_FILE;
+  process.env.RUVNET_EVIDENCE_FILE = path.join(evidenceDir, 'evidence.jsonl');
+});
+afterEach(() => {
+  if (previousEvidenceFile === undefined) delete process.env.RUVNET_EVIDENCE_FILE;
+  else process.env.RUVNET_EVIDENCE_FILE = previousEvidenceFile;
+  fs.rmSync(evidenceDir, { recursive: true, force: true });
+});
 
 /** Brace-depth scope walk — the same check that found defect 1. */
 function shadowReport(source, importedName) {
@@ -121,39 +136,28 @@ describe('defect 2 — no lane may read a lazily-imported writer without awaitin
 
 describe('the writer itself still writes — the guard above is about wiring, not about this', () => {
   it('a card-shaped result carrying real facts appends exactly one ledger line', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grounding-receipt-'));
-    const f = path.join(dir, 'evidence.jsonl');
-    const previous = process.env.RUVNET_EVIDENCE_FILE;
-    process.env.RUVNET_EVIDENCE_FILE = f;
-    const lineCount = () => (fs.existsSync(f)
-      ? fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).length : 0);
-    try {
-      const before = lineCount();
-      const r = recordAnswer({
-        query: 'receipt-lane test',
-        repos: ['synaptic-mesh'],
-        results: [{
-          repo: 'synaptic-mesh',
-          path: 'capability-cards.md#synaptic-mesh',
-          text: 'npm install synaptic-mesh — runs fully local, no backend required.\nimport { Mesh } from "synaptic-mesh";',
-          score: 0.4,
-        }],
-      });
-      const after = lineCount();
-      expect(r?.receiptId, 'a successful answer must produce a receipt id').toBeTruthy();
-      expect(r.sources.length).toBeGreaterThan(0);
-      expect(r.sources[0].enforceable).toBe(true);
-      expect(after, 'exactly one JSONL record appended').toBe(before + 1);
-    } finally {
-      if (previous === undefined) delete process.env.RUVNET_EVIDENCE_FILE;
-      else process.env.RUVNET_EVIDENCE_FILE = previous;
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+    const f = evidenceFile();
+    const before = lineCount(f);
+    const r = recordAnswer({
+      query: 'receipt-lane test',
+      repos: ['synaptic-mesh'],
+      results: [{
+        repo: 'synaptic-mesh',
+        path: 'capability-cards.md#synaptic-mesh',
+        text: 'npm install synaptic-mesh — runs fully local, no backend required.\nimport { Mesh } from "synaptic-mesh";',
+        score: 0.4,
+      }],
+    });
+    const after = lineCount(f);
+    expect(r?.receiptId, 'a successful answer must produce a receipt id').toBeTruthy();
+    expect(r.sources.length).toBeGreaterThan(0);
+    expect(r.sources[0].enforceable).toBe(true);
+    expect(after, 'exactly one JSONL record appended').toBe(before + 1);
   });
 
   it('a factless capability card emits an honest non-enforceable recommendation receipt', () => {
     const f = evidenceFile();
-    const before = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    const before = lineCount(f);
     const r = recordAnswer({
       query: 'which tool should I use',
       repos: ['agentdb'],
@@ -164,7 +168,7 @@ describe('the writer itself still writes — the guard above is about wiring, no
         score: 0.8,
       }],
     });
-    const after = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    const after = lineCount(f);
     expect(r.sources).toHaveLength(1);
     expect(r.sources[0]).toMatchObject({ capability: 'agentdb', enforceable: false });
     expect(after).toBe(before + 1);
@@ -175,13 +179,13 @@ describe('the writer itself still writes — the guard above is about wiring, no
     // packages, symbols, verbatim posture), never prose. A card with none contributes none. This is
     // why the live card-lane run showed a receipt on the wire and an unchanged ledger.
     const f = evidenceFile();
-    const before = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    const before = lineCount(f);
     recordAnswer({
       query: 'factless',
       repos: ['x'],
       results: [{ repo: 'x', path: 'a/b.md', text: 'This document discusses ideas in general terms.', score: 0.1 }],
     });
-    const after = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').length : 0;
+    const after = lineCount(f);
     expect(after).toBe(before);
   });
 });

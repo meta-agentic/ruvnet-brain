@@ -20,7 +20,10 @@ describe('top-100 RuvNet recall corpus', () => {
   });
 
   it('balances all five experience levels at 20 each', () => {
-    const counts = Object.groupBy(corpus.questions, (q) => q.level);
+    const counts = corpus.questions.reduce((byLevel, question) => {
+      (byLevel[question.level] ??= []).push(question);
+      return byLevel;
+    }, {});
     for (const level of ['naive', 'beginner', 'intermediate', 'advanced', 'expert']) {
       expect(counts[level], level).toHaveLength(20);
     }
