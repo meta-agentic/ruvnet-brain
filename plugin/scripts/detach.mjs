@@ -98,18 +98,25 @@ if (!SUPERVISOR) {
     };
     let child;
     if (process.platform === 'win32') {
-      // detached:true alone did not sever the console/handle tree on Windows: session-start.sh
-      // reached `exit 0` in ~0.9s, yet cmd.exe kept its capture pipe open until the 5s watchdog.
-      // `start` is Windows' native "launch and do not wait" boundary. All variable arguments travel
-      // in a base64 environment payload, leaving only trusted executable paths in cmd's command
-      // string and avoiding cmd metacharacter/quoting ambiguity in job arguments and log paths.
-      const comspec = process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
-      const launch = `start "" /b "${process.execPath}" "${SELF}" --payload-env`;
-      child = spawn(comspec, ['/d', '/s', '/c', `"${launch}"`], {
+      // detached:true and `cmd start /b` both left the cold hook's capture pipe open on
+      // windows-latest after session-start.sh itself had finished. Start-Process crosses a native
+      // process-launch boundary without `/b`'s same-console inheritance. All variable arguments
+      // still travel in a base64 environment payload, so the PowerShell command contains only
+      // trusted executable paths and no job/log-path metacharacters.
+      const powershell = process.env.SystemRoot
+        ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+        : 'powershell.exe';
+      const quotePs = (value) => `'${String(value).replaceAll("'", "''")}'`;
+      const launch = [
+        'Start-Process',
+        '-FilePath', quotePs(process.execPath),
+        '-ArgumentList', `@(${quotePs(SELF)},${quotePs('--payload-env')})`,
+        '-WindowStyle', 'Hidden',
+      ].join(' ');
+      child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', launch], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
-        windowsVerbatimArguments: true,
         env: supervisorEnv,
       });
     } else {
