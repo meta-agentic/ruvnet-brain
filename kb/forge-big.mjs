@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { loadRvf, loadTransformers, chooseModelCache } from './resolve-deps.mjs';
+import { materializeModelRevision, modelCacheReady } from './model-requirements.mjs';
 
 const MODEL = 'Xenova/bge-base-en-v1.5';
 // MODEL-WEIGHT PIN: address the embedder by an exact HuggingFace commit SHA, not the floating `main`
@@ -53,10 +54,13 @@ async function getEmbedder() {
   if (_fe) return _fe;
   const { T, via } = await loadTransformers();
   const cache = chooseModelCache();
+  materializeModelRevision(cache, MODEL, MODEL_REVISION);
   T.env.localModelPath = cache;
-  T.env.allowRemoteModels = !fs.existsSync(path.join(cache, MODEL));
+  T.env.cacheDir = cache;
+  T.env.allowRemoteModels = !modelCacheReady(cache, MODEL);
   console.log(`[big] transformers via ${via} | model ${MODEL}@${MODEL_REVISION} | cache ${cache} (${T.env.allowRemoteModels ? 'will download' : 'local'})`);
   _fe = await T.pipeline('feature-extraction', MODEL, { quantized: true, revision: MODEL_REVISION });
+  materializeModelRevision(cache, MODEL, MODEL_REVISION);
   return _fe;
 }
 async function embedTexts(texts) {
@@ -128,7 +132,7 @@ async function ingestStore() {
 
   // query-side embedder config (how forge-ask embeds a query for THIS .rvf — asymmetric bge)
   fs.writeFileSync(OUT_RVF + '.embed.json', JSON.stringify({
-    model: MODEL, dimensions: DIM, metric: 'cosine', pooling: POOLING, normalize: true,
+    model: MODEL, revision: MODEL_REVISION, dimensions: DIM, metric: 'cosine', pooling: POOLING, normalize: true,
     queryPrefix: QUERY_PREFIX,
     note: 'Big (Mac/PC) variant. Passages embedded with NO prefix; queries use queryPrefix (asymmetric).',
     builtFrom: path.basename(passagesFile), generated: new Date().toISOString(),

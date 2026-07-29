@@ -8,6 +8,32 @@ export function modelPath(modelCache, model) {
   return path.join(modelCache, ...model.split('/'));
 }
 
+export function modelCacheReady(modelCache, model, revision = null) {
+  const root = revision
+    ? path.join(modelPath(modelCache, model), revision)
+    : modelPath(modelCache, model);
+  return [
+    path.join(root, 'tokenizer.json'),
+    path.join(root, 'config.json'),
+    path.join(root, 'onnx', 'model_quantized.onnx'),
+  ].every((file) => fs.existsSync(file));
+}
+
+// Revision-pinned downloads live below <model>/<revision>/, while strict offline reads resolve
+// <model>/ directly. Promote only the exact pinned files into that canonical offline location.
+export function materializeModelRevision(modelCache, model, revision) {
+  if (!revision || !modelCacheReady(modelCache, model, revision)) return false;
+  const source = path.join(modelPath(modelCache, model), revision);
+  const destination = modelPath(modelCache, model);
+  for (const entry of fs.readdirSync(source)) {
+    fs.cpSync(path.join(source, entry), path.join(destination, entry), {
+      recursive: true,
+      force: true,
+    });
+  }
+  return modelCacheReady(modelCache, model);
+}
+
 // The RVF sidecar is the source of truth for the query embedder. Only sidecars with a matching
 // installed RVF count; stale/orphan metadata must not make a healthy installation look cold.
 export function requiredEmbedderModels(kbDir) {
@@ -35,7 +61,7 @@ export function missingEmbedderModels(modelCache, models) {
 }
 
 export function configureTransformersModel(T, modelCache, model) {
-  const local = fs.existsSync(modelPath(modelCache, model));
+  const local = modelCacheReady(modelCache, model);
   T.env.localModelPath = modelCache;
   // Transformers.js otherwise downloads into its package-local `.cache`, while every doctor and
   // release detector inspects `modelCache`. A download invisible to the runtime's own detector

@@ -17,7 +17,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { loadRvf, loadTransformers, configureModel } from './resolve-deps.mjs';
-import { configureTransformersModel } from './model-requirements.mjs';
+import { configureTransformersModel, materializeModelRevision } from './model-requirements.mjs';
 
 // LAZY, not module-level (2026-07-12): an eager loadRvf() here killed every importer — including
 // forge-mcp-all's MCP server — at STARTUP on any machine without @ruvector/rvf resolvable, before
@@ -110,11 +110,12 @@ function getEmbedder(model) {
 }
 async function loadEmbedderUncached(model) {
   const { T, modelCache, via } = await loadTransformers();
+  const revision = PINNED_REVISIONS[model] || 'main';
+  materializeModelRevision(modelCache, model, revision);
   // Local-first network guard: a remote fetch is permitted ONLY when THIS model is not already
   // cached locally (offline once cached). Reads AND downloads use the same detector-visible cache.
   // When a fetch does happen it is pinned to the exact revision below.
   configureTransformersModel(T, modelCache, model);
-  const revision = PINNED_REVISIONS[model] || 'main';
   if (process.env.KB_DEBUG) console.error(`[forge-ask] transformers via: ${via} | model ${model}@${revision} | cache: ${modelCache} (${T.env.allowRemoteModels ? 'remote' : 'local'})`);
 
   // ISSUE #27 (Jan Lafko, 2026-07-18): in a network-restricted sandbox (turbo-flow devcontainer) a
@@ -160,6 +161,7 @@ async function loadEmbedderUncached(model) {
   let fe;
   try {
     fe = await attemptLoad();
+    materializeModelRevision(modelCache, model, revision);
   } catch (e) {
     // Bug B (issue #29, found+fixed by Jan Lafko): allowRemoteModels was gated purely on the model
     // DIRECTORY existing — but a directory proves a download STARTED, not that it finished. A
