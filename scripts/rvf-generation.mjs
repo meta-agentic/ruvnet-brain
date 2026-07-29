@@ -82,6 +82,7 @@ export function verifyRvfGenerations(dir, {
   version = getVersion(),
   releaseTag = getVersionTag(),
   requiredStores = [],
+  allowMissingFiles = false,
 } = {}) {
   const manifest = readRvfGenerations(dir);
   const failures = [];
@@ -93,7 +94,7 @@ export function verifyRvfGenerations(dir, {
   for (const [store, generation] of Object.entries(manifest.stores)) {
     const file = path.join(dir, generation.file || `${store}.big.rvf`);
     if (!fs.existsSync(file)) {
-      failures.push(`${store}: missing ${path.basename(file)}`);
+      if (!allowMissingFiles) failures.push(`${store}: missing ${path.basename(file)}`);
       continue;
     }
     const actual = sha256File(file);

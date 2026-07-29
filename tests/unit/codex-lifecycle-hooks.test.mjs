@@ -113,6 +113,25 @@ describe('Codex lifecycle hook packaging', () => {
     }
   });
 
+  it('gives UserPromptSubmit hooks twice the unprompted runtime deadline on both hosts', () => {
+    const runtime = fs.readFileSync(path.join(ROOT, 'plugin', 'scripts', 'unprompted-runtime.mjs'), 'utf8');
+    const deadlineMs = Number(runtime.match(/RUVNET_UNPROMPTED_TIMEOUT_MS\) \|\| (\d+)/)?.[1]);
+    expect(deadlineMs).toBeGreaterThan(0);
+
+    for (const hookFile of [CLAUDE_HOOKS, HOOKS]) {
+      const hooks = JSON.parse(fs.readFileSync(hookFile, 'utf8')).hooks;
+      for (const group of hooks.UserPromptSubmit ?? []) {
+        for (const hook of group.hooks ?? []) {
+          expect(
+            hook.timeout * 1_000,
+            `${path.basename(hookFile)} UserPromptSubmit "${hook.command}" has no cold/contended headroom`,
+          ).toBeGreaterThanOrEqual(deadlineMs * 2);
+          expect(hook.timeout).toBeLessThanOrEqual(10);
+        }
+      }
+    }
+  });
+
   it('matches the raw Codex tool names before the adapter normalizes them', () => {
     const hooks = JSON.parse(fs.readFileSync(HOOKS, 'utf8')).hooks;
     const groupsFor = (event, hookId) => hooks[event].filter((group) =>

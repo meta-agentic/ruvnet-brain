@@ -41,7 +41,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const HANG_BUDGET_MS = 15000; // generous — real fixed-code loads complete in well under 1s
+// The fixed path deliberately deletes a corrupt ~23MB model and re-fetches it. That is normally
+// quick, but it is still a network transfer; 15s misclassified a slow registry/CDN response as the
+// historical indefinite futex deadlock. Keep a finite in-process diagnostic deadline while leaving
+// the authoritative OS-level guard in the Vitest parent comfortably outside it.
+const HANG_BUDGET_MS = 60_000;
 const CE_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
 function arg(flag, dflt) {

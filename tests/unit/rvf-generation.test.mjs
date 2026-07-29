@@ -76,4 +76,15 @@ describe('checksum-bound RVF generation identity', () => {
       requiredStores: ['recorded', 'missing'],
     }).failures).toContain('missing: no generation record');
   });
+
+  it('can validate ledger metadata in a source-only checkout without the ignored RVF bytes', () => {
+    const dir = fixtureDir();
+    fs.writeFileSync(path.join(dir, 'demo.big.rvf'), 'canonical');
+    writeRvfGeneration({ dir, store: 'demo', model: 'bge', dimensions: 768 });
+    fs.rmSync(path.join(dir, 'demo.big.rvf'));
+
+    expect(verifyRvfGenerations(dir, {
+      allowMissingFiles: true,
+    }).failures).toEqual([]);
+  });
 });

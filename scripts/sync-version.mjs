@@ -97,7 +97,13 @@ if (CHECK && fs.existsSync(path.join(ROOT, 'kb/RVF-GENERATIONS.json'))) {
   const requiredStores = fs.readdirSync(kbDir)
     .filter((file) => file.endsWith('.big.rvf'))
     .map((file) => file.slice(0, -'.big.rvf'.length));
-  const { failures } = verifyRvfGenerations(kbDir, { requiredStores });
+  // CI/source-only clones intentionally omit the gitignored RVF binaries. In that shape, validate
+  // the committed ledger's version fields but defer byte checks to bundle assembly, where the RVFs
+  // are present. A checkout containing any canonical RVF remains fail-closed for every ledger row.
+  const { failures } = verifyRvfGenerations(kbDir, {
+    requiredStores,
+    allowMissingFiles: requiredStores.length === 0,
+  });
   for (const failure of failures) {
     console.error(`[version] RVF GENERATION DRIFT: ${failure}`);
     drift++;

@@ -41,7 +41,7 @@ describe('issue #29 — a corrupted CE cache must never deadlock a repeat load (
       );
       return; // loud skip, never a silent pass
     }
-    const res = run('test', 60_000);
+    const res = run('test', 120_000);
     // status 0  → both calls completed: the self-heal worked, no deadlock.
     // status null → spawnSync's OS timeout SIGKILLed a frozen child: the #29 deadlock is back.
     expect(
