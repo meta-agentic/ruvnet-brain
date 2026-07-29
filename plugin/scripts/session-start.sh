@@ -346,16 +346,17 @@ PLUGIN_VERSION=""
 PLUGIN_UPDATED=""
 PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT:-}/.claude-plugin/plugin.json"
 if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$PLUGIN_JSON" ]; then
-  while IFS= read -r PLUGIN_LINE; do
-    case "$PLUGIN_LINE" in
-      *'"version"'*)
-        PLUGIN_VALUE="${PLUGIN_LINE#*:}"; PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"
-        PLUGIN_VERSION="${PLUGIN_VALUE%%\"*}" ;;
-      *'"updated"'*)
-        PLUGIN_VALUE="${PLUGIN_LINE#*:}"; PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"
-        PLUGIN_UPDATED="${PLUGIN_VALUE%%\"*}" ;;
-    esac
-  done < "$PLUGIN_JSON"
+  PLUGIN_TEXT=$(<"$PLUGIN_JSON")
+  case "$PLUGIN_TEXT" in
+    *'"version"'*)
+      PLUGIN_VALUE="${PLUGIN_TEXT#*\"version\"}"; PLUGIN_VALUE="${PLUGIN_VALUE#*:}"
+      PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"; PLUGIN_VERSION="${PLUGIN_VALUE%%\"*}" ;;
+  esac
+  case "$PLUGIN_TEXT" in
+    *'"updated"'*)
+      PLUGIN_VALUE="${PLUGIN_TEXT#*\"updated\"}"; PLUGIN_VALUE="${PLUGIN_VALUE#*:}"
+      PLUGIN_VALUE="${PLUGIN_VALUE#*\"}"; PLUGIN_UPDATED="${PLUGIN_VALUE%%\"*}" ;;
+  esac
 fi
 
 # ── what's-new: the FIRST session after a version change surfaces ONE positive line about what the
