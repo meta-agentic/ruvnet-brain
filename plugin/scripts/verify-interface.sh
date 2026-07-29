@@ -144,6 +144,16 @@ INPUT="${INPUT:0:65536}"
 # Opt-in, like every other gate here: no router profile = this user never asked for our discipline.
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
+# Non-interactive installation may persist detected subscriptions with an explicit `assumed:` basis.
+# That is not consent. Existing confirmed profiles without a basis field remain compatible, while an
+# unreadable or assumed profile fails open and cannot activate this blocking hook.
+PROFILE_INPUT=""
+while IFS= read -r _profile_line; do
+  PROFILE_INPUT+="$_profile_line"
+  [ ${#PROFILE_INPUT} -ge 65536 ] && break
+done < "$PROFILE" 2>/dev/null || exit 0
+[ -n "$_profile_line" ] && PROFILE_INPUT+="$_profile_line"
+case "$PROFILE_INPUT" in *'"basis"'*'"assumed:'*) exit 0 ;; esac
 # Session-wide opt-out: the hook PROCESS's own environment (e.g. exported in the shell that launches
 # Claude Code). Different from — and not a substitute for — the per-command override checked below.
 [ "${RUVNET_SKIP_INTERFACE_CHECK:-0}" = "1" ] && exit 0

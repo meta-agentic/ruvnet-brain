@@ -55,6 +55,16 @@ INPUT="${INPUT:0:65536}"
 # ── OPT-IN GATE. No profile = this user never asked for cost routing = we do not touch their tools. ──
 PROFILE="${MODEL_ROUTER_PROFILE:-$HOME/.claude/model-router/profile.json}"
 [ -f "$PROFILE" ] || exit 0
+# A non-interactive install records useful detection data with an explicit `assumed:` basis, but it
+# never asked the consent questions. Treat that provenance as inert. Existing confirmed profiles
+# that predate the basis field remain compatible; malformed/unreadable profiles fail open.
+PROFILE_INPUT=""
+while IFS= read -r _profile_line; do
+  PROFILE_INPUT+="$_profile_line"
+  [ ${#PROFILE_INPUT} -ge 65536 ] && break
+done < "$PROFILE" 2>/dev/null || exit 0
+[ -n "$_profile_line" ] && PROFILE_INPUT+="$_profile_line"
+case "$PROFILE_INPUT" in *'"basis"'*'"assumed:'*) exit 0 ;; esac
 
 # ── Deliberate escape hatch (must be used ON PURPOSE, never reached by omission). ──
 [ "${RUVNET_ALLOW_INHERITED_MODEL:-0}" = "1" ] && exit 0

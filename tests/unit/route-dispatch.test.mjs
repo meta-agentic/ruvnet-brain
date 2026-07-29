@@ -29,11 +29,11 @@ const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
  *   hostile. It now enforces ONLY for users who opted in (they answered the two subscription
  *   questions, so profile.json exists). Everyone else is untouched — not even warned.
  */
-function dispatch(toolInput, toolName = 'Task', env = {}, optedIn = true) {
+function dispatch(toolInput, toolName = 'Task', env = {}, optedIn = true, profileContent = '{"harnesses":{}}') {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rd-'));
   if (optedIn) {
     fs.mkdirSync(path.join(home, '.claude/model-router'), { recursive: true });
-    fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), '{"harnesses":{}}');
+    fs.writeFileSync(path.join(home, '.claude/model-router/profile.json'), profileContent);
   }
   const r = spawnSync('bash', [GATE], {
     input: JSON.stringify({ tool_name: toolName, tool_input: toolInput }),
@@ -48,6 +48,26 @@ describe.skipIf(!hasBash || process.platform === 'win32')('route-dispatch.sh —
     // The defect I shipped and caught minutes later: this hook goes to EVERY plugin user. Hard-blocking
     // the Task tool for people who never asked for routing would break strangers' workflows.
     const r = dispatch({ description: 'x', subagent_type: 'general-purpose' }, 'Task', {}, /* optedIn */ false);
+    expect(r.status).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+
+  it('does not mistake a non-interactive installer assumption for consent (GHSA-jgvj-938r-2433)', () => {
+    const profile = JSON.stringify({
+      harnesses: {
+        'claude-code': {
+          subscription: true,
+          basis: 'assumed: installing the Claude Code brain; confirm with model-router-setup.mjs --show',
+        },
+      },
+    });
+    const r = dispatch(
+      { description: 'x', subagent_type: 'general-purpose' },
+      'Task',
+      {},
+      true,
+      profile,
+    );
     expect(r.status).toBe(0);
     expect(r.stderr).toBe('');
   });

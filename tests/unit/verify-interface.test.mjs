@@ -24,11 +24,11 @@ import path from 'node:path';
 const GATE = path.resolve(import.meta.dirname, '../../plugin/scripts/verify-interface.sh');
 const hasBash = spawnSync('bash', ['-c', 'exit 0']).status === 0;
 
-function run(command, { optedIn = true, home = null } = {}) {
+function run(command, { optedIn = true, home = null, profileContent = '{}' } = {}) {
   const h = home || fs.mkdtempSync(path.join(os.tmpdir(), 'vi-'));
   if (optedIn) {
     fs.mkdirSync(path.join(h, '.claude/model-router'), { recursive: true });
-    fs.writeFileSync(path.join(h, '.claude/model-router/profile.json'), '{}');
+    fs.writeFileSync(path.join(h, '.claude/model-router/profile.json'), profileContent);
   }
   const r = spawnSync('bash', [GATE], {
     input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
@@ -71,6 +71,20 @@ describe.skipIf(!hasBash || process.platform === 'win32')('verify-interface.sh �
 
   it('never touches a user who did not opt in — consent is the default', () => {
     expect(run('npx ruflo@latest memory search -q test', { optedIn: false }).status).toBe(0);
+  });
+
+  it('does not activate from a non-interactive installer assumption (GHSA-jgvj-938r-2433)', () => {
+    const profileContent = JSON.stringify({
+      harnesses: {
+        'claude-code': {
+          subscription: true,
+          basis: 'assumed: installing the Claude Code brain; confirm with model-router-setup.mjs --show',
+        },
+      },
+    });
+    const r = run('npx ruflo@latest memory search -q test', { profileContent });
+    expect(r.status).toBe(0);
+    expect(r.stderr).toBe('');
   });
 
   it('FAILS OPEN on garbage — a blocking hook must never brick a session', () => {
