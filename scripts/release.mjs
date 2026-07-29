@@ -166,7 +166,9 @@ if (PUBLISH) {
   let already = '';
   try { already = execFileSync('npm', ['view', `ruvnet-brain@${v}`, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* not published yet */ }
   if (already === v) console.log(c.dim(`  ${v} already on npm — skipping publish, just re-asserting the tag`));
-  else runOrDie('npm publish', 'npm', ['publish']);
+  // npm requires an explicit tag for prerelease versions. This project intentionally serves its
+  // `-dev` release from `latest`, so make that policy explicit on the publish command itself.
+  else runOrDie('npm publish', 'npm', ['publish', '--tag', 'latest']);
   // npm does NOT auto-move `latest` to a prerelease (x.y.z-dev) — force it, or `@latest` stays stale.
   runOrDie('npm dist-tag latest', 'npm', ['dist-tag', 'add', `ruvnet-brain@${v}`, 'latest']);
 } else {

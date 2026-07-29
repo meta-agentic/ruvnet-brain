@@ -31,4 +31,11 @@ describe('release command wording', () => {
     expect(src).toContain('PREFLIGHT PASS — NOT PUBLISHED');
     expect(src).toMatch(/PUBLISH\s*\\?[\s\S]*SHIPPED[\s\S]*PREFLIGHT PASS — NOT PUBLISHED/);
   });
+
+  it('publishes prerelease versions with an explicit npm tag on both ship paths', () => {
+    const release = fs.readFileSync(path.join(ROOT, 'scripts/release.mjs'), 'utf8');
+    const nightly = fs.readFileSync(path.join(ROOT, 'scripts/self-update.mjs'), 'utf8');
+    expect(release).toContain("runOrDie('npm publish', 'npm', ['publish', '--tag', 'latest'])");
+    expect(nightly).toContain("execFileSync('npm', ['publish', '--tag', 'latest']");
+  });
 });

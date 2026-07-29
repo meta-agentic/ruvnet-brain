@@ -486,11 +486,11 @@ if (has('--publish')) {
     try {
       let onNpm = '';
       try { onNpm = execFileSync('npm', ['view', `ruvnet-brain@${next}`, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { /* not yet on npm — fine */ }
-      if (onNpm !== next) execFileSync('npm', ['publish'], { cwd: ROOT, stdio: 'inherit' });
+      if (onNpm !== next) execFileSync('npm', ['publish', '--tag', 'latest'], { cwd: ROOT, stdio: 'inherit' });
       execFileSync('npm', ['dist-tag', 'add', `ruvnet-brain@${next}`, 'latest'], { cwd: ROOT, stdio: 'inherit' });
       console.log(`[publish] npm ${next} + \`latest\` — channels IN SYNC (npm == GitHub == plugin)`);
     } catch (e) {
-      console.error(`[publish] FATAL: npm publish/dist-tag FAILED (${e.message.split('\n')[0]}). GitHub is now AHEAD of npm — the exact drift this guards against. The nightly aborts here; republish npm manually (\`npm publish && npm dist-tag add ruvnet-brain@${next} latest\`) and check npm auth in the launchd env.`);
+      console.error(`[publish] FATAL: npm publish/dist-tag FAILED (${e.message.split('\n')[0]}). GitHub is now AHEAD of npm — the exact drift this guards against. The nightly aborts here; republish npm manually (\`npm publish --tag latest && npm dist-tag add ruvnet-brain@${next} latest\`) and check npm auth in the launchd env.`);
       process.exit(1);
     }
     NOTIFY('🟢 Nightly brain published', `${tag} is live on releases/latest + npm — ${todo.length ? `rebuilt: ${todo.map((p) => p.name).join(', ')}` : `reader-script fixes only`}`);
