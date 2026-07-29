@@ -687,7 +687,7 @@ function wirePlugin() {
 // THAT absolute server path is registered. Registering the npx dir would rot when the temp dir vanished.
 const CODEX_BLOCK_START = '# --- ruvnet-brain (managed block, installer-rewritten) ---';
 const CODEX_BLOCK_END = '# --- end ruvnet-brain ---';
-const codexHomeDir = () => path.join(os.homedir(), '.codex');
+const codexHomeDir = () => process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 const codexConfigPath = () => path.join(codexHomeDir(), 'config.toml');
 const codexServerDir = () => path.join(os.homedir(), '.claude', 'ruvnet-brain', 'mcp');
 const codexHookWrapperPath = (codexDir = codexHomeDir()) =>
@@ -734,8 +734,9 @@ export function codexStatus({ configPath = codexConfigPath(), codexDir = codexHo
   if (!host) return { host: false, wired: false, serverPath: null, serverExists: false };
   let text = '';
   try { text = fs.readFileSync(configPath, 'utf8'); } catch { /* no config yet */ }
-  const m = /^[ \t]*\[mcp_servers\.(?:ruvnet-brain|"ruvnet-brain"|'ruvnet-brain')\][^[]*?args\s*=\s*\[\s*"([^"]+)"/m.exec(text);
-  const serverPath = m ? m[1] : null;
+  const m = /^[ \t]*\[mcp_servers\.(?:ruvnet-brain|"ruvnet-brain"|'ruvnet-brain')\][^[]*?args\s*=\s*\[\s*("(?:\\.|[^"\\])*")/m.exec(text);
+  let serverPath = null;
+  try { serverPath = m ? JSON.parse(m[1]) : null; } catch { /* malformed entry — treat as absent */ }
   let serverExists = false;
   try { serverExists = serverPath ? fs.existsSync(serverPath) : false; } catch { /* unreadable */ }
   return { host: true, wired: Boolean(serverPath) && serverExists, serverPath, serverExists };
