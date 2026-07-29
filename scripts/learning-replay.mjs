@@ -892,6 +892,7 @@ const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] 
 const usage = () => `Usage:
   node scripts/learning-replay.mjs [--n N] [--host codex|claude-code] [--model MODEL]
   node scripts/learning-replay.mjs --check
+  node scripts/learning-replay.mjs --check-mutants
   node scripts/learning-replay.mjs --dry-run
   node scripts/learning-replay.mjs --mutant <${Object.keys(MUTANTS).join('|')}>
 
@@ -907,6 +908,12 @@ export const MUTANTS = Object.freeze({
   // ── the execution gate's own mutants (2026-07-28) ──
   'wrong-subcommand': `substitute the treated arm's artifact with \`${WRONG_SUBCOMMAND_COMMAND}\` — right flag, wrong verb: the exact command the grader found being certified. Must go red.`,
   'empty-store': "empty project B's seeded memory before the gate runs — a perfect command that retrieves nothing must go red on RETRIEVAL, not pass on exit status",
+});
+
+/** Committed real-model evidence for ADR-058's two named falsification traps. */
+export const MUTANT_RESULT_FILES = Object.freeze({
+  'delete-lesson': path.join(ROOT, 'data', 'learning-replay-delete-lesson-result.json'),
+  'brain-off-treated': path.join(ROOT, 'data', 'learning-replay-brain-off-result.json'),
 });
 
 function headSha() {
@@ -947,12 +954,76 @@ export function checkArtifact({ file = RESULT_FILE, repo = ROOT, maxAgeDays = 14
   };
 }
 
+/**
+ * Verify the two named ADR-058 mutants were run against a current load-bearing tree and each
+ * destroyed the claimed effect. A mutant FAIL is evidence only when the failure has the expected
+ * causal shape; "the executor crashed" or "some unrelated assertion failed" cannot satisfy this.
+ */
+export function checkMutantArtifacts({
+  files = MUTANT_RESULT_FILES,
+  repo = ROOT,
+  maxAgeDays = 14,
+} = {}) {
+  const checked = [];
+  for (const mutant of ['delete-lesson', 'brain-off-treated']) {
+    const file = files[mutant];
+    if (!file || !fs.existsSync(file)) {
+      return { status: VERDICT.UNKNOWN, why: `${mutant}: no committed execution artifact`, checked };
+    }
+
+    const currency = checkArtifact({ file, repo, maxAgeDays });
+    if (currency.status === VERDICT.UNKNOWN) {
+      return { status: VERDICT.UNKNOWN, why: `${mutant}: ${currency.why}`, checked };
+    }
+
+    let artifact;
+    try { artifact = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch (e) { return { status: VERDICT.UNKNOWN, why: `${mutant}: artifact unparseable: ${e.message}`, checked }; }
+
+    if (artifact.mutant !== mutant) {
+      return { status: VERDICT.FAIL, why: `${mutant}: artifact names mutant "${artifact.mutant || 'none'}"`, checked };
+    }
+    if (artifact.verdict !== VERDICT.FAIL || artifact.passes !== 0 || !(artifact.n >= 1)) {
+      return { status: VERDICT.FAIL, why: `${mutant}: mutant did not go red with zero passes`, checked };
+    }
+    if (!Array.isArray(artifact.runs) || artifact.runs.length !== artifact.n) {
+      return { status: VERDICT.FAIL, why: `${mutant}: missing per-run execution evidence`, checked };
+    }
+
+    if (mutant === 'delete-lesson') {
+      const lessonSurvived = artifact.runs.some((run) =>
+        run.treated?.lessonBeforeFirstToolCall === true
+        || run.treated?.lessonDelivered === true
+        || run.treated?.class === 'flagged');
+      if (lessonSurvived) {
+        return { status: VERDICT.FAIL, why: 'delete-lesson: treated arm still received or reproduced the lesson', checked };
+      }
+    } else {
+      const differsFromControl = artifact.runs.some((run) =>
+        run.treated?.lessonBeforeFirstToolCall === true
+        || run.treated?.lessonDelivered === true
+        || run.control?.lessonDelivered === true
+        || run.treated?.class !== run.control?.class);
+      if (differsFromControl) {
+        return { status: VERDICT.FAIL, why: 'brain-off-treated: treated arm did not collapse to the brain-off control artifact', checked };
+      }
+    }
+    checked.push(mutant);
+  }
+  return {
+    status: VERDICT.PASS,
+    why: 'delete-lesson and brain-off-treated both went red on current real-model execution evidence',
+    checked,
+  };
+}
+
 async function main() {
   if (has('--help') || has('-h')) {
     console.log(usage());
     return;
   }
   const check = has('--check');
+  const checkMutants = has('--check-mutants');
   const dryRun = has('--dry-run');
   const mutant = arg('--mutant', null);
   const n = Math.max(1, parseInt(arg('--n', mutant ? '1' : '3'), 10) || 1);
@@ -969,6 +1040,12 @@ async function main() {
   if (check) {
     const res = checkArtifact();
     console.log(`\n  ${INVARIANT}: ${res.status}\n  ${res.why}\n`);
+    process.exit(EXIT[res.status] ?? EXIT.UNKNOWN);
+  }
+
+  if (checkMutants) {
+    const res = checkMutantArtifacts();
+    console.log(`\n  ${INVARIANT}-MUTANTS: ${res.status}\n  ${res.why}\n`);
     process.exit(EXIT[res.status] ?? EXIT.UNKNOWN);
   }
 

@@ -37,6 +37,7 @@
     "sbom": "npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file sbom/ruvnet-brain.cdx.json --mc-type application --validate",
     "learning:replay": "node scripts/learning-replay.mjs",
     "learning:replay:check": "node scripts/learning-replay.mjs --check",
+    "learning:replay:mutants:check": "node scripts/learning-replay.mjs --check-mutants",
     "learning:replay:dry": "node scripts/learning-replay.mjs --dry-run",
     "wired:check": "node scripts/wired-check.mjs --check",
     "doc:currency": "node scripts/doc-currency.mjs --check",

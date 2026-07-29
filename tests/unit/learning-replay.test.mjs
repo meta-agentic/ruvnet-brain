@@ -21,6 +21,7 @@ import {
   assertRetrieved, executeProducedCommand, RETRIEVAL_EVIDENCE,
   PROJECT_B_MEMORY_KEY, PROJECT_B_MEMORY_VALUE, RUFLO_BIN, MUTANTS, WRONG_SUBCOMMAND_COMMAND,
   replayRunError, buildCodexArgv, parseCodexRunError, codexLessonBeforeTool,
+  checkMutantArtifacts, MUTANT_RESULT_FILES,
 } from '../../scripts/learning-replay.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -441,6 +442,89 @@ describe('--check gates on a STATED SHA, and UNKNOWN is never PASS', () => {
     expect(LOAD_BEARING).toContain('scripts/learning-replay.mjs');
     expect(LOAD_BEARING).toContain('scripts/lesson-gate.mjs');
     expect(LOAD_BEARING).toContain('plugin/scripts/hook-shim.mjs');
+  });
+});
+
+describe('the two ADR-058 D4 mutants have executable, current evidence', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd4-mutants-')); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  const head = () => spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: path.resolve(import.meta.dirname, '../..'),
+    encoding: 'utf8',
+  }).stdout.trim();
+  const write = (name, body) => {
+    const file = path.join(dir, `${name}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      invariant: INVARIANT,
+      verdict: VERDICT.FAIL,
+      sha: head(),
+      at: new Date().toISOString(),
+      mutant: name,
+      n: 1,
+      passes: 0,
+      controlTokenRuns: 0,
+      runs: [{
+        verdict: VERDICT.FAIL,
+        treated: {
+          class: 'positional',
+          lessonBeforeFirstToolCall: false,
+          lessonDelivered: false,
+        },
+        control: { class: 'positional', lessonDelivered: false },
+      }],
+      ...body,
+    }));
+    return file;
+  };
+
+  it('accepts only a delete-lesson red and a brain-off treated/control match', () => {
+    const files = {
+      'delete-lesson': write('delete-lesson'),
+      'brain-off-treated': write('brain-off-treated'),
+    };
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.PASS);
+    expect(result.checked).toEqual(['delete-lesson', 'brain-off-treated']);
+  });
+
+  it('rejects a delete-lesson mutant that still received the lesson', () => {
+    const files = {
+      'delete-lesson': write('delete-lesson', {
+        runs: [{
+          verdict: VERDICT.PASS,
+          treated: { class: 'flagged', lessonBeforeFirstToolCall: true, lessonDelivered: true },
+          control: { class: 'positional', lessonDelivered: false },
+        }],
+      }),
+      'brain-off-treated': write('brain-off-treated'),
+    };
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.FAIL);
+    expect(result.why).toMatch(/delete-lesson.*lesson/i);
+  });
+
+  it('rejects a brain-off treated arm that differs from its control', () => {
+    const files = {
+      'delete-lesson': write('delete-lesson'),
+      'brain-off-treated': write('brain-off-treated', {
+        runs: [{
+          verdict: VERDICT.FAIL,
+          treated: { class: 'flagged', lessonBeforeFirstToolCall: false, lessonDelivered: false },
+          control: { class: 'positional', lessonDelivered: false },
+        }],
+      }),
+    };
+    const result = checkMutantArtifacts({ files });
+    expect(result.status).toBe(VERDICT.FAIL);
+    expect(result.why).toMatch(/brain-off-treated.*control/i);
+  });
+
+  it('declares stable default result paths so the CLI and CI cannot disagree', () => {
+    expect(Object.keys(MUTANT_RESULT_FILES)).toEqual(['delete-lesson', 'brain-off-treated']);
+    expect(MUTANT_RESULT_FILES['delete-lesson']).toMatch(/delete-lesson-result\.json$/);
+    expect(MUTANT_RESULT_FILES['brain-off-treated']).toMatch(/brain-off-result\.json$/);
   });
 });
 
