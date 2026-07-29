@@ -3,10 +3,10 @@ id: ADR-057
 title: 95 on both graders — closing a 38/53 against a self-reported 83, dimension by dimension
 status: Proposed
 date: 2026-07-27
-updated: 2026-07-28
+updated: 2026-07-29
 impl: verified
-verified: 2026-07-28
-verified_digest: 5f732514b355
+verified: 2026-07-29
+verified_digest: 334ff86499fe
 verified_by: governed-source claim ledger in this ADR plus node scripts/doc-currency.mjs --json
 governs:
   - scripts/behavioral-l1-l4.mjs
@@ -243,6 +243,7 @@ to the five governed paths; it does not adjudicate the product or substitute for
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Reviewed the complete governed-path history since `8325510` and re-read the only changed governed path; the architecture and open proof limits are unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
 | 2026-07-28 | Re-read the full ADR and all five governed paths after five post-document commits; changed `impl:` from stale `unbuilt` to source-currency `verified`, replaced the obsolete build-order table, and added a governed-source claim ledger. No score or release verdict was promoted. | `doc-currency` reported drift after `2f420e7`, `27cca88`, `7eb11fb`, `e089074`, and `4ad464e`. The re-read confirms source wiring in `bin/install.mjs` and `plugin/hooks/hooks.json`, while `scripts/no-silent-substitution.mjs` still lacks downstream `--project` routing. `2b39f68` is one D4 causal artifact, not win-twice; `/private/tmp/qe-grade-gpt56-879b928.out` remains the last external grade at 15/100 and explicitly leaves exact-SHA matrix, published artifact, and both-grader proof untested. |
 | 2026-07-28 | Re-read all governed paths after the exact-SHA adversarial grade; the document's build-order claims remain accurate, and the current measured score is recorded as 15/100 rather than promoted. | `/private/tmp/qe-grade-gpt56-879b928.out` found D4 15, D1 30, and an overall vector minimum of 15 at SHA `879b928`. This repair closes Codex transport, cache-verifier, portable wiring, and Ruflo-memory-init defects, but does not claim the still-missing N=3 causal replay or stranger matrix. |
 | 2026-07-27 | v2 — corrected the 83-vs-38 framing after the owner caught it: different subject (product self-score vs independent grade of the test suite), different date. Replaced with the falsifiable claim, README:484/526 "L1–L4 behavioral all pass" |

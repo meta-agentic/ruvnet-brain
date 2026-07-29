@@ -1,9 +1,9 @@
 ---
 id: ADR-051
 title: Codex host wiring — register MCP and adapt the full lifecycle without version-pinned commands
-status: Implemented
+status: Accepted
 date: 2026-07-24
-updated: 2026-07-28
+updated: 2026-07-29
 authors: [Stuart Kerr, Claude Code]
 tags: [codex, mcp, install, doctor, honesty, portability]
 supersedes: []
@@ -69,16 +69,17 @@ older repo-local `.codex/skills/*/skill.toml` convention is not the shipped plug
 
 ### 1. Install-time registration, not documentation
 
-When a Codex host is present (`~/.codex` exists — the same detection surface the installer's existing
-`codexAuth` probe already reads), `wireCodexHost()` registers `[mcp_servers.ruvnet-brain]` in
-`~/.codex/config.toml` with `command = "node"` and a single resolved absolute path argument. It runs
-in the main install flow next to `wirePlugin()`, wrapped in the same non-fatal `try` every other
-wiring step uses: a second host we cannot reach must never break the one we can. A machine with no
-`~/.codex` is not a warning — nothing is said and nothing is changed.
+The active Codex home is `$CODEX_HOME` when set, otherwise `~/.codex`. When that directory is
+present — the same detection surface the installer's existing `codexAuth` probe already reads —
+`wireCodexHost()` registers `[mcp_servers.ruvnet-brain]` in `<active Codex home>/config.toml` with
+`command = "node"` and a single resolved absolute path argument. It runs in the main install flow
+next to `wirePlugin()`, wrapped in the same non-fatal `try` every other wiring step uses: a second
+host we cannot reach must never break the one we can. A machine with no active Codex-home directory
+is not a warning — nothing is said and nothing is changed.
 
 ### 2. Merge, never clobber
 
-`~/.codex/config.toml` is the *user's* file and already carries their settings (ours ships
+`<active Codex home>/config.toml` (normally `~/.codex/config.toml`) is the *user's* file and already carries their settings (ours ships
 `[shell_environment_policy]` plus a `RUFLO_HARNESS_LOOP` var). There is no TOML dependency in this
 package and adding one to write six lines is not worth it, so our lines live inside a
 comment-delimited managed block:
@@ -129,6 +130,10 @@ Claude Code being installed, which matters because the whole point is Codex-only
   fixes it.
 - **`Codex: no host detected`** — dim, informational, no call to action.
 
+The doctor reads the active Codex home. It decodes the JSON-escaped TOML argument before checking
+whether the named server exists, so quoted Windows paths retain their real backslashes and quotes;
+a malformed argument is treated as unwired, never guessed valid.
+
 And the banner is scoped honestly: when a Codex host is detected but unwired, "It works in EVERY
 project" becomes "It works in EVERY project in Claude Code … Codex is NOT wired yet". The original
 sentence is a true claim about Claude Code that would be read as a claim about every editor, which is
@@ -164,10 +169,13 @@ product hook surface.
 host-specific registration file. Every Codex command enters through the same installed path:
 
 ```text
-~/.cache/ruvnet-brain/codex-hook.mjs
+<parent of active Codex home>/.cache/ruvnet-brain/codex-hook.mjs
 ```
 
 `wireCodexHost()` copies that self-contained wrapper atomically beside the Brain's stable cache.
+With the default Codex home this remains `~/.cache/ruvnet-brain/codex-hook.mjs`; an isolated
+`CODEX_HOME` keeps the wrapper beside that isolated home rather than leaking state into the login
+home.
 The wrapper reads `active.json` on every invocation, resolves only a contained
 `versions/<version>/` generation, and runs that generation's `codex-hook-adapter.mjs`. Therefore an
 already-loaded command never names the plugin cache generation that an updater may remove.
@@ -201,8 +209,9 @@ drift is bounded by design — the shell proxies search to
 `~/.cache/ruvnet-brain/kb/forge-mcp-all.mjs`, while the sibling exposes a small allowlisted CLI
 boundary; their schemas are part of the frozen contract (ADR-023), and the self-updating knowledge
 half remains the brain. Each reinstall refreshes both files, dependency first, with atomic
-replacement. `~/.codex` existing is treated as "a Codex host", which is a heuristic: a leftover
-directory would get an entry it never asked for, inside a clearly marked and removable block.
+replacement. An active Codex-home directory existing is treated as "a Codex host", which is a
+heuristic: a leftover directory would get an entry it never asked for, inside a clearly marked and
+removable block.
 
 The wrapper is a second stable shell alongside the MCP supervisor. That duplication is intentional:
 the command must survive plugin-cache replacement, while behavior continues to hot-swap through
@@ -230,6 +239,7 @@ native Windows.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Re-read all governed Codex wiring after eight later commits; the architecture still holds, with active-home and Windows path handling made explicit. | Commits `b1760d4`, `4a0529c`, `04b0008`, `e6ca575`, `9ece40f`, and `d09363f` only advance `plugin/.codex-plugin/plugin.json`; `c2d5ef0` changes only canonical `*.big.rvf` doctor counting; issue #61 / commit `ebe51a5` makes `bin/install.mjs` honor `CODEX_HOME`, keep the stable wrapper beside that active home, and decode JSON-escaped MCP paths before probing them. `tests/unit/codex-wiring.test.mjs` passes 42/42. |
 | 2026-07-28 | Re-read all governed Codex wiring after three later installer commits; corrected the persistent MCP boundary from “one self-contained server file” to the server plus its local structured-interface dependency. | Commit `e089074` changes `bin/install.mjs`, `plugin/skills/ruvnet-brain/SKILL.md`, and `PLAYBOOK.md`: `wireCodexHost()` now refuses an incomplete pair, atomically copies `managed-cli-interface.mjs` before `server.mjs`, and the skill directs CLI-only gaps through `ruvnet_cli_help` then literal-argv `ruvnet_cli_run`. Commits `2f420e7` (test-only Release-resolution seam) and `7eb11fb` (assembled-directory local install, stale-store pruning, shared runtime model-cache path) also changed governed `bin/install.mjs` but do not alter the managed-block merge, doctor verdict, stable hook wrapper, native-skill discovery, or stated Windows/trust limitations. |
 | 2026-07-28 | Native `brain-console` and `whats-new` Codex skills replace the dropped-command and absent-sibling failure; obsolete `skill.toml` manifests are removed. | The real isolated-home plugin install showed `rvbc` and `whats-new` were omitted at migration while `brain-console` and `rvcb` referenced `rvbc.md`, which was not copied. `tests/integration/codex-skill-discovery.test.mjs` pins the installed boundary. |
 | 2026-07-28 | Codex shell events now normalize `exec_command`, `functions.exec_command`, and `functions__exec_command` into the shared Bash contract; custom `codexDir` installs keep the stable wrapper inside the matching isolated home. | Exact installed-boundary tests in `tests/unit/codex-lifecycle-hooks.test.mjs` reproduce the previously missed raw Codex tool names and prove the wrong Ruflo command is blocked. `tests/unit/codex-wiring.test.mjs` proves a temporary Codex home causes no write to the maintainer's `~/.cache`. |
