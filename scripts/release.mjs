@@ -77,6 +77,11 @@ runOrDie('wired (no orphan modules)', process.execPath, ['scripts/wired-check.mj
 // every publish attempt executes the eight D1-D8 detectors on the candidate SHA.
 runOrDie('release vector (all critical invariants PASS)', process.execPath, ['scripts/release-vector.mjs']);
 
+// The Top-100 corpus spans naive through expert prompts and grades semantic clauses, citations,
+// abstention, and latency. A manual-only benchmark is a report; a release-path benchmark is a
+// guarantee. The benchmark itself fails closed unless all 100 canonical questions run.
+runOrDie('Top-100 source-grounded recall contract', process.execPath, ['scripts/top100-benchmark.mjs']);
+
 // A2. Stable Spine restart classifier (ADR-023, red-team finding 18): diff the boot-frozen SHELL
 // (hooks.json, hook-shim, MCP server, .mcp.json, skills/, commands/) against the previous release
 // tag and SAY OUT LOUD whether this release needs a restart. The classification is computed, never
