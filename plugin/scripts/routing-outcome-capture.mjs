@@ -7,7 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { parseHookEvent, rawToolResponse, toolName } from './hook-input.mjs';
+import {
+  parseHookEvent,
+  rawToolResponse,
+  readStdinBounded,
+  toolName,
+} from './hook-input.mjs';
 
 const SUCCESS = new Set(['completed', 'success', 'succeeded']);
 const FAILURE = new Set(['failed', 'error', 'cancelled', 'canceled', 'timed_out', 'timeout']);
@@ -71,14 +76,14 @@ export function appendObservation(row, file = outcomesPath()) {
   }
 }
 
-function main() {
+async function main() {
   if (process.stdin.isTTY) return;
   let event = null;
-  try { event = parseHookEvent(fs.readFileSync(0, 'utf8')); } catch { return; }
+  try { event = parseHookEvent((await readStdinBounded()).toString('utf8')); } catch { return; }
   const decision = findDispatchDecision(event?.tool_use_id);
   appendObservation(observationFrom(event, new Date().toISOString(), decision));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch { /* advisory observer: fail open */ }
+  try { await main(); } catch { /* advisory observer: fail open */ }
 }

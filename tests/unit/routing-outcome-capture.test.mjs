@@ -8,6 +8,7 @@ import {
   findDispatchDecision,
   observationFrom,
 } from '../../plugin/scripts/routing-outcome-capture.mjs';
+import { fireHook } from '../../scripts/selfcheck.mjs';
 
 const REAL_SHAPE = {
   hook_event_name: 'PostToolUse',
@@ -27,6 +28,8 @@ const REAL_SHAPE = {
   },
 };
 const SHIM = path.resolve(import.meta.dirname, '../../plugin/scripts/hook-shim.mjs');
+const REPO = path.resolve(import.meta.dirname, '../..');
+const PLUGIN = path.join(REPO, 'plugin');
 
 describe('routing outcome capture uses the verified Task PostToolUse shape', () => {
   it('records host completion as an unverified observation, never a training score', () => {
@@ -117,6 +120,67 @@ describe('routing outcome capture uses the verified Task PostToolUse shape', () 
         decisionLinked: true,
         decisionModelMatch: true,
       });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the registered observer exits when the host leaves stdin open', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-routing-held-'));
+    const registry = JSON.parse(fs.readFileSync(path.join(PLUGIN, 'hooks/hooks.json'), 'utf8'));
+    const registration = registry.hooks.PostToolUse
+      .flatMap((group) => group.hooks || [])
+      .find((hook) => String(hook.command).includes('routing-outcome'));
+    expect(registration).toBeTruthy();
+    const command = registration.command.replaceAll('${CLAUDE_PLUGIN_ROOT}', PLUGIN);
+
+    try {
+      const measurement = await fireHook({
+        command,
+        event: 'PostToolUse',
+        regime: 'held',
+        timeoutSec: 1,
+        graceMs: 100,
+        cwd: REPO,
+        env: {
+          RUVNET_BRAIN_HOME: path.join(dir, 'brain-home'),
+          RUVNET_BRAIN_STATE_DIR: path.join(dir, 'brain-state'),
+        },
+      });
+
+      expect(measurement.timedOut, measurement.stderr).toBe(false);
+      expect(measurement.status).toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not use the Windows-blocking synchronous stdin reader', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-routing-win32-stdin-'));
+    const preload = path.join(dir, 'block-sync-stdin.mjs');
+    fs.writeFileSync(preload, [
+      "import fs from 'node:fs';",
+      'const original = fs.readFileSync;',
+      'fs.readFileSync = function (file, ...args) {',
+      '  if (file === 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);',
+      '  return original.call(this, file, ...args);',
+      '};',
+      '',
+    ].join('\n'));
+    const body = path.join(PLUGIN, 'scripts/routing-outcome-capture.mjs');
+    const command = `"${process.execPath}" --import "${preload}" "${body}" || true`;
+
+    try {
+      const measurement = await fireHook({
+        command,
+        event: 'PostToolUse',
+        regime: 'held',
+        timeoutSec: 1,
+        graceMs: 100,
+        cwd: REPO,
+      });
+      expect(measurement.timedOut, measurement.stderr).toBe(false);
+      expect(measurement.status).toBe(0);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

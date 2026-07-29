@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import * as RV from '../../scripts/release-vector.mjs';
 
@@ -75,6 +76,46 @@ describe('every invariant carries a real incident and a real detector', () => {
       expect(i.incident, `${i.name} has no incident`).toBeTruthy();
       expect(i.incident.length, `${i.name}'s incident is too thin to be real`).toBeGreaterThan(40);
       expect(typeof i.detect).toBe('function');
+    }
+  });
+});
+
+describe('release-vector runners cross the Windows command-shim boundary', () => {
+  it('D3 executes the available npx.cmd shim instead of returning UNKNOWN', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-release-vector-win32-'));
+    const shim = path.join(dir, 'npx.cmd');
+    const actualPlatform = process.platform;
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    const previousPath = process.env.PATH;
+    const previousComSpec = process.env.ComSpec;
+    try {
+      fs.writeFileSync(
+        shim,
+        actualPlatform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n',
+      );
+      if (actualPlatform !== 'win32') {
+        fs.chmodSync(shim, 0o755);
+        const commandInterpreter = path.join(dir, 'cmd.exe');
+        fs.writeFileSync(commandInterpreter, [
+          '#!/bin/sh',
+          '[ "$1" = /d ] && [ "$2" = /c ] && [ "$3" = npx.cmd ]',
+          '',
+        ].join('\n'));
+        fs.chmodSync(commandInterpreter, 0o755);
+        process.env.ComSpec = commandInterpreter;
+      }
+      Object.defineProperty(process, 'platform', { ...platformDescriptor, value: 'win32' });
+      process.env.PATH = dir;
+
+      const d3 = RV.INVARIANTS.find((i) => i.name === 'SIGNAL-WATCH-FIRES');
+      expect(await d3.detect()).toMatchObject({ state: 'PASS' });
+    } finally {
+      Object.defineProperty(process, 'platform', platformDescriptor);
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      if (previousComSpec === undefined) delete process.env.ComSpec;
+      else process.env.ComSpec = previousComSpec;
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });

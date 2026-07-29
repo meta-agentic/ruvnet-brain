@@ -54,7 +54,18 @@ const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8
 
 /** Run a command; UNKNOWN (not FAIL) when the runner itself could not execute. */
 function run(cmd, args, timeoutMs = 120_000) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', timeout: timeoutMs });
+  // npm installs `npm.cmd` / `npx.cmd` command shims on Windows. Direct spawn does not resolve the
+  // extension through PATHEXT, and .cmd files require cmd.exe, so a healthy detector otherwise
+  // reads UNKNOWN with ENOENT. Invoke the command interpreter explicitly rather than `shell:true`;
+  // the latter concatenates arguments into a shell string and is deprecated for that reason.
+  const windowsCommandShim = process.platform === 'win32' && /^(?:npm|npx)$/i.test(cmd);
+  const executable = windowsCommandShim ? (process.env.ComSpec || 'cmd.exe') : cmd;
+  const spawnArgs = windowsCommandShim ? ['/d', '/c', `${cmd}.cmd`, ...args] : args;
+  const r = spawnSync(executable, spawnArgs, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: timeoutMs,
+  });
   if (r.error || r.status === null) return { state: 'UNKNOWN', why: `runner did not complete: ${r.error?.code || 'killed/timeout'}` };
   return { state: r.status === 0 ? 'PASS' : 'FAIL', why: r.status === 0 ? 'exit 0' : `exit ${r.status}`, out: r.stdout };
 }
