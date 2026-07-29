@@ -19,7 +19,11 @@ import {
   EMBEDDER_REL,
   BGE_EMBEDDER_REL,
 } from '../../plugin/test/model-cache.mjs';
-import { configureTransformersModel } from '../../kb/model-requirements.mjs';
+import {
+  configureTransformersModel,
+  materializeModelRevision,
+  modelCacheReady,
+} from '../../kb/model-requirements.mjs';
 
 let tmp;
 const savedEnv = {};
@@ -123,11 +127,29 @@ describe('configureTransformersModel — reads and downloads through the same ca
   });
 
   it('disables remote loading when that exact model is already local', () => {
-    fs.mkdirSync(path.join(tmp, BGE_EMBEDDER_REL), { recursive: true });
+    for (const file of ['tokenizer.json', 'config.json', path.join('onnx', 'model_quantized.onnx')]) {
+      const target = path.join(tmp, BGE_EMBEDDER_REL, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, 'ready');
+    }
     const T = { env: {} };
     const r = configureTransformersModel(T, tmp, 'Xenova/bge-base-en-v1.5');
     expect(T.env.allowRemoteModels).toBe(false);
     expect(r.local).toBe(true);
+  });
+
+  it('materializes a complete pinned revision into the canonical offline path', () => {
+    const model = 'Xenova/bge-base-en-v1.5';
+    const revision = 'exact-sha';
+    for (const file of ['tokenizer.json', 'config.json', path.join('onnx', 'model_quantized.onnx')]) {
+      const target = path.join(tmp, BGE_EMBEDDER_REL, revision, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `pinned:${file}`);
+    }
+    expect(modelCacheReady(tmp, model)).toBe(false);
+    expect(materializeModelRevision(tmp, model, revision)).toBe(true);
+    expect(modelCacheReady(tmp, model)).toBe(true);
+    expect(fs.readFileSync(path.join(tmp, BGE_EMBEDDER_REL, 'tokenizer.json'), 'utf8')).toBe('pinned:tokenizer.json');
   });
 });
 

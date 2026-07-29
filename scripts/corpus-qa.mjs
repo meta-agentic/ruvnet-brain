@@ -54,6 +54,8 @@ const KB = path.join(ROOT, 'kb');
 // resolve-deps lives in the real kb/ regardless of --dir (fixtures point --dir elsewhere).
 const { loadRvf, loadTransformers, configureModel, chooseModelCache, closeReadonlyRvf } =
   await import(path.join(KB, 'resolve-deps.mjs')).then((m) => m);
+const { materializeModelRevision } =
+  await import(path.join(KB, 'model-requirements.mjs')).then((m) => m);
 
 const FULL_BODY_MARK = '(full body):';
 // R1 photo-finish epsilon: measured quantized batch-vs-single embed drift is ~0.035 cosine
@@ -88,14 +90,21 @@ export function sampleIndices(storeKey, n, k) {
 // (not just the resolved pipe) so concurrent qaStore() calls that both miss on the same model don't
 // each trigger their own T.pipeline() load — first caller wins, the rest await its promise.
 const pipelines = new Map();
-function getPipeline(model) {
-  if (pipelines.has(model)) return pipelines.get(model);
+function getPipeline(embedConf) {
+  const { model, revision } = embedConf;
+  const key = `${model}@${revision || 'unversioned'}`;
+  if (pipelines.has(key)) return pipelines.get(key);
   const p = (async () => {
     const { T } = await loadTransformers();
-    configureModel(T, chooseModelCache());
-    return T.pipeline('feature-extraction', model, { quantized: true });
+    const cache = chooseModelCache();
+    materializeModelRevision(cache, model, revision);
+    configureModel(T, cache);
+    return T.pipeline('feature-extraction', model, {
+      quantized: true,
+      ...(revision ? { revision } : {}),
+    });
   })();
-  pipelines.set(model, p);
+  pipelines.set(key, p);
   return p;
 }
 
@@ -151,7 +160,7 @@ export async function qaStore(dir, store, variant, { roundtrip = true, samples =
       const byId = new Map(rows.map((r) => [String(r.id), r]));
       let hit = 0;
       const misses = [];
-      const pipe = await getPipeline(embedConf.model);
+      const pipe = await getPipeline(embedConf);
       for (const i of picks) {
         const r = rows[i];
         // Re-embed EXACTLY what the pipeline indexed for this variant (forge-build/forge-big):
