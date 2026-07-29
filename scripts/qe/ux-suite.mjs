@@ -97,7 +97,13 @@ function line(label, measured, unit, hardAt) {
 }
 
 function writeEvidence(receipt) {
-  const target = process.env.UX_QE_EVIDENCE;
+  const jsonOutIndex = process.argv.indexOf('--json-out');
+  if (jsonOutIndex >= 0 && !process.argv[jsonOutIndex + 1]) {
+    throw new Error('--json-out requires a file path');
+  }
+  const target = jsonOutIndex >= 0
+    ? process.argv[jsonOutIndex + 1]
+    : process.env.UX_QE_EVIDENCE;
   if (!target) return;
   const resolved = path.resolve(target);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
