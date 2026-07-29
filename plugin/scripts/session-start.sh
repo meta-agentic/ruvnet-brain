@@ -487,10 +487,12 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
 fi
 
 # Check EVERY session start, deduped to once per 15 min (a burst of window-opens = one check).
-# The check is a single 3s-capped fetch of a ~1KB raw file — negligible. The old ~20h limit meant
-# a release shipped an hour after your last check stayed invisible until TOMORROW — day-long
-# version skew, exactly what this heartbeat exists to prevent. Detection latency is now "your
-# next restart," which is also the only moment a new version can load anyway.
+# Network I/O NEVER runs in the hook's foreground. A 3s-capped curl was previously called
+# "negligible", but on windows-latest the surrounding shell/process startup pushed one real
+# SessionStart past its 5s declaration and the stranger battery killed it. The check now runs
+# through detach.mjs and writes one version line; a later stale-window session consumes that receipt
+# before launching the next check. This adds at most one 15-minute interval of detection latency
+# while keeping SessionStart independent of GitHub/network health.
 NOW=$(date +%s 2>/dev/null || echo 0)
 LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
 if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
@@ -527,9 +529,10 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   LOCAL_V=""
   [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ] && \
     LOCAL_V=$(grep -m1 '"version"' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | sed -E 's/.*"version": *"([^"]+)".*/\1/')
-  REMOTE_V=$(curl -fsS --max-time 3 \
-    "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json" 2>/dev/null \
-    | grep -m1 '"version"' | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+  VERSION_LOG="$STATE_DIR/.last-version-check.log"
+  REMOTE_V=$(grep -m1 -E '^[0-9]+(\.[0-9]+){2}(-[A-Za-z0-9.-]+)?$' "$VERSION_LOG" 2>/dev/null | head -1)
+  [ -f "$DETACH" ] && node "$DETACH" 10 "$VERSION_LOG" \
+    /bin/sh -c "curl -fsS --max-time 3 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json' 2>/dev/null | grep -m1 '\"version\"' | sed -E 's/.*\"version\": *\"([^\"]+)\".*/\\1/'"
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
     AUTO_PREF=$(cat "$PREF_FILE" 2>/dev/null || echo "")
     if [ "$AUTO_PREF" = "yes" ] && command -v claude >/dev/null 2>&1; then
@@ -702,14 +705,8 @@ if [ "$BRAIN_OFF" = "1" ]; then
   # The meter still finalizes below — an off session's byte count is a real measurement.
   if [ -n "$METER_TMP" ]; then
     exec 1>&3 3>&-
-    cat "$METER_TMP" 2>/dev/null
-    METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
-    rm -f "$METER_TMP" 2>/dev/null
     METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
-    mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
-      printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
-        >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
+    node "$HOOK_DIR/finalize-token-meter.mjs" "$METER_TMP" "$METER_LEDGER_DIR" "$PWD" 2>/dev/null
   fi
   exit 0
 fi
@@ -787,15 +784,9 @@ EOF
 # Fail-silent at every step: metering can never block a session start (still exit 0 regardless).
 if [ -n "$METER_TMP" ]; then
   exec 1>&3 3>&-
-  cat "$METER_TMP" 2>/dev/null
-  METER_BYTES=$(($(wc -c < "$METER_TMP" 2>/dev/null || echo 0)))
-  rm -f "$METER_TMP" 2>/dev/null
   # ONE fixed, user-level ledger — see the full note in ground-ruvnet.sh (issue #36, mamd69).
   # Writing relative to CWD scattered hidden .ruvnet-brain/ directories into users' project trees.
   METER_LEDGER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ruvnet-brain"
-  mkdir -p "$METER_LEDGER_DIR" 2>/dev/null && \
-    printf '{"ts":"%s","source":"hook","class":"session-start","bytes":%d,"cwd":"%s"}\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$METER_BYTES" "$( { pwd -W 2>/dev/null || pwd 2>/dev/null; } | sed 's/"/\\"/g')" \
-      >> "$METER_LEDGER_DIR/token-ledger.jsonl" 2>/dev/null
+  node "$HOOK_DIR/finalize-token-meter.mjs" "$METER_TMP" "$METER_LEDGER_DIR" "$PWD" 2>/dev/null
 fi
 exit 0

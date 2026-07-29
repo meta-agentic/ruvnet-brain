@@ -39,20 +39,41 @@ const CONSOLE_MJS = path.join(REPO, 'scripts', 'onboarding-console.mjs');
 function waitForReady(port, timeoutMs = 20000) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
     const tick = () => {
+      if (settled) return;
       const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 800 }, (res) => {
         let b = '';
-        res.on('data', (c) => { b += c; if (b.length > 8192) res.destroy(); });
+        res.on('data', (c) => {
+          if (settled) return;
+          b += c;
+          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) {
+            finish(resolve, Date.now() - start);
+            res.destroy();
+          } else if (b.length > 65536) {
+            b = b.slice(-65536);
+          }
+        });
         res.on('end', () => {
-          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) resolve(Date.now() - start);
+          if (settled) return;
+          if (res.statusCode === 200 && /RuvNet Brain/.test(b)) finish(resolve, Date.now() - start);
           else retry();
         });
-        res.on('error', retry);
+        res.on('error', () => { if (!settled) retry(); });
       });
-      req.on('error', retry);
-      req.on('timeout', () => { req.destroy(); retry(); });
+      req.on('error', () => { if (!settled) retry(); });
+      req.on('timeout', () => { req.destroy(); if (!settled) retry(); });
     };
-    const retry = () => { if (Date.now() - start > timeoutMs) reject(new Error('server never became ready')); else setTimeout(tick, 150); };
+    const retry = () => {
+      if (settled) return;
+      if (Date.now() - start > timeoutMs) finish(reject, new Error('server never became ready'));
+      else setTimeout(tick, 150);
+    };
     tick();
   });
 }
