@@ -1,0 +1,31 @@
+name: sync-upstream
+
+# Keeps this mirror fork level with stuinfla/ruvnet-brain.
+# Twice daily so the fork is never more than ~12h behind. Off-peak minutes are
+# deliberate: GitHub drops scheduled runs when the :00 mark is congested.
+on:
+  schedule:
+    - cron: '17 3,15 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fast-forward main from upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          result=$(gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/merge-upstream" \
+            -f branch=main --jq '.merge_type + ": " + .message')
+          echo "$result"
+          echo "$result" >> "$GITHUB_STEP_SUMMARY"
