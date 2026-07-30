@@ -39,7 +39,7 @@ const PLUGIN_VERSION = JSON.parse(
 // Gate output markers (distinctive text from each injected block).
 const PLAYBOOK = 'APPLY THE PLAYBOOK'; // Gate 3 (build)
 const GROUND = 'ground before you assert'; // Gate 1 (ruvnet topic)
-const DRIFT = 'reaching for a classical default'; // Gate 2 (hijack/substitution)
+const DRIFT = 'reaching for a classical default'; // Gate 2 (guidance/substitution)
 const HARNESS = 'offer MetaHarness + QE'; // Gate 4 (quality intent)
 const FOOTER = 'RuvNet Brain — engaged on this prompt'; // conditional status footer
 
@@ -149,7 +149,7 @@ describe('ground-ruvnet.sh — gate behavior battery', () => {
     expect(out.stdout).toContain(FOOTER);
   });
 
-  // ── Case 5: classical-default drift — the hijack/substitution gate ────────────────────────────
+  // ── Case 5: classical-default drift — the guidance/substitution gate ──────────────────────────
   // (Prompt assembled from fragments so this repo's own live hooks don't fire on the test SOURCE;
   //  the hook under test receives the exact spec'd prompt.)
   it('5. classical vector-store prompt → hijack gate fires with the substitution map', () => {

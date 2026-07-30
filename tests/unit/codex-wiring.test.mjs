@@ -37,13 +37,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CODEX_DIR = path.join(ROOT, '.codex');
 
-let mergeCodexConfig, wireCodexHost, codexStatus, codexMarketplaceRows, classifyCodexLifecycle;
+let mergeCodexConfig, removeCodexManagedBlock, wireCodexHost, codexStatus, codexMarketplaceRows, classifyCodexLifecycle;
 let wireCodexPlugin, codexPluginStatus, codexLifecycleGuidance;
 beforeAll(async () => {
   // Same import-only contract the other installer tests use, so main() never runs on import.
   process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
   ({
     mergeCodexConfig,
+    removeCodexManagedBlock,
     wireCodexHost,
     codexStatus,
     codexMarketplaceRows,
@@ -115,6 +116,22 @@ describe('mergeCodexConfig — the three outcomes, and only three', () => {
   it('does not mistake another server for ours', () => {
     const other = `${REAL_CONFIG}\n[mcp_servers.something-else]\ncommand = "node"\n`;
     expect(mergeCodexConfig(other, SERVER).action).toBe('added');
+  });
+});
+
+describe('removeCodexManagedBlock — uninstall is surgical', () => {
+  it('removes only the installer-owned block', () => {
+    const installed = mergeCodexConfig(REAL_CONFIG, SERVER).text;
+    const result = removeCodexManagedBlock(installed);
+    expect(result.action).toBe('removed');
+    expect(result.text).toBe(REAL_CONFIG);
+  });
+
+  it('leaves user-owned declarations byte-identical', () => {
+    const userOwned = `${REAL_CONFIG}\n[mcp_servers.ruvnet-brain]\ncommand = "node"\nargs = ["/mine.mjs"]\n`;
+    const result = removeCodexManagedBlock(userOwned);
+    expect(result.action).toBe('absent');
+    expect(result.text).toBe(userOwned);
   });
 });
 
@@ -545,11 +562,55 @@ describe('wireCodexPlugin — install is idempotent, state-driven, and disable-p
       error: 'codex not found',
     });
   });
+
+  it('refuses to call a stale Codex snapshot successfully installed', () => {
+    const home = tmpdir();
+    const codexDir = path.join(home, '.codex');
+    fs.mkdirSync(codexDir, { recursive: true });
+    let installed = false;
+    const runJson = (args) => {
+      if (args.join(' ') === 'plugin list --json') {
+        return {
+          ok: true,
+          value: {
+            installed: installed ? [{
+              pluginId: 'ruvnet-brain@ruvnet-brain',
+              version: '1.2.2',
+              installed: true,
+              enabled: true,
+            }] : [],
+          },
+        };
+      }
+      if (args.join(' ') === 'plugin marketplace list --json') {
+        return { ok: true, value: { marketplaces: [{ name: 'ruvnet-brain' }] } };
+      }
+      if (args.join(' ') === 'plugin marketplace upgrade ruvnet-brain --json') {
+        return { ok: true, value: {} };
+      }
+      if (args.join(' ') === 'plugin add ruvnet-brain@ruvnet-brain --json') {
+        installed = true;
+        return { ok: true, value: {} };
+      }
+      return { ok: false, error: `unexpected ${args.join(' ')}` };
+    };
+
+    expect(wireCodexPlugin({
+      codexDir,
+      expectedVersion: '1.2.3',
+      runJson,
+      announce: false,
+    })).toMatchObject({
+      action: 'verification-failed',
+      version: '1.2.2',
+      expectedVersion: '1.2.3',
+    });
+  });
 });
 
 // ── native plugin skills: the actual current Codex surface ───────────────────────────────────────
 describe('plugin/skills/*/SKILL.md — native, self-contained Codex skills', () => {
-  const native = ['brain-console', 'whats-new'];
+  const native = ['brain-console', 'rvbc', 'whats-new'];
 
   for (const name of native) {
     it(`${name} has matching frontmatter and no absent sibling dependency`, () => {

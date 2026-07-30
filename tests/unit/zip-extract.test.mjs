@@ -31,6 +31,7 @@ const CAN_ZIP = hasTool('zip') && hasTool('unzip');
 
 let tmp;
 let goodZip;
+let symlinkZip;
 
 /**
  * Minimal stored ZIP fixture with the directory shape emitted by PowerShell Compress-Archive:
@@ -92,9 +93,11 @@ beforeAll(() => {
   fs.writeFileSync(path.join(src, 'bin.dat'), Buffer.from(Array.from({ length: 200_000 }, (_, i) => (i * 7919) % 256)));
   fs.writeFileSync(path.join(src, 'exec.sh'), '#!/bin/sh\necho hi\n');
   fs.chmodSync(path.join(src, 'exec.sh'), 0o755);
-  fs.symlinkSync('forge-mcp-all.mjs', path.join(src, 'link.mjs'));
   goodZip = path.join(tmp, 'good.zip');
   execFileSync('zip', ['-q', '-r', '-y', goodZip, 'ruvnet-brain'], { cwd: stage });
+  fs.symlinkSync('forge-mcp-all.mjs', path.join(src, 'link.mjs'));
+  symlinkZip = path.join(tmp, 'symlink.zip');
+  execFileSync('zip', ['-q', '-y', symlinkZip, 'ruvnet-brain/link.mjs'], { cwd: stage });
 });
 
 afterAll(() => { if (tmp) fs.rmSync(tmp, { recursive: true, force: true }); });
@@ -119,8 +122,8 @@ function describeTree(root) {
   return acc.join('\n');
 }
 
-describe.skipIf(!CAN_ZIP)('kb/zip-extract.mjs matches the `unzip` it replaced', () => {
-  it('produces a tree byte-for-byte identical to `unzip -q -o`, including modes and symlinks', async () => {
+describe.skipIf(!CAN_ZIP)('kb/zip-extract.mjs matches the safe regular-file subset of `unzip`', () => {
+  it('produces a tree byte-for-byte identical to `unzip -q -o`, including file modes', async () => {
     const mine = path.join(tmp, 'out-node');
     const theirs = path.join(tmp, 'out-unzip');
     const res = await extractZip(goodZip, mine);
@@ -193,6 +196,12 @@ describe.skipIf(!CAN_ZIP)('a bad archive fails LOUDLY, naming what was wrong', (
 });
 
 describe('the extractor refuses, by name, what it does not implement', () => {
+  it.skipIf(!CAN_ZIP)('rejects archive symlinks before creating the destination', async () => {
+    const dest = path.join(tmp, 'out-symlink');
+    await expect(extractZip(symlinkZip, dest)).rejects.toThrow(/symbolic link.*regular files and directories only/i);
+    expect(fs.existsSync(dest)).toBe(false);
+  });
+
   it('names the file when handed something that is not a zip at all', async () => {
     const junk = path.join(tmp, 'junk.bin');
     fs.writeFileSync(junk, Buffer.alloc(5000, 0x41));

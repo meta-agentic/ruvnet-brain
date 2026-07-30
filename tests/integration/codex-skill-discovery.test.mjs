@@ -34,6 +34,7 @@ describe('installed Codex skill discovery', () => {
       expect(prompt.status, prompt.stderr || prompt.stdout).toBe(0);
       const rendered = prompt.stdout;
 
+      expect(rendered).toContain('ruvnet-brain:rvbc');
       expect(rendered).toContain('ruvnet-brain:brain-console');
       expect(rendered).toContain('ruvnet-brain:whats-new');
       expect(rendered).not.toMatch(

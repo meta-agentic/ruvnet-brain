@@ -164,14 +164,20 @@ export async function loadTransformers() {
 }
 
 /**
- * Pick a model cache directory. KB_MODEL_CACHE wins; otherwise a kb-local `models-cache`
- * if it already has the model; otherwise the Mac cache if present; otherwise a kb-local
- * dir (created lazily) into which a remote download will be cached.
+ * Pick the one model cache used by every Brain entry path. KB_MODEL_CACHE wins. An installed
+ * bundle lives at <brain-home>/kb, while its MCP and installer warm <brain-home>/models, so reuse
+ * that sibling when it contains either supported query embedder. A source checkout without that
+ * installed layout retains the repo-local kb/models-cache fallback.
  */
-export function chooseModelCache() {
-  if (process.env.KB_MODEL_CACHE) return process.env.KB_MODEL_CACHE;
-  const kbLocal = path.join(KB_DIR, 'models-cache');
-  if (fs.existsSync(path.join(kbLocal, 'Xenova/all-MiniLM-L6-v2'))) return kbLocal;
+export function chooseModelCache({ kbDir = KB_DIR, env = process.env } = {}) {
+  if (env.KB_MODEL_CACHE) return env.KB_MODEL_CACHE;
+  const sibling = path.join(path.dirname(kbDir), 'models');
+  const supported = [
+    path.join('Xenova', 'bge-base-en-v1.5'),
+    path.join('Xenova', 'all-MiniLM-L6-v2'),
+  ];
+  if (supported.some((model) => fs.existsSync(path.join(sibling, model)))) return sibling;
+  const kbLocal = path.join(kbDir, 'models-cache');
   return kbLocal; // remote download lands here on first run
 }
 

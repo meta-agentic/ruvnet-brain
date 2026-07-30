@@ -274,7 +274,7 @@ describe('§2a byte-equivalence — ~/.codex/config.toml (mergeCodexConfig CLAIM
     '# trailing comment kept verbatim',
   ].join('\r\n') + '\r\n';
 
-  it('install -> update -> (uninstall never touches it) leaves every unrelated byte identical', () => {
+  it('install -> update -> uninstall removes only our managed block and leaves every unrelated byte identical', () => {
     const home = mkdtemp('mesh-codex-');
     const codexDir = path.join(home, '.codex');
     const configPath = path.join(codexDir, 'config.toml');
@@ -296,26 +296,26 @@ describe('§2a byte-equivalence — ~/.codex/config.toml (mergeCodexConfig CLAIM
     const afterUpdate = fs.readFileSync(configPath, 'utf8');
     expect(afterUpdate).toBe(afterInstall);
 
-    // UNINSTALL — bin/install.mjs's uninstallAll() NEVER touches codex config: it is explicitly
-    // "not ours to delete" (see the AUTO-set comment above uninstallAll()). Proven by source
-    // inspection, not just by us declining to call anything.
+    // UNINSTALL — remove precisely the installer-owned marked block. The user-owned bytes before it
+    // must survive byte-for-byte; this is the same pure transformation removeCodexWiring invokes.
     const src = fs.readFileSync(INSTALLER, 'utf8');
     const start = src.indexOf('function uninstallAll()');
     const end = src.indexOf('export async function offerSpendGuard', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    expect(src.slice(start, end)).not.toMatch(/codex/i);
-    const afterUninstall = fs.readFileSync(configPath, 'utf8'); // nothing ran; still just a read
-    expect(afterUninstall).toBe(afterUpdate);
+    expect(src.slice(start, end)).toMatch(/removeCodexWiring\(\)/);
+    const removed = installer.removeCodexManagedBlock(afterUpdate);
+    expect(removed.action).toBe('removed');
+    fs.writeFileSync(configPath, removed.text);
+    const afterUninstall = fs.readFileSync(configPath, 'utf8');
 
     // Every byte OUTSIDE our managed block survived the whole cycle — CRLF, the comments, and the
     // user's own [mcp_servers.mine] block — verbatim.
-    const without = afterUninstall.slice(0, afterUninstall.indexOf(START)).replace(/\n+$/, '\n');
-    expect(without).toBe(SEED_TOML);
-    expect(without).toContain('\r\n'); // CRLF really did survive
-    expect(without).toContain('# personal config');
-    expect(without).toContain('[mcp_servers.mine]');
-    expect(without).toContain('command = "python"');
+    expect(afterUninstall).toBe(SEED_TOML);
+    expect(afterUninstall).toContain('\r\n'); // CRLF really did survive
+    expect(afterUninstall).toContain('# personal config');
+    expect(afterUninstall).toContain('[mcp_servers.mine]');
+    expect(afterUninstall).toContain('command = "python"');
   });
 });
 

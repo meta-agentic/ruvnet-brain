@@ -13,6 +13,7 @@ governs:
   - .codex/config.toml
   - .codex/hooks.json
   - plugin/skills/*
+  - plugin/skills/rvbc/SKILL.md
   - plugin/commands/brain-console.md
   - plugin/commands/rvcb.md
   - plugin/.codex-plugin/plugin.json
@@ -187,6 +188,15 @@ becomes Codex `decision: "block"` plus `reason`; and invalid advisory
 `permissionDecision: "defer"` is removed rather than promoted into a deny. SessionEnd is registered
 at Codex's actual three-second maximum. The bodies and their Brain off/on law remain single-source.
 
+### 8. Initial installation and continuing convergence share one installer
+
+Codex is not a one-time side branch. The Stable Spine's `host-update.mjs` invokes the published
+installer in update mode; that path refreshes stable MCP/wrapper files, synchronizes the Codex
+plugin through Codex's supported marketplace lifecycle, preserves an intentional disabled state,
+and requires the installed version to equal the candidate exactly. `update-apply.mjs` discovers
+staged payloads in both Claude Code and Codex caches, so a Codex-only SessionStart can advance the
+same runtime Spine without a `claude` executable.
+
 ## Consequences
 
 **Good.** `search_ruvnet` becomes reachable in Codex, which the reporter correctly identified as the
@@ -239,6 +249,7 @@ native Windows.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Added a native `rvbc` Codex skill and made the shared SessionStart body emit `$ruvnet-brain:rvbc` on Codex while retaining `/rvbc` on Claude Code. | A live Codex 0.145.0 session rejected `/rvbc` before model dispatch even though `commands/rvbc.md` shipped. The official Codex manual documents plugin workflows as skills invoked through `/skills` or `$`, while slash commands are a built-in host surface. `tests/integration/codex-skill-discovery.test.mjs` now requires the installed plugin loader to expose `ruvnet-brain:rvbc`; `tests/unit/codex-console-invocation.test.mjs` pins the host-specific session contract. |
 | 2026-07-29 | Re-read the Codex lifecycle registration after increasing only the two UserPromptSubmit host deadlines from 5s to 10s; the stable wrapper, adapter, and single-source hook-body decision remain unchanged. | PR #65 / commit `6734597` measured the real installed `ground-ruvnet` and `unprompted-speech` paths at 3.48–4.26s cold against an internal 4s runtime bound, leaving no safe margin under the former 5s host deadline. Post-fix real-path probes completed in 0.75s and 1.15s; `tests/unit/codex-lifecycle-hooks.test.mjs` requires at least 2× internal-runtime headroom while capping the declaration at 10s. |
 | 2026-07-29 | Re-read all governed Codex wiring after eight later commits; the architecture still holds, with active-home and Windows path handling made explicit. | Commits `b1760d4`, `4a0529c`, `04b0008`, `e6ca575`, `9ece40f`, and `d09363f` only advance `plugin/.codex-plugin/plugin.json`; `c2d5ef0` changes only canonical `*.big.rvf` doctor counting; issue #61 / commit `ebe51a5` makes `bin/install.mjs` honor `CODEX_HOME`, keep the stable wrapper beside that active home, and decode JSON-escaped MCP paths before probing them. `tests/unit/codex-wiring.test.mjs` passes 42/42. |
 | 2026-07-28 | Re-read all governed Codex wiring after three later installer commits; corrected the persistent MCP boundary from “one self-contained server file” to the server plus its local structured-interface dependency. | Commit `e089074` changes `bin/install.mjs`, `plugin/skills/ruvnet-brain/SKILL.md`, and `PLAYBOOK.md`: `wireCodexHost()` now refuses an incomplete pair, atomically copies `managed-cli-interface.mjs` before `server.mjs`, and the skill directs CLI-only gaps through `ruvnet_cli_help` then literal-argv `ruvnet_cli_run`. Commits `2f420e7` (test-only Release-resolution seam) and `7eb11fb` (assembled-directory local install, stale-store pruning, shared runtime model-cache path) also changed governed `bin/install.mjs` but do not alter the managed-block merge, doctor verdict, stable hook wrapper, native-skill discovery, or stated Windows/trust limitations. |

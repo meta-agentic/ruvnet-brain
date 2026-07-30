@@ -1,5 +1,5 @@
 [
-  { "set": "tuned", "query": "Can ruflo orchestrate agent swarms, and what implements it?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -3 },
+  { "set": "tuned", "query": "Can ruflo orchestrate agent swarms?", "expectRepo": ["ruflo", "concepts"], "minRelevance": -3 },
   { "set": "tuned", "query": "Does RuVector use HNSW for vector search?", "expectRepo": ["ruvector", "concepts"], "minRelevance": -3 },
   { "set": "tuned", "query": "Can AgentDB run Cypher graph queries over agent memory?", "expectRepo": ["agentdb", "concepts"], "minRelevance": -3 },
   { "set": "tuned", "query": "Can agentic-flow switch between alternative low-cost AI models in Claude Code?", "expectRepo": ["agentic-flow", "concepts"], "minRelevance": -3 },

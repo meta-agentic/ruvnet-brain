@@ -1,6 +1,6 @@
 # DDD-0003 — The Updating bounded context
 
-Updated: 2026-07-18 11:25:00 EDT | Version 1.0.0
+Updated: 2026-07-29 22:04:00 EDT | Version 1.1.1
 Created: 2026-07-18 11:25:00 EDT
 Governs: ADR-023 (Intelligent Updating — Stable Spine) · Mechanism doc: `docs/INTELLIGENT-UPDATING.md`
 
@@ -16,7 +16,7 @@ context, one language, one writer.
 
 | Term | Meaning (exactly one) |
 |---|---|
-| **Shell** | The boot-frozen minimum CC loads: hooks.json declarations, hook-shim.mjs, the stable MCP server, skills/commands markdown. Changes here are rare and honestly flagged `requiresRestart`. |
+| **Shell** | The boot-frozen minimum a host loads: hook declarations, the stable wrapper/shim, MCP declaration, and skills/commands markdown. Changes here are rare and honestly flagged `requiresRestart`. |
 | **Body** | Everything with behavior: hook script bodies, query engine, CLI, console, scripts. Updates hot. |
 | **Generation** | A monotonically increasing integer naming one immutable, gated code payload under `versions/`. |
 | **Spine / active.json** | The single atomically-rewritten pointer naming the active generation. The ONLY mutable control-plane state. |
@@ -25,6 +25,7 @@ context, one language, one writer.
 | **Lease** | A liveness marker a consumer (the MCP server) holds on the generation it is serving; GC never collects a leased generation. |
 | **Transaction record** | `update-txn.json`; makes crash recovery deterministic (old world or new world, never half). |
 | **KB track** | KB data's separate update lifecycle (private-store fence). The Updating context NEVER writes into `kb/`. |
+| **Host convergence** | The exact candidate version is installed and independently verified in every detected managed host after the runtime flip. A restart is useful only after this state is ready. |
 
 ## Aggregates & invariants
 
@@ -33,8 +34,15 @@ context, one language, one writer.
 - INV-2: All writes to the aggregate happen under the `.update.lock/` mkdir-lock, through the ONE engine (`scripts/update-apply.mjs`). The installer, `--update`, session-triggered and nightly updates are *callers* of the engine, never writers themselves.
 - INV-3: A generation is immutable after promote. Fixes ship as a new generation.
 - INV-4: `previous` is always retained until a newer generation is verified healthy; rollback is a flip, not a restore.
-- INV-5: Unattended applies REQUIRE a valid Ed25519 signature; interactive applies may degrade to SHA-256 + loud warning.
+- INV-5: Unattended extraction of the Brain/KB Release bundle REQUIRES its valid Ed25519 signature.
+  Host plugin snapshots arrive through the host package manager's integrity-checked cache instead;
+  they require exact-version equality, path containment, no symlinks, and all Spine gates before flip.
+  These are distinct trust channels and neither may be described as the other.
 - INV-6: The aggregate never touches `kb/` (the KB track owns it, with the private-store fence).
+- INV-7: A host snapshot is never called converged unless its reported installed version equals the
+  candidate exactly. Disabled hosts remain disabled and are recorded as intentional, not repaired.
+- INV-8: SessionStart invokes one host-neutral Brain coordinator. Neither Claude Code nor Codex is
+  required merely because the other host triggered the update.
 
 **Consumers (read-only)**: hook-shim.mjs and the stable MCP server. They read `active.json` once
 per invocation/call, validate containment, and lease what they serve. They NEVER write the aggregate.
@@ -48,8 +56,9 @@ is the audit trail `--doctor` and the console read; silence is never health.
 
 ## Anti-corruption layer
 
-- **Toward Claude Code**: CC's versioned plugin cache and `installed_plugins.json` are treated as
-  an external system we do not fight — the shim makes their staleness irrelevant.
+- **Toward Claude Code and Codex**: each host's versioned plugin cache is an external system. The
+  installer uses that host's supported lifecycle, verifies exact version equality, and the Spine
+  may stage from either cache. Runtime hot-swap makes cache staleness survivable, not acceptable.
 - **Toward the KB track**: `forge-update.mjs` keeps its contract; the Updating context calls it,
   never reimplements it (no-silent-substitution rule).
 - **Toward the legacy paths**: `bin/install.mjs --update` and session-start become thin callers of

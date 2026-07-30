@@ -34,6 +34,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -46,7 +47,10 @@ const RECEIPTS = path.join(BRAIN_HOME, 'update-receipts.jsonl');
 const LEASES = path.join(BRAIN_HOME, 'leases');
 const DEV = path.join(BRAIN_HOME, 'dev.json');
 const SEEDED = path.join(BRAIN_HOME, '.spine-seeded');
-const CC_PLUGIN_CACHE = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'ruvnet-brain', 'ruvnet-brain');
+const PLUGIN_CACHES = [
+  path.join(os.homedir(), '.claude', 'plugins', 'cache', 'ruvnet-brain', 'ruvnet-brain'),
+  path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'plugins', 'cache', 'ruvnet-brain', 'ruvnet-brain'),
+];
 const LEASE_FRESH_MS = 6 * 3600_000; // a lease older than 6h is stale (its process is long gone)
 
 const argv = process.argv.slice(2);
@@ -124,15 +128,75 @@ function gateCandidate(dir) {
 }
 
 // ── copy a payload into an immutable version dir (staged; never into a live dir) ────────────────
-function stagePayload(srcDir, version) {
+function safeVersion(version) {
+  if (typeof version !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/.test(version)
+    || version.includes('..')) {
+    throw new Error(`unsafe payload version: ${JSON.stringify(version)}`);
+  }
+  return version;
+}
+function versionPath(version, suffix = '') {
+  const root = path.resolve(VERSIONS);
+  const target = path.resolve(root, `${safeVersion(version)}${suffix}`);
+  if (path.dirname(target) !== root) throw new Error(`payload version escapes versions/: ${JSON.stringify(version)}`);
+  return target;
+}
+function ensureVersionsRoot() {
   fs.mkdirSync(VERSIONS, { recursive: true });
-  const staging = path.join(VERSIONS, `${version}.staging-${process.pid}`);
+  if (fs.lstatSync(VERSIONS).isSymbolicLink()) {
+    throw new Error('versions/ must be a real directory, not a symbolic link');
+  }
+}
+function assertNoSymlinks(root) {
+  if (fs.lstatSync(root).isSymbolicLink()) {
+    throw new Error('payload root is a symbolic link');
+  }
+  const pending = [root];
+  while (pending.length) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const candidate = path.join(current, entry.name);
+      const stat = fs.lstatSync(candidate);
+      if (stat.isSymbolicLink()) {
+        throw new Error(`payload contains a symbolic link: ${path.relative(root, candidate)}`);
+      }
+      if (stat.isDirectory()) pending.push(candidate);
+    }
+  }
+}
+function payloadDigest(root) {
+  const hash = crypto.createHash('sha256');
+  const visit = (dir, prefix = '') => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const full = path.join(dir, entry.name);
+      hash.update(`${entry.isDirectory() ? 'd' : 'f'}\0${rel}\0`);
+      if (entry.isDirectory()) visit(full, rel);
+      else hash.update(fs.readFileSync(full));
+    }
+  };
+  visit(root);
+  return hash.digest('hex');
+}
+function stagePayload(srcDir, version) {
+  ensureVersionsRoot();
+  assertNoSymlinks(srcDir);
+  const staging = versionPath(version, `.staging-${process.pid}`);
   fs.rmSync(staging, { recursive: true, force: true });
-  fs.cpSync(srcDir, staging, { recursive: true, dereference: true });
+  try {
+    fs.cpSync(srcDir, staging, { recursive: true, dereference: false });
+    // Scan the copy too: a source entry swapped after the pre-copy lstat must never survive the
+    // time-of-check/time-of-use window into an activated generation.
+    assertNoSymlinks(staging);
+  } catch (error) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    throw error;
+  }
   return staging;
 }
 function promote(staging, version) {
-  const finalDir = path.join(VERSIONS, version);
+  const finalDir = versionPath(version);
   fs.rmSync(finalDir, { recursive: true, force: true }); // re-promote of same version is legal (idempotent)
   fs.renameSync(staging, finalDir);
   return finalDir;
@@ -182,6 +246,32 @@ function flip(version, codeRootAbs, why) {
 }
 
 function applyFromDir(srcDir, version, why) {
+  const active = readJSON(ACTIVE);
+  if (active?.version === version) {
+    const activeRoot = active.codeRoot
+      ? (path.isAbsolute(active.codeRoot) ? active.codeRoot : path.join(BRAIN_HOME, active.codeRoot))
+      : null;
+    const problems = [];
+    if (!activeRoot || !fs.existsSync(activeRoot)) problems.push('active generation directory is missing');
+    try {
+      assertNoSymlinks(srcDir);
+      if (!problems.length) problems.push(...gateCandidate(activeRoot));
+      problems.push(...gateCandidate(srcDir));
+      if (!problems.length && payloadDigest(activeRoot) !== payloadDigest(srcDir)) {
+        problems.push('same version identifies different payload bytes — bump the version');
+      }
+    } catch (e) {
+      problems.push(String(e?.message || e));
+    }
+    if (problems.length) {
+      receipt('SameVersionRejected', { version, problems: problems.slice(0, 5) });
+      console.error(`✗ active ${version} cannot be treated as an idempotent retry: ${problems[0]}`);
+      return false;
+    }
+    receipt('SameVersionNoop', { version, generation: active.generation, why });
+    console.log(`✓ spine already active: ${version} (generation ${active.generation}) — verified no-op`);
+    return true;
+  }
   writeAtomic(TXN, JSON.stringify({ state: 'staging', to: version }));
   const staging = stagePayload(srcDir, version);
   const problems = gateCandidate(staging);
@@ -228,14 +318,19 @@ function gc() {
 
 // ── sources ─────────────────────────────────────────────────────────────────────────────────────
 function newestStagedCC() {
-  if (!fs.existsSync(CC_PLUGIN_CACHE)) return null;
   const semverish = (v) => v.split(/[.-]/).map((x) => (Number.isFinite(+x) ? +x : x));
   const cmp = (a, b) => { const A = semverish(a), B = semverish(b); for (let i = 0; i < Math.max(A.length, B.length); i++) { if ((A[i] ?? 0) === (B[i] ?? 0)) continue; if (typeof A[i] === 'number' && typeof B[i] === 'number') return A[i] - B[i]; return String(A[i] ?? '') < String(B[i] ?? '') ? -1 : 1; } return 0; };
-  const dirs = fs.readdirSync(CC_PLUGIN_CACHE).filter((d) => !d.startsWith('.') && fs.existsSync(path.join(CC_PLUGIN_CACHE, d, 'scripts')));
-  if (!dirs.length) return null;
-  dirs.sort(cmp);
-  const v = dirs[dirs.length - 1];
-  return { version: v, dir: path.join(CC_PLUGIN_CACHE, v) };
+  const candidates = [];
+  for (const cache of PLUGIN_CACHES) {
+    if (!fs.existsSync(cache)) continue;
+    for (const version of fs.readdirSync(cache)) {
+      if (!version.startsWith('.') && fs.existsSync(path.join(cache, version, 'scripts'))) {
+        candidates.push({ version, dir: path.join(cache, version) });
+      }
+    }
+  }
+  candidates.sort((a, b) => cmp(a.version, b.version));
+  return candidates.at(-1) || null;
 }
 function versionOfPayload(dir, fallback) {
   const pj = readJSON(path.join(dir, '.claude-plugin', 'plugin.json'));

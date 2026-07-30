@@ -7,6 +7,14 @@
 # stdout is injected into the session context at startup; ALWAYS exit 0 so it can never block a session.
 set +e
 
+# Claude Code supports plugin slash commands. Codex exposes plugin workflows as skills instead, so
+# every instruction emitted by this shared body must name the host's real invocation surface.
+if [ "${RUVNET_HOOK_HOST:-claude}" = "codex" ]; then
+  CONSOLE_INVOKE='$ruvnet-brain:rvbc'
+else
+  CONSOLE_INVOKE='/rvbc'
+fi
+
 # Opt-in stage trace for the release gate. EPOCHREALTIME and printf are Bash builtins, so this adds
 # no subprocess and stays completely silent in real sessions unless the isolated QE harness enables it.
 trace_stage() {
@@ -179,7 +187,7 @@ if [ "$BRAIN_OFF" != "1" ] && [ ! -f "$CONSOLE_OFFERED" ]; then
   mkdir -p "$HOME/.cache/ruvnet-brain" 2>/dev/null
   touch "$CONSOLE_OFFERED" 2>/dev/null
   echo "[RuvNet Brain — FIRST LOAD: offer the Console once]"
-  echo "Offer ONCE in one line, then respect it: \"Want to see your whole RuvNet stack on one page?\" — what's installed, what your AI has learned, one-click fixes, read-only until they click; later it's /rvbc. On yes run /rvbc; on no, one gracious line and never again."
+  echo "Offer ONCE in one line, then respect it: \"Want to see your whole RuvNet stack on one page?\" — what's installed, what your AI has learned, one-click fixes, read-only until they click; later it's $CONSOLE_INVOKE. On yes invoke $CONSOLE_INVOKE; on no, one gracious line and never again."
 fi
 
 # ── Open-issue surfacer (2026-07-17): issues stacked to 29h unseen because the only alert channel
@@ -424,8 +432,8 @@ if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ]; then
     else
       echo "  1. The 4.0-LINE enhancements have landed (they're on v$RUNNING_V). Honestly: the number stays 3.9.x until the work is field-verified (ADR-042), so 'the 4.0-line upgrades are here', NOT 'you're on 4.0'."
     fi
-    echo "  2. Two or three things they can DO now: the Console on /rvbc (their whole stack, one live page); every number measured from their machine, never projected; it learns across their projects."
-    echo "  3. OFFER to open the Console now — on yes, follow rvbc.md exactly. Point at /whats-new for the full highlights."
+    echo "  2. Two or three things they can DO now: the Console on $CONSOLE_INVOKE (their whole stack, one live page); every number measured from their machine, never projected; it learns across their projects."
+    echo "  3. OFFER to open the Console now — on yes, invoke $CONSOLE_INVOKE. Point at the native what's-new workflow for the full highlights."
     echo "Never claim 'proven better' or 'fully proactive' — the self-measurement is new and still filling. Once only."
     echo "$MILESTONE" > "$MILESTONE_FILE" 2>/dev/null
   fi
@@ -436,7 +444,7 @@ fi
 if [ "$BRAIN_OFF" != "1" ] && [ -n "$RUNNING_V" ] && [ "$RUNNING_V" != "$LAST_ANNOUNCED" ]; then
   WHATS_NEW=""
   case "$RUNNING_V" in
-    3.2.*|3.1.*) WHATS_NEW="opens with the Console — /rvbc shows your whole RuvNet stack on one live page: what's installed, what your AI has actually learned from YOUR projects, and one-click reversible fixes. Every number is measured from your machine, never projected." ;;
+    3.2.*|3.1.*) WHATS_NEW="opens with the Console — $CONSOLE_INVOKE shows your whole RuvNet stack on one live page: what's installed, what your AI has actually learned from YOUR projects, and one-click reversible fixes. Every number is measured from your machine, never projected." ;;
     3.0.*) WHATS_NEW="ships a visual configurator — /ruvnet-brain:configure mirrors your machine's RuvNet setup in plain English and turns things on safely with one click. Read-only until you say so; nothing leaves your machine." ;;
     2.4.*) WHATS_NEW="routes every task to the cheapest model that can do the job, aware of YOUR subscriptions specifically — it detects what it can prove, asks what it can't, and learns from every override." ;;
     2.3.*) WHATS_NEW="can no longer break silently: a failed search now rings three independent alarms (phone push, red banner at session start, nightly canary), each tested by deliberately breaking the brain. Failed searches say WHY, instead of pretending nothing matched." ;;
@@ -582,17 +590,16 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   VERSION_LOG="$STATE_DIR/.last-version-check.log"
   REMOTE_V=$(grep -m1 -E '^[0-9]+(\.[0-9]+){2}(-[A-Za-z0-9.-]+)?$' "$VERSION_LOG" 2>/dev/null | head -1)
   [ -f "$DETACH" ] && node "$DETACH" 10 "$VERSION_LOG" \
-    /bin/sh -c "curl -fsS --max-time 3 'https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/plugin/.claude-plugin/plugin.json' 2>/dev/null | grep -m1 '\"version\"' | sed -E 's/.*\"version\": *\"([^\"]+)\".*/\\1/'"
+    node "$HOOK_DIR/host-update.mjs" --check
   trace_stage "version-dispatch-returned"
   if [ -n "$LOCAL_V" ] && [ -n "$REMOTE_V" ] && [ "$LOCAL_V" != "$REMOTE_V" ]; then
     AUTO_PREF=""
     [ -f "$PREF_FILE" ] && IFS= read -r AUTO_PREF < "$PREF_FILE"
-    if [ "$AUTO_PREF" = "yes" ] && command -v claude >/dev/null 2>&1; then
-      # STABLE SPINE (ADR-023): download via CC's trusted marketplace path as before, then hand the
-      # staged payload to the ONE update engine — gate, atomic active.json flip, receipt. Hook
-      # BEHAVIOR from the new version goes live in THIS session on the very next hook fire; the MCP
-      # worker swaps between calls. The engine is locked (concurrency-1 across all sessions) and
-      # detached — this hook never blocks on it.
+    if [ "$AUTO_PREF" = "yes" ] && [ -f "$HOOK_DIR/host-update.mjs" ]; then
+      # STABLE SPINE (ADR-023/051): one Brain-owned coordinator invokes the current published
+      # installer, which acquires the signed release, syncs every detected host to that exact
+      # version, verifies it, then advances the ONE spine. It requires neither host's CLI merely
+      # because the other host triggered SessionStart.
       #
       # SPAWN 3 of 3, and the one that most needed the deliberate reparenting rather than a kill-on-
       # exit: two `claude plugin` network operations plus the update engine, minutes of work behind a
@@ -601,17 +608,16 @@ if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
       # marketplace call cannot sit on the user's machine forever. detach.mjs redirects the whole
       # sequence's output to the log, so the per-command redirects are gone.
       [ -f "$DETACH" ] && node "$DETACH" 600 "$STATE_DIR/.last-auto-update.log" \
-        /bin/sh -c "claude plugin marketplace update ruvnet-brain; claude plugin update ruvnet-brain@ruvnet-brain; node '$HOOK_DIR/update-apply.mjs' --auto"
+        node "$HOOK_DIR/host-update.mjs"
       echo "[RuvNet Brain — v$REMOTE_V is downloading and will AUTO-APPLY via the Stable Spine (ADR-023); this session picks up the new behavior live]"
       echo "Tell the user ONE short line, near the top of your first response:"
-      echo "  \"🧠 RuvNet Brain v$REMOTE_V is installing in the background — behavior updates go live in this session automatically (no restart). If this release changed boot-level declarations, I'll tell you at your next session start — that's the only case a restart ever helps.\""
+      echo "  \"🧠 RuvNet Brain v$REMOTE_V is installing in the background for every detected host. Runtime behavior goes live automatically; if boot-level declarations changed, I'll ask for a restart only after that host's exact new snapshot is verified.\""
       echo "Don't repeat this notice later in the same session."
       echo ""
     else
       echo "[RuvNet Brain — update available, auto-update not enabled]"
       echo "Tell the user this PLAINLY, near the top of your first response:"
-      echo "  \"🧠 RuvNet Brain found v$REMOTE_V (you're on v$LOCAL_V). Run this, then restart Claude Code to load it:"
-      echo "  claude plugin marketplace update ruvnet-brain && claude plugin update ruvnet-brain@ruvnet-brain\""
+      echo "  \"🧠 RuvNet Brain found v$REMOTE_V (you're on v$LOCAL_V). Run: npx ruvnet-brain@latest --update\""
       echo "  (Or say the word and I'll turn on auto-update so this never comes up again.)\""
       echo "Don't repeat this notice later in the same session."
       echo ""
@@ -786,7 +792,7 @@ else
   cat <<EOF
 [RuvNet Brain v$BANNER_V — active this session${BANNER_D:+ · updated $BANNER_D}${BANNER_KB:+ · knowledge bundle $BANNER_KB}]
 USER-LEVEL: one brain (~/.cache/ruvnet-brain/kb) shared by every project and window here — nothing to reinstall per project. search_ruvnet and the grounding hooks are live now.
-Open your FIRST response with ONE short, warm confirmation in your own words (2-3 lines, then move on; never repeat it this session). It must say "🧠 RuvNet Brain active (v$BANNER_V${BANNER_KB:+, brain $BANNER_KB})" — that version, in parentheses, always — and convey: it grounds rUv's stack (RVF, Ruflo, AgentDB, SPARC, agentic-flow…) in his real source rather than guessing; npx github:stuinfla/ruvnet-brain --doctor checks it; /ruvnet-brain:configure (exactly that, never a bare /configure) opens a visual settings page.
+Open your FIRST response with ONE short, warm confirmation in your own words (2-3 lines, then move on; never repeat it this session). It must say "🧠 RuvNet Brain active (v$BANNER_V${BANNER_KB:+, brain $BANNER_KB})" — that version, in parentheses, always — and convey: it grounds rUv's stack (RVF, Ruflo, AgentDB, SPARC, agentic-flow…) in his real source rather than guessing; npx github:stuinfla/ruvnet-brain --doctor checks it; $CONSOLE_INVOKE opens a visual settings page.
 EOF
 fi
 

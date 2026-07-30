@@ -590,6 +590,38 @@ describe('anticipate.sh — continuous reconciliation (the L5 loop runs on the P
   const advocacyModule = () =>
     import(pathToFileURL(path.join(ROOT, 'scripts', 'advocacy-outcomes.mjs')).href);
 
+  it('carries one induced dormant capability through offer → user action → ON → APPLIED', async () => {
+    const matcher = writeMatcher('remember', [GOOD_MATCH]);
+
+    const offered = run({
+      event: { session_id: 'induced-offer', prompt: PROMPT },
+      registry: writeRegistry([DORMANT_ROW]),
+      matcher,
+    });
+    expect(offered.status).toBe(0);
+    expect(offered.stdout).toContain(DORMANT_ROW.label);
+    expect(ledgerRows(DORMANT_ROW.key).filter((r) => r.action === 'offered')).toHaveLength(1);
+
+    // The user's action is represented by the same observable the product trusts in production:
+    // the next capability audit sees the offered capability ON. The hook then reconciles that
+    // transition into the real append-only outcome ledger without a console poll or hand-seeded row.
+    const acted = run({
+      event: { session_id: 'induced-applied', prompt: 'confirm the learning hooks I enabled are active now' },
+      registry: writeRegistry([{ ...DORMANT_ROW, state: 'on', evidence: 'enabled by user' }]),
+      matcher: writeMatcher('will-not-match', []),
+    });
+    expect(acted.status).toBe(0);
+
+    const rows = ledgerRows(DORMANT_ROW.key);
+    expect(rows.filter((r) => r.action === 'applied')).toHaveLength(1);
+    const mod = await advocacyModule();
+    expect(mod.precision({ file: OUTCOMES() })).toMatchObject({
+      offered: 1,
+      applied: 1,
+      precision: 1,
+    });
+  });
+
   /** Seed an OFFER through the REAL recorder, so the row is exactly the shape reconcileApplied reads —
    *  a hand-written JSONL line would be testing a schema the module might never accept. */
   async function seedOffer(id) {

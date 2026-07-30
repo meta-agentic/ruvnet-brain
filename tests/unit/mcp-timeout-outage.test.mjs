@@ -29,6 +29,11 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SERVER = path.join(ROOT, 'plugin', 'mcp', 'server.mjs');
 
+it('allows the same 240s cold-start budget as the installer doctor', () => {
+  const source = fs.readFileSync(SERVER, 'utf8');
+  expect(source).toMatch(/CALL_TIMEOUT_MS[^\\n]*240_000/);
+});
+
 // A child that completes the handshake and then goes silent forever — the exact live failure shape
 // (the worker is alive and working, it just never answers within the deadline).
 const STUB_CHILD = `
@@ -160,6 +165,7 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'recovered worker' }] } }) + '\\n');
   }
 });
+
 setInterval(() => {}, 1 << 30);
 `);
     const server = startServer({
@@ -237,4 +243,55 @@ setInterval(() => {}, 1 << 30);
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   }, 20000);
+});
+
+describe('idle worker retirement', () => {
+  it('releases an inactive worker and lazily starts a replacement on the next call', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rvb-mcp-idle-'));
+    const starts = path.join(home, 'starts.txt');
+    fs.mkdirSync(path.join(home, 'kb'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'kb', 'forge-mcp-all.mjs'), `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const starts = process.env.STUB_STARTS;
+const n = (fs.existsSync(starts) ? Number(fs.readFileSync(starts, 'utf8')) : 0) + 1;
+fs.writeFileSync(starts, String(n));
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let m; try { m = JSON.parse(line); } catch { return; }
+  const result = m.method === 'initialize'
+    ? { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } }
+    : m.method === 'tools/call'
+      ? { content: [{ type: 'text', text: 'worker ' + n }] }
+      : { tools: [{ name: 'search_ruvnet', inputSchema: { type: 'object' } }] };
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\\n');
+});
+setInterval(() => {}, 1 << 30);
+`);
+    const server = startServer({
+      RUVNET_BRAIN_HOME: home,
+      RUVNET_BRAIN_KB: path.join(home, 'kb'),
+      RUVNET_BRAIN_CHILD_IDLE_MS: '150',
+      STUB_STARTS: starts,
+    });
+
+    try {
+      server.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      await waitFor(() => server.lines.some((l) => l.includes('"id":1')), 5000, 'initialize response');
+      server.send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: 'first' } } });
+      const first = await waitFor(() => server.lines.find((l) => l.includes('"id":2')), 5000, 'first worker response');
+      expect(first).toContain('worker 1');
+
+      await waitFor(() => fs.existsSync(starts) && Number(fs.readFileSync(starts, 'utf8')) === 1, 1000, 'first worker start');
+      await new Promise((r) => setTimeout(r, 500));
+
+      server.send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'search_ruvnet', arguments: { query: 'second' } } });
+      const second = await waitFor(() => server.lines.find((l) => l.includes('"id":3')), 5000, 'replacement worker response');
+      expect(second).toContain('worker 2');
+      expect(Number(fs.readFileSync(starts, 'utf8'))).toBe(2);
+    } finally {
+      try { server.proc.kill('SIGKILL'); } catch { /* gone */ }
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }, 15000);
 });

@@ -95,10 +95,33 @@ let child = null;            // { proc, generation, nextId, pending: Map<childId
 let pendingCount = 0;        // client tools/call requests currently in flight (drain gate for swaps)
 let childRetirement = Promise.resolve();
 let childStartup = null;
+let childIdleTimer = null;
 const CHILD_TERM_GRACE_MS = 3_000;
 const CHILD_INIT_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_INIT_TIMEOUT_MS) || 60_000;
+const CHILD_IDLE_MS = Number(process.env.RUVNET_BRAIN_CHILD_IDLE_MS) || 30 * 60_000;
+
+function clearChildIdleTimer() {
+  if (childIdleTimer) clearTimeout(childIdleTimer);
+  childIdleTimer = null;
+}
+
+function armChildIdleTimer(c = child) {
+  clearChildIdleTimer();
+  if (!c || CHILD_IDLE_MS <= 0) return;
+  childIdleTimer = setTimeout(() => {
+    childIdleTimer = null;
+    if (child !== c) return;
+    if (pendingCount > 0 || c.pending.size > 0 || childStartup) {
+      armChildIdleTimer(c);
+      return;
+    }
+    void killChild(`idle for ${CHILD_IDLE_MS / 1000}s`);
+  }, CHILD_IDLE_MS);
+  childIdleTimer.unref?.();
+}
 
 function killChild(reason) {
+  clearChildIdleTimer();
   if (!child) return childRetirement;
   const c = child; child = null;
   for (const [, p] of c.pending) p.reject(new Error(`brain worker ${reason}`));
@@ -158,6 +181,7 @@ async function ensureChild() {
         await killChild('failed initialize');
         throw new Error(`brain worker failed to initialize: ${e.message}`);
       }
+      armChildIdleTimer(c);
       return c;
     })();
   }
@@ -191,10 +215,11 @@ async function onChildTimeout(method, timeoutMs) {
   }
 }
 
-// Overridable so the outage path above can actually be TESTED — a 120s default is untestable, and
-// an untestable failure path is how this one went four days reporting "ok" while it was down. Also
-// genuinely useful in the field: a slow machine can raise it, and a CI runner can lower it.
-const CALL_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_CALL_TIMEOUT_MS) || 120_000;
+// Overridable so the outage path above can actually be TESTED. The default matches the installer's
+// real cold-start smoke budget: measured 153s after a cache repair on 2026-07-29. A 120s parent
+// deadline killed the model just before it became usable and forced every retry to start cold.
+// Steady-state latency remains a separate release gate; this budget prevents a permanent cold loop.
+const CALL_TIMEOUT_MS = Number(process.env.RUVNET_BRAIN_CALL_TIMEOUT_MS) || 240_000;
 
 function childRequest(c, method, params, timeoutMs = CALL_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
@@ -225,7 +250,10 @@ async function handleClient(msg) {
         if (c) {
           try {
             const r = await childRequest(c, 'tools/list', {}, 15_000);
-            if (r.result?.tools?.length) return clientOk(id, { ...r.result, tools: withLocalTools(r.result.tools) });
+            if (r.result?.tools?.length) {
+              armChildIdleTimer(c);
+              return clientOk(id, { ...r.result, tools: withLocalTools(r.result.tools) });
+            }
           }
           catch { /* fall through to the static declaration */ }
         }
@@ -259,6 +287,7 @@ async function handleClient(msg) {
         return clientOk(id, { content: [{ type: 'text', text: `search_ruvnet error: ${e.message}` }], isError: true });
       } finally {
         pendingCount--;
+        armChildIdleTimer(c);
       }
     }
     default:

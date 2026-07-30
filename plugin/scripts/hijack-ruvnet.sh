@@ -1,5 +1,5 @@
 #!/bin/sh
-# ruvnet-brain PreToolUse hook (POSIX sh) — the ACTION-LEVEL interceptor ("hijack Claude Code").
+# ruvnet-brain PreToolUse hook (POSIX sh) — the ACTION-LEVEL guidance interceptor.
 # Fires right before a Write / Edit / Bash call. If Claude is about to install or import a classical
 # default that rUv already replaced (pinecone, pgvector, langchain, ...), it injects a forceful
 # course-correction into context via PreToolUse `additionalContext` — WITHOUT blocking the call
@@ -43,7 +43,7 @@ fi
 # function must announce it, never fake health by staying quiet.
 NODE_BIN=$(command -v node 2>/dev/null)
 if [ -z "$NODE_BIN" ]; then
-  printf '%s\n' "[RuvNet Brain] hijack protection is OFF on this machine: node not found on PATH." >&2
+  printf '%s\n' "[RuvNet Brain] action guidance is OFF on this machine: node not found on PATH." >&2
   exit 0
 fi
 HOOK_INPUT="$(dirname "$0")/hook-input.mjs"
@@ -72,7 +72,7 @@ fi
 
 [ -z "$MSG" ] && exit 0
 
-FULL="[RuvNet Brain — hijack] $MSG  Confirm the exact capability with the search_ruvnet MCP tool before writing this, and ground the implementation in rUv's real source. Do not assert these tools' behavior from memory."
+FULL="[RuvNet Brain — guidance] $MSG  Confirm the exact capability with the search_ruvnet MCP tool before writing this, and ground the implementation in rUv's real source. Do not assert these tools' behavior from memory."
 
 # EMIT via the shared parser, not jq (2026-07-27). Removing jq from the PARSE half alone left this
 # line dying with "jq: command not found" on a jq-less machine — the hook got all the way to a

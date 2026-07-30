@@ -275,6 +275,7 @@ async function handle(msg) {
         // simply never called). A miss falls straight through to the unchanged heavy path — see
         // card-lane.mjs's header for the honesty contract (silence-or-fallthrough, never a
         // fabricated hit; naming a repo is not by itself sufficient confidence).
+        // Heavy-path model revisions are materialized locally by forge-rerank before remote access.
         const cardHit = answerFromCards(query, KB_DIR);
         if (cardHit.hit) {
           const cardBody = renderCardHit(cardHit);

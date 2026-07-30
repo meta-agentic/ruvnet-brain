@@ -207,7 +207,9 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
   }
   await finish();
 } else {
-  const questions = readJson(process.env.CAP_QUESTIONS || 'test/capability-questions.json') || [];
+  // The smoke battery proves fast capability selection. Implementation claims live in the separate
+  // source-evidence corpus; mixing them here forced nine heavyweight searches into every npm test.
+  const questions = readJson(process.env.CAP_QUESTIONS || 'test/capability-selection-questions.json') || [];
   // COLD-CACHE EVIDENCE (docs/4.0-READINESS.md §6 item 1). Read the required query model from the
   // installed RVF sidecars. Canonical `*.big.rvf` stores use BGE; assuming MiniLM here used to make
   // this gate declare itself warm while the real reader failed every general query.

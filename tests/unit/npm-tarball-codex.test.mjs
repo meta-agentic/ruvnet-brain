@@ -65,19 +65,27 @@ function isolatedHome() {
 }
 
 // ── the tarball manifest: only the two persistent Codex host files ship from plugin/ ─────────────
-describe('the published artifact carries the persistent Codex host files, and no more of plugin/', () => {
+describe('the published artifact carries a complete persistent Codex marketplace', () => {
   it('plugin/mcp/server.mjs is in the tarball', () => {
     expect(packed.files.map((f) => f.path)).toContain('plugin/mcp/server.mjs');
     expect(packed.files.map((f) => f.path)).toContain('plugin/mcp/managed-cli-interface.mjs');
   });
 
-  it('ships only the MCP server, its structured-interface module, and the generation-independent hook wrapper from plugin/', () => {
+  it('ships runtime assets without generated state or test fixtures', () => {
     const pluginFiles = packed.files.map((f) => f.path).filter((p) => p.startsWith('plugin/'));
-    expect(pluginFiles).toEqual([
+    for (const required of [
+      'plugin/.claude-plugin/plugin.json',
+      'plugin/.codex-plugin/plugin.json',
+      'plugin/hooks/codex-hooks.json',
       'plugin/mcp/managed-cli-interface.mjs',
       'plugin/mcp/server.mjs',
       'plugin/scripts/codex-hook-wrapper.mjs',
-    ]);
+      'plugin/scripts/host-update.mjs',
+      'plugin/scripts/update-apply.mjs',
+      'plugin/skills/rvbc/SKILL.md',
+    ]) expect(pluginFiles).toContain(required);
+    expect(pluginFiles.some((file) => file.includes('/.ruvnet-brain/'))).toBe(false);
+    expect(pluginFiles.some((file) => file.startsWith('plugin/test/'))).toBe(false);
   });
 
   it('the packed server is byte-identical to the source of truth', () => {
@@ -90,6 +98,9 @@ describe('the published artifact carries the persistent Codex host files, and no
 
 // ── the installer, run from the unpacked artifact with DEFAULT source resolution ─────────────────
 describe('wireCodexHost from the unpacked tarball — the exact path issue #43 proved dead', () => {
+  it('ships the host-neutral update coordinator in the published artifact', () => {
+    expect(fs.existsSync(path.join(unpackedRoot, 'plugin', 'scripts', 'host-update.mjs'))).toBe(true);
+  });
   it('wires (never `no-source`), and a rerun is an idempotent no-op', () => {
     const { codexDir, configPath, serverDir } = isolatedHome();
     // No `source:` override — this exercises path.join(__dirname, '..', 'plugin', 'mcp', 'server.mjs')

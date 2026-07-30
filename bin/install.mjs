@@ -725,6 +725,37 @@ export function mergeCodexConfig(existing, serverPath) {
   return { text: `${text}${sep}${block}\n`, action: 'added' };
 }
 
+export function removeCodexManagedBlock(existing) {
+  const text = typeof existing === 'string' ? existing : '';
+  const start = text.indexOf(CODEX_BLOCK_START);
+  const end = text.indexOf(CODEX_BLOCK_END, start === -1 ? 0 : start);
+  if (start === -1 || end === -1 || end < start) return { text, action: 'absent' };
+  const blockEnd = end + CODEX_BLOCK_END.length;
+  let before = text.slice(0, start);
+  let after = text.slice(blockEnd);
+  // mergeCodexConfig inserts one separator newline before the block and the block carries one
+  // trailing newline. Remove exactly those two installer-owned seam bytes when present.
+  if (before.endsWith('\n\n')) before = before.slice(0, -1);
+  if (after.startsWith('\n')) after = after.slice(1);
+  return { text: `${before}${after}`, action: 'removed' };
+}
+
+function removeCodexWiring() {
+  const configPath = codexConfigPath();
+  let before = '';
+  try { before = fs.readFileSync(configPath, 'utf8'); } catch { return 'absent'; }
+  const result = removeCodexManagedBlock(before);
+  if (result.action !== 'removed') return result.action;
+  try {
+    const backup = `${configPath}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(configPath, backup);
+    atomicReplace(configPath, (tmp) => fs.writeFileSync(tmp, result.text));
+    return 'removed';
+  } catch {
+    return 'failed';
+  }
+}
+
 // What the doctor asserts from disk — never from the fact that we once ran. "Wired" means our entry
 // is in the config AND the server.mjs it points at is really there, because a registration pointing
 // at a deleted file is worse than no registration: Codex fails at spawn time with nothing to read.
@@ -835,6 +866,32 @@ const CODEX_PLUGIN_ID = 'ruvnet-brain@ruvnet-brain';
 const CODEX_MARKETPLACE = 'ruvnet-brain';
 const CODEX_MARKETPLACE_SOURCE = 'stuinfla/ruvnet-brain';
 
+function prepareCodexMarketplace() {
+  const target = path.join(
+    process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain'),
+    'codex-marketplace',
+  );
+  const staged = `${target}.tmp-${process.pid}`;
+  fs.rmSync(staged, { recursive: true, force: true });
+  fs.mkdirSync(path.join(staged, '.claude-plugin'), { recursive: true });
+  fs.copyFileSync(
+    path.join(REPO_ROOT, '.claude-plugin', 'marketplace.json'),
+    path.join(staged, '.claude-plugin', 'marketplace.json'),
+  );
+  fs.cpSync(path.join(REPO_ROOT, 'plugin'), path.join(staged, 'plugin'), { recursive: true });
+  const prior = `${target}.prior-${process.pid}`;
+  fs.rmSync(prior, { recursive: true, force: true });
+  if (fs.existsSync(target)) fs.renameSync(target, prior);
+  try {
+    fs.renameSync(staged, target);
+    fs.rmSync(prior, { recursive: true, force: true });
+  } catch (error) {
+    if (fs.existsSync(prior) && !fs.existsSync(target)) fs.renameSync(prior, target);
+    throw error;
+  }
+  return target;
+}
+
 // Codex 0.145 returns `{ marketplaces: [...] }`; early preview builds returned the array itself.
 // Keep both shapes so an installer update never turns a harmless host-version difference into a
 // repeated "marketplace already exists" failure.
@@ -904,6 +961,7 @@ export function wireCodexPlugin({
     return { host: true, action: 'unchanged', ...before };
   }
 
+  const localMarketplace = runJson === runCodexJson ? prepareCodexMarketplace() : null;
   const markets = runJson(['plugin', 'marketplace', 'list', '--json'], options);
   if (!markets.ok) {
     if (announce) warn(`Codex marketplace check failed — ${markets.error}`);
@@ -911,9 +969,15 @@ export function wireCodexPlugin({
   }
   const marketRows = codexMarketplaceRows(markets.value);
   const known = marketRows.some((market) => market?.name === CODEX_MARKETPLACE);
-  const marketAction = known
-    ? runJson(['plugin', 'marketplace', 'upgrade', CODEX_MARKETPLACE, '--json'], options)
-    : runJson(['plugin', 'marketplace', 'add', marketplaceSource, '--json'], options);
+  let marketAction;
+  if (localMarketplace) {
+    if (known) runJson(['plugin', 'marketplace', 'remove', CODEX_MARKETPLACE, '--json'], options);
+    marketAction = runJson(['plugin', 'marketplace', 'add', localMarketplace, '--json'], options);
+  } else {
+    marketAction = known
+      ? runJson(['plugin', 'marketplace', 'upgrade', CODEX_MARKETPLACE, '--json'], options)
+      : runJson(['plugin', 'marketplace', 'add', marketplaceSource, '--json'], options);
+  }
   if (!marketAction.ok) {
     if (announce) warn(`Codex marketplace ${known ? 'upgrade' : 'add'} failed — ${marketAction.error}`);
     return { host: true, action: 'marketplace-failed', error: marketAction.error };
@@ -924,9 +988,9 @@ export function wireCodexPlugin({
     return { host: true, action: 'plugin-failed', error: added.error };
   }
   const after = codexPluginStatus({ ...options, runJson });
-  if (!after.installed || !after.enabled) {
+  if (!after.installed || !after.enabled || (expectedVersion && after.version !== expectedVersion)) {
     if (announce) warn('Codex accepted the install command but the Brain plugin is not installed and enabled.');
-    return { host: true, action: 'verification-failed', ...after };
+    return { host: true, action: 'verification-failed', expectedVersion, ...after };
   }
   if (announce) {
     ok(`Codex Brain plugin installed and enabled (${after.version || 'version unknown'}).`);
@@ -1434,9 +1498,20 @@ async function doctor() {
     : info('git not found — that\'s fine, this installer never needs it');
   cleanupStrayRuvectorDb(); // issue #39: sweep a leftover empty scaffold from before this fix, if one's here
   const env = detectEnvironment();
-  env.ruflo
-    ? ok('Ruflo present — orchestration / swarms / SPARC available')
-    : warn('Ruflo not found — answers still work. To build: npm install -g claude-flow@alpha  (or /plugin add ruvnet/claude-flow)');
+  let rufloOperational = null;
+  if (env.ruflo) {
+    rufloOperational = probeRufloOperationalHealth();
+    if (rufloOperational.healthy) {
+      ok('Ruflo operational — runtime, memory, and learning signals agree');
+    } else {
+      warn('Ruflo CLI is present, but operational learning is DEGRADED — availability is not enforcement.');
+      if (rufloOperational.stopped) warn('  live status reports STOPPED / swarm not running');
+      if (rufloOperational.memoryContradiction) warn(`  status reports no memory while status memory reports ${rufloOperational.memoryEntries} entries`);
+      if (rufloOperational.zeroLearning) warn('  learning dashboard is all zero: patterns=0, routes=0, commands=0');
+    }
+  } else {
+    warn('Ruflo not found — answers still work. To build: npm install -g claude-flow@alpha  (or /plugin add ruvnet/claude-flow)');
+  }
   env.ruvector
     ? ok('RuVector present — vector CLI / MCP available')
     : warn(`RuVector not found — answers still work. To add: ${buildRuvectorMcpAddCommand(env).say}`);
@@ -1569,9 +1644,12 @@ async function doctor() {
     && !codexLifecycleGuidance(codexLifecycle).healthy
     && !codexLifecycleGuidance(codexLifecycle).intentional,
   );
+  const codexWiringFailed = Boolean(cx.host && !cx.wired);
   const failed = (hookResult ? hookResult.exitCode !== 0 : !allGreen)
     || groundingUnprovenPersisted
-    || codexLifecycleFailed;
+    || codexLifecycleFailed
+    || codexWiringFailed
+    || Boolean(rufloOperational && !rufloOperational.healthy);
   if (failed && !hookResult && !groundingUnprovenPersisted) {
     console.log(`  ${c.red('✗ FAILING')} — the warnings above are real. Re-run  ${c.bold('npx ruvnet-brain')}  to repair.`);
   }
@@ -1834,6 +1912,28 @@ function missingUpdaterHelp(kbDir) {
   console.error(`  — the current bundle ships forge-update.mjs; then this command will work.`);
 }
 
+function syncHostsAfterUpdate() {
+  const results = {};
+  results.claude = wirePlugin();
+  try {
+    results.codexHost = wireCodexHost();
+    if (results.codexHost.host) {
+      results.codex = wireCodexPlugin({ expectedVersion: PACKAGE_VERSION });
+      if (!['unchanged', 'installed', 'updated', 'disabled'].includes(results.codex.action)) {
+        return { ok: false, results };
+      }
+    }
+  } catch (error) {
+    results.codex = { action: 'failed', error: error?.message || String(error) };
+    return { ok: false, results };
+  }
+
+  const apply = path.join(__dirname, '..', 'plugin', 'scripts', 'update-apply.mjs');
+  if (!fs.existsSync(apply)) return { ok: false, results, error: 'Stable Spine updater missing from package' };
+  const applied = spawnSync(process.execPath, [apply, '--auto'], { stdio: 'inherit', env: process.env });
+  return { ok: !applied.error && applied.status === 0, results, applyStatus: applied.status };
+}
+
 function runUpdate() {
   printBanner('update');
   const kbDir = resolvedKbDir();
@@ -1868,6 +1968,14 @@ function runUpdate() {
     const fr = spawnSync(process.execPath, [self, '--force'], { stdio: 'inherit',
       env: { ...process.env, RUVNET_BRAIN_NO_UPDATE_FALLBACK: '1' } });
     updateStatus = fr.error ? 1 : (fr.status === null ? 1 : fr.status);
+  }
+  if (updateStatus === 0) {
+    info(c.dim('\nsynchronizing every detected host to this exact published version…\n'));
+    const convergence = syncHostsAfterUpdate();
+    if (!convergence.ok) {
+      warn(`host synchronization is incomplete — runtime stays on the prior verified generation${convergence.error ? ` (${convergence.error})` : ''}`);
+      updateStatus = 1;
+    }
   }
   // `--update --auto` = update now AND enroll in Evergreen, so this is the LAST time it's ever run by
   // hand. Only enroll if the update itself succeeded — never promise "you're set forever" on a failed
@@ -2185,6 +2293,27 @@ export function machineFootprint() {
       items.push({ label: 'The search_ruvnet MCP server registration', path: claudeJson, undo: 'claude mcp remove ruvnet-brain --scope user' });
     }
   } catch { /* unreadable — do not claim it */ }
+  try {
+    const codex = codexStatus();
+    if (codex.host && codex.serverPath) {
+      items.push({
+        label: 'The Codex search_ruvnet MCP registration',
+        path: codexConfigPath(),
+        undo: 'npx ruvnet-brain --uninstall (removes only the managed block)',
+      });
+    }
+    add('Codex lifecycle hook wrapper', codexHookWrapperPath(),
+      'npx ruvnet-brain --uninstall');
+    add('Codex MCP server files', codexServerDir(), 'npx ruvnet-brain --uninstall');
+    const codexPlugin = codexPluginStatus();
+    if (codexPlugin.installed) {
+      items.push({
+        label: 'Codex plugin',
+        path: codexHomeDir(),
+        undo: 'codex plugin remove ruvnet-brain@ruvnet-brain && codex plugin marketplace remove ruvnet-brain',
+      });
+    }
+  } catch { /* Codex absent or unavailable — do not claim it */ }
   // GAP FIX: recordNotified() (scripts/upgrade-notice.mjs, invoked from main() and runDemo() below)
   // writes this file the first time a "what's new" notice is shown — a real disk artifact this
   // installer's own code path creates, that was never listed here and never removed on --uninstall.
@@ -2276,7 +2405,9 @@ function uninstallAll() {
     'Model-router files', 'Status-bar version script', 'Status-bar preference', 'Usage-counts preference',
     // Two gaps closed here: the statusLine KEY is now removable in place (we know exactly what we
     // wrote — see removeSettingsStatusLine()), and the upgrade-notice tracker is a file we fully own.
-    'The statusLine entry in settings.json', 'Upgrade-notice state (release-notice tracking)']);
+    'The statusLine entry in settings.json', 'Upgrade-notice state (release-notice tracking)',
+    'The Codex search_ruvnet MCP registration', 'Codex lifecycle hook wrapper',
+    'Codex MCP server files']);
   const willRemove = before.filter((it) => AUTO.has(it.label));
   const manual = before.filter((it) => !AUTO.has(it.label));
 
@@ -2302,6 +2433,8 @@ function uninstallAll() {
   // customized — removeSettingsStatusLine() checks the live command before touching anything).
   const statusLine = removeSettingsStatusLine();
   if (statusLine === 'removed') ok('removed the statusLine entry from ~/.claude/settings.json (your other settings untouched, backup saved)');
+  const codexWiring = removeCodexWiring();
+  if (codexWiring === 'removed') ok('removed the managed RuvNet Brain block from Codex config (your other config untouched, backup saved)');
 
   // NEVER rm -rf A PATH WE HAVE NOT PROVEN IS OURS. resolvedKbDir() honours $RUVNET_BRAIN_KB, which
   // the docs encourage for custom install locations — so `RUVNET_BRAIN_KB=$HOME npx ruvnet-brain
@@ -2340,6 +2473,8 @@ function uninstallAll() {
     ['upgrade-notice state', upgradeNoticeStatePath()],
     // ADR-054 §5: a reinstall must never inherit an invisible OFF. See brainOffSentinelPath().
     ['brain on/off switch', brainOffSentinelPath()],
+    ['Codex lifecycle hook wrapper', codexHookWrapperPath()],
+    ['Codex MCP server files', codexServerDir()],
   ]) {
     if (!fs.existsSync(target)) continue;
     try { fs.rmSync(target, { recursive: true, force: true }); ok(`removed the ${label}`); }
@@ -2714,9 +2849,9 @@ async function printPlanAndConfirm() {
     { name: 'Download the knowledge base',
       cost: short(resolveCacheDir().cacheDir),
       what: 'Real rUv source, on your disk, so answers cite files instead of guessing.' },
-    { name: 'Register the Claude Code plugin + MCP server',
-      cost: `an entry in ${short(path.join(H, '.claude'))}`,
-      what: 'Gives Claude a search_ruvnet tool. Adds no hooks you have not agreed to.' },
+    { name: 'Register host plugins + MCP server',
+      cost: `managed entries in ${short(path.join(H, '.claude'))} and, when detected, ${short(path.join(H, '.codex'))}`,
+      what: 'Gives Claude Code and Codex the same search_ruvnet tool and native Brain workflows.' },
   ];
   // The OPTIONAL steps — each asked ONCE here, stored in PLAN_CHOICES, and consumed by its offer
   // later (no second prompt). `def` is the pre-check: nightly + spend are recommended (default yes),
@@ -2848,6 +2983,35 @@ function detectEnvironment() {
     }
   } catch { /* ignore — detection is best-effort */ }
   return env;
+}
+
+export function classifyRufloOperationalHealth({ status = '', memory = '', metrics = '' } = {}) {
+  const stopped = /\b(?:RuFlo V3 \[STOPPED\]|Swarm not running|MCP Server\s*\\n.*Not running)/i.test(status);
+  const statusSaysNoMemory = /Backend\s*[|:]?\s*none|Entries\s*[|:]?\s*0\b/i.test(status);
+  const memoryEntries = Number((memory.match(/Total Entries\s*[|:]?\s*([\d,]+)/i)?.[1] || '0').replace(/,/g, ''));
+  const zeroLearning = /Total Patterns\s*[|:]?\s*0\b/i.test(metrics)
+    && /Total Routes\s*[|:]?\s*0\b/i.test(metrics)
+    && /Total Executed\s*[|:]?\s*0\b/i.test(metrics);
+  const memoryContradiction = statusSaysNoMemory && memoryEntries > 0;
+  return {
+    healthy: !stopped && !memoryContradiction && !zeroLearning,
+    stopped,
+    zeroLearning,
+    memoryContradiction,
+    memoryEntries,
+  };
+}
+
+function probeRufloOperationalHealth() {
+  const run = (args) => {
+    const result = spawnSync('ruflo', args, { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000 });
+    return `${result.stdout || ''}\n${result.stderr || ''}`;
+  };
+  return classifyRufloOperationalHealth({
+    status: run(['status']),
+    memory: run(['status', 'memory']),
+    metrics: run(['hooks', 'metrics', '--v3-dashboard']),
+  });
 }
 
 // ── issue #39: the ruvector MCP server's own native VectorDb defaults ITS storage to
@@ -3295,7 +3459,7 @@ function installedRepoCount(cacheDir) {
   }
 }
 
-function success({ cacheDir, isCustom, plugin, env, nightly }) {
+function success({ cacheDir, isCustom, plugin, codexHost, codexPlugin, env, nightly }) {
   const line = '─'.repeat(64);
   console.log(`\n${c.green(line)}`);
   console.log(`${c.green(c.bold('  RuvNet Brain is installed.'))}`);
@@ -3306,6 +3470,13 @@ function success({ cacheDir, isCustom, plugin, env, nightly }) {
   console.log(
     `    • the Claude Code plugin ${plugin.wired ? c.green('wired at user scope') : c.yellow('(finish the 2 commands above)')} — search_ruvnet + grounding hook`,
   );
+  if (codexHost?.host) {
+    const hostReady = ['added', 'rewritten', 'user-owned'].includes(codexHost.action);
+    const pluginReady = Boolean(codexPlugin?.installed && codexPlugin?.enabled);
+    console.log(
+      `    • the Codex host ${hostReady && pluginReady ? c.green('wired at user scope') : c.yellow('needs attention')} — search_ruvnet + native Brain skills`,
+    );
+  }
   if (env) {
     const t = (okv) => (okv ? c.green('✓ present') : c.yellow('not added (optional)'));
     console.log(`    • rUv build toolkit — Ruflo: ${t(env.ruflo)} · RuVector: ${t(env.ruvector)}  ${c.dim('answers work without them')}`);
@@ -3316,7 +3487,8 @@ function success({ cacheDir, isCustom, plugin, env, nightly }) {
     console.log(`    ${c.bold(`export RUVNET_BRAIN_KB="${cacheDir}"`)}`);
   }
   // ── where + how it runs — the confidence answers, stated up front ──
-  console.log(`\n  ${c.bold('Where it runs:')} ${c.bold('everywhere you use Claude Code')} — CLI, VS Code, JetBrains, the desktop app.`);
+  const hostLabel = codexHost?.host ? 'Claude Code and Codex' : 'Claude Code';
+  console.log(`\n  ${c.bold('Where it runs:')} ${c.bold(`everywhere you use ${hostLabel}`)} — CLI and supported editor/desktop surfaces.`);
   console.log(`    It's ${c.bold('user-level (global)')}: open ANY repo or folder and it's already there. Nothing per project,`);
   console.log(`    nothing to copy in, nothing to git-ignore. ${c.dim('(Runs locally — it is not active in the claude.ai web app.)')}`);
   console.log(`\n  ${c.bold('How it runs:')} ${c.bold('automatically')} — you never call or configure anything. Ask normally; on rUv-stack work it`);
@@ -3325,12 +3497,12 @@ function success({ cacheDir, isCustom, plugin, env, nightly }) {
   console.log(`  Release regardless (that part isn't cached). For the bleeding-edge installer too, use ${c.bold('npx github:stuinfla/ruvnet-brain')}.`);
 
   // ── one important expectation: the hook activates on the NEXT session ──
-  console.log(`\n  ${c.yellow(c.bold('One thing to know:'))} the grounding hook turns on at your ${c.bold('next')} Claude Code session.`);
-  console.log(`  ${c.dim('If Claude Code is open right now, quit and reopen it — then the brain is live on every prompt.')}`);
+  console.log(`\n  ${c.yellow(c.bold('One thing to know:'))} lifecycle hooks turn on in your ${c.bold('next')} host session.`);
+  console.log(`  ${c.dim(`If ${hostLabel} is open right now, quit and reopen it so the new plugin snapshot loads.`)}`);
 
   // ── what to do now ──
   console.log(`\n  ${c.bold('What to do now:')}`);
-  console.log(`    ${c.cyan('1.')} Open Claude Code in ${c.bold('any')} project (your own, or a fresh repo — nothing to copy in).`);
+  console.log(`    ${c.cyan('1.')} Open ${hostLabel} in ${c.bold('any')} project (your own, or a fresh repo — nothing to copy in).`);
   console.log(`    ${c.cyan('2.')} Just ask, normally. Try:  ${c.bold('"Set up vector search here the way rUv would."')}`);
   console.log(`    ${c.cyan('3.')} Watch what changes (below).`);
 
@@ -3464,7 +3636,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   if (FLAG_WHAT_CHANGED) { printBanner('what RuvNet Brain put on this machine'); printFootprint(); return; }
 
   printBanner('installer');
-  console.log(c.dim("I'll set up the brain and the Claude Code plugin, explaining each step as I go.\n"));
+  console.log(c.dim("I'll set up the brain for Claude Code and Codex, explaining each step as I go.\n"));
 
   // ── environment guard: fail early and CLEARLY on unsupported Node, not cryptically mid-install ──
   // Node itself can't be silently auto-upgraded from inside a script it's currently running as —
@@ -3610,10 +3782,12 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   const plugin = wirePlugin();
   // Codex hosts got nothing before this (issue #42): shipped, never registered. Non-fatal like every
   // other wiring step — a second host we cannot reach must never break the one we can.
+  let codexHost = { host: false, action: 'no-host' };
+  let codexPlugin = null;
   try {
-    const codexHost = wireCodexHost();
+    codexHost = wireCodexHost();
     if (codexHost.host) {
-      const codexPlugin = wireCodexPlugin();
+      codexPlugin = wireCodexPlugin();
       if (codexPlugin.available) printCodexLifecycle(await codexLifecycleStatus());
     }
   } catch (e) {
@@ -3657,7 +3831,7 @@ It is safe to re-run at any time. After installing, restart Claude Code so the g
   // Same rule: an optional offer can never break a finished install.
   try { await offerStatusline(); } catch { /* non-fatal — a status-bar nicety must never break the install */ }
 
-  success({ cacheDir, isCustom, plugin, env, nightly });
+  success({ cacheDir, isCustom, plugin, codexHost, codexPlugin, env, nightly });
 
   // Close every install by stating, in one place, exactly what is now on their machine and how to
   // take each piece back off. Someone reading this should never have to file a bug report to find

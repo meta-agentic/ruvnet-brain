@@ -449,12 +449,13 @@ function gatherAdvocacy() {
  * to either endpoint with identical client code — only the URL and the target file differ.
  */
 function saveAdvocacy(values) {
-  const value = values && typeof values === 'object' ? values.advocacy : undefined;
-  if (value === undefined) {
+  const supplied = values && typeof values === 'object' ? values.advocacy : undefined;
+  if (supplied === undefined) {
     return { ok: false, log: 'nothing was saved — no recognised settings were supplied' };
   }
-  if (typeof value !== 'string' || !ADVOCACY_FIELD.options.includes(value)) {
-    const reason = `expected one of ${ADVOCACY_FIELD.options.join(', ')}, got ${JSON.stringify(value)}`;
+  const value = ADVOCACY_FIELD.legacy?.[supplied] ?? supplied;
+  if (!ADVOCACY_FIELD.options.includes(value)) {
+    const reason = `expected one of ${ADVOCACY_FIELD.options.join(', ')}, got ${JSON.stringify(supplied)}`;
     return { ok: false, rejected: [{ key: 'advocacy', reason }], log: `nothing was saved — advocacy: ${reason}` };
   }
   const result = saveSettings({ advocacy: value });

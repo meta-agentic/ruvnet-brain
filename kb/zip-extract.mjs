@@ -47,15 +47,28 @@ const SIG_EOCD64_LOC = 0x07064b50;
 const SIG_CENTRAL = 0x02014b50;
 const SIG_LOCAL = 0x04034b50;
 
+export const ZIP_LIMITS = Object.freeze({
+  archiveBytes: 2 * 1024 ** 3,
+  entries: 100_000,
+  centralDirectoryBytes: 128 * 1024 ** 2,
+  entryBytes: 2 * 1024 ** 3,
+  totalBytes: 8 * 1024 ** 3,
+  compressionRatio: 1_000,
+});
+
 // zlib.crc32 landed in Node 20.15.0 / 22.2.0. package.json engines allow >=18, so it is OPTIONAL —
 // present it is used, absent the size check still stands and the caller is told which happened.
 // Reimplementing CRC-32 here would be hand-rolling something the runtime ships.
 const crc32 = typeof zlib.crc32 === 'function' ? zlib.crc32 : null;
 
 class Tally extends Transform {
-  constructor() { super(); this.bytes = 0; this.crc = 0; }
+  constructor(maxBytes) { super(); this.bytes = 0; this.crc = 0; this.maxBytes = maxBytes; }
   _transform(chunk, _enc, cb) {
     this.bytes += chunk.length;
+    if (this.bytes > this.maxBytes) {
+      cb(new Error(`uncompressed entry exceeded the ${this.maxBytes}-byte safety limit`));
+      return;
+    }
     if (crc32) this.crc = crc32(chunk, this.crc);
     this.push(chunk);
     cb();
@@ -181,10 +194,40 @@ export async function extractZip(zipPath, destDir) {
   try {
     const size = fs.fstatSync(fd).size;
     if (size === 0) throw new Error('archive is empty (0 bytes)');
+    if (size > ZIP_LIMITS.archiveBytes) {
+      throw new Error(`archive is ${size} bytes, above the ${ZIP_LIMITS.archiveBytes}-byte safety limit`);
+    }
     const { cdSize, cdOffset } = centralDirectoryLocation(fd, size);
+    if (cdSize > ZIP_LIMITS.centralDirectoryBytes) {
+      throw new Error(`central directory is ${cdSize} bytes, above the ${ZIP_LIMITS.centralDirectoryBytes}-byte safety limit`);
+    }
     if (cdOffset + cdSize > size) throw new Error(`central directory runs past end of file (offset ${cdOffset} + ${cdSize} > ${size})`);
     const entries = parseCentralDirectory(readAt(fd, cdSize, cdOffset));
     if (entries.length === 0) throw new Error('central directory contains no entries');
+    if (entries.length > ZIP_LIMITS.entries) {
+      throw new Error(`archive has ${entries.length} entries, above the ${ZIP_LIMITS.entries}-entry safety limit`);
+    }
+    let declaredTotal = 0;
+    for (const entry of entries) {
+      const unixType = (entry.externalAttrs >>> 16) & 0xf000;
+      if ((entry.versionMadeBy >> 8) === 3 && unixType === 0xa000) {
+        throw new Error(`entry "${entry.name}" is a symbolic link — downloaded bundles may contain regular files and directories only`);
+      }
+      if (!Number.isSafeInteger(entry.uncompSize) || entry.uncompSize < 0) {
+        throw new Error(`entry "${entry.name}" has an unsafe uncompressed size`);
+      }
+      if (entry.uncompSize > ZIP_LIMITS.entryBytes) {
+        throw new Error(`entry "${entry.name}" claims ${entry.uncompSize} bytes, above the ${ZIP_LIMITS.entryBytes}-byte safety limit`);
+      }
+      declaredTotal += entry.uncompSize;
+      if (!Number.isSafeInteger(declaredTotal) || declaredTotal > ZIP_LIMITS.totalBytes) {
+        throw new Error(`archive claims ${declaredTotal} uncompressed bytes, above the ${ZIP_LIMITS.totalBytes}-byte safety limit`);
+      }
+      const ratio = entry.uncompSize / Math.max(entry.compSize, 1);
+      if (ratio > ZIP_LIMITS.compressionRatio) {
+        throw new Error(`entry "${entry.name}" has compression ratio ${ratio.toFixed(1)}, above the ${ZIP_LIMITS.compressionRatio}:1 safety limit`);
+      }
+    }
 
     fs.mkdirSync(destDir, { recursive: true });
     let files = 0;
@@ -234,17 +277,6 @@ export async function extractZip(zipPath, destDir) {
         throw new Error(`entry "${e.name}" uses unsupported compression method ${e.method} (only stored=0 and deflate=8 are implemented)`);
       }
 
-      const isSymlink = (e.versionMadeBy >> 8) === 3 && ((e.externalAttrs >>> 16) & 0xf000) === 0xa000;
-      if (isSymlink) {
-        // A symlink's payload is its target path — always tiny, so it is read whole rather than streamed.
-        const comp = e.compSize === 0 ? Buffer.alloc(0) : readAt(fd, e.compSize, dataStart);
-        const linkTarget = (e.method === 8 ? zlib.inflateRawSync(comp) : comp).toString('utf8');
-        fs.rmSync(target, { recursive: true, force: true });
-        fs.symlinkSync(linkTarget, target);
-        files++;
-        continue;
-      }
-
       // A zero-length entry has no data range to stream (start > end would be a nonsense read), so
       // it is written directly. Its size/CRC assertions below still apply.
       if (e.compSize === 0) {
@@ -254,25 +286,32 @@ export async function extractZip(zipPath, destDir) {
         continue;
       }
 
-      const tally = new Tally();
+      const tally = new Tally(Math.min(e.uncompSize, ZIP_LIMITS.entryBytes));
+      const partial = path.join(path.dirname(target), `.ruvnet-extract-${process.pid}-${entryIndex}.tmp`);
+      try { fs.rmSync(partial, { force: true }); } catch { /* absent */ }
       const stages = [fs.createReadStream(zipPath, { start: dataStart, end: dataStart + e.compSize - 1 })];
       if (e.method === 8) stages.push(zlib.createInflateRaw());
-      stages.push(tally, fs.createWriteStream(target));
+      stages.push(tally, fs.createWriteStream(partial, { flags: 'wx' }));
 
       try {
         await pipeline(...stages);
       } catch (err) {
+        try { fs.rmSync(partial, { force: true }); } catch { /* best effort */ }
         throw new Error(`entry "${e.name}" failed to inflate (${err && err.code ? err.code : ''}${err && err.message ? ` ${err.message}` : ''}) — the archive is corrupt or truncated`);
       }
       if (tally.bytes !== e.uncompSize) {
+        fs.rmSync(partial, { force: true });
         throw new Error(`entry "${e.name}" is corrupt: expected ${e.uncompSize} bytes, extracted ${tally.bytes}`);
       }
       if (crc32 && (tally.crc >>> 0) !== (e.crc >>> 0)) {
+        fs.rmSync(partial, { force: true });
         // Zero-padded to 8 hex digits so the value is directly comparable to the one Info-ZIP's
         // own `unzip` prints for the same damaged entry ("bad CRC 811e0dd1 (should be 0f6994e4)").
         const hex = (n) => (n >>> 0).toString(16).padStart(8, '0');
         throw new Error(`entry "${e.name}" failed its CRC-32 check (expected ${hex(e.crc)}, got ${hex(tally.crc)}) — the archive is corrupt`);
       }
+      if (process.platform === 'win32') fs.rmSync(target, { recursive: true, force: true });
+      fs.renameSync(partial, target);
 
       // Unix permission bits, when the archive carries them. Skipped on Windows, which has no
       // POSIX mode and where chmod is a no-op at best.

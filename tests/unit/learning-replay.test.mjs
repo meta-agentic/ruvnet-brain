@@ -431,7 +431,14 @@ describe('the live CLI still behaves the way the gate assumes (Rule 0, re-checke
     spawnSync(RUFLO_BIN, ['memory', 'store', '-k', PROJECT_B_MEMORY_KEY, '--value', PROJECT_B_MEMORY_VALUE, '-n', 'default', '--path', db], { encoding: 'utf8', timeout: 120_000, cwd: dir });
   });
   afterEach(() => {
-    if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    if (dir) {
+      // `memory init/store` may auto-start a workspace daemon. Stop it while the workspace still
+      // exists; deleting the directory first orphaned one daemon per live test invocation.
+      spawnSync(RUFLO_BIN, ['daemon', 'stop', '--quiet'], {
+        cwd: dir, encoding: 'utf8', timeout: 30_000,
+      });
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    }
   });
 
   t('the CORRECT command retrieves', () => {

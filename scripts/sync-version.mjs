@@ -19,6 +19,20 @@ const V = getVersion();
 const TODAY = new Date().toISOString().slice(0, 10);
 let drift = 0;
 
+export function readLockVersion(s) {
+  const doc = JSON.parse(s);
+  const top = doc.version ?? null;
+  const root = doc.packages?.['']?.version ?? null;
+  return top === root ? top : `mixed(${top}, ${root})`;
+}
+
+export function writeLockVersion(s, version) {
+  const doc = JSON.parse(s);
+  doc.version = version;
+  if (doc.packages?.['']) doc.packages[''].version = version;
+  return `${JSON.stringify(doc, null, 2)}\n`;
+}
+
 // Each target: a file, a regex to find the version-bearing line, and the corrected line.
 const targets = [
   { // Codex plugin manifest — same product, same release train as the Claude manifest
@@ -30,6 +44,11 @@ const targets = [
     file: 'package.json',
     get: (s) => (JSON.parse(s).version),
     set: (s) => s.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${V}"`),
+  },
+  { // npm lock metadata is part of the packed candidate lineage too
+    file: 'package-lock.json',
+    get: readLockVersion,
+    set: (s) => writeLockVersion(s, V),
   },
   { // the brain bundle's product-version stamp (corpus provenance stays in SOURCE.json separately)
     file: 'data/manifest.json',

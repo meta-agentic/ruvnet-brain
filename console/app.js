@@ -1144,6 +1144,28 @@ function capLegend() {
       '☐ a tickable box only appears where flipping it is single-step, reversible, and proven — everything else explains itself in words, on purpose'));
 }
 
+function advocacyPrecisionSummary(advocacy) {
+  const p = advocacy && advocacy.precision;
+  if (!p || typeof p !== 'object') return null;
+  const n = Number(p.offered) || 0;
+  const applied = Number(p.applied) || 0;
+  const interval = Array.isArray(p.interval) && p.interval.length === 2
+    ? `${Math.round(Number(p.interval[0]) * 100)}–${Math.round(Number(p.interval[1]) * 100)}%`
+    : null;
+  if (!n || p.precision == null) {
+    return el('section', { class: 'cap-precision', 'aria-label': 'Advocacy precision' },
+      el('h3', {}, 'Advocacy precision · accruing'),
+      el('p', {}, 'Not judgeable yet — no resolved offers have accumulated. This is a ',
+        el('b', {}, 'post-launch metric'), ', never a fabricated launch score.'));
+  }
+  return el('section', { class: 'cap-precision', 'aria-label': 'Advocacy precision' },
+    el('h3', {}, 'Advocacy precision · accruing'),
+    el('p', {},
+      el('b', {}, `${applied} of ${n}`), ' resolved offers were applied',
+      interval ? ` · honest 95% interval ${interval}` : '',
+      '. This remains a ', el('b', {}, 'post-launch metric'), ' while evidence accumulates.'));
+}
+
 let lastCapabilities = null;   // kept so the card can re-render once the rec cards its checkboxes point at have mounted
 function renderCapabilities(data) {
   lastCapabilities = data;
@@ -1231,6 +1253,8 @@ function renderCapabilities(data) {
       : ' Every row below was established by something we observed, not assumed.'));
 
   main.push(capLegend());
+  const precisionSummary = advocacyPrecisionSummary(data && data.advocacy);
+  if (precisionSummary) main.push(precisionSummary);
 
   /* GROUPED BY SCOPE, not flat. `scope` has been in the registry since it was written
      (capability-registry.mjs — SCOPE.MACHINE / PROJECT / USER) and was rendered as a small grey
@@ -2520,21 +2544,27 @@ function buildSettingsField(f, values, defaults, refreshDirty) {
     const name = `seg-${f.key}`;
     const seg = el('div', { class: 'seg', role: 'radiogroup', 'aria-labelledby': labId, 'aria-describedby': helpId });
     const inputs = [];
-    const chosen = typeof values[f.key] === 'string' && f.options.includes(values[f.key]);
+    const chosen = f.options.some((opt) => Object.is(values[f.key], opt));
     const rec = f.options.includes(defaults[f.key]) ? defaults[f.key] : f.options[0];
     for (const opt of f.options) {
-      const input = el('input', { type: 'radio', name, value: opt, onchange: refreshDirty });
-      input.checked = chosen ? values[f.key] === opt : opt === rec;
+      const input = el('input', { type: 'radio', name, value: String(opt), onchange: refreshDirty });
+      input.optionValue = opt;
+      input.checked = chosen ? Object.is(values[f.key], opt) : Object.is(opt, rec);
       inputs.push(input);
       seg.append(el('label', {}, input, el('span', { class: 'seg-lab' }, segLabel(f.key, opt))));
     }
     // Falling back to options[0] and saying nothing is how "routing: auto" appeared to be the
     // user's setting on a machine whose config file did not exist.
     if (!inputs.some((i) => i.checked) && inputs[0]) inputs[0].checked = true;
-    initialValue = inputs.find((i) => i.checked)?.value;
+    initialValue = inputs.find((i) => i.checked)?.optionValue;
+    if (f.key === 'advocacy' && !chosen) {
+      ctl.append(el('p', { class: 'field-consult', role: 'note' },
+        'First-time choice: how much should RuvNet Brain jump in unprompted? Choose 1–5. ',
+        el('b', {}, '3 · Balanced is recommended'), ' and you can change it any time.'));
+    }
     ctl.append(seg);
     if (!chosen) ctl.append(notChosenField(segLabel(f.key, rec)));
-    collector = () => ({ include: true, value: inputs.find((i) => i.checked)?.value });
+    collector = () => ({ include: true, value: inputs.find((i) => i.checked)?.optionValue });
   } else {
     const input = el('input', {
       type: 'text', class: 'text-input', 'aria-labelledby': labId, 'aria-describedby': helpId, oninput: refreshDirty,

@@ -67,7 +67,8 @@ describe.skipIf(!hasPosixShell)('hijack-ruvnet.sh — the interceptor survives a
   it('CONTROL: with a normal PATH it fires on a generic vector store', () => {
     const r = fire(VECTOR_STORE);
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('RuvNet Brain — hijack');
+    expect(r.stdout).toContain('RuvNet Brain — guidance');
+    expect(r.stdout).not.toMatch(/hijack/i);
   });
 
   it('THE FIX: with jq ABSENT from PATH it STILL fires — this returned empty before', () => {
@@ -78,7 +79,8 @@ describe.skipIf(!hasPosixShell)('hijack-ruvnet.sh — the interceptor survives a
       const r = fire(VECTOR_STORE, { PATH: dir });
       expect(r.status).toBe(0);
       // KNOWN-BAD: before the fix this stdout was '' — byte-for-byte silence on a real violation.
-      expect(r.stdout).toContain('RuvNet Brain — hijack');
+      expect(r.stdout).toContain('RuvNet Brain — guidance');
+      expect(r.stdout).not.toMatch(/hijack/i);
       expect(r.stdout).toContain('RuVector');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });

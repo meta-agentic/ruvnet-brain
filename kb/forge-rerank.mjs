@@ -12,6 +12,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { loadTransformers } from './resolve-deps.mjs';
+import { materializeModelRevision, modelCacheReady } from './model-requirements.mjs';
 
 // ADR-0011 Phase 3: this file doubles as its OWN worker_threads entry (single-file pattern —
 // scripts/build-bundle.mjs ships a fixed tools list, so no new file may be added to the bundle).
@@ -47,8 +48,11 @@ async function loadCE() {
   if (modelCache) {
     T.env.cacheDir = modelCache;
     T.env.localModelPath = modelCache;
+    if (!modelCacheReady(modelCache, CE_MODEL)) {
+      materializeModelRevision(modelCache, CE_MODEL, CE_REVISION);
+    }
   }
-  T.env.allowRemoteModels = true;
+  T.env.allowRemoteModels = !(modelCache && modelCacheReady(modelCache, CE_MODEL));
   const ceDir = modelCache ? path.join(modelCache, CE_MODEL) : null;
   const attempt = async () => {
     const tok = await T.AutoTokenizer.from_pretrained(CE_MODEL, { revision: CE_REVISION });

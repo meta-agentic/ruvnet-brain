@@ -31,9 +31,23 @@ describe('chooseModelCache — model-cache selection', () => {
   });
   it('falls back to a kb-local "models-cache" dir when no override is set', () => {
     delete process.env.KB_MODEL_CACHE;
-    const r = chooseModelCache();
+    const r = chooseModelCache({ kbDir: path.join(tmp, 'kb') });
     expect(typeof r).toBe('string');
     expect(r.endsWith(path.join('kb', 'models-cache'))).toBe(true);
+  });
+  it('reuses the installed Brain sibling model cache instead of creating a split cache', () => {
+    delete process.env.KB_MODEL_CACHE;
+    const kbDir = path.join(tmp, 'kb');
+    const brainModels = path.join(tmp, 'models');
+    fs.mkdirSync(path.join(brainModels, 'Xenova', 'bge-base-en-v1.5'), { recursive: true });
+    expect(chooseModelCache({ kbDir })).toBe(brainModels);
+  });
+  it('recognizes the legacy MiniLM cache as a valid installed sibling', () => {
+    delete process.env.KB_MODEL_CACHE;
+    const kbDir = path.join(tmp, 'kb');
+    const brainModels = path.join(tmp, 'models');
+    fs.mkdirSync(path.join(brainModels, MODEL_SLUG), { recursive: true });
+    expect(chooseModelCache({ kbDir })).toBe(brainModels);
   });
 });
 

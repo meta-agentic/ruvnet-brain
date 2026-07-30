@@ -1,0 +1,11 @@
+[
+  { "query": "Ruflo agent swarm orchestration overview", "expectRepo": ["ruflo", "concepts"], "minRelevance": 0 },
+  { "query": "RuVector HNSW vector search overview", "expectRepo": ["ruvector", "concepts"], "minRelevance": -1.5 },
+  { "query": "AgentDB Cypher graph queries over agent memory", "expectRepo": ["agentdb", "concepts"], "minRelevance": -1.5 },
+  { "query": "Agentic-flow low-cost model routing for Claude Code", "expectRepo": ["agentic-flow", "concepts"], "minRelevance": -3 },
+  { "query": "SPARC methodology phases overview", "expectRepo": ["sparc", "concepts", "ruflo"], "minRelevance": -3 },
+  { "query": "QuDAG quantum-resistant DAG anonymous communication", "expectRepo": ["qudag", "concepts"], "minRelevance": -3 },
+  { "query": "RuLake vector-query cache overview", "expectRepo": ["rulake", "concepts"], "minRelevance": -3 },
+  { "query": "SAFLA self-aware feedback loop overview", "expectRepo": ["safla", "concepts"], "minRelevance": -3 },
+  { "query": "Agent harness generator MetaHarness scaffolding overview", "expectRepo": ["agent-harness-generator", "metaharness", "concepts"], "minRelevance": -3 }
+]

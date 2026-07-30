@@ -38,7 +38,7 @@ export const BUDGET_PATH = path.join(KB_DIR, 'card-lane-budget.json');
 // string — the lane's cost should not depend on which of these it is asked, and cycling several
 // (rather than one) avoids over-fitting the measurement to a single query's token count.
 const FALLBACK_QUERIES = [
-  'Can ruflo orchestrate agent swarms, and what implements it?',
+  'Can ruflo orchestrate agent swarms?',
   'Does RuVector use HNSW for vector search?',
   'Can rUv building blocks run graph queries over agent memory?',
 ];

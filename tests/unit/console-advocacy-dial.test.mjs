@@ -149,23 +149,7 @@ describe('the console serves the advocacy dial — real schema, not invented cop
 });
 
 describe('a save round-trips through user-settings.mjs\'s saveSettings, to the file IT owns', () => {
-  // KNOWN, OUT-OF-SCOPE REGRESSION discovered while migrating this suite to ADR-052's 1-5 dial
-  // (2026-07-25). scripts/onboarding-console.mjs's saveAdvocacy() still reads:
-  //     if (typeof value !== 'string' || !ADVOCACY_FIELD.options.includes(value)) { ...reject... }
-  // ADVOCACY_FIELD.options is now [1,2,3,4,5] (numbers, not strings) — so `typeof value !== 'string'`
-  // is true for EVERY legal value, and saveAdvocacy() now rejects 100% of input. Confirmed live:
-  // saveAdvocacy({advocacy:4}) AND saveAdvocacy({advocacy:'off'}) both return ok:false today. This
-  // task's constraints are "edit ONLY test files", so the three tests below whose entire purpose is
-  // proving a successful save keep their correct, un-weakened assertions — they are NOT rewritten to
-  // match the broken behavior — but are marked `it.fails()` with the reason on record, rather than
-  // silently deleted or quietly repointed at something else. The likely fix, for whoever owns
-  // onboarding-console.mjs: resolve `ADVOCACY_FIELD.legacy?.[value] ?? value` before the
-  // `options.includes` check and drop the `typeof value !== 'string'` guard (saveSettings() already
-  // re-validates the resolved value against the real schema, so the console's own duplicate type
-  // check is redundant once options are numbers). The moment that lands, these three `it.fails()`
-  // start UNEXPECTEDLY PASSING — which Vitest's `.fails()` contract itself turns into a hard failure,
-  // forcing whoever fixes it to notice and flip them back to plain `it(...)`.
-  it.fails('saveAdvocacy writes advocacy nested under `.settings`, in user-settings.mjs\'s own versioned envelope', () => {
+  it('saveAdvocacy writes advocacy nested under `.settings`, in user-settings.mjs\'s own versioned envelope', () => {
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 4 })));`);
     expect(out.ok).toBe(true);
 
@@ -176,13 +160,13 @@ describe('a save round-trips through user-settings.mjs\'s saveSettings, to the f
     expect(typeof raw.version).toBe('number');
   });
 
-  it.fails('reading it back through gatherAdvocacy() sees exactly what was saved', () => {
+  it('reading it back through gatherAdvocacy() sees exactly what was saved', () => {
     run(`${IMPORT} m.saveAdvocacy({ advocacy: 1 });`);
     const after = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
     expect(after.values.advocacy).toBe(1);
   });
 
-  it.fails('a save takes a real backup — the same safety net user-settings.mjs\'s own saveSettings tests prove', () => {
+  it('a save takes a real backup — the same safety net user-settings.mjs\'s own saveSettings tests prove', () => {
     run(`${IMPORT} m.saveAdvocacy({ advocacy: 1 });`); // first save: no backup (nothing existed yet)
     const second = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.saveAdvocacy({ advocacy: 4 })));`);
     expect(second.ok).toBe(true);
@@ -269,5 +253,12 @@ describe('console/app.js — wired to the real endpoint, reusing the schema\'s o
   it('the shared widget builders exist — the dial is required to reuse them, not a bespoke control', () => {
     expect(src).toMatch(/function buildSettingsField\(/);
     expect(src).toMatch(/function buildSettingsForm\(/);
+  });
+
+  it('asks the first-run question at the functional 1–5 control and keeps numeric values numeric', () => {
+    expect(src).toContain('First-time choice: how much should RuvNet Brain jump in unprompted? Choose 1–5.');
+    expect(src).toContain('3 · Balanced is recommended');
+    expect(src).toMatch(/input\.optionValue\s*=\s*opt/);
+    expect(src).toMatch(/value:\s*inputs\.find\(\(i\)\s*=>\s*i\.checked\)\?\.optionValue/);
   });
 });

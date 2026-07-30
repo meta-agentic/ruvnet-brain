@@ -7,7 +7,7 @@ authors: [Stuart Kerr, Claude Code]
 tags: [updating, self-update, plugin, hot-reload, rollback, mcp, hooks]
 supersedes: []
 relates: [ADR-020, ADR-021, ADR-022]
-updated: 2026-07-27
+updated: 2026-07-29
 updated_source: derived-from-git
 ---
 
@@ -91,6 +91,20 @@ Split the product into a **boot-frozen shell** (as small as possible, changes ~n
    update flow (`forge-update.mjs`) including the private-store fence: a code update can never
    strip a user's private stores (the maintainer's machine carries 3).
 
+7. **Host-neutral convergence** — SessionStart launches `host-update.mjs`, never a host-specific
+   marketplace pipeline. The current published installer refreshes the signed KB release, wires
+   every detected Claude Code and Codex host through its supported plugin lifecycle, requires the
+   installed snapshot version to equal the candidate exactly, and only then advances the Spine from
+   the newest staged payload in either host cache. A missing, stale, or unverifiable host snapshot
+   leaves the prior runtime generation active and returns a failed update for automatic retry.
+
+   **Trust boundary (reconciled 2026-07-29):** the Brain/KB Release archive is the product-signed
+   channel and unattended extraction requires its Ed25519 signature. Host plugin code is a separate
+   package-manager channel: npm/Claude/Codex verifies its published artifact integrity, then the
+   Spine independently requires exact version equality, contained regular files with no symlinks,
+   and all structural/runtime gates before activation. We do not claim an Ed25519 signature exists
+   on a host cache when that channel supplies none.
+
 ## Why this holds
 
 - It converts our "loaded" surfaces into "invoked" surfaces wherever the process boundary allows,
@@ -112,6 +126,8 @@ Split the product into a **boot-frozen shell** (as small as possible, changes ~n
   staged payload the engine gates and applies.
 - New failure mode to watch: a broken active generation. Mitigated by gate-before-flip + retained
   previous + loud shim fallback; `update-apply.mjs --doctor` reports spine state.
+- A dual-host machine has one candidate and one runtime Spine, not two update races. A Codex-only
+  machine does not require the `claude` executable, and vice versa.
 
 ## What this does NOT claim
 
