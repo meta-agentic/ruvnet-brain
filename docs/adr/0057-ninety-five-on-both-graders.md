@@ -6,7 +6,7 @@ date: 2026-07-27
 updated: 2026-07-29
 impl: verified
 verified: 2026-07-29
-verified_digest: 1602b6437902
+verified_digest: 1f3d77fee84c
 verified_by: governed-source claim ledger in this ADR plus node scripts/doc-currency.mjs --json
 governs:
   - scripts/behavioral-l1-l4.mjs
@@ -244,6 +244,7 @@ to the five governed paths; it does not adjudicate the product or substitute for
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-29 | Re-verified every governed source surface after the 4.0.0 Agentic-QE and release-hardening commit and refreshed the machine-derived digest. This does not promote an external grader score; it proves only governed-source currency. | Commit `e20cdf2`; `scripts/behavioral-l1-l4.mjs`, `scripts/no-silent-substitution.mjs`, `tests/mesh/*.mjs`, `bin/install.mjs`, and `plugin/hooks/hooks.json` were re-read against the stored QE evidence in `docs/qe/AGENTIC-QE-4.0-MASTER-PLAN.md`; computed digest `1f3d77fee84c`. |
 | 2026-07-29 | Re-read all five governed surfaces after the UserPromptSubmit timeout repair; the architecture and open score/proof limits remain unchanged, while the D6 envelope wording now matches the actual split deadlines. | PR #65 / commit `6734597` changes only the two UserPromptSubmit declarations in `plugin/hooks/hooks.json` from 5s to 10s; pre-tool declarations remain 5s and the inner unprompted runtime remains bounded at 4s. The exact candidate passed the GitHub macOS/Ubuntu/Windows stranger matrix, full Windows units, UX/QE, and warm-brain battery; neither external grader re-ran, so no score is promoted. |
 | 2026-07-29 | Reviewed the complete governed-path history since `8325510` and re-read the only changed governed path; the architecture and open proof limits are unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
 | 2026-07-28 | Re-read the full ADR and all five governed paths after five post-document commits; changed `impl:` from stale `unbuilt` to source-currency `verified`, replaced the obsolete build-order table, and added a governed-source claim ledger. No score or release verdict was promoted. | `doc-currency` reported drift after `2f420e7`, `27cca88`, `7eb11fb`, `e089074`, and `4ad464e`. The re-read confirms source wiring in `bin/install.mjs` and `plugin/hooks/hooks.json`, while `scripts/no-silent-substitution.mjs` still lacks downstream `--project` routing. `2b39f68` is one D4 causal artifact, not win-twice; `/private/tmp/qe-grade-gpt56-879b928.out` remains the last external grade at 15/100 and explicitly leaves exact-SHA matrix, published artifact, and both-grader proof untested. |
