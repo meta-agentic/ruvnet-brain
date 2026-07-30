@@ -56,7 +56,7 @@
 
 ---
 
-## What's new in 3.9 — it anticipates, and it learns whether it was right
+## What's new in 4.0 — it anticipates, and it learns whether it was right
 
 **Building toward L4/L5 (3.9.x, dev).** The mechanisms for the top two rungs of the proactivity
 ladder are built and wired — but they are **not yet verified to 4.0's bar**, which requires all five
