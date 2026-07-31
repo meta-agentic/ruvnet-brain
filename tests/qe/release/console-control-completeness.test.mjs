@@ -48,6 +48,7 @@ describe('console control completeness', () => {
     expect(APP).toContain('Unsupported settings and secrets are never included');
     expect(APP).toContain("postJSON('/api/apply', { ids: recs.map((rec) => rec.id), preStateHash })");
     expect(APP).toContain("postJSON('/api/undo', { undoToken: result.undoToken })");
-    expect(SERVER).toContain('const { ids: validNow } = currentValidIds();');
+    expect(SERVER).toContain('const { ids: validNow } = currentValidIds(id);');
+    expect(SERVER).toContain("onlyId.startsWith('reconcile:')");
   });
 });

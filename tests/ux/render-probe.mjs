@@ -104,6 +104,7 @@ function startConsole(port, home, cwd = REPO) {
   const env = {
     ...process.env,
     HOME: home,
+    USERPROFILE: home,
     CONSOLE_PORT: String(port),
     RUVNET_CONSOLE_DISABLE_BACKGROUND_REFRESH: '1',
   };
@@ -119,7 +120,7 @@ function startConsole(port, home, cwd = REPO) {
 /** Pre-warm the cache in the temp HOME by running --refresh-cache once, so the render is warm-path. */
 function prewarm(home, cwd = REPO) {
   return new Promise((resolve) => {
-    const env = { ...process.env, HOME: home };
+    const env = { ...process.env, HOME: home, USERPROFILE: home };
     const child = spawn(process.execPath, [CONSOLE_MJS, '--refresh-cache'], { env, stdio: 'ignore', cwd });
     let settled = false;
     const finish = () => {
@@ -229,7 +230,7 @@ export async function runRenderProbe() {
       'field-qeFleet',
       'field-routing',
     ];
-    if (!surface.unavailable.includes('Nightly brain refresh')) expectedFields.push('field-nightly');
+    if (process.platform === 'darwin') expectedFields.push('field-nightly');
     expectedFields.sort();
     acceptance.push({
       label: 'only consumer-backed settings are actionable',
@@ -238,7 +239,8 @@ export async function runRenderProbe() {
     });
     acceptance.push({
       label: 'all unsupported settings are visibly disclosed',
-      pass: surface.unavailable.length === (expectedFields.includes('field-nightly') ? 0 : 1),
+      pass: JSON.stringify(surface.unavailable)
+        === JSON.stringify(process.platform === 'darwin' ? [] : ['Nightly brain refresh']),
       detail: `${surface.unavailable.length}: ${surface.unavailable.join(', ')}`,
     });
     acceptance.push({
@@ -265,9 +267,11 @@ export async function runRenderProbe() {
     });
     stage('console:settings-accepted');
 
-    // A recommendation is conditional on platform/runtime evidence. Do not turn "nothing to fix"
-    // into a 30-second timeout; when a card exists, the assertions below still require its real
-    // Fix All endpoint and per-item undo.
+    // The isolated fixture carries one real npx-wiring defect on every OS. HOME and USERPROFILE
+    // point to the same fixture root above, so a missing card is a product failure, not a platform
+    // condition the oracle may silently accept.
+    await consolePage.waitForSelector('article.rec', { state: 'attached' });
+    stage('console:recommendation-attached');
     const recommendations = await consolePage.locator('article.rec').count();
     await consolePage.locator('#card-recs').evaluate((node) => { node.open = true; });
     const fixAllButton = consolePage.getByRole('button', { name: /^Fix all \(/ });

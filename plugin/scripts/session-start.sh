@@ -38,10 +38,13 @@ if [ "$HOOK_DIR" = "$0" ]; then
 fi
 DETACH="$HOOK_DIR/detach.mjs"
 
-# Apply opted-in defaults exactly once when this is genuinely a new project. The helper copies only
-# project-scoped, non-secret choices into .swarm and uses exclusive creation, so concurrent Claude
-# and Codex windows cannot overwrite one another. It emits nothing into the session.
-if [ -f "$HOOK_DIR/runtime-preferences.mjs" ]; then
+# Apply opted-in defaults exactly once when this is genuinely a new project. Avoid starting Node at
+# all for the default-off case on the latency-critical SessionStart path; the helper remains the
+# authority and re-validates the file before copying any project-scoped, non-secret choices.
+RUVNET_PREFS_FILE="${RUVNET_SETTINGS_FILE:-${HOME}/.config/ruvnet-brain/settings.json}"
+if [ -f "$HOOK_DIR/runtime-preferences.mjs" ] \
+  && [ -f "$RUVNET_PREFS_FILE" ] \
+  && grep -Eq '"newProjectDefaults"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$RUVNET_PREFS_FILE"; then
   node "$HOOK_DIR/runtime-preferences.mjs" --seed-project >/dev/null 2>&1 || true
 fi
 

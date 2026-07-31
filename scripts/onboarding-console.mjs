@@ -1962,33 +1962,53 @@ function observeLearning() {
   return { queueDepth, lastTrainSeconds, trajectories, fleet };
 }
 
-function currentValidIds() {
+function currentValidIds(onlyId = null) {
   const ids = new Set();
-  for (const r of buildWiringRecommendations({ sites: wiringSurvey().sites })) ids.add(r.id);
-  const a = auditModel();
-  for (const r of buildStackRecommendations({ rows: a.rows, stale: a.stale })) ids.add(r.id);
+  const wiringOnly = typeof onlyId === 'string' && onlyId.startsWith('reconcile:');
+  const stackOnly = typeof onlyId === 'string'
+    && (onlyId === 'purge:shadows'
+      || onlyId.startsWith('sync:')
+      || (onlyId.startsWith('repair:') && onlyId !== 'repair:memory-index'));
+  const healthOnly = onlyId === 'repair:memory-index'
+    || (typeof onlyId === 'string' && onlyId.startsWith('learning:'));
+  const capabilityOnly = typeof onlyId === 'string' && onlyId.startsWith('enable:');
+  const validateAll = !wiringOnly && !stackOnly && !healthOnly && !capabilityOnly;
+
+  if (validateAll || wiringOnly) {
+    for (const r of buildWiringRecommendations({ sites: wiringSurvey().sites })) ids.add(r.id);
+  }
+  let auditRows = [];
+  if (validateAll || stackOnly) {
+    const a = auditModel();
+    auditRows = a.rows;
+    for (const r of buildStackRecommendations({ rows: a.rows, stale: a.stale })) ids.add(r.id);
+  }
   // Health + learning. Previously the console could SEE a corrupt store and score it 49/100 while
   // offering nothing to do about it — detection without a remedy, which ADR-027 prohibits.
-  try {
-    const project = process.cwd();
-    const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
-    for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
-  } catch { /* an advisory surface must never break the apply path */ }
+  if (validateAll || healthOnly) {
+    try {
+      const project = process.cwd();
+      const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
+      for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
+    } catch { /* an advisory surface must never break the apply path */ }
+  }
   // Capability recs (e.g. `enable:memory-distillation`) — without this, clicking the one recommended
   // capability checkbox would always report "already resolved / your machine changed", because apply()
   // only ever accepts ids this function has vouched for. Separate try from the health block above so a
   // failure in one surface never silently hides the other's ids too.
-  try {
-    for (const r of buildCapabilityRecommendations({ capabilities: capabilityAuditAll({ project: process.cwd() }) })) ids.add(r.id);
-  } catch { /* an advisory surface must never break the apply path */ }
-  return { ids, auditRows: a.rows };
+  if (validateAll || capabilityOnly) {
+    try {
+      for (const r of buildCapabilityRecommendations({ capabilities: capabilityAuditAll({ project: process.cwd() }) })) ids.add(r.id);
+    } catch { /* an advisory surface must never break the apply path */ }
+  }
+  return { ids, auditRows };
 }
 function apply(ids) {
   const results = [];
   for (const id of ids) {
     // Re-read immediately before EACH fix. A batch can change the validity of the next item; one
     // pre-flight snapshot for the whole list would let item 2 run against the world item 1 changed.
-    const { ids: validNow } = currentValidIds();
+    const { ids: validNow } = currentValidIds(id);
     if (!validNow.has(id)) { results.push({ id, ok: false, skipped: true, error: 'worldMoved', log: 'Skipped — this is already resolved, or your machine changed since the page loaded. Nothing was done. Reload to see the current state.' }); continue; }
 
     // ONE dispatch, through the registry (scripts/remedy-registry.mjs). This used to be a chain of
