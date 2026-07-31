@@ -3,7 +3,7 @@ id: ADR-050
 title: The issue pipeline may never manufacture its own acknowledgment — awareness, escalation, and a fixer that knows when to stop
 status: Accepted
 date: 2026-07-24
-updated: 2026-07-30
+updated: 2026-07-31
 impl: wired
 authors: [Stuart Kerr, Claude Code]
 tags: [issues, automation, alerting, sla, security, circuit-breaker]
@@ -178,6 +178,7 @@ The four parallel agents working tonight support this distinction. They show tha
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-31 | Re-read the issue surfacer after first-session seed and update maintenance were serialized into one detached worker; I1-I3 are unchanged. | Commit `0f68737` changes only the Stable-Spine seed/heartbeat block in `plugin/scripts/session-start.sh` and adds `plugin/scripts/first-session-worker.mjs`. The open-issue count, human-acknowledgment predicate, SLA escalation, and fixer circuit breaker are untouched. |
 | 2026-07-30 | Removed the default-off project-preference Node launch from SessionStart without changing the issue surfacer. | `plugin/scripts/session-start.sh` now calls the authoritative seed helper only when the settings file explicitly opts into new-project defaults. Issue counting, acknowledgment, escalation, and repair logic are untouched. |
 | 2026-07-30 | Re-read the issue pipeline after project-default seeding and host-convergence messaging landed in SessionStart; I1–I3 are unchanged. | `plugin/scripts/session-start.sh` adds one-time nonsecret preference seeding and restart guidance. The open-count, acknowledgment, escalation, and fixer circuit-breaker logic in `scripts/issue-watch.mjs` and `scripts/issue-fix.mjs` is unchanged; GitHub App follow-up remains open. |
 | 2026-07-29 | Re-read the issue surfacer after opt-in cold-start tracing was added around unrelated spine, heartbeat, and metering stages. The issue block and its acknowledgment/escalation semantics are unchanged. | Commit `66589f4`; governed path `plugin/scripts/session-start.sh`; PR #58 Windows job `90484507774`. |

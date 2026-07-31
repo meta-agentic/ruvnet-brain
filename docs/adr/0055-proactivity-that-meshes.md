@@ -3,7 +3,7 @@ id: ADR-055
 title: Proactivity that meshes — one decision law, four planes, substance-bound enforcement, learning bound to outcomes
 status: Accepted
 date: 2026-07-27
-updated: 2026-07-30
+updated: 2026-07-31
 impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6 (codex, read-only)]
 tags: [proactivity, hooks, mesh, fourth-wall, learning, grounding, qa]
@@ -684,6 +684,7 @@ delegation drift goes to the interrupt tier (§3.7.9).
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-31 | First-session Stable-Spine seeding and update detection now run sequentially in one detached worker; the four-plane decision law, hook output, and outcome receipts are unchanged. | Main stranger run `30603476401` measured two cold detachers at 4597ms. PR #71 core job `91073195901` then rejected simply deferring maintenance because ADR-054 requires updates while Brain OFF. Commit `0f68737` adds `plugin/scripts/first-session-worker.mjs`; focused acceptance passed 70/70 and the real registered SessionStart measured cold 249ms, p95 182ms, max 192ms. |
 | 2026-07-30 | The Windows detached supervisor now severs stdout and stderr explicitly at PowerShell's native `Start-Process` boundary. The process lifetime, TTL, receipt, and four-plane decision law are unchanged. | PR #68 job `91056188408` showed the packed PowerShell SessionStart body completed but the checker did not receive `close` before its five-second watchdog, consistent with a descendant retaining a capture handle; the job did not instrument exact handle ownership. `plugin/scripts/detach.mjs` now prevents supervisor stream inheritance with distinct files; `tests/unit/hook-battery.test.mjs` pins both redirects, and the unchanged packed Windows stranger gate remains the acceptance authority. |
 | 2026-07-30 | Re-read the governed mesh after the default-off SessionStart seed guard and strict cross-platform UX oracle correction. The four-plane decision law, grounding receipts, hook registrations, and outcome-bound learning paths are unchanged. | `plugin/scripts/session-start.sh` skips a Node launch unless `newProjectDefaults` is explicitly true, while `tests/ux/render-probe.mjs` changes only the external acceptance oracle. `npm run qe:ux` passed at candidate `ba53fc9`: cold 334ms, p95 195ms, max 195ms, Fix All 1588ms. |
 | 2026-07-29 | Re-read the full governed hook, mesh, retrieval, and experience surface after the 4.0.0 hardening commit. The decision law is unchanged; dual-host updating, worker retirement, and stored Agentic-QE tests strengthen its enforcement and proof. | Commit `e20cdf2`; governed paths include `plugin/scripts/host-update.mjs`, `plugin/scripts/detach.mjs`, `kb/forge-mcp-all.mjs`, `tests/mesh/coexistence.test.mjs`, and `tests/experience/scenarios.json`. The mesh suite, live Ruflo learning replay, and Agentic-QE gates recorded in `docs/qe/AGENTIC-QE-4.0-MASTER-PLAN.md` pass. |
