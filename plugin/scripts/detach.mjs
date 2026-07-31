@@ -107,11 +107,25 @@ if (!SUPERVISOR) {
         ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
         : 'powershell.exe';
       const quotePs = (value) => `'${String(value).replaceAll("'", "''")}'`;
+      // Start-Process has its own standard-stream boundary. On GitHub's packed PowerShell install
+      // path the SessionStart body finished but the external checker never received `close` before
+      // its 5s watchdog — consistent with a descendant retaining a capture handle, though that job
+      // did not instrument exact handle ownership. Redirect both streams to distinct files at the
+      // native boundary so the supervisor cannot inherit the hook's capture streams; redirecting
+      // only this short Node wrapper's stdio does not establish that contract for its grandchild.
+      const supervisorOut = logPath && logPath !== '-'
+        ? `${logPath}.supervisor.stdout`
+        : path.join(os.tmpdir(), `ruvnet-brain-detach-supervisor-${process.pid}.stdout`);
+      const supervisorErr = logPath && logPath !== '-'
+        ? `${logPath}.supervisor.stderr`
+        : path.join(os.tmpdir(), `ruvnet-brain-detach-supervisor-${process.pid}.stderr`);
       const launch = [
         'Start-Process',
         '-FilePath', quotePs(process.execPath),
         '-ArgumentList', `@(${quotePs(SELF)},${quotePs('--payload-env')})`,
         '-WindowStyle', 'Hidden',
+        '-RedirectStandardOutput', quotePs(supervisorOut),
+        '-RedirectStandardError', quotePs(supervisorErr),
       ].join(' ');
       child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', launch], {
         detached: true,
