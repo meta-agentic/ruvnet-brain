@@ -25,12 +25,19 @@ const SID = 'redaction-test';
 let home;
 const queuePath = () => path.join(home, '.cache', 'ruvnet-brain', 'learn', `session-${SID}.jsonl`);
 
-/** Run the hook with a fake HOME so nothing touches the real queue. Returns the recorded action. */
+/** Run the hook against an explicit user-scope fake HOME so nothing touches the real queue. */
 function capture(command) {
   const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
   execFileSync('bash', [HOOK], {
     input: payload,
-    env: { ...process.env, HOME: home, CLAUDE_SESSION_ID: SID },
+    env: {
+      ...process.env,
+      HOME: home,
+      CLAUDE_SESSION_ID: SID,
+      // This suite asserts the user-scope queue path. The product default is project scope, so
+      // leaving this implicit would test one scope and read another.
+      RUVNET_LEARNING_SCOPE: 'user',
+    },
     encoding: 'utf8',
   });
   const lines = fs.readFileSync(queuePath(), 'utf8').trim().split('\n').filter(Boolean);
