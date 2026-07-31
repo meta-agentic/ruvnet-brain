@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 const WORKER = path.resolve('plugin/scripts/first-session-worker.mjs');
 const roots = [];
 
-function fixture({ seedExit = 0, checkExit = 0, version = '4.0.2' } = {}) {
+function fixture({ seedExit = 0, checkExit = 0, version = '9.8.7' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'first-session-worker-'));
   roots.push(root);
   const seed = path.join(root, 'seed.mjs');
@@ -29,7 +29,7 @@ describe('first-session lifecycle worker', () => {
     const run = spawnSync(process.execPath, [WORKER, f.seed, f.check, f.versionLog], { encoding: 'utf8' });
     expect(run.status).toBe(0);
     expect(fs.readFileSync(f.order, 'utf8')).toBe('seed\ncheck\n');
-    expect(fs.readFileSync(f.versionLog, 'utf8')).toBe('4.0.2\n');
+    expect(fs.readFileSync(f.versionLog, 'utf8')).toBe('9.8.7\n');
   });
 
   it('does not run the heartbeat when seeding failed', () => {
