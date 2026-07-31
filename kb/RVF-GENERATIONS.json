@@ -626,12 +626,12 @@
     },
     "ruvnet-brain": {
       "file": "ruvnet-brain.big.rvf",
-      "sha256": "2d1e8db1ea63ac4b593cc0917ad84bfc1b3a64bb73f7a37f2e2d2b477b68a7bd",
-      "bytes": 4661410,
+      "sha256": "ca290ed69d9c2046f288c7fe0d0b37ada24e9e23449e07bd0f55649b0b3f7d2a",
+      "bytes": 7352789,
       "model": "Xenova/bge-base-en-v1.5",
       "dimensions": 768,
-      "sourceCommit": "cd0ed16ab3dc7199d0bb2e8c65b6c37887606192",
-      "builtUtc": "2026-07-30T17:24:56.436Z"
+      "sourceCommit": "0f68737ae8521a5ad56b33b591b8f757c7029d2d",
+      "builtUtc": "2026-07-31T04:39:28.487Z"
     }
   }
 }
