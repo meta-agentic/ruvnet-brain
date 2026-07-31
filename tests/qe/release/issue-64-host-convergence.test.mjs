@@ -136,6 +136,7 @@ describe('issue #64 — exact dual-host convergence', () => {
     const source = fs.readFileSync(SESSION, 'utf8');
     expect(source).toContain('SEED_DISPATCHED=0');
     expect(source).toContain('SEED_DISPATCHED=1');
+    expect(source).toContain('first-session-worker.mjs');
     expect(source).toContain('if [ "$SEED_DISPATCHED" != "1" ] && [ "$NOW" -gt 0 ]');
   });
 
