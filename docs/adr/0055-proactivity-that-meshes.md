@@ -3,7 +3,7 @@ id: ADR-055
 title: Proactivity that meshes — one decision law, four planes, substance-bound enforcement, learning bound to outcomes
 status: Accepted
 date: 2026-07-27
-updated: 2026-07-29
+updated: 2026-07-30
 impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6 (codex, read-only)]
 tags: [proactivity, hooks, mesh, fourth-wall, learning, grounding, qa]
@@ -684,6 +684,7 @@ delegation drift goes to the interrupt tier (§3.7.9).
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Re-read the governed mesh after the default-off SessionStart seed guard and strict cross-platform UX oracle correction. The four-plane decision law, grounding receipts, hook registrations, and outcome-bound learning paths are unchanged. | `plugin/scripts/session-start.sh` skips a Node launch unless `newProjectDefaults` is explicitly true, while `tests/ux/render-probe.mjs` changes only the external acceptance oracle. `npm run qe:ux` passed at candidate `ba53fc9`: cold 334ms, p95 195ms, max 195ms, Fix All 1588ms. |
 | 2026-07-29 | Re-read the full governed hook, mesh, retrieval, and experience surface after the 4.0.0 hardening commit. The decision law is unchanged; dual-host updating, worker retirement, and stored Agentic-QE tests strengthen its enforcement and proof. | Commit `e20cdf2`; governed paths include `plugin/scripts/host-update.mjs`, `plugin/scripts/detach.mjs`, `kb/forge-mcp-all.mjs`, `tests/mesh/coexistence.test.mjs`, and `tests/experience/scenarios.json`. The mesh suite, live Ruflo learning replay, and Agentic-QE gates recorded in `docs/qe/AGENTIC-QE-4.0-MASTER-PLAN.md` pass. |
 | 2026-07-29 | The `cmd start /b` candidate also retained the cold hook's capture handle, so Windows maintenance supervision now crosses PowerShell's native `Start-Process` boundary with hidden independent processes. Job arguments continue to travel as a base64 JSON environment payload, so user/log paths never enter the PowerShell command. POSIX keeps the existing `setsid` path. | PR #58 run `30424023167`, Windows job `90486434201`, showed the body finished in 0.98s while the watchdog returned at 7.18s. The unchanged cold hard gate remains the acceptance test for governed source `plugin/scripts/detach.mjs`. |
 | 2026-07-29 | An unrelated prompt now exits before stack-currency and project-state scans when neither prompt intent nor project state can produce any advisory. The prefilter deliberately over-approximates every downstream gate; Ruflo projects and autonomous mode always retain the established full path. | PR #58 run `30424223276`, Windows PowerShell job `90487025753`, found `ground-ruvnet.sh` exceeding its declared 5s timeout on the literal unrelated `selfcheck probe` while cold seed maintenance was active. Governed source `plugin/scripts/ground-ruvnet.sh`; packed-install stranger acceptance remains unchanged. |
