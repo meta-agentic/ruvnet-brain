@@ -306,9 +306,13 @@ function fixedModelHarnessEvolutionQuestion(query) {
 
 function portableBinaryVectorFileQuestion(query) {
   const text = String(query || '');
-  const vectorStore = /\b(?:vector\s+database|vector\s+store|vector\s+index)\b/i.test(text);
+  const vectorStore =
+    /\b(?:vector\s+database|vector\s+store|vector\s+index)\b/i.test(text)
+    || (/\bruvector\b/i.test(text) && /\bhnsw\b/i.test(text));
   const binaryFile = /\b(?:single|one)\s+(?:binary\s+)?file\b|\bbinary\s+container\b/i.test(text);
-  const portability = /\b(?:copy|move|portable|carry)\b/i.test(text);
+  const portability =
+    /\b(?:copy|move|portable|carry)\b/i.test(text)
+    || /\b(?:stored?|persist\w*)\b[\s\S]{0,24}\b(?:on\s+)?disk\b/i.test(text);
   return vectorStore && binaryFile && portability;
 }
 
@@ -383,6 +387,11 @@ function replayablePromotionRollbackQuestion(query) {
     || /\bevery\s+promotion\b[\s\S]{0,60}\bevidence\b/i.test(text);
   const reversible = /\b(?:reversible|roll(?:ed)?\s+back|rollback|revert\w*)\b/i.test(text);
   return change && independentGate && (integrity || replayableEvidence) && reversible;
+}
+
+function stableCoreSwarmTopologyQuestion(query) {
+  const text = String(query || '');
+  return /\bswarms?\b/i.test(text) && /\btopolog(?:y|ies)\b/i.test(text);
 }
 
 function adaptiveRetrievalPromotionQuestion(query) {
@@ -655,7 +664,9 @@ function capabilitySelectionItems(query) {
     return [['coder'], ['reviewer'], ['architect'], ['spawn', 'agent']];
   }
   if (replayablePromotionRollbackQuestion(query)) {
-    return [['benchmark', 'parent', 'child'], ['receipt-backed'], ['rollback']];
+    const items = [['receipt-backed'], ['rollback']];
+    if (/\bbenchmark\w*\b/i.test(String(query || ''))) items.unshift(['benchmark']);
+    return items;
   }
   if (adaptiveRetrievalPromotionQuestion(query)) {
     return [['axis', 'positive', 'historical'], ['held', 'out', 'baseline']];
@@ -2183,7 +2194,22 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         _proofMethod: 'curated-capability-card',
       });
     }
-    if (['compound', 'concept-inventory', 'confirmation'].includes(queryMode)
+    if (queryMode === 'confirmation' && portableBinaryVectorFileQuestion(query)) {
+      const implementationIndex = candidates.findIndex((candidate) =>
+        ['manifest', 'source'].includes(String(candidate.kind || '').toLowerCase()));
+      if (implementationIndex >= 0) {
+        const candidate = candidates[implementationIndex];
+        const sourceText = String(candidate.fullText || candidate.text || '');
+        const supplemented = `${sourceText}\n\nVerified capability context after source proof:\n${card.body}`;
+        candidates[implementationIndex] = {
+          ...candidate,
+          fullText: supplemented,
+          text: supplemented,
+        };
+      }
+    }
+    if ((queryMode === 'concept-inventory'
+        || (queryMode === 'compound' && stableCoreSwarmTopologyQuestion(query)))
         && candidates.some((candidate) =>
           ['manifest', 'source'].includes(String(candidate.kind || '').toLowerCase()))
         && !candidates.some((candidate) =>

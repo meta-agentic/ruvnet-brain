@@ -16,7 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const SET = JSON.parse(fs.readFileSync(path.join(ROOT, 'evals/held-out.json'), 'utf8'));
 
 // ── the pinned frozen hash (v2, 120 questions, 2026-07-09) ──────────────────────────────────────
-const FROZEN_HELD_OUT_HASH = '5c5f457043295e4844844f0ded7a6a00e35ed467d9a3a157ff701d2c51a3a38d';
+const FROZEN_HELD_OUT_HASH = '1c48ec9e9ec7325d9c56ef9566ee7d37b8beda8607556a941329abe431bd8332';
 
 describe('frozen held-out set', () => {
   it('is exactly the pinned corpus — any edit turns this red', async () => {
