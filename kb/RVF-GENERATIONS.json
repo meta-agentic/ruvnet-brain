@@ -608,12 +608,12 @@
     },
     "synthlang": {
       "file": "synthlang.big.rvf",
-      "sha256": "5cda25e961e8f71484a2f0f7a4f3aa8a1a6d2e54becc645072a36caf4b56a36b",
-      "bytes": 1902067,
+      "sha256": "9a8747bec8b7b89f0958168778d9632db4fde82e2dc9461bf64524df6d29b3b2",
+      "bytes": 2224423,
       "model": "Xenova/bge-base-en-v1.5",
       "dimensions": 768,
-      "sourceCommit": null,
-      "builtUtc": "2026-07-29T12:58:09.566Z"
+      "sourceCommit": "6959956375073c333b6a57bb9b2ff70ccd8b86ea",
+      "builtUtc": "2026-07-31T03:23:58.336Z"
     },
     "worldgraph": {
       "file": "worldgraph.big.rvf",

@@ -87,7 +87,7 @@ describe('Top-100 acceptance is stricter than the legacy routing proxy', () => {
     const acceptance = acceptanceGates(metrics, { semanticAssertionsPresent: false });
     expect(acceptance.pass).toBe(false);
     expect(acceptance.gates.find((g) => g.id === 'no-errors')?.pass).toBe(false);
-    expect(acceptance.gates.find((g) => g.id === 'max-at-most-30s')?.pass).toBe(false);
+    expect(acceptance.gates.find((g) => g.id === 'max-at-most-4s')?.pass).toBe(false);
     expect(acceptance.gates.find((g) => g.id === 'semantic-answer-assertions')?.pass).toBe(false);
   });
 

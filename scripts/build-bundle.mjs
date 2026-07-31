@@ -12,7 +12,9 @@
 //
 //   node scripts/build-bundle.mjs [--out dist/ruvnet-brain] [--version v0.2.0-dev]
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { getVersionTag, stripTag } from './version.mjs';
 import { auditRvfIndexes } from './rvf-index-audit.mjs';
@@ -275,7 +277,7 @@ const ENTRYPOINTS = [
 ];
 // Non-module assets, and modules reached only by a path the graph walk cannot see (e.g. a spawned
 // child process). Kept explicit BECAUSE they are genuinely not derivable — not as a duplicate list.
-const EXTRA_FILES = ['package.json', 'package-lock.json'];
+const EXTRA_FILES = ['package.json', 'package-lock.json', 'package-owners.json'];
 
 /** Local (relative) specifiers a module imports — static, side-effect, and literal dynamic. */
 function localImportsOf(absFile) {
@@ -443,6 +445,62 @@ node forge-ask.mjs --dir . --name ruvector --variant big --q "what is the RVF co
 - Everything runs locally; no network calls at query time. DO NOT use @ruvector/rvf-mcp-server (stub).
 - See \`manifest.json\` for per-repo chunk counts, variants, grades, and pinned source SHAs.
 `);
+
+// ---- exact release artifact -------------------------------------------------------------------
+// The release signer signs dist/ruvnet-brain.zip, not this assembly directory. Rebuilding only the
+// directory can therefore sign stale bytes left by an older run—the source tree is green while
+// users receive an old brain. Build the exact ZIP here, then extract it through the same safe
+// extractor users run and audit the RVF indexes in those extracted bytes before signing is allowed.
+const ZIP = path.join(path.dirname(OUT), `${path.basename(OUT)}.zip`);
+const archiveFiles = [];
+function collectArchiveFiles(dir, prefix = '') {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const relative = prefix ? path.join(prefix, entry.name) : entry.name;
+    if (entry.isDirectory()) collectArchiveFiles(path.join(dir, entry.name), relative);
+    else if (entry.isFile()) archiveFiles.push(relative);
+  }
+}
+collectArchiveFiles(OUT);
+archiveFiles.sort();
+fs.rmSync(ZIP, { force: true });
+const zipped = process.platform === 'win32'
+  ? spawnSync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Compress-Archive -Path '${OUT.replaceAll("'", "''")}\\*' -DestinationPath '${ZIP.replaceAll("'", "''")}' -Force`,
+  ], { encoding: 'utf8' })
+  : spawnSync('zip', ['-q', '-X', ZIP, ...archiveFiles], {
+    cwd: OUT,
+    encoding: 'utf8',
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+  });
+if (zipped.status !== 0 || !fs.existsSync(ZIP)) {
+  console.error(`[build-bundle] FATAL: could not create exact release ZIP (${zipped.stderr || zipped.error?.message || `exit ${zipped.status}`})`);
+  process.exit(1);
+}
+
+const extracted = fs.mkdtempSync(path.join(os.tmpdir(), 'ruvnet-brain-release-audit-'));
+try {
+  const { extractZip } = await import('../kb/zip-extract.mjs');
+  await extractZip(ZIP, extracted);
+  const packagedRvfs = fs.readdirSync(extracted)
+    .filter((name) => name.endsWith('.rvf'))
+    .sort()
+    .map((name) => path.join(extracted, name));
+  const packagedAudit = await auditRvfIndexes(packagedRvfs);
+  const packagedFailures = packagedAudit.filter(({ state }) => state !== 'PASS');
+  if (packagedFailures.length) {
+    console.error('[build-bundle] FATAL: extracted release artifact contains RVFs without persisted HNSW indexes:');
+    for (const result of packagedFailures) {
+      console.error(`  ${path.basename(result.path)} vectors=${result.totalVectors ?? '?'}`);
+    }
+    throw new Error('extracted release artifact failed the persisted HNSW index audit');
+  }
+  console.log(`[build-bundle] exact archive proof: ${packagedRvfs.length} RVFs audited after extraction; 0 index failures`);
+} finally {
+  fs.rmSync(extracted, { recursive: true, force: true });
+}
 
 // ---- report ------------------------------------------------------------------------------------
 console.log(`\n=== build-bundle → ${path.relative(ROOT, OUT)} (${BRAIN_VERSION}) ===`);

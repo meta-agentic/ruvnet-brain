@@ -46,6 +46,7 @@ function lifecycleStatus(text) {
 export function classifyResultEvidence(result) {
   const kind = String(result?.kind || '').toLowerCase();
   const file = String(result?.path || '');
+  const basename = path.basename(file.split(/[?#]/, 1)[0]).toLowerCase();
   // A citation fragment is not part of the filesystem path. Without stripping it first,
   // `capability-cards.md#dspy.ts` looks like a TypeScript source file and documentation can
   // silently satisfy the built-state proof gate.
@@ -55,6 +56,14 @@ export function classifyResultEvidence(result) {
 
   if (kind === 'source' || kind === 'manifest' || SOURCE_EXTENSIONS.has(ext)) {
     return { evidenceClass: 'implementation', lifecycleStatus: lifecycle };
+  }
+  // A documentation file inside a tool whose NAME contains "adr" is still documentation.
+  // Classify explicit corpus kinds before path heuristics so plugins/ruflo-adr/README.md and its
+  // review skill do not become design intent merely because their parent directory names the tool.
+  if (['doc', 'skill', 'tutorial'].includes(kind)
+      || basename === 'readme.md'
+      || basename === 'skill.md') {
+    return { evidenceClass: 'documentation', lifecycleStatus: lifecycle };
   }
   if (kind === 'adr' || /(?:^|\/)(?:adr[-_/]|\d{4}[-_])/i.test(file)) {
     return { evidenceClass: 'design-intent', lifecycleStatus: lifecycle };

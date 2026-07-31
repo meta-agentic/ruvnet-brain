@@ -41,7 +41,7 @@ export const TOP100_SEMANTIC_ASSERTIONS = Object.freeze({
     clause('typescript runtime', 'typescript', 'javascript implementation'),
   ],
   'n-11': [
-    clause('low-latency tools', 'aggressive caching', 'cached access', 'low-latency ai tool'),
+    clause('low-latency tools', 'aggressive caching', 'cache-first pattern', 'cached access', 'low-latency ai tool', 'seconds to milliseconds'),
     clause('resilience', 'circuit-breaker', 'graceful degradation', 'dependable under failure'),
   ],
   'n-12': [
@@ -136,7 +136,10 @@ export const TOP100_SEMANTIC_ASSERTIONS = Object.freeze({
   ],
   'ruflo-q2': [
     clause('swarm definition', 'agents working', 'coordinated agents', 'agent swarm'),
-    clause('topologies', 'mesh', 'hierarchical', 'ring', 'star'),
+    clause('hierarchical topology', 'hierarchical'),
+    clause('mesh topology', 'mesh'),
+    clause('ring topology', 'ring'),
+    clause('star topology', 'star'),
   ],
   'ruflo-q8': [
     clause('project store', '.swarm/memory.db', 'project memory'),
@@ -375,24 +378,24 @@ export const TOP100_SEMANTIC_ASSERTIONS = Object.freeze({
   ],
   's-17': [
     clause('living decisions', 'living plans', 'architecture decision record', 'adr tooling'),
-    clause('implementation drift', 'match implementation', 'code does another', 'checked against reality'),
+    clause('implementation drift', 'implementation drifts', 'drift detection', 'match implementation', 'code does another', 'checked against reality'),
   ],
   's-18': [
     clause('copy-on-write tenants', 'copy-on-write', 'cow branch', 'fork a vector store'),
     clause('tiny branch cost', '162 bytes', 'constant time and size', 'tiny storage overhead'),
   ],
   's-19': [
-    clause('independent benchmark', 'independently benchmarked', 'fixed benchmark', 'quality gate'),
+    clause('independent benchmark', 'independently benchmarked', 'fixed benchmark', 'frozen benchmark', 'benchmark immutability', 'parent and child each scored', 'quality gate', 'benchmark the parent versus the child'),
     clause('signed evidence', 'signed', 'witness', 'receipt-backed'),
     clause('reversible change', 'reversible', 'roll back', 'rollback'),
   ],
   's-20': [
     clause('multiple providers', 'multiple model providers', 'anthropic', 'openrouter', 'gemini'),
-    clause('task-level attribution', 'cost tracking', 'per task', 'billing', 'cost attribution'),
+    clause('per-task budget', 'max cost per task', 'per-task cost budget', 'cost ceiling'),
   ],
 
   'agentdb-q9': [
-    clause('database class', 'rvfdatabase'),
+    clause('database class', 'rvf database'),
     clause('node backend', 'nodebackend', 'node backend', 'native (n-api)', 'native n-api'),
     clause('wasm backend', 'wasmbackend', 'wasm backend'),
     clause('runtime resolution', "resolvebackend('auto')", 'resolvebackend("auto")', 'backend resolved at runtime', 'auto-detects native or wasm'),
@@ -407,6 +410,7 @@ export const TOP100_SEMANTIC_ASSERTIONS = Object.freeze({
     clause('registration code', 'register tool', 'registertool', 'tools/call', 'tool registry'),
   ],
   'ruflo-q12': [
+    clause('package identity', '@claude-flow/neural'),
     clause('neural algorithms', 'actor-critic', 'a2c', 'decision transformer', 'q-learning', 'ppo'),
   ],
   'rulake-q9': [

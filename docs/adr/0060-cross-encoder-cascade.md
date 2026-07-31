@@ -3,7 +3,7 @@ id: ADR-060
 title: The two-stage cross-encoder cascade — reading every passage, cheaply, before reading a few properly
 status: Accepted
 date: 2026-07-27
-updated: 2026-07-30
+updated: 2026-07-31
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, cascade, measurement]
 supersedes: [ADR-059]
@@ -17,7 +17,7 @@ governs:
   - plugin/mcp/server.mjs
 ---
 
-Updated: 2026-07-30 | Version 1.0.2
+Updated: 2026-07-31 | Version 1.0.3
 Created: 2026-07-27
 
 # ADR-060 — The two-stage cross-encoder cascade
@@ -229,6 +229,7 @@ opt in with `KB_CE_CASCADE_K=64`; this ADR does not accept that value as the def
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-31 | Re-verified the off-by-default cross-encoder cascade after the release-oracle fixes. | Commit `14f654e` changes only source-backed query classification, capability-card supplementation after source proof, and question-specific replayable-promotion evidence selection in `kb/forge-ask-all.mjs`. It does not change `CE_CASCADE_K_DEFAULT`, `cascadeRerankPool`, model loading, or the heavy cross-encoder path. The impacted broad gate passed 273/273 and the production Top-100 gate passed 100/100 semantic with a 3.723s maximum. |
 | 2026-07-30 | Reconciled the source-backed-card fast lane and persistent-worker readiness without changing the cascade default or claiming a new measurement. | `kb/forge-ask-all.mjs` may satisfy source-backed cards before the heavy full-corpus cross-encoder path; the two-stage cascade contract applies to that heavy path. `CE_CASCADE_K_DEFAULT` remains 0. `kb/forge-rerank.mjs`, `kb/forge-mcp-all.mjs`, and `plugin/mcp/server.mjs` prime the existing reranker inside the persistent MCP worker, not at host SessionStart. |
 | 2026-07-28 | Re-read every governed path, recorded the interrupted 120-question attempt, and explicitly retained the off-by-default decision. The completed n=24 table remains historical evidence; it was not relabeled as a current n=120 result. | Live `kb/forge-ask-all.mjs` still defines `CE_CASCADE_K_DEFAULT = 0`, `CE_CASCADE_TOKENS_DEFAULT = 192`, runs `cePrefilterScores` only for an explicit positive K, and selects survivors through `cascadeRerankPool`. Commits `2de0c58` and `859a16d` later added implementation-evidence checks, query-scoped routing, and exact-evidence rescue lanes, which can change the candidate pool; neither constitutes a cascade remeasurement. `kb/forge-rerank.mjs`, `scripts/rerank-cap-eval.mjs`, and `scripts/rerank-cap-warm-ab.mjs` did not move after the prior stamp. Known governed-source comment debt remains in `kb/forge-ask-all.mjs` and `scripts/rerank-cap-warm-ab.mjs`: comments still use the pre-renumber ADR-057/058 labels, and the warm-A/B header still describes the corrected 53s download as model loading; executable defaults and harness behavior are as described here. |
 | 2026-07-28 | Corrected predecessor references from ADR-057 to ADR-059 and corrected the cold-load rationale. | Commit `d117234` renumbered the pool-cap decision to ADR-059. The run record in `evals/runs/2026-07-27-cross-encoder-cascade.md` reports 1,670 ms cold-minus-warm, 1,762 ms direct two-model load, and 802 ms for the rejected additional L-2 model; 53,350 ms was a first-run download/cache-path defect, not ONNX initialization. |
