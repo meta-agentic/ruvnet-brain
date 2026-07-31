@@ -45,6 +45,10 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } } }) + '\\n');
     return;
   }
+  if (m.method === 'brain/warmup') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { ready: true } }) + '\\n');
+    return;
+  }
   // Everything else: answer NOTHING, forever. This is the outage.
 });
 setInterval(() => {}, 1 << 30); // stay alive so the parent must kill us
@@ -161,6 +165,8 @@ rl.on('line', (line) => {
   let m; try { m = JSON.parse(line); } catch { return; }
   if (m.method === 'initialize') {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } } }) + '\\n');
+  } else if (m.method === 'brain/warmup') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { ready: true } }) + '\\n');
   } else if (n > 1 && m.method === 'tools/call') {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'recovered worker' }] } }) + '\\n');
   }
@@ -261,6 +267,8 @@ rl.on('line', (line) => {
   let m; try { m = JSON.parse(line); } catch { return; }
   const result = m.method === 'initialize'
     ? { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } }
+    : m.method === 'brain/warmup'
+      ? { ready: true }
     : m.method === 'tools/call'
       ? { content: [{ type: 'text', text: 'worker ' + n }] }
       : { tools: [{ name: 'search_ruvnet', inputSchema: { type: 'object' } }] };

@@ -37,7 +37,7 @@ import { callManagedCli, MANAGED_CLI_TOOLS } from './managed-cli-interface.mjs';
 
 const BRAIN_HOME = process.env.RUVNET_BRAIN_HOME || path.join(os.homedir(), '.cache', 'ruvnet-brain');
 const KB = process.env.RUVNET_BRAIN_KB || path.join(BRAIN_HOME, 'kb');
-const CHILD_MCP = path.join(KB, 'forge-mcp-all.mjs');
+const CHILD_MCP = process.env.RUVNET_BRAIN_CHILD_MCP || path.join(KB, 'forge-mcp-all.mjs');
 const ACTIVE = path.join(BRAIN_HOME, 'active.json');
 const LEASES = path.join(BRAIN_HOME, 'leases');
 const LEASE = path.join(LEASES, `mcp-${process.pid}.json`);
@@ -147,6 +147,10 @@ function killChild(reason) {
 async function ensureChild() {
   const gen = currentGeneration();
   if (child && child.generation !== gen && pendingCount === 0) await killChild('superseded by a newer generation');
+  // A concurrent initialize/tools-list/tools-call must join the same readiness promise. Returning
+  // `child` while its private initialize or model warmup is still running advertises a half-ready
+  // worker and charges cold-start to the first user call.
+  if (childStartup) return childStartup;
   if (child) return child;
   await childRetirement;
   if (!fs.existsSync(CHILD_MCP)) return null;
@@ -177,6 +181,17 @@ async function ensureChild() {
           capabilities: {},
           clientInfo: { name: 'ruvnet-brain-shell', version: SERVER_INFO.version },
         }, CHILD_INIT_TIMEOUT_MS);
+        const warmed = await childRequest(c, 'brain/warmup', {}, CHILD_INIT_TIMEOUT_MS);
+        // Rolling-upgrade compatibility: 4.0.1 workers predate the private warmup extension. The
+        // stable shell is installed before the 700MB KB swap completes, so rejecting -32601 here
+        // makes every query fail during the exact in-place upgrade window the shell exists to hide.
+        // An older initialized worker is usable (its first query may be cold); any other warmup
+        // failure still fails closed.
+        const warmupUnsupported = warmed.error?.code === -32601
+          || /method not found/i.test(String(warmed.error?.message || ''));
+        if (!warmupUnsupported && (warmed.error || warmed.result?.ready !== true)) {
+          throw new Error(warmed.error?.message || 'brain worker did not confirm warm readiness');
+        }
       } catch (e) {
         await killChild('failed initialize');
         throw new Error(`brain worker failed to initialize: ${e.message}`);
@@ -241,6 +256,12 @@ async function handleClient(msg) {
   if (id === undefined || id === null) return; // notifications need no answer
   switch (method) {
     case 'initialize':
+      // MCP initialize itself stays protocol-fast; normal clients request tools/list immediately
+      // afterwards, which joins this readiness promise and does not receive the tool declaration
+      // until the worker's query embedder and cross-encoder are warm.
+      void ensureChild().catch((e) => {
+        console.error(`[ruvnet-brain] worker warmup failed during initialize: ${e.message}`);
+      });
       return clientOk(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: SERVER_INFO });
     case 'ping':
       return clientOk(id, {});

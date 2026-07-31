@@ -40,6 +40,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const HOME = os.homedir();
 const RUFLO = process.env.RUFLO_BIN || path.join(HOME, '.npm-global/bin/ruflo');
+const RUFLO_ENV = { ...process.env, RUFLO_DAEMON_AUTOSTART: '0' };
 
 const argv = process.argv.slice(2);
 const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
@@ -56,7 +57,7 @@ const die = (s, code = 1) => { process.stderr.write(s + '\n'); process.exit(code
 
 /** Run a ruflo subcommand, returning {ok, out, err}. Never throws — callers decide what a failure means. */
 function ruflo(args, { timeout = 600_000 } = {}) {
-  const r = spawnSync(RUFLO, args, { encoding: 'utf8', timeout, shell: process.platform === 'win32' }); // a global npm ruflo is ruflo.cmd on Windows; Node refuses .cmd without a shell (CVE-2024-27980)
+  const r = spawnSync(RUFLO, args, { encoding: 'utf8', timeout, env: RUFLO_ENV, shell: process.platform === 'win32' }); // a global npm ruflo is ruflo.cmd on Windows; Node refuses .cmd without a shell (CVE-2024-27980)
   return { ok: !r.error && r.status === 0, out: r.stdout || '', err: (r.stderr || '') + (r.error ? String(r.error.message) : '') };
 }
 

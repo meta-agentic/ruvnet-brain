@@ -10,8 +10,10 @@ Treat `/rvbc`, `/rvcb`, `/brain-console`, and `/ruvnet-brain:configure` as equal
 Never correct the user's spelling.
 
 1. Say one short sentence: "Opening it now; it scans live while you watch."
-2. Locate `scripts/onboarding-console.mjs` from the current repository. If it is not present,
-   check `~/Code/ruvnet-brain/scripts/onboarding-console.mjs`. Do not invent another path.
+2. Resolve the installed runtime at
+   `${RUVNET_BRAIN_KB:-$HOME/.cache/ruvnet-brain/kb}/.console-runtime/scripts/onboarding-console.mjs`.
+   A current-repository `scripts/onboarding-console.mjs` is allowed only for an explicit developer
+   checkout. Never fall back to a guessed `~/Code` path.
 3. Run `node <resolved-script> --serve --open` in the background.
 4. Give the URL immediately. Do not promise a duration; the page reports its own scan progress.
 

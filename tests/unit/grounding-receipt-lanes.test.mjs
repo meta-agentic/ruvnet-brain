@@ -25,7 +25,12 @@ import { afterEach, beforeEach, describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { recordAnswer, evidenceFile } from '../../kb/forge-evidence.mjs';
+import {
+  buildReceipt,
+  extractFacts,
+  recordAnswer,
+  evidenceFile,
+} from '../../kb/forge-evidence.mjs';
 
 const REPO = path.resolve(import.meta.dirname, '../..');
 const SERVER = path.join(REPO, 'kb/forge-mcp-all.mjs');
@@ -172,6 +177,144 @@ describe('the writer itself still writes — the guard above is about wiring, no
     expect(r.sources).toHaveLength(1);
     expect(r.sources[0]).toMatchObject({ capability: 'agentdb', enforceable: false });
     expect(after).toBe(before + 1);
+  });
+
+  it('treats Rust public traits, enums, types, modules, and re-exports as enforceable symbols', () => {
+    const text = [
+      'pub trait BackendAdapter {}',
+      'pub enum Consistency { Fresh, Eventual, Frozen }',
+      'pub type BackendId = String;',
+      'pub mod cache;',
+      'pub use backend::{BackendAdapter, LocalBackend};',
+    ].join('\n');
+    const r = recordAnswer({
+      query: 'Rust public API',
+      repos: ['rulake'],
+      results: [{
+        repo: 'rulake',
+        path: 'crates/core/src/lib.rs',
+        kind: 'source',
+        text,
+      }],
+    });
+    expect(r.sources).toHaveLength(1);
+    expect(r.sources[0].enforceable).toBe(true);
+    expect(extractFacts({ text }).symbols.map((symbol) => symbol.name))
+      .toEqual(expect.arrayContaining([
+        'BackendAdapter',
+        'Consistency',
+        'BackendId',
+        'cache',
+      ]));
+  });
+
+  it('content-addresses a cited code source even when the bundled passage contains only its doc comment', () => {
+    const facts = extractFacts({
+      repo: 'qe-engine',
+      path: 'src/generators/test-generator.ts',
+      kind: 'source',
+      text: 'Module src/generators/test-generator.ts — doc comment: Generates test code.',
+    });
+    expect(facts).toMatchObject({
+      enforceable: false,
+      sourceReference: {
+        path: 'src/generators/test-generator.ts',
+        sha: expect.stringMatching(/^[a-f0-9]{12}$/),
+      },
+    });
+    const receipt = buildReceipt({
+      query: 'Does qe-engine generate tests automatically?',
+      repos: ['qe-engine'],
+      results: [{
+        repo: 'qe-engine',
+        path: 'src/generators/test-generator.ts',
+        kind: 'source',
+        text: 'Module source — Test Generator Factory creates framework-specific tests.',
+      }],
+    });
+    expect(receipt.sources[0]).toMatchObject({
+      enforceable: true,
+      claimBinding: { method: 'tight-source-token-pair' },
+    });
+  });
+
+  it('never treats a code extension and hash as capability enforcement when source terms are unrelated', () => {
+    const receipt = buildReceipt({
+      query: 'Does cipher-engine encrypt records and rotate keys?',
+      repos: ['cipher-engine'],
+      results: [{
+        repo: 'cipher-engine',
+        path: 'src/metrics.ts',
+        kind: 'source',
+        text: 'Encrypt metadata attached to records. Rotate counters emitted for keys.',
+      }],
+    });
+    expect(receipt.sources[0]).toMatchObject({
+      sourceReference: {
+        path: 'src/metrics.ts',
+        sha: expect.stringMatching(/^[a-f0-9]{12}$/),
+      },
+      enforceable: false,
+    });
+  });
+
+  it('content-addresses Python implementation sources and extracts their public symbols', () => {
+    const facts = extractFacts({
+      repo: 'adaptive-engine',
+      path: 'adaptive/core/learning.py',
+      kind: 'source',
+      text: [
+        'class AdaptationEngine:',
+        '    async def adapt_policy(self, feedback):',
+        '        return feedback',
+      ].join('\n'),
+    });
+    expect(facts).toMatchObject({
+      sourceReference: {
+        path: 'adaptive/core/learning.py',
+        sha: expect.stringMatching(/^[a-f0-9]{12}$/),
+      },
+      enforceable: true,
+    });
+    expect(facts.symbols.map((symbol) => symbol.name))
+      .toEqual(expect.arrayContaining(['AdaptationEngine', 'adapt_policy']));
+  });
+
+  it('extracts an explicit gold-fix grading firewall as enforceable posture', () => {
+    const facts = extractFacts({
+      repo: 'security-benchmark',
+      path: 'scripts/evaluate.mjs',
+      kind: 'source',
+      text: 'The gold `patch` is NEVER applied here; gold is used only by --validate, never during grading.',
+    });
+    expect(facts).toMatchObject({
+      enforceable: true,
+      sourceReference: {
+        path: 'scripts/evaluate.mjs',
+        sha: expect.stringMatching(/^[a-f0-9]{12}$/),
+      },
+    });
+    expect(facts.posture.join(' ')).toMatch(/gold .*never applied.*grading/i);
+  });
+
+  it('extracts explicit browser-local and no-upload source posture', () => {
+    const facts = extractFacts({
+      repo: 'visual-search',
+      path: 'docs/live.js',
+      kind: 'source',
+      text: [
+        'Visual search runs fully in the browser.',
+        'Frames are embedded with CLIP locally. No server, no upload.',
+      ].join('\n'),
+    });
+    expect(facts).toMatchObject({
+      enforceable: true,
+      sourceReference: {
+        path: 'docs/live.js',
+        sha: expect.stringMatching(/^[a-f0-9]{12}$/),
+      },
+    });
+    expect(facts.posture.join(' ')).toMatch(/fully in the browser|no upload/i);
   });
 
   it('a factless source mints a receipt but writes NO ledger line — extraction is deterministic', () => {

@@ -72,8 +72,10 @@ const IMPORT = `const m = await import(${JSON.stringify(pathToFileURL(CONSOLE_MJ
 describe('the console serves the advocacy dial — real schema, not invented copy', () => {
   it('gatherAdvocacy() reports the real options + default straight from user-settings.mjs', () => {
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
-    expect(out.schema).toHaveLength(1);
-    const f = out.schema[0];
+    expect(out.schema.map((field) => field.key)).toEqual([
+      'learningScope', 'advocacy', 'autoApply', 'newProjectDefaults',
+    ]);
+    const f = out.schema.find((field) => field.key === 'advocacy');
     expect(f.key).toBe('advocacy');
     // ADR-052: label + a 3-value enum → a 1-5 dial. Literal, not derived, so a drift in the schema
     // fails HERE rather than silently in the console's copy.
@@ -102,7 +104,7 @@ describe('the console serves the advocacy dial — real schema, not invented cop
     // must come FROM the schema, so this reads it back through gatherAdvocacy() rather than trusting a
     // hand-typed second copy in the client.
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
-    const f = out.schema[0];
+    const f = out.schema.find((field) => field.key === 'advocacy');
     const copy = `${f.help}\n${f.whyItMatters}\n${f.downside}`;
 
     // Names the separate channel it does NOT govern (fails on the old copy — it had no "lesson" at all).
@@ -116,8 +118,18 @@ describe('the console serves the advocacy dial — real schema, not invented cop
   it('reports "not chosen" (null) on a fresh machine — never the default painted on as a real answer', () => {
     const out = runJSON(`${IMPORT} process.stdout.write(JSON.stringify(m.gatherAdvocacy()));`);
     expect(out.exists).toBe(false);
-    expect(out.values).toEqual({ advocacy: null });
-    expect(out.defaults).toEqual({ advocacy: 3 });
+    expect(out.values).toEqual({
+      learningScope: null,
+      advocacy: null,
+      autoApply: null,
+      newProjectDefaults: null,
+    });
+    expect(out.defaults).toEqual({
+      learningScope: 'project',
+      advocacy: 3,
+      autoApply: false,
+      newProjectDefaults: false,
+    });
   });
 
   it('once a value is saved, gatherAdvocacy() reports it as CHOSEN, not as a coincidental default', () => {
@@ -143,7 +155,9 @@ describe('the console serves the advocacy dial — real schema, not invented cop
         hasConfigSection: Array.isArray(st.sections.config?.schema) && st.sections.config.schema.length > 0,
       }));
     `);
-    expect(out.userSettingsKeys).toEqual(['advocacy']);
+    expect(out.userSettingsKeys).toEqual([
+      'learningScope', 'advocacy', 'autoApply', 'newProjectDefaults',
+    ]);
     expect(out.hasConfigSection).toBe(true);
   }, 30_000);
 });

@@ -26,10 +26,11 @@ opening it now and it will scan itself live in their browser. Something in the s
 Say it like a person, not a status bar. **Do not** promise 20 seconds, a minute, or any duration: the
 page carries its own timing now, and a number invented here is a number the page will contradict.
 
-## 2. Find the repo
+## 2. Find the installed runtime
 
-Prefer `~/Code/ruvnet-brain`. If `$CLAUDE_PLUGIN_ROOT` is set, the repo may be its parent
-directory. Use whichever path actually contains `scripts/onboarding-console.mjs`.
+Use `${RUVNET_BRAIN_KB:-$HOME/.cache/ruvnet-brain/kb}/.console-runtime/scripts/onboarding-console.mjs`.
+A current-repository copy is allowed only in an explicit developer checkout. Never guess a
+`~/Code/ruvnet-brain` path: the installer persists this runtime for clean users.
 
 ## 3. Start it in the BACKGROUND and open the browser
 

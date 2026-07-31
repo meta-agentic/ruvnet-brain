@@ -86,10 +86,10 @@ run_once() {
 # Memory distillation (ADR-174) had gone stale 3 days — same silent-death pattern as everything
 # else tonight. Independent of publish success/failure: mine raw memory_entries into structured
 # episodes/reasoning_patterns on every nightly run. Best-effort, never blocks the real job.
-~/.npm-global/bin/ruflo memory distill run --path .swarm/memory.db >> "$LOG" 2>&1 || true
+RUFLO_DAEMON_AUTOSTART=0 ~/.npm-global/bin/ruflo memory distill run --path .swarm/memory.db >> "$LOG" 2>&1 || true
 # Durability: was a one-off manual snapshot before tonight. Now recurring — WAL-safe, rotates
 # automatically (keeps last 14), zero risk to the live DB (reads only).
-~/.npm-global/bin/ruflo memory backup --db .swarm/memory.db --keep 14 >> "$LOG" 2>&1 || true
+RUFLO_DAEMON_AUTOSTART=0 ~/.npm-global/bin/ruflo memory backup --db .swarm/memory.db --keep 14 >> "$LOG" 2>&1 || true
 
 # AgentDB drift canary (2026-07-23, P7 wiring sweep) — scripts/memdb-health.sh existed unwired since
 # 2026-07-09/10, the exact nights idx_bridge_key/idx_bridge_ns corruption recurred 3x on this very DB

@@ -121,7 +121,7 @@ check_memory_db() {
 for _db in .swarm/agentdb-memory.db .swarm/memory.db .claude/memory.db; do
   check_memory_db "$_db" && break
 done
-if [ "$MEM_STATE" = "off" ]; then
+if [ "$MEM_STATE" != "on" ]; then
   _common_git=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
   case "$_common_git" in
     */.git)
@@ -135,6 +135,15 @@ if [ "$MEM_STATE" = "off" ]; then
       done
       ;;
   esac
+fi
+if [ "$MEM_STATE" != "on" ] && [ -n "${HOME:-}" ] && [ "$PWD" != "$HOME" ]; then
+  for _db in \
+    "$HOME/.swarm/agentdb-memory.db" \
+    "$HOME/.swarm/memory.db" \
+    "$HOME/.claude/memory.db"
+  do
+    check_memory_db "$_db" && break
+  done
 fi
 unset _db
 unset _common_git _primary_root
@@ -162,11 +171,10 @@ if [ "$RUFLO_STATE" = "yes" ] && [ "$MEM_STATE" = "off" ]; then
 This project runs the Ruflo stack but AgentDB persistent project memory is NOT set up (.swarm/memory.db does not exist) — decisions made here are being lost between sessions. rUv's default is memory ON. If you have not already offered this session, offer ONCE, plainly and warmly: "One thing I noticed: this project doesn't have persistent memory turned on — AgentDB would let me carry decisions and context across sessions instead of starting cold each time. Want me to turn it on and wire it up?" On a yes, set it up with the ruflo tools you have (a first memory_store write creates the store) and confirm with the real file path. If they decline, respect it for the rest of the session — the status line keeps them informed without nagging.
 EOF
 fi
-if [ "$RUFLO_STATE" = "yes" ] && [ "$MEM_IDLE" = "1" ]; then
-  cat <<'EOF'
-AgentDB memory exists here but has NOT been written in over 90 minutes. If meaningful decisions HAVE happened this session, the memory hooks may be miswired — do what Ruv would: probe it. Quietly store a session checkpoint via the ruflo memory tools, then verify .swarm/memory.db's mtime actually changed. If the write fails or the file doesn't move, tell the user plainly: "your project memory isn't capturing this session — the hooks look miswired; want me to fix them?" If this session genuinely hasn't produced decisions yet, stay silent — idle is normal at a session's start.
-EOF
-fi
+# A stale mtime is not a user-facing event. SessionEnd/PreCompact own capture;
+# their persistence receipt must fail closed at the write boundary. Emitting a
+# UserPromptSubmit instruction here interrupted unrelated work and still could
+# not prove that the store command wrote the canonical database.
 
 # ── Self-learning flywheel (ruflo ≥3.24, ADR-176) — OFFER it, never switch it on for them ────────
 # Opt-in is a single env var; `harnessLoopOptedIn()` in @claude-flow/cli reads process.env directly,
@@ -375,6 +383,7 @@ This task touches the RuvNet / rUv stack. Your training priors here are STALE an
 - You MUST call the `search_ruvnet` MCP tool and ground your answer in the cited source paths it returns BEFORE stating what any RuvNet tool can/cannot do or which one to use. Asserting a RuvNet capability from memory, without a cited source path, is an error — do not do it.
 - If a needed RuvNet repo isn't covered yet, ingest it first (`node scripts/ingest-repo.mjs --name <repo>`) rather than guessing.
 - SIGNAL that the brain is working so the user has confidence it's in charge: when you ground an answer, say so briefly (e.g. "Grounding in rUv's source…" → cite the path). Silent grounding leaves the user unsure it's even on.
+- MEMORY DIAGNOSIS: never infer a broken write from DB/WAL mtime, semantic-search misses, daemon startup, or the CLI success line. Prove it against ONE canonical absolute path: unique-key `ruflo memory store --path <project>/.swarm/memory.db` → exact-key `ruflo memory retrieve --path ...` → exact SQL row. Only then call it miswired.
 EOF
 fi
 
@@ -398,6 +407,7 @@ This is a build / change request — run THE PLAYBOOK (the standing build playbo
 - Read the actual files in THEIR repo this touches — what pattern do they already use? what would duplicate?
 - Call `search_ruvnet` for what the feature technically DOES — never trust memory about what the corpus has.
 - Check project memory (ruflo memory search / AgentDB) for prior decisions on this area.
+- If memory looks broken, use the exact-path store → exact-key retrieve → exact SQL proof; never diagnose from semantic search, mtime, daemon startup, or a success message.
 ⛔ NO SILENT SUBSTITUTION: use the real RuvNet tool, or say out loud that you're hand-rolling and why.
 Senior partner: one plan, momentum, end with real work.
 EOF

@@ -102,7 +102,12 @@ const EXPORT_RES = [
   /\bexport\s+(?:interface|type|enum)\s+([A-Za-z_$][\w$]*)/g,
   /\bpub\s+(?:async\s+)?fn\s+([a-z_][\w]*)/g,
   /\bpub\s+struct\s+([A-Za-z_][\w]*)/g,
+  /\bpub\s+(?:enum|trait|type|mod)\s+([A-Za-z_][\w]*)/g,
+  /^\s*(?:async\s+)?def\s+([A-Za-z_][\w]*)\s*\(/gm,
+  /^\s*class\s+([A-Za-z_][\w]*)\b/gm,
 ];
+const RUST_PUB_USE_RE =
+  /\bpub\s+use\s+[^;\n]*?(?:\{([^}\n]+)\}|(?:::)?([A-Za-z_][\w]*))\s*;/g;
 
 /**
  * POSTURE PHRASES, quoted verbatim. These are what make "the stamped source ships this locally" a
@@ -120,6 +125,10 @@ const POSTURE_RES = [
   /zero server round-trips/i,
   /nothing leaves your (?:device|machine)/i,
   /client-side only/i,
+  /fully (?:in (?:the|your) browser|client[- ]side)/i,
+  /no (?:data )?upload/i,
+  /gold\s+`?patch`?\s+is\s+never\s+applied[^.\n]{0,180}(?:during\s+grading|--grade)/i,
+  /gold\s+is\s+used\s+only\s+by\s+--validate,\s+never\s+during\s+grading/i,
 ];
 
 /**
@@ -174,6 +183,56 @@ export function packageFromUrl(url) {
 const uniq = (a) => [...new Set(a.filter(Boolean))];
 const clip = (s) => String(s).replace(/\s+/g, ' ').trim().slice(0, MAX_QUOTE);
 
+function canonicalClaimTokens(value) {
+  const text = String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+  const raw = text.match(/[a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]/g) || [];
+  return raw.map((term) => {
+    if (/^explain(?:able|ed|ing|s)?$/.test(term)) return 'explain';
+    if (/^recall(?:ed|ing|s)?$/.test(term)) return 'recall';
+    if (/^generat(?:e|ed|es|ing|ion|ions|or|ors)$/.test(term)) return 'generate';
+    if (/^tests?$/.test(term)) return 'test';
+    if (/^encrypt(?:ed|ing|s)?$/.test(term)) return 'encrypt';
+    if (/^rotat(?:e|ed|es|ing|ion|ions)$/.test(term)) return 'rotate';
+    if (/^coordinat(?:e|ed|es|ing|ion|ions)$/.test(term)) return 'coordinate';
+    if (/^orchestrat(?:e|ed|es|ing|ion|ions)$/.test(term)) return 'orchestrate';
+    if (/^persist(?:ed|ing|s|ence|ent)?$/.test(term)) return 'persist';
+    if (/^retain(?:ed|ing|s)?$/.test(term)) return 'retain';
+    return term;
+  });
+}
+
+function sourceBindsQueryClaim(query, sourceText) {
+  const queryTokens = canonicalClaimTokens(query);
+  const sourceTokens = canonicalClaimTokens(sourceText);
+  const actions = new Set([
+    'coordinate', 'encrypt', 'explain', 'generate',
+    'orchestrate', 'persist', 'retain', 'rotate',
+  ]);
+  const noise = new Set([
+    'a', 'an', 'are', 'automatically', 'can', 'could', 'do', 'does', 'has', 'have',
+    'is', 'it', 'not', 'particular', 'should', 'the', 'this', 'why', 'will', 'would',
+  ]);
+  const pairs = [];
+  for (let index = 0; index < queryTokens.length; index++) {
+    const action = queryTokens[index];
+    if (!actions.has(action)) continue;
+    const object = queryTokens.slice(index + 1, index + 6)
+      .find((term) => !noise.has(term) && !actions.has(term));
+    if (object) pairs.push([action, object]);
+  }
+  if (!pairs.length) return false;
+  return pairs.every(([action, object]) => {
+    const actionPositions = sourceTokens
+      .map((term, index) => term === action ? index : -1)
+      .filter((index) => index >= 0);
+    const objectPositions = sourceTokens
+      .map((term, index) => term === object ? index : -1)
+      .filter((index) => index >= 0);
+    return actionPositions.some((left) =>
+      objectPositions.some((right) => Math.abs(left - right) <= 2));
+  });
+}
+
 /**
  * The extractor. One returned DOCUMENT in, one typed fact record out.
  * Total: any throw yields a minimal record rather than propagating into a query.
@@ -190,6 +249,7 @@ export function extractFacts(doc) {
     posture: [],
     negatives: [],
     capability: null,
+    sourceReference: null,
     enforceable: false,
     chars: 0,
     sha: '',
@@ -200,6 +260,9 @@ export function extractFacts(doc) {
     rec.sha = sha12(text);
     if (!text) return rec;
     if (/^capability-cards\.md#/i.test(rec.path) && rec.repo) rec.capability = rec.repo;
+    if (/\.(?:c|cc|cpp|cxx|go|java|js|jsx|mjs|cjs|py|rs|ts|tsx)$/i.test(rec.path)) {
+      rec.sourceReference = { path: rec.path, sha: rec.sha };
+    }
 
     // 1. Install commands → packages, each carrying the exact command a compliant write would run.
     const packages = new Map();
@@ -258,6 +321,14 @@ export function extractFacts(doc) {
     // 4. Symbols the source EXPORTS. Attribution is to the document's own package when it has one.
     const ownPkg = rec.packages[0]?.name || null;
     for (const re of EXPORT_RES) for (const m of text.matchAll(re)) addSym(m[1], ownPkg);
+    for (const m of text.matchAll(RUST_PUB_USE_RE)) {
+      if (m[1]) {
+        for (const raw of m[1].split(',')) {
+          const name = raw.trim().split(/\s+as\s+/)[0].trim();
+          if (/^[A-Za-z_][\w]*$/.test(name) && name !== 'self') addSym(name, ownPkg);
+        }
+      } else addSym(m[2], ownPkg);
+    }
     rec.symbols = [...symbols.values()];
 
     // 5. Posture, in the source's own words.
@@ -276,7 +347,11 @@ export function extractFacts(doc) {
       }
     }
     rec.enforceable = Boolean(
-      rec.packages.length || rec.origins.length || rec.symbols.length || rec.posture.length || rec.negatives.length
+      rec.packages.length
+      || rec.origins.length
+      || rec.symbols.length
+      || rec.posture.length
+      || rec.negatives.length
     );
   } catch { /* a partial record is fine; a thrown query is not */ }
   return rec;
@@ -292,10 +367,16 @@ export function buildReceipt({ query, repos, results }) {
   try {
     for (const r of (results || [])) {
       const f = extractFacts(r);
+      if (!f.enforceable
+          && f.sourceReference
+          && sourceBindsQueryClaim(query, r?.fullText || r?.text || '')) {
+        f.enforceable = true;
+        f.claimBinding = { method: 'tight-source-token-pair', query: clip(query) };
+      }
       // Keep only documents that carry at least one fact worth binding to. A document with no
       // package, no origin, no symbol and no posture cannot contradict anything, and storing it
       // would only make the ledger bigger and the hot read slower.
-      if (f.capability || f.enforceable) {
+      if (f.capability || f.enforceable || f.sourceReference) {
         sources.push(f);
       }
     }
@@ -361,6 +442,9 @@ export function recordAnswer({ query, repos, results }) {
         installs: s.packages.map((p) => p.install),
         origins: s.origins.slice(0, 6),
         capability: s.capability,
+        sha: s.sha,
+        sourceReference: s.sourceReference,
+        claimBinding: s.claimBinding || null,
         enforceable: s.enforceable,
       })),
     };

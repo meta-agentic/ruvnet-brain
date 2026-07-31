@@ -19,6 +19,7 @@ function fixture({ withBrain = false } = {}) {
   const home = path.join(root, 'home');
   const bin = path.join(root, 'bin');
   const calls = path.join(root, 'calls.jsonl');
+  const warmup = path.join(root, 'warmup.txt');
   fs.mkdirSync(home, { recursive: true });
   fs.mkdirSync(bin, { recursive: true });
   const executable = path.join(bin, 'ruflo');
@@ -29,21 +30,42 @@ if (process.argv[2] === 'fail') process.exit(9);
 console.log(JSON.stringify(process.argv.slice(2)));
 `);
   fs.chmodSync(executable, 0o755);
+  for (const name of ['agentic-flow', 'agentic-qe']) {
+    fs.symlinkSync('ruflo', path.join(bin, name));
+  }
   const kb = path.join(root, withBrain ? 'kb' : 'absent-kb');
   if (withBrain) {
     fs.mkdirSync(kb, { recursive: true });
     fs.writeFileSync(path.join(kb, 'forge-mcp-all.mjs'), `import readline from 'node:readline';
+import fs from 'node:fs';
 const rl = readline.createInterface({ input: process.stdin });
 rl.on('line', (line) => {
   const msg = JSON.parse(line);
-  const result = msg.method === 'tools/list'
+  if (msg.method === 'brain/warmup') fs.writeFileSync(process.env.WARMUP_MARKER, 'ready');
+  const result = msg.method === 'brain/warmup'
+    ? { ready: true }
+    : msg.method === 'tools/list'
     ? { tools: [{ name: 'search_ruvnet', description: 'live child description', inputSchema: { type: 'object' } }] }
     : {};
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) + '\\n');
 });
 `);
   }
-  return { root, home, bin, calls, kb };
+  return { root, home, bin, calls, kb, warmup };
+}
+
+function fatalFixture() {
+  const fx = fixture();
+  fs.writeFileSync(path.join(fx.bin, 'ruflo'), `#!/usr/bin/env node
+if (process.argv.includes('--help')) {
+  console.log('memory store help');
+  process.exit(0);
+}
+console.log('[OK] Data stored successfully');
+console.error('❌ Invalid PRAGMA command: wal_checkpoint(passive)');
+process.exit(0);
+`);
+  return fx;
 }
 
 function startServer(fx) {
@@ -55,8 +77,10 @@ function startServer(fx) {
       HOME: fx.home,
       PATH: `${fx.bin}${path.delimiter}${process.env.PATH || ''}`,
       MANAGED_CLI_CALLS: fx.calls,
+      WARMUP_MARKER: fx.warmup,
       RUVNET_BRAIN_HOME: path.join(fx.root, 'brain'),
       RUVNET_BRAIN_KB: fx.kb,
+      RUVNET_BRAIN_PROJECT_SETTINGS_FILE: path.join(fx.root, 'absent-project-settings.json'),
     },
   });
   children.add(child);
@@ -121,10 +145,12 @@ describe('ruvnet-brain MCP structured managed-CLI boundary', () => {
   });
 
   it('merges local tools without replacing the live brain tool declaration', async () => {
-    const mcp = startServer(fixture({ withBrain: true }));
+    const fx = fixture({ withBrain: true });
+    const mcp = startServer(fx);
     const listed = await mcp.request('tools/list');
     const tools = new Map(listed.result.tools.map((tool) => [tool.name, tool]));
     expect(tools.get('search_ruvnet').description).toBe('live child description');
+    expect(fs.readFileSync(fx.warmup, 'utf8')).toBe('ready');
     expect(tools.has('ruvnet_cli_help')).toBe(true);
     expect(tools.has('ruvnet_cli_run')).toBe(true);
   });
@@ -173,6 +199,77 @@ describe('ruvnet-brain MCP structured managed-CLI boundary', () => {
     ]);
     expect(fs.existsSync(injected)).toBe(false);
     expect(fs.existsSync(path.join(REPO, 'nope'))).toBe(false);
+  });
+
+  it('enforces live routing and QE-fleet choices before either real executable starts', async () => {
+    const fx = fixture();
+    const configDir = path.join(fx.home, '.claude', 'ruvnet-brain');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'config.json'), JSON.stringify({
+      routing: 'off',
+      qeFleet: false,
+    }));
+    const mcp = startServer(fx);
+
+    for (const [executable, helpArgv] of [
+      ['agentic-flow', []],
+      ['agentic-qe', ['fleet', 'run']],
+    ]) {
+      const helped = await mcp.request('tools/call', {
+        name: 'ruvnet_cli_help',
+        arguments: { executable, argv: helpArgv },
+      });
+      expect(helped.result.isError).not.toBe(true);
+    }
+    const before = lines(fx.calls).length;
+    const routedOff = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_run',
+      arguments: { executable: 'agentic-flow', argv: ['--agent', 'researcher', '--task', 'x'] },
+    });
+    expect(routedOff.result.isError).toBe(true);
+    expect(routedOff.result.content[0].text).toMatch(/routing is off/i);
+    const fleetOff = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_run',
+      arguments: { executable: 'agentic-qe', argv: ['fleet', 'run', 'test', '--target', '.'] },
+    });
+    expect(fleetOff.result.isError).toBe(true);
+    expect(fleetOff.result.content[0].text).toMatch(/fleet is off/i);
+    expect(lines(fx.calls)).toHaveLength(before);
+
+    fs.writeFileSync(path.join(configDir, 'config.json'), JSON.stringify({
+      routing: 'auto',
+      qeFleet: true,
+    }));
+    const routedOn = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_run',
+      arguments: { executable: 'agentic-flow', argv: ['--agent', 'researcher', '--task', 'x'] },
+    });
+    expect(routedOn.result.isError).not.toBe(true);
+    const fleetOn = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_run',
+      arguments: { executable: 'agentic-qe', argv: ['fleet', 'run', 'test', '--target', '.'] },
+    });
+    expect(fleetOn.result.isError).not.toBe(true);
+    expect(lines(fx.calls).slice(-2)).toEqual([
+      ['--agent', 'researcher', '--task', 'x'],
+      ['fleet', 'run', 'test', '--target', '.'],
+    ]);
+  });
+
+  it('fails closed when a CLI exits zero but reports a fatal persistence error', async () => {
+    const fx = fatalFixture();
+    const mcp = startServer(fx);
+    const helped = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_help',
+      arguments: { executable: 'ruflo', argv: ['memory', 'store'] },
+    });
+    expect(helped.result.isError).not.toBe(true);
+    const run = await mcp.request('tools/call', {
+      name: 'ruvnet_cli_run',
+      arguments: { executable: 'ruflo', argv: ['memory', 'store', '-k', 'proof', '--value', 'x'] },
+    });
+    expect(run.result.isError).toBe(true);
+    expect(run.result.content[0].text).toMatch(/invalid pragma/i);
   });
 
   it('does not stamp a failed help call and rejects a stale stamp', async () => {

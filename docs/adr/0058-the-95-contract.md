@@ -3,7 +3,7 @@ id: ADR-058
 title: The 95 contract — one observable per dimension, one mutant per observable, and the external-signal watch plane
 status: Proposed
 date: 2026-07-27
-updated: 2026-07-29
+updated: 2026-07-30
 impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
@@ -28,22 +28,40 @@ governs:
   - kb/card-lane-budget.json
   - scripts/qe/card-lane-gate.mjs
   - scripts/release-vector.mjs
+  - scripts/release-proof.mjs
+  - plugin/skills/release-proof/SKILL.md
+  - plugin/skills/release-proof/scripts/release-proof.mjs
+  - tests/qe/gpt56/live-brain-search.test.mjs
 ---
 
 # ADR-058: The 95 contract
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-28 · **Why**: recovery reconciled the formerly
-dirty Top-100/install/routing work onto the candidate branch and re-read the governed surfaces
-through commit `4ad464e`.
-**Implementation**: wired on the recovery candidate, not released. D4 has a current Codex-backed
+**Date**: 2026-07-27 · **Last updated**: 2026-07-30 · **Why**: the public 4.0.1 artifact exposed
+that QE-BRN-001 existed in the written master plan but was absent from the executable critical-risk
+map and release vector; the live `search_ruvnet` worker consequently timed out without blocking
+publication.
+**Implementation**: partial candidate repair, not an accepted release verdict. QE-BRN-001 now starts
+the real MCP worker, requires cited `ruvnet-brain` source, exercises concurrent calls, and is invoked
+fail-closed by `scripts/release-vector.mjs`. Its 2026-07-30 candidate run passed at 5.138s cold and
+1.331s for two concurrent substantive searches after exact-name RVF routing was repaired. A later
+broad release-process query exposed a second defect: thin evidence from the exact Brain scope still
+fell back to the entire corpus and timed out at 30.004s. Product-primary routing now retains honest
+scoped evidence instead of widening; the same query passes in 0.671s, with 118/118 focused tests and
+3/3 live MCP cases. The new `release-proof` skill and executable authority fail closed on dirty
+lineage, zero/skipped/todo work, open issues, exact-SHA GitHub failures, artifact/host/grader binding
+splits, missing self-RVF, deadline-margin breaches, and public-byte drift. GitHub now enforces required
+checks for admins and protects `Production – ruvnet-brain` with required review and no admin bypass.
+D4 has a current Codex-backed
 3/3 treated versus 0/3 control artifact on source SHA `63e5e67`, plus committed delete-lesson and
 brain-off-treated causal failures in `2b39f68`. D3 now executes its real signal lifecycle from the
 release vector (`2984783`). The packed installer, Top-100 harness, routing outcomes, retrieval
 receipts, and structured CLI boundary are committed (`7eb11fb`, `b48fb3b`, `27cca88`, `859a16d`,
-`e089074`, `4ad464e`). This is still not a release verdict: D4 has not met the win-twice promotion
-bar, WSL2 and the published artifact remain unproven, and both external graders have not re-run on
-one clean published candidate.
+`e089074`, `4ad464e`). This is still not a release verdict: the worktree is dirty and split from
+remote main, five issues remain open, remote CI/Windows UX are red, the installed 4.0.1 registry
+lacks the Brain self-store, WSL2 and the published artifact remain unproven, Agentic QE currently
+reports a vacuous 0-test pass through its CLI, and both external graders have not re-run on one clean
+published candidate.
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -296,6 +314,7 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Removed the isolated unit-test module from `governs:`; the executable release authority and its live-QE caller remain governed. | `tests/unit/release-proof.test.mjs` is an acceptance observer, not a production caller. Treating an intentionally test-only module as an unwired runtime surface capped the implemented authority at `built` and made D7 fail for the wrong reason. The runtime path remains `scripts/release-vector.mjs` → `tests/qe/gpt56/live-brain-search.test.mjs` plus `scripts/release-proof.mjs`. |
 | 2026-07-29 | Re-read the complete governed set after the prompt-hook timeout repair; the vector-minimum contract is unchanged, and D6 now states the real 5s pre-tool / 10s prompt-host envelope rather than the obsolete uniform-5s claim. | PR #65 / commit `6734597` changes only the two UserPromptSubmit declarations in `plugin/hooks/hooks.json` and `plugin/hooks/codex-hooks.json`; their inner runtime remains bounded at 4s and the new regression caps the host declaration at 10s. The exact candidate's release vector and cross-platform CI passed before merge; this is release evidence, not a two-grader 95 claim. |
 | 2026-07-29 | Reviewed the complete governed-path history since `7709c67` and re-read the only changed governed path; both post-document installer fixes strengthen D8 and leave the 95 contract unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
 | 2026-07-29 | The `cmd start /b` candidate also retained the inherited capture handle, so the launcher now uses PowerShell's native `Start-Process` boundary with arguments outside the command string. The unchanged cold hard gate remains the acceptance test. | PR #58 run `30424023167`, Windows job `90486434201`; governed source `plugin/scripts/detach.mjs`; acceptance `scripts/qe/session-start-gate.mjs`. |

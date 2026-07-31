@@ -27,17 +27,27 @@ const NAME = arg('--name');
 // --org lets us ingest ecosystem repos that live in a rUv COLLABORATOR org (e.g. the QE fleet at
 // proffesor-for-testing/agentic-qe), not just github.com/ruvnet/*. Defaults to ruvnet.
 const ORG = arg('--org', 'ruvnet');
-if (!NAME) { console.error('Usage: node scripts/ingest-repo.mjs --name <repo> [--org <github-org>]'); process.exit(2); }
+const SOURCE = arg('--source');
+if (!NAME) {
+  console.error('Usage: node scripts/ingest-repo.mjs --name <repo> [--org <github-org>] [--source <local-checkout>]');
+  process.exit(2);
+}
 
 const KB = path.join(ROOT, 'kb');
 const CLONES = path.join(ROOT, 'clones');
 const kb = NAME.toLowerCase();
-const dir = path.join(CLONES, NAME);
+const dir = SOURCE ? path.resolve(SOURCE) : path.join(CLONES, NAME);
 const env = { ...process.env };
 const run = (cmd, args, opts) => execFileSync(cmd, args, { stdio: 'inherit', ...opts });
 
 fs.mkdirSync(CLONES, { recursive: true });
-if (!fs.existsSync(path.join(dir, '.git'))) {
+if (SOURCE) {
+  if (!fs.existsSync(path.join(dir, '.git'))) {
+    console.error(`[source] ${dir} is not a git checkout`);
+    process.exit(2);
+  }
+  console.log(`[source] local candidate ${dir}`);
+} else if (!fs.existsSync(path.join(dir, '.git'))) {
   console.log(`[clone] ${ORG}/${NAME}`);
   run('git', ['clone', '--depth', '1', `https://github.com/${ORG}/${NAME}`, dir]);
 } else {

@@ -1,6 +1,5 @@
 {
-  "_note": "STABLE SPINE (ADR-023): every hook routes through hook-shim.mjs, which resolves the ACTIVE generation from ~/.cache/ruvnet-brain/active.json per invocation. This file is boot-frozen, so matcher, command, and dispatch-mode changes require restart classification. Advisory hooks keep `|| true` and can never block a turn. FOUR blocking hooks remain unguarded because their exit codes are their contract: route-dispatch, design-wall, unprompted-speech, and protect-state. Issue #48 demoted verify-interface to advisory-only: raw shell reconstruction may suggest the structured ruvnet_cli_help/ruvnet_cli_run boundary but can never authorize or deny execution. protect-state remains a blocking offBehavior:'run' consent guard. continuation-gate remains advisory with offBehavior:'run'.",
-  "_platform": "posix",
+  "description": "POSIX Stable Spine (ADR-023): every hook routes through hook-shim.mjs, which resolves the active generation per invocation. Advisory hooks fail open; blocking hooks preserve their exit-code contract.",
   "hooks": {
     "SessionStart": [
       {

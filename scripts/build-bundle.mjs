@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getVersionTag, stripTag } from './version.mjs';
+import { auditRvfIndexes } from './rvf-index-audit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KB = path.join(ROOT, 'kb');
@@ -142,6 +143,18 @@ fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
 const built = discoverBuilt();
+const rvfIndexAudit = await auditRvfIndexes(
+  built.map((name) => path.join(KB, `${name}.big.rvf`)),
+);
+const missingIndexes = rvfIndexAudit.filter(({ state }) => state !== 'PASS');
+if (missingIndexes.length) {
+  console.error('[build-bundle] FATAL: eligible RVFs lack persisted HNSW indexes:');
+  for (const result of missingIndexes) {
+    console.error(`  ${path.basename(result.path)} vectors=${result.totalVectors}`);
+  }
+  console.error('[build-bundle] Repair with: node scripts/rvf-index-audit.mjs --repair');
+  process.exit(1);
+}
 const builtRepos = [];
 for (const name of built) {
   // One canonical computer-focused vector store per repository. The unsuffixed passages/meta

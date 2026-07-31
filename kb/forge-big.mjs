@@ -22,6 +22,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { loadRvf, loadTransformers, chooseModelCache } from './resolve-deps.mjs';
 import { materializeModelRevision, modelCacheReady } from './model-requirements.mjs';
+import { persistAndVerifyRvfIndex } from './rvf-index.mjs';
 
 const MODEL = 'Xenova/bge-base-en-v1.5';
 // MODEL-WEIGHT PIN: address the embedder by an exact HuggingFace commit SHA, not the floating `main`
@@ -128,7 +129,13 @@ async function ingestStore() {
     }
   }
   const status = await db.status();
-  await db.close();
+  const indexProof = await persistAndVerifyRvfIndex({
+    db,
+    dimensions: DIM,
+    rvfPath: OUT_RVF,
+    RvfDatabase,
+  });
+  console.log('[ingest] index:', JSON.stringify(indexProof));
 
   // query-side embedder config (how forge-ask embeds a query for THIS .rvf — asymmetric bge)
   fs.writeFileSync(OUT_RVF + '.embed.json', JSON.stringify({

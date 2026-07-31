@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { selectResults } from '../../kb/forge-ask-all.mjs';
 import { answerFromCards } from '../../kb/card-lane.mjs';
 import { groundedToolResult } from '../../kb/grounded-response.mjs';
-import { implementationNotice } from '../../kb/implementation-evidence.mjs';
+import {
+  implementationNotice,
+  requiresImplementationProof,
+} from '../../kb/implementation-evidence.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -85,6 +88,24 @@ describe('implementation truth gate — design intent is never built-state proof
     });
   });
 
+  it('does not infer a source extension from a documentation anchor fragment', () => {
+    const out = selectResults({
+      query: 'Does this project implement a TypeScript pipeline?',
+      ranked: ranked(
+        'doc',
+        'capability-cards.md#example.ts',
+        'A curated capability description for the example.ts project.',
+      ),
+    });
+
+    expect(out.implementation).toMatchObject({
+      required: true,
+      verdict: 'unproven',
+      implementationSources: [],
+    });
+    expect(out.results[0].evidenceClass).toBe('documentation');
+  });
+
   it('does not let a capability card answer a built/shipped capability claim', () => {
     const hit = answerFromCards('Did Reuven build and ship agent swarms in ruflo?', KB);
     expect(hit.hit).toBe(false);
@@ -95,6 +116,40 @@ describe('implementation truth gate — design intent is never built-state proof
     const hit = answerFromCards('Can ruflo orchestrate agent swarms?', KB);
     expect(hit.hit).toBe(false);
     expect(hit.reason).toMatch(/implementation evidence/i);
+  });
+
+  it('applies the same proof gate to plural what-are capability inventories', () => {
+    expect(requiresImplementationProof('What are AgentDB core concepts and controllers?')).toBe(true);
+  });
+
+  it('does not mistake agents working in parallel for an operational-status claim', () => {
+    expect(requiresImplementationProof(
+      'What coordinates several coding agents working at the same time on one task?',
+    )).toBe(false);
+    expect(requiresImplementationProof('Are the coding agents working?')).toBe(true);
+  });
+
+  it('does not mistake "the code does another" background context for a built-state question', () => {
+    expect(requiresImplementationProof(
+      'Our ADRs say one thing and the code does another; we want decision records treated as living plans and checked against reality.',
+    )).toBe(false);
+    expect(requiresImplementationProof(
+      'Does ruflo implement ADR compliance checking against source code?',
+    )).toBe(true);
+  });
+
+  it('does not mistake a team workflow complaint for a product shipped-state claim', () => {
+    expect(requiresImplementationProof(
+      'The team ships code with no specs and QA finds the gaps too late; we want a phased method with hard gates from requirements to completion.',
+    )).toBe(false);
+    expect(requiresImplementationProof('Does SPARC ship code without specs?')).toBe(true);
+  });
+
+  it('does not mistake a no-Python deployment constraint for a shipped-state claim', () => {
+    expect(requiresImplementationProof(
+      "A sensor box with 256MB RAM needs a small trainable classifier, and we can't ship Python.",
+    )).toBe(false);
+    expect(requiresImplementationProof('Can ruv-fann ship Python?')).toBe(true);
   });
 });
 

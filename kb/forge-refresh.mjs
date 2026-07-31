@@ -273,6 +273,7 @@ async function incrementalRefresh(corpus, previousMeta, currentLedger) {
     stagePath: path.join(candidate, `${NAME}.big.rvf`),
     deleteIds: delta.deleteIds,
     inserts: bigVectors,
+    dimensions: BGE.dimensions,
     RvfDatabase: rvf.RvfDatabase,
   });
   validateDeltaResult('big', big, corpus.chunks.length);
@@ -325,6 +326,7 @@ async function migrateLegacyStore(corpus, previousMeta, currentLedger) {
       stagePath: path.join(candidate, `${NAME}.big.rvf`),
       deleteIds: delta.deleteIds,
       inserts: vectors,
+      dimensions: BGE.dimensions,
       RvfDatabase: rvfMod.RvfDatabase,
     });
     validateDeltaResult('legacy-big', result, corpus.chunks.length);

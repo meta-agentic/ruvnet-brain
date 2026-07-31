@@ -22,6 +22,7 @@ const risks = [
   ['QE-REL-002', 'release', 'tests/qe/release/packed-clean-install.test.mjs'],
   ['QE-FLT-001', 'fault-recovery', 'tests/unit/mcp-timeout-outage.test.mjs'],
   ['QE-FLT-002', 'fault-recovery', 'tests/qe/security/release-abuse-cases.test.mjs'],
+  ['QE-BRN-001', 'source-grounding', 'tests/qe/gpt56/live-brain-search.test.mjs'],
   ['QE-TOOL-001', 'toolchain', 'tests/qe/gpt56/live-toolchain-health.test.mjs'],
 ];
 
@@ -37,6 +38,7 @@ describe('the 4.0 critical-risk matrix is executable', () => {
       'resources',
       'release',
       'fault-recovery',
+      'source-grounding',
       'toolchain',
     ]));
   });

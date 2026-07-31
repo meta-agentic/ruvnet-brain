@@ -10,7 +10,30 @@ const SOURCE_EXTENSIONS = new Set([
 
 export function requiresImplementationProof(query) {
   const text = String(query || '');
-  return IMPLEMENTATION_QUERY.test(text) || /^\s*(?:what\s+is|is\s+)/i.test(text);
+  // "Agents working in parallel" describes the workload being coordinated; it is not the
+  // operational-status claim "is this working?". Keep the status word load-bearing everywhere
+  // else, but do not force a capability-selection question onto the built-state proof lane merely
+  // because its subject is an agent at work.
+  const proofText = text.replace(
+    /\bagents?\s+working\s+(?:at\s+the\s+same\s+time|in\s+parallel|concurrently)\b/gi,
+    'agents in parallel',
+  ).replace(
+    /\b(?:the\s+)?team\s+ships?\s+code\b/gi,
+    'team writes code',
+  ).replace(
+    /\b(?:we|i)\s+can(?:not|'t)\s+ship\s+python\b/gi,
+    'python-free deployment requirement',
+  ).replace(
+    /\bsupport\s+(?:bots?|assistants?|agents?)\b/gi,
+    'customer-service assistant',
+  ).replace(
+    /\b(?:we|i)\s+(?:need|want)\b([^.!?;]{0,180})\bcan\b/gi,
+    'desired capability$1should',
+  ).replace(
+    /\b(?:the\s+)?code\s+does\s+another\b/gi,
+    'decision differs from source',
+  );
+  return IMPLEMENTATION_QUERY.test(proofText) || /^\s*(?:what\s+(?:is|are)|is\s+)/i.test(text);
 }
 
 function lifecycleStatus(text) {
@@ -23,7 +46,10 @@ function lifecycleStatus(text) {
 export function classifyResultEvidence(result) {
   const kind = String(result?.kind || '').toLowerCase();
   const file = String(result?.path || '');
-  const ext = path.extname(file).toLowerCase();
+  // A citation fragment is not part of the filesystem path. Without stripping it first,
+  // `capability-cards.md#dspy.ts` looks like a TypeScript source file and documentation can
+  // silently satisfy the built-state proof gate.
+  const ext = path.extname(file.split(/[?#]/, 1)[0]).toLowerCase();
   const text = result?.fullText || result?.text || '';
   const lifecycle = lifecycleStatus(text);
 

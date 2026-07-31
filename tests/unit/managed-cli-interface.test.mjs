@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
   MANAGED_EXECUTABLES,
   helpKey,
+  resolveManagedExecutable,
   stampKeysForHelp,
 } from '../../plugin/mcp/managed-cli-interface.mjs';
 
@@ -46,6 +48,17 @@ describe('managed CLI structured interface policy', () => {
     const source = fs.readFileSync(path.join(REPO, 'plugin/mcp/managed-cli-interface.mjs'), 'utf8');
     expect(source).not.toMatch(/hook-input|commandNodes|findInvocations|commandOf/);
     expect(source).toMatch(/shell:\s*false/);
+  });
+
+  it('pins Ruflo to the one global binary when it exists', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-ruflo-home-'));
+    const canonical = path.join(home, '.npm-global', 'bin', 'ruflo');
+    fs.mkdirSync(path.dirname(canonical), { recursive: true });
+    fs.writeFileSync(canonical, '#!/bin/sh\nexit 0\n');
+    fs.chmodSync(canonical, 0o755);
+    expect(resolveManagedExecutable('ruflo', { HOME: home })).toBe(canonical);
+    expect(resolveManagedExecutable('agentic-qe', { HOME: home })).toBe('agentic-qe');
+    fs.rmSync(home, { recursive: true, force: true });
   });
 
   it('routes skills to native Ruflo MCP tools first and the gateway only for CLI-only gaps', () => {

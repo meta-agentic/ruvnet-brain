@@ -8,8 +8,9 @@ their actual machine and lets them configure and (with consent) fix it.
 
 Do this:
 
-1. **Find the repo.** Prefer `~/Code/ruvnet-brain`. If `$CLAUDE_PLUGIN_ROOT` is set, the repo may be
-   its parent directory. Use whichever path contains `scripts/onboarding-console.mjs`.
+1. **Find the installed runtime.** Use
+   `${RUVNET_BRAIN_KB:-$HOME/.cache/ruvnet-brain/kb}/.console-runtime/scripts/onboarding-console.mjs`.
+   A current-repository copy is allowed only for an explicit developer checkout.
 
 2. **Start the server in the BACKGROUND** (it is a long-running process) so this turn keeps going, and
    open the browser:

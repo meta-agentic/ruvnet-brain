@@ -108,6 +108,22 @@ function getEmbedder(model) {
   }
   return p;
 }
+
+// Stable-Spine readiness hook. MCP hosts call this before advertising the search tool so the first
+// user question never pays lazy ONNX initialization. Big RVF stores are the canonical production
+// format; MiniLM remains lazy for legacy small-only stores.
+export async function warmQueryEmbedder() {
+  // Exercise the exact production BGE query shape: asymmetric prefix + CLS pooling. A generic
+  // mean-pooled call loaded the weights but did not pay the first production-shape inference cost,
+  // leaving the first real search 5-6 seconds slow.
+  await embed('ruvnet brain readiness', {
+    model: 'Xenova/bge-base-en-v1.5',
+    pooling: 'cls',
+    normalize: true,
+    queryPrefix: 'Represent this sentence for searching relevant passages: ',
+  });
+}
+
 async function loadEmbedderUncached(model) {
   const { T, modelCache, via } = await loadTransformers();
   const revision = PINNED_REVISIONS[model] || 'main';
@@ -321,6 +337,26 @@ function getKb(dir, name, conf) {
   entry.catch(() => _kbCache.delete(key)); // don't let a failed load poison the cache permanently
   _kbCache.set(key, entry);
   return entry;
+}
+
+// Stable-Spine readiness hook for high-frequency stores. Opening an RVF file and parsing its
+// passage sidecar is a one-time multi-second cost; subsequent lookups use this exact cache.
+export async function warmKnowledgeStores(dir, names, { concurrency = 4 } = {}) {
+  const queue = [...new Set(names || [])];
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    for (let i = next++; i < queue.length; i = next++) {
+      const name = queue[i];
+      const conf = resolveConf(dir, name);
+      const { db } = await getKb(dir, name, conf);
+      // RvfDatabase performs one-time native index initialization on its first query, not open.
+      // Prime that exact boundary with a harmless unit vector so the first user query does not pay
+      // the observed 5-6 second HNSW initialization cost.
+      const probe = new Float32Array(conf.embedCfg.dimensions || 384);
+      probe[0] = 1;
+      await db.query(probe, 1);
+    }
+  }));
 }
 
 async function waitForPromotion(dir, timeoutMs = 30_000) {

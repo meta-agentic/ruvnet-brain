@@ -1,0 +1,14 @@
+{
+  "ruvnet-brain": [
+    "brain"
+  ],
+  "ruvector": [
+    "rvf"
+  ],
+  "agentic-qe": [
+    "qe"
+  ],
+  "agent-harness-generator": [
+    "metaharness"
+  ]
+}

@@ -32,6 +32,7 @@ import { execFileSync } from 'node:child_process';
 import { loadRvf, loadTransformers, configureModel } from './resolve-deps.mjs';
 import { buildCorpus, FORGE_BUILD_FINGERPRINT } from './forge-corpus.mjs';
 import { buildCorpusLedger } from './incremental-refresh.mjs';
+import { persistAndVerifyRvfIndex } from './rvf-index.mjs';
 
 // Best-effort git provenance of the repo being indexed (for the evergreen SOURCE.json).
 function gitInfo(repoDir) {
@@ -176,8 +177,13 @@ console.log('Reconcile: chunks =', chunks.length, '| vectors =', status.totalVec
   '| passages lines =', passageLines, '| meta ids =', Object.keys(meta).length,
   '| MATCH =', chunks.length === status.totalVectors && passageLines === chunks.length && Object.keys(meta).length === chunks.length);
 
-// verification queries on the live handle (sanity only; the real proof is the 10-question test)
-await db.close();
+const indexProof = await persistAndVerifyRvfIndex({
+  db,
+  dimensions: 384,
+  rvfPath: OUT_RVF,
+  RvfDatabase,
+});
+console.log('RVF index:', JSON.stringify(indexProof));
 
 fs.writeFileSync(OUT_META, JSON.stringify({
   model: 'Xenova/all-MiniLM-L6-v2', dimensions: 384, metric: 'cosine',

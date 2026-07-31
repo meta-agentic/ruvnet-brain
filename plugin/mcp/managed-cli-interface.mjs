@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { loadRuntimePreferences, runtimeChildEnv } from '../scripts/runtime-preferences.mjs';
 
 export const MANAGED_EXECUTABLES = Object.freeze([
   'ruflo',
@@ -142,9 +143,21 @@ function writeStamps(executable, argv, env) {
   }
 }
 
+export function resolveManagedExecutable(executable, env = process.env) {
+  if (executable !== 'ruflo') return executable;
+  const home = env.HOME || os.homedir();
+  const canonical = path.join(home, '.npm-global', 'bin', 'ruflo');
+  try {
+    fs.accessSync(canonical, fs.constants.X_OK);
+    return canonical;
+  } catch {
+    return executable;
+  }
+}
+
 function execute(executable, argv, env) {
   return new Promise((resolve) => {
-    const child = spawn(executable, argv, {
+    const child = spawn(resolveManagedExecutable(executable, env), argv, {
       env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -186,8 +199,9 @@ function execute(executable, argv, env) {
 
 function resultOf(executable, argv, result) {
   const output = [result.stdout, result.stderr].filter(Boolean).join(result.stdout && result.stderr ? '\n' : '');
-  if (result.error || result.code !== 0) {
-    const reason = result.error || `exit ${result.code}`;
+  const contradictoryFailure = /(?:^|\n)\s*(?:❌|\[ERROR\])|invalid pragma command|key not found/i.test(output);
+  if (result.error || result.code !== 0 || contradictoryFailure) {
+    const reason = result.error || (contradictoryFailure ? 'fatal output despite exit 0' : `exit ${result.code}`);
     return {
       content: [{ type: 'text', text: output || `${executable} ${argv.join(' ')} failed: ${reason}` }],
       isError: true,
@@ -220,7 +234,36 @@ export async function callManagedCli(toolName, args, env = process.env) {
           isError: true,
         };
       }
-      return resultOf(executable, argv, await execute(executable, argv, env));
+      const policy = loadRuntimePreferences({ env, cwd: env.RUVNET_BRAIN_PROJECT_DIR || process.cwd() });
+      if (executable === 'agentic-flow' && policy.values.routing !== 'auto') {
+        return {
+          content: [{
+            type: 'text',
+            text: policy.values.routing === 'off'
+              ? 'Token-smart routing is off in RuvNet Brain Console; agentic-flow was not started.'
+              : 'Token-smart routing has not been enabled in RuvNet Brain Console; agentic-flow was not started.',
+          }],
+          isError: true,
+        };
+      }
+      const isFleetMutation = executable === 'agentic-qe'
+        && argv[0] === 'fleet'
+        && ['init', 'spawn', 'run'].includes(argv[1]);
+      if (isFleetMutation && policy.values.qeFleet !== true) {
+        return {
+          content: [{
+            type: 'text',
+            text: policy.values.qeFleet === false
+              ? 'The Agentic-QE fleet is off in RuvNet Brain Console; no QE agents were started.'
+              : 'The Agentic-QE fleet has not been enabled in RuvNet Brain Console; no QE agents were started.',
+          }],
+          isError: true,
+        };
+      }
+      const childEnv = (executable === 'agentic-flow' || executable === 'agentic-qe')
+        ? runtimeChildEnv({ env, cwd: env.RUVNET_BRAIN_PROJECT_DIR || process.cwd() })
+        : env;
+      return resultOf(executable, argv, await execute(executable, argv, childEnv));
     }
 
     return {

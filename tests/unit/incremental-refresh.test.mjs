@@ -326,6 +326,7 @@ describe('stageRvfDelta — mutate a staged copy, never the live store', () => {
         stagePath,
         deleteIds: [oldB],
         inserts: [{ id: newC, vector: [0, 0, 1] }],
+        dimensions: 3,
         RvfDatabase,
       });
 
@@ -334,6 +335,7 @@ describe('stageRvfDelta — mutate a staged copy, never the live store', () => {
       expect(fs.readFileSync(`${sourcePath}.idmap.json`)).toEqual(beforeMap);
 
       const staged = await RvfDatabase.openReadonly(stagePath);
+      expect((await staged.segments()).some(({ segType }) => segType === 'index')).toBe(false);
       const ids = (await staged.query([0, 0, 1], 3)).map((hit) => hit.id);
       await closeReadonlyRvf(staged);
       expect(ids).toContain(newC);

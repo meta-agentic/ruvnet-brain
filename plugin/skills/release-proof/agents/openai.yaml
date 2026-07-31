@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Proof"
+  short_description: "Fail-closed exact-artifact release authority"
+  default_prompt: "Prove this release candidate end to end and refuse publication unless every required gate is green."

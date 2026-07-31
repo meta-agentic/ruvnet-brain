@@ -12,7 +12,8 @@
 //
 // WHY A CLONED ROOT, NOT node_modules/tmp COPY OF THE WHOLE REPO: build-bundle.mjs computes
 // ROOT = path.dirname(script's own location).."/..", so copying just
-// {scripts/build-bundle.mjs, scripts/version.mjs, kb/, data/registry.tiers.json} into a fresh tmpdir
+// {scripts/build-bundle.mjs, scripts/version.mjs, a scoped index-audit stub, kb/,
+// data/registry.tiers.json} into a fresh tmpdir
 // gives it a fully isolated ROOT — no risk of mutating the real repo's kb/ or dist/.
 //
 // discoverBuilt() (line 79) matches repos by FILENAME PATTERN ONLY (`<name>.rvf`) — it never opens
@@ -36,6 +37,12 @@ beforeEach(() => {
   fs.mkdirSync(path.join(tmp, 'plugin/.claude-plugin'), { recursive: true });
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/build-bundle.mjs'), path.join(tmp, 'scripts/build-bundle.mjs'));
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/version.mjs'), path.join(tmp, 'scripts/version.mjs'));
+  // This suite measures only the private-store fence. The production bundle builder's independent
+  // RVF-index gate is covered by rvf-index-audit.test.mjs and build-bundle release tests; using
+  // empty placeholder RVFs here cannot exercise the native reader. Keep the dependency present and
+  // explicitly pass it so a missing import cannot prevent these fence assertions from running.
+  fs.writeFileSync(path.join(tmp, 'scripts/rvf-index-audit.mjs'),
+    'export async function auditRvfIndexes(paths) { return paths.map((path) => ({ path, state: "PASS" })); }\n');
   // Minimal registry: build-bundle.mjs reads this before it ever reaches the fence.
   fs.writeFileSync(path.join(tmp, 'data/registry.tiers.json'), JSON.stringify({ tiers: {} }));
   // version.mjs's single source of truth — build-bundle.mjs resolves the version tag before the fence.

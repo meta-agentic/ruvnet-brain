@@ -62,7 +62,7 @@ breaks the contract.
 | QE-FLT-002 | P0 | recovery | compression bomb or deceptive expansion leaves partial output | `tests/qe/security/release-abuse-cases.test.mjs` | H |
 | QE-TOOL-001 | P0 | QE toolchain | Agentic-QE prints initialization failure but exits zero | `tests/qe/gpt56/live-toolchain-health.test.mjs` | L |
 | QE-TOOL-002 | P1 | QE toolchain | coverage absence is mislabeled as measured 0% | live `hooks_coverage_gaps`; evidence rules below | L |
-| QE-BRN-001 | P0 | source grounding | `search_ruvnet` is registered but the live worker times out | active MCP `search_ruvnet` smoke | L |
+| QE-BRN-001 | P0 | source grounding | `search_ruvnet` is registered but the live worker times out | `tests/qe/gpt56/live-brain-search.test.mjs` | L |
 
 ## Exhaustive scenario inventory
 

@@ -16,6 +16,10 @@ export default defineConfig({
       // "Mutation tests" step), so being listed here is necessary but was already PROVEN insufficient
       // once on this exact file; the corpus is not considered wired until its CI step is green.
       'tests/regression/*.test.mjs',
+      // Release-critical agentic QE must be part of the ordinary runner. A file that exists under
+      // tests/qe but is absent from this include list is silently ignored even when its path is
+      // supplied on the command line — the exact vacuous-green failure this suite is meant to stop.
+      'tests/qe/**/*.test.mjs',
       // ADR-058 D5: the coexistence suite. Same lesson, stated twice on one file in one night —
       // a directory absent from `include` is invisible to `vitest run` no matter what any npm
       // script or CI step claims to run.
@@ -51,7 +55,9 @@ export default defineConfig({
       // shipped plugin MCP server. plugin/test/run-tests.mjs is the plugin's own test battery and
       // kb/test-guard-injection.mjs is a test script (both run directly in CI), so they are test
       // code, not source — excluded from the denominator like tests/.
-      include: ['scripts/**/*.mjs', 'kb/*.mjs', 'bin/*.mjs', 'plugin/mcp/*.mjs'],
+      // The visual console is shipped product code too. Omitting it let source-string assertions
+      // look green while the browser behavior itself contributed nothing to the release denominator.
+      include: ['scripts/**/*.mjs', 'kb/*.mjs', 'bin/*.mjs', 'plugin/mcp/*.mjs', 'console/**/*.js'],
       exclude: ['kb/node_modules/**', 'kb/clones/**', 'kb/test-guard-injection.mjs'],
       // json-summary writes coverage/coverage-summary.json, which scripts/claims-verify.mjs's
       // verifyCoverageBadge RE-DERIVES the README badge % from (it no longer string-matches a

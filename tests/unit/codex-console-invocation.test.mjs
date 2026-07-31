@@ -5,6 +5,7 @@ import path from 'node:path';
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const SESSION_START = path.join(ROOT, 'plugin', 'scripts', 'session-start.sh');
 const HOST_UPDATE = path.join(ROOT, 'plugin', 'scripts', 'host-update.mjs');
+const RVBC_SKILL = path.join(ROOT, 'plugin', 'skills', 'rvbc', 'SKILL.md');
 
 describe('Codex Console invocation contract', () => {
   it('teaches the native Codex skill mention instead of an unsupported custom slash command', () => {
@@ -12,6 +13,14 @@ describe('Codex Console invocation contract', () => {
 
     expect(source).toContain('RUVNET_HOOK_HOST');
     expect(source).toContain('$ruvnet-brain:rvbc');
+  });
+
+  it('advertises one natural-language Console command in both hosts', () => {
+    const skill = fs.readFileSync(RVBC_SKILL, 'utf8');
+    expect(skill).toContain('Configure RuvNet Brain');
+    expect(skill).toContain('Claude Code and Codex');
+    expect(skill).toContain('/rvbc');
+    expect(skill).toContain('$ruvnet-brain:rvbc');
   });
 
   it('routes automatic updates through one host-neutral Brain coordinator', () => {

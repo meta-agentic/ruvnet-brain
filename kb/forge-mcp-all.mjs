@@ -18,6 +18,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { searchAll, discoverRepos } from './forge-ask-all.mjs';
+import { warmKnowledgeStores, warmQueryEmbedder } from './forge-ask.mjs';
+import { warmReranker } from './forge-rerank.mjs';
 import { guardPassages } from './forge-guard-injection.mjs';
 import { answerFromCards, renderCardHit } from './card-lane.mjs';
 import { implementationNotice } from './implementation-evidence.mjs';
@@ -149,6 +151,9 @@ const REPOS = (process.env.KB_REPOS || '').split(',').map((s) => s.trim()).filte
 let discovered = [];
 try { discovered = discoverRepos(KB_DIR); } catch { /* dir checked at call time */ }
 const repoList = (REPOS.length ? REPOS : discovered);
+// Keep MCP readiness below host startup budgets. The self store covers the product's first-use
+// questions; larger ecosystem stores initialize on demand under getKb's single-flight cache.
+const CORE_WARM_REPOS = ['ruvnet-brain'].filter((name) => repoList.includes(name));
 
 // ── OPT-IN USAGE PINGS (counts only — the full privacy contract lives in telemetry-ping.mjs). ──
 // Sends NOTHING unless the user explicitly said yes at install time (consent file), and never
@@ -252,6 +257,10 @@ async function handle(msg) {
       return ok(id, {});
     case 'tools/list':
       return ok(id, { tools: TOOLS });
+    case 'brain/warmup':
+      await Promise.all([warmQueryEmbedder(), warmReranker()]);
+      await warmKnowledgeStores(KB_DIR, CORE_WARM_REPOS);
+      return ok(id, { ready: true });
     case 'tools/call': {
       const name = params?.name;
       const args = params?.arguments || {};
@@ -276,7 +285,7 @@ async function handle(msg) {
         // card-lane.mjs's header for the honesty contract (silence-or-fallthrough, never a
         // fabricated hit; naming a repo is not by itself sufficient confidence).
         // Heavy-path model revisions are materialized locally by forge-rerank before remote access.
-        const cardHit = answerFromCards(query, KB_DIR);
+        const cardHit = answerFromCards(query, KB_DIR, { allowGuideAnswers: true });
         if (cardHit.hit) {
           const cardBody = renderCardHit(cardHit);
           // MINT THE RECEIPT ON THIS LANE TOO (ADR-055 §3.1). When the fast lane became the FIRST
@@ -319,7 +328,13 @@ async function handle(msg) {
           adrCollision,
           implementation,
           routing,
-        } = await searchAll({ dir: KB_DIR, query, k, repos: REPOS.length ? REPOS : undefined });
+        } = await searchAll({
+          dir: KB_DIR,
+          query,
+          k,
+          repos: REPOS.length ? REPOS : undefined,
+          allowFullCorpus: false,
+        });
         // ── GONG LAYER 1 (real-time): distinguish "searched fine, found nothing" from "retrieval
         // itself is broken". Every repo erroring is an OUTAGE — report it as one, in-band AND
         // out-of-band, never as an innocent empty result (the 2026-07-12 dark-brain lesson).
@@ -346,7 +361,7 @@ async function handle(msg) {
         // an untrusted ingested repo. Exit-safe: guardPassages never throws into the search path.
         const results = guardPassages(rawResults);
         const text = results.map((r, i) =>
-          `#${i + 1}  repo=${r.repo}  (relevance ${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}; vec ${r.bestDistance?.toFixed(4)})\n`
+          `#${i + 1}  repo=${r.repo}  (relevance ${r.ceScore == null ? 'n/a' : r.ceScore.toFixed(3)}; vec ${r.bestDistance == null ? 'n/a' : r.bestDistance.toFixed(4)})\n`
           + `path : ${r.repo}/${r.path}\n`
           + `title: ${r.title}\n`
           + `evidence class: ${r.evidenceClass || 'unknown'}${r.lifecycleStatus ? `; lifecycle status: ${r.lifecycleStatus}` : ''}\n`
