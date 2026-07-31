@@ -1,9 +1,10 @@
 ---
 id: ADR-050
 title: The issue pipeline may never manufacture its own acknowledgment — awareness, escalation, and a fixer that knows when to stop
-status: Implemented
+status: Accepted
 date: 2026-07-24
-updated: 2026-07-29
+updated: 2026-07-30
+impl: wired
 authors: [Stuart Kerr, Claude Code]
 tags: [issues, automation, alerting, sla, security, circuit-breaker]
 supersedes: []
@@ -16,7 +17,7 @@ governs:
 
 # ADR-050 — The issue pipeline may never manufacture its own acknowledgment
 
-**Status**: Implemented
+**Status**: Accepted (implemented)
 
 ## Context: the 2026-07-24 incident
 
@@ -177,6 +178,7 @@ The four parallel agents working tonight support this distinction. They show tha
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Re-read the issue pipeline after project-default seeding and host-convergence messaging landed in SessionStart; I1–I3 are unchanged. | `plugin/scripts/session-start.sh` adds one-time nonsecret preference seeding and restart guidance. The open-count, acknowledgment, escalation, and fixer circuit-breaker logic in `scripts/issue-watch.mjs` and `scripts/issue-fix.mjs` is unchanged; GitHub App follow-up remains open. |
 | 2026-07-29 | Re-read the issue surfacer after opt-in cold-start tracing was added around unrelated spine, heartbeat, and metering stages. The issue block and its acknowledgment/escalation semantics are unchanged. | Commit `66589f4`; governed path `plugin/scripts/session-start.sh`; PR #58 Windows job `90484507774`. |
 | 2026-07-29 | Re-read the issue watcher, fixer, and SessionStart issue surfacer after PR #57. The later hook edits change manifest parsing, Windows path resolution, latency measurement, and lifecycle transport; they do not change the issue acknowledgment predicate, escalation state, or banner semantics. | Exact reviewed source head `989e19a`; governed paths `scripts/issue-watch.mjs`, `scripts/issue-fix.mjs`, and `plugin/scripts/session-start.sh`. GitHub PR #57 merged as `802886a`. |
 | 2026-07-27 | **Re-read against the governed code; NO change required — every claim still holds.** Re-stamped to record that the reading happened | Flagged `presumed-stale` by `doc-currency`: 3 commits / 2 days after this document's last commit (`b4eed42`, 2026-07-24). The drift is real but lands entirely in `plugin/scripts/session-start.sh`, a hub file many ADRs govern — **`scripts/issue-watch.mjs` and `scripts/issue-fix.mjs` did not change at all.** The one issue-related line in that diff *upholds* this ADR rather than eroding it: ADR-054's off-switch explicitly lists "the open-issue SLA banner" among the things that **keep running while the brain is off**, because the issue pipeline must not be silenceable — this document's whole thesis, honoured by a later decision |

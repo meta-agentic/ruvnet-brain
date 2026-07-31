@@ -3,10 +3,10 @@ id: ADR-054
 title: Brain on/off and per-part scope — a user-controlled brain that can never silently lie about being off
 status: Accepted
 date: 2026-07-26
-updated: 2026-07-29
+updated: 2026-07-30
 impl: verified
-verified: 2026-07-29
-verified_digest: b5b3ea58d448
+verified: 2026-07-30
+verified_digest: 7c3dcc3f2fe8
 authors: [Stuart Kerr, Claude Code]
 tags: [settings, console, scope, retrieval, hooks, honesty]
 supersedes: []
@@ -183,6 +183,7 @@ failure. v1 draft's Decision + risks register superseded above; Context stands.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Re-verified the sentinel master-off and per-plane authority after 4.0.2 preferences, project-default seeding, Console persistence, and MCP readiness warmup. | `scripts/user-settings.mjs`, `plugin/scripts/hook-shim.mjs`, and `kb/brain-profile.mjs` retain sentinel authority. New preference controls are subordinate runtime choices; `plugin/scripts/session-start.sh` seeds nonsecrets once and never copies or overrides the sentinel. `bin/install.mjs` Console persistence and `plugin/mcp/server.mjs` readiness warmup do not change off-state authority. |
 | 2026-07-29 | Re-verified the complete governed set for the 4.0.0 release candidate and refreshed the machine-derived digest; the brain-off, sentinel-authority, storage-profile, and maintenance boundaries are unchanged. | Commit `e20cdf2` changed governed runtime files for worker retirement, host parity, and release hardening. The contract remains exercised by `tests/unit/brain-off.test.mjs`, the live console inspection, and the release QE evidence in `docs/qe/AGENTIC-QE-4.0-MASTER-PLAN.md`; computed digest `b5b3ea58d448`. |
 | 2026-07-29 | Re-verified ADR-054 after the three governed-code commits since `4ad464e`; no architecture change required. | Commit `79573ff` changes only quiet-prompt classification/dispatch in `plugin/scripts/hook-shim.mjs`; the brain-off silence exit remains before the new fast path. Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores. Commit `ebe51a5` makes Codex wiring honor `CODEX_HOME` and decode quoted server paths; neither installer change touches sentinel lifecycle or profile reapplication. `tests/unit/brain-off.test.mjs`, `tests/unit/hook-shim-ground-fast.test.mjs`, `tests/unit/codex-wiring.test.mjs`, and `tests/integration/install-smoke.mjs` passed on 2026-07-29. |
 | 2026-07-28 | Re-read the installer after making stale/current integration tests independent of GitHub API quota; the brain-state contract is unchanged. | Commit `2f420e7` adds a `RUVNET_BRAIN_TEST_LATEST_TAG` seam that is reachable only with the existing `RUVNET_BRAIN_TEST=1` guard. Production release resolution, the OFF sentinel, profile selection, and uninstall behavior are unchanged; `tests/integration/stale-install-trap.test.mjs` now proves stale/current behavior without a live unauthenticated API call. |

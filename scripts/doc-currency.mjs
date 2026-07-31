@@ -724,6 +724,15 @@ export function blockingFindings(docs, { strict = false, warnDrift = false, scop
   return out;
 }
 
+// A changed-scope gate must follow the Document -> Governed set relationship in both directions.
+// Looking only for directly touched ADR filenames lets code invalidate an ADR without evaluating it.
+export function changedDocumentScope(docs, touched) {
+  return new Set(docs
+    .filter((d) => touched.has(d.file)
+      || (d.governed ?? []).some((g) => g.resolved && touched.has(g.path)))
+    .map((d) => d.file));
+}
+
 export function main(argv = process.argv.slice(2)) {
   const a = parseArgs(argv);
   if (!isGitRepo(a.root)) {
@@ -740,7 +749,7 @@ export function main(argv = process.argv.slice(2)) {
   if (a.changed) {
     const r = git(a.root, ['diff', '--name-only', `${a.changed}...HEAD`]);
     const touched = new Set(r.ok ? r.out.split('\n').filter(Boolean) : []);
-    scope = new Set(result.docs.map((d) => d.file).filter((f) => touched.has(f)));
+    scope = changedDocumentScope(result.docs, touched);
   }
 
   if (a.mode === 'fix') {

@@ -3,7 +3,7 @@ id: ADR-060
 title: The two-stage cross-encoder cascade — reading every passage, cheaply, before reading a few properly
 status: Accepted
 date: 2026-07-27
-updated: 2026-07-28
+updated: 2026-07-30
 authors: [Stuart Kerr, Claude Code]
 tags: [retrieval, latency, cross-encoder, cascade, measurement]
 supersedes: [ADR-059]
@@ -13,9 +13,11 @@ governs:
   - kb/forge-ask-all.mjs
   - scripts/rerank-cap-warm-ab.mjs
   - scripts/rerank-cap-eval.mjs
+  - kb/forge-mcp-all.mjs
+  - plugin/mcp/server.mjs
 ---
 
-Updated: 2026-07-28 | Version 1.0.1
+Updated: 2026-07-30 | Version 1.0.2
 Created: 2026-07-27
 
 # ADR-060 — The two-stage cross-encoder cascade
@@ -204,7 +206,7 @@ opt in with `KB_CE_CASCADE_K=64`; this ADR does not accept that value as the def
 | **bi-encoder distance as stage 1** (free, already computed) | **rejected.** s-05's answer is rank 593/608 by distance and 1/608 by cross-encoder. A distance cascade needs K>593 to hold it. |
 | **quantizing the cross-encoder** | **already done, by inspection.** `from_pretrained(..., { quantized: true })` and the only weights on disk are `model_quantized.onnx` (23,143,499 bytes, int8). No fp32 copy exists or is ever fetched. rUv's ADR-080 independently records int8 L-6 as the sweet spot. |
 | **a second, distilled CE (`L-2-v2`) as stage 1** | **rejected on the cold path.** Measured: a second model load costs 802 ms that the prefix design costs zero, and it is a different opinion rather than an approximation of the score it is filtering for. |
-| **preloading models at session start / keeping them warm** | **rejected — the premise was wrong.** The one-time cost is 1,670 ms (cold-minus-warm) / 1,762 ms (direct), not 53,350 ms. See the run record §6. |
+| **preloading models at host SessionStart** | **rejected.** Persistent MCP-worker readiness may load and prime the existing reranker so the first query is not falsely charged as ready; it does not add SessionStart model loading. The measured one-time cost is 1,670 ms (cold-minus-warm) / 1,762 ms (direct), not 53,350 ms. See the run record §6. |
 | **per-store floor in the cascade selector** | **dropped.** It exists to avoid muting a store before any score exists; stage 1 gives every candidate a score, so the floor only spends 69 slots re-confirming what stage 1 already ranked. |
 | **length-sorted batching** | **stays rejected** (ADR-059): 19.8% less padded compute, but it perturbs every score. |
 
@@ -227,5 +229,6 @@ opt in with `KB_CE_CASCADE_K=64`; this ADR does not accept that value as the def
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Reconciled the source-backed-card fast lane and persistent-worker readiness without changing the cascade default or claiming a new measurement. | `kb/forge-ask-all.mjs` may satisfy source-backed cards before the heavy full-corpus cross-encoder path; the two-stage cascade contract applies to that heavy path. `CE_CASCADE_K_DEFAULT` remains 0. `kb/forge-rerank.mjs`, `kb/forge-mcp-all.mjs`, and `plugin/mcp/server.mjs` prime the existing reranker inside the persistent MCP worker, not at host SessionStart. |
 | 2026-07-28 | Re-read every governed path, recorded the interrupted 120-question attempt, and explicitly retained the off-by-default decision. The completed n=24 table remains historical evidence; it was not relabeled as a current n=120 result. | Live `kb/forge-ask-all.mjs` still defines `CE_CASCADE_K_DEFAULT = 0`, `CE_CASCADE_TOKENS_DEFAULT = 192`, runs `cePrefilterScores` only for an explicit positive K, and selects survivors through `cascadeRerankPool`. Commits `2de0c58` and `859a16d` later added implementation-evidence checks, query-scoped routing, and exact-evidence rescue lanes, which can change the candidate pool; neither constitutes a cascade remeasurement. `kb/forge-rerank.mjs`, `scripts/rerank-cap-eval.mjs`, and `scripts/rerank-cap-warm-ab.mjs` did not move after the prior stamp. Known governed-source comment debt remains in `kb/forge-ask-all.mjs` and `scripts/rerank-cap-warm-ab.mjs`: comments still use the pre-renumber ADR-057/058 labels, and the warm-A/B header still describes the corrected 53s download as model loading; executable defaults and harness behavior are as described here. |
 | 2026-07-28 | Corrected predecessor references from ADR-057 to ADR-059 and corrected the cold-load rationale. | Commit `d117234` renumbered the pool-cap decision to ADR-059. The run record in `evals/runs/2026-07-27-cross-encoder-cascade.md` reports 1,670 ms cold-minus-warm, 1,762 ms direct two-model load, and 802 ms for the rejected additional L-2 model; 53,350 ms was a first-run download/cache-path defect, not ONNX initialization. |

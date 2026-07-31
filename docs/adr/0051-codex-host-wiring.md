@@ -3,7 +3,7 @@ id: ADR-051
 title: Codex host wiring — register MCP and adapt the full lifecycle without version-pinned commands
 status: Accepted
 date: 2026-07-24
-updated: 2026-07-29
+updated: 2026-07-30
 authors: [Stuart Kerr, Claude Code]
 tags: [codex, mcp, install, doctor, honesty, portability]
 supersedes: []
@@ -249,6 +249,7 @@ native Windows.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Re-read the complete Codex install and lifecycle boundary after the 4.0.2 control-plane work; the stable wrapper and host-adapter architecture remain intact. | `bin/install.mjs` now persists the Console runtime and uses a realpath main-entry guard so imports are side-effect free. `plugin/skills/*` and the command aliases expose `$ruvnet-brain:rvbc`; `plugin/hooks/codex-hooks.json` remains schema-valid. Focused lifecycle, mutation, stale-install, and skill-discovery tests cover the shipped paths; external exact-SHA CI remains the release gate. |
 | 2026-07-29 | Added a native `rvbc` Codex skill and made the shared SessionStart body emit `$ruvnet-brain:rvbc` on Codex while retaining `/rvbc` on Claude Code. | A live Codex 0.145.0 session rejected `/rvbc` before model dispatch even though `commands/rvbc.md` shipped. The official Codex manual documents plugin workflows as skills invoked through `/skills` or `$`, while slash commands are a built-in host surface. `tests/integration/codex-skill-discovery.test.mjs` now requires the installed plugin loader to expose `ruvnet-brain:rvbc`; `tests/unit/codex-console-invocation.test.mjs` pins the host-specific session contract. |
 | 2026-07-29 | Re-read the Codex lifecycle registration after increasing only the two UserPromptSubmit host deadlines from 5s to 10s; the stable wrapper, adapter, and single-source hook-body decision remain unchanged. | PR #65 / commit `6734597` measured the real installed `ground-ruvnet` and `unprompted-speech` paths at 3.48–4.26s cold against an internal 4s runtime bound, leaving no safe margin under the former 5s host deadline. Post-fix real-path probes completed in 0.75s and 1.15s; `tests/unit/codex-lifecycle-hooks.test.mjs` requires at least 2× internal-runtime headroom while capping the declaration at 10s. |
 | 2026-07-29 | Re-read all governed Codex wiring after eight later commits; the architecture still holds, with active-home and Windows path handling made explicit. | Commits `b1760d4`, `4a0529c`, `04b0008`, `e6ca575`, `9ece40f`, and `d09363f` only advance `plugin/.codex-plugin/plugin.json`; `c2d5ef0` changes only canonical `*.big.rvf` doctor counting; issue #61 / commit `ebe51a5` makes `bin/install.mjs` honor `CODEX_HOME`, keep the stable wrapper beside that active home, and decode JSON-escaped MCP paths before probing them. `tests/unit/codex-wiring.test.mjs` passes 42/42. |

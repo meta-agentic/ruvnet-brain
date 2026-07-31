@@ -1,6 +1,6 @@
 # DDD-0008 — The Currency bounded context
 
-Updated: 2026-07-27 | Version 1.1.0
+Updated: 2026-07-30 | Version 1.1.1
 Created: 2026-07-22
 
 Governs **ADR-034** (document currency and the status lifecycle) and **ADR-056** (currency at a
@@ -101,6 +101,11 @@ The link from a Document to the code it speaks about. Owned by the Document; mea
 **Invariant: a `verified` Document MUST have a non-empty governed set.**
 *An empty `governs:` verifies against nothing and shows green — a forgery requiring no intent, only
 carelessness.*
+
+**Invariant: a changed resolved member of a Governed set MUST bring its owning Document into the
+`--changed` validation scope.** A code-only change is precisely when correspondence can break.
+Scoping only to directly touched document filenames turns `governs:` into evidence the report can
+display but the release gate can ignore.
 
 **Acknowledged weakness, recorded rather than designed around: the governed set is an asserted
 field.** Nothing derives it. A narrow or wrong list produces a Document that verifies perfectly and
@@ -320,5 +325,6 @@ freshness can be proven.
 
 | Date | What changed | Why |
 |---|---|---|
+| 2026-07-30 | Added the governed-path reachability invariant for changed-scope validation. | `scripts/doc-currency.mjs` had scoped `--changed` only to directly modified ADR filenames. A change to a resolved `governs:` path therefore escaped the blocking set even when the full report showed the ADR stale. ADR-056 v3 and the real-git regression close that aggregate-boundary gap. |
 | 2026-07-22 | Created | Defines the bounded context for ADR-034 (`docs/adr/0034-document-currency.md`). Owner, 2026-07-22: *"Is it VERIFIED TO BE IN SYNC with the resulting output?"* — no such state existed in any of the 32 ADRs in `docs/adr/` |
 | 2026-07-27 | Added the **Authored Document** and **Diagram** aggregates; un-parked README/PROGRESS/skills/primer into the thin tier; added `AuthoredDocumentUnstamped` + `DiagramDrifted` events | Governs `docs/adr/0055-currency-at-a-chokepoint.md`. Owner's three rules, 2026-07-27. Measured that day: **166 of 239** `.md` files unstamped (96 of them generated output, hence the exclusion invariant); `~/.claude/hooks/ascii-svg-auto-sync.sh` advertised by `ascii-to-svg/change-tracking.md` **does not exist**, manifest last written 2026-06-29; `package.json:35` defines `doc:currency` and nothing calls it. The Diagram aggregate lands here rather than in a new context because ASCII→SVG is the same authored-source/derived-artifact correspondence this context already models |
