@@ -1,6 +1,6 @@
 // tests/unit/install-telemetry-consent.test.mjs — the installer half of the telemetry contract.
 //
-// bin/install.mjs exports (under RUVNET_BRAIN_IMPORT_ONLY=1, same pattern as offerNightly):
+// bin/install.mjs exports through its side-effect-free import boundary:
 //   parseTelemetryAnswer — default-YES parser (ENTER/y accept; only explicit n/no declines)
 //   offerTelemetry       — the decision matrix (suppressed in test mode; asked once ever;
 //                          fail-PRIVATE when there is no TTY to ask on)
@@ -31,9 +31,10 @@ afterEach(() => {
 
 let seq = 0;
 async function freshInstaller({ testMode = false, argv = [] } = {}) {
-  process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
   if (testMode) process.env.RUVNET_BRAIN_TEST = '1'; else delete process.env.RUVNET_BRAIN_TEST;
-  process.argv = [process.execPath, INSTALLER, ...argv];
+  // The installer now authorizes main() by direct argv identity. Give flag parsing the requested
+  // arguments without claiming this dynamic import is a direct CLI invocation.
+  process.argv = [process.execPath, `${INSTALLER}.import-test`, ...argv];
   // unique query → unique module instance → module-level flags re-read the env we just set
   return import(pathToFileURL(INSTALLER).href + `?telemetry-case=${++seq}`);
 }
