@@ -10,6 +10,7 @@
     "test": "node plugin/test/run-tests.mjs",
     "release:proof": "node scripts/release-proof.mjs",
     "benchmark:brain50": "node scripts/brain-latency-50.mjs",
+    "benchmark:novice50": "node scripts/brain-novice-50.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
     "claims:verify": "node scripts/claims-verify.mjs",
     "claims:fix": "node scripts/claims-verify.mjs --fix",
