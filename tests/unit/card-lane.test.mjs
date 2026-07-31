@@ -178,12 +178,15 @@ describe('answerFromCards — capability claims require implementation evidence'
 
   it('ignores generic question scaffolding when selecting structured relationship memory', () => {
     const query = 'I want to keep structured agent state and ask questions about how facts relate to each other.';
-    const hit = answerFromCards(query, KB);
-    expect(hit).toMatchObject({
-      hit: true,
-      repo: 'agentdb',
-    });
-    expect(hit.text).toMatch(/structured agent state[\s\S]*graph\/relationship/i);
+    for (const options of [undefined, { allowGuideAnswers: true }]) {
+      const hit = answerFromCards(query, KB, options);
+      expect(hit).toMatchObject({
+        hit: true,
+        repo: 'agentdb',
+        namedRepo: false,
+      });
+      expect(hit.text).toMatch(/structured agent state[\s\S]*graph\/relationship/i);
+    }
   });
 
   it('recognizes a session-starts-cold complaint as durable project memory', () => {
@@ -448,6 +451,66 @@ describe('routeReposFromCards — routing never masquerades as a card answer', (
   });
 
   const available = ['agentdb', 'agentic-flow', 'concepts', 'ruflo', 'rulake', 'ruvector'];
+
+  it('does not promote a format alias into a second repo beside an explicit product', () => {
+    const cases = [
+      [
+        "What are AgentDB's core concepts — the .rvf cognitive container, Reflexion episodic memory, causal graph, skill library, ReasoningBank, and the self-learning bandit?",
+        'agentdb',
+      ],
+      [
+        "What are RuView's core concepts — CSI (Channel State Information), ESP32 sensors, WiFi-DensePose pose estimation, and RVF cognitive containers?",
+        'ruview',
+      ],
+    ];
+    for (const [query, repo] of cases) {
+      expect(routeReposFromCards(query, KB, [...available, 'ruview'])).toMatchObject({
+        confidence: 'named',
+        namedRepos: [repo],
+        repos: [repo],
+      });
+    }
+  });
+
+  it('keeps aliases first-class when named alone or in an explicit comparison', () => {
+    expect(routeReposFromCards('What is RVF?', KB, available).repos).toEqual(['ruvector']);
+    expect(routeReposFromCards('RVF versus AgentDB', KB, available).repos)
+      .toEqual(expect.arrayContaining(['ruvector', 'agentdb']));
+  });
+
+  it('routes an exact scoped package through the shipped ownership registry', () => {
+    const route = routeReposFromCards(
+      'What does the @claude-flow/neural package implement — which algorithms?',
+      KB,
+      available,
+    );
+    expect(route).toMatchObject({
+      confidence: 'named',
+      namedRepos: ['ruflo'],
+      repos: ['ruflo'],
+    });
+  });
+
+  it('does not let generic Brain hints override a canonically named repository', () => {
+    const route = routeReposFromCards(
+      "What are RuVector's npm package and core crate names, and roughly how large is the Rust workspace?",
+      KB,
+      available,
+    );
+    expect(route.repos).toEqual(['ruvector']);
+  });
+
+  it('lets decisive capability context beat a weak format alias', () => {
+    const route = routeReposFromCards(
+      'What does ADR-003 propose about using RVF cognitive containers for CSI data, and what problem does it target?',
+      KB,
+      [...available, 'ruview'],
+    );
+    expect(route).toMatchObject({
+      confidence: 'described',
+      repos: ['ruview'],
+    });
+  });
 
   it('routes an exact scoped-package ask to its owning repo first', () => {
     const route = routeReposFromCards(

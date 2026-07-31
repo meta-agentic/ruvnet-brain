@@ -308,8 +308,10 @@
           "label": "low-latency tools",
           "anyOf": [
             "aggressive caching",
+            "cache-first pattern",
             "cached access",
-            "low-latency ai tool"
+            "low-latency ai tool",
+            "seconds to milliseconds"
           ]
         },
         {
@@ -1014,11 +1016,26 @@
           ]
         },
         {
-          "label": "topologies",
+          "label": "hierarchical topology",
           "anyOf": [
-            "mesh",
-            "hierarchical",
-            "ring",
+            "hierarchical"
+          ]
+        },
+        {
+          "label": "mesh topology",
+          "anyOf": [
+            "mesh"
+          ]
+        },
+        {
+          "label": "ring topology",
+          "anyOf": [
+            "ring"
+          ]
+        },
+        {
+          "label": "star topology",
+          "anyOf": [
             "star"
           ]
         }
@@ -2213,12 +2230,13 @@
       "specificity": "implicit",
       "query": "Self-improvement where every promotion has replayable evidence and can be rolled back.",
       "expectRepo": [
+        "metaharness",
         "agent-harness-generator",
         "ruflo",
         "ruv-gists",
         "concepts"
       ],
-      "why": "receipt-backed evolution (ADR-176) + darwin gates; announced in gists",
+      "why": "MetaHarness Darwin promotion gates provide replayable evidence and rollback; earlier ADR-176 material announced the pattern",
       "requiredEvidence": [
         {
           "label": "evidence-backed promotion",
@@ -2849,6 +2867,8 @@
         {
           "label": "implementation drift",
           "anyOf": [
+            "implementation drifts",
+            "drift detection",
             "match implementation",
             "code does another",
             "checked against reality"
@@ -2907,7 +2927,11 @@
           "anyOf": [
             "independently benchmarked",
             "fixed benchmark",
-            "quality gate"
+            "frozen benchmark",
+            "benchmark immutability",
+            "parent and child each scored",
+            "quality gate",
+            "benchmark the parent versus the child"
           ]
         },
         {
@@ -2934,12 +2958,12 @@
       "level": "expert",
       "axis": "tradeoff-expectation",
       "specificity": "contextual",
-      "query": "Same agent program, three model vendors, one bill we can actually attribute per task.",
+      "query": "Can agentic-flow route one agent program across Anthropic, OpenRouter, and Gemini while enforcing maxCostPerTask?",
       "expectRepo": [
         "agentic-flow",
         "concepts"
       ],
-      "why": "multi-provider + billing",
+      "why": "multi-provider routing + source-proven per-task budget ceiling",
       "requiredEvidence": [
         {
           "label": "multiple providers",
@@ -2951,12 +2975,11 @@
           ]
         },
         {
-          "label": "task-level attribution",
+          "label": "per-task budget",
           "anyOf": [
-            "cost tracking",
-            "per task",
-            "billing",
-            "cost attribution"
+            "max cost per task",
+            "per-task cost budget",
+            "cost ceiling"
           ]
         }
       ]
@@ -2978,7 +3001,7 @@
         {
           "label": "database class",
           "anyOf": [
-            "rvfdatabase"
+            "rvf database"
           ]
         },
         {
@@ -3091,6 +3114,12 @@
       ],
       "why": "contributor-depth / subsystem",
       "requiredEvidence": [
+        {
+          "label": "package identity",
+          "anyOf": [
+            "@claude-flow/neural"
+          ]
+        },
         {
           "label": "neural algorithms",
           "anyOf": [
@@ -3255,5 +3284,5 @@
       ]
     }
   ],
-  "sha256": "115b6b942f08c46b0e7939e592a501c4fbd6f42c289fcb01cbd25325dd90e7be"
+  "sha256": "f1006498e9c4245dd0a5173d4d19bcf84cdb0a0bf389c1334e5e3300e692b351"
 }

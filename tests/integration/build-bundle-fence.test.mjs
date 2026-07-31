@@ -37,6 +37,7 @@ beforeEach(() => {
   fs.mkdirSync(path.join(tmp, 'plugin/.claude-plugin'), { recursive: true });
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/build-bundle.mjs'), path.join(tmp, 'scripts/build-bundle.mjs'));
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/version.mjs'), path.join(tmp, 'scripts/version.mjs'));
+  fs.copyFileSync(path.join(REPO_ROOT, 'kb/zip-extract.mjs'), path.join(tmp, 'kb/zip-extract.mjs'));
   // This suite measures only the private-store fence. The production bundle builder's independent
   // RVF-index gate is covered by rvf-index-audit.test.mjs and build-bundle release tests; using
   // empty placeholder RVFs here cannot exercise the native reader. Keep the dependency present and

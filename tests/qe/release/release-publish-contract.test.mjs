@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const source = fs.readFileSync(path.join(ROOT, 'scripts/release.mjs'), 'utf8');
+const bundleSource = fs.readFileSync(path.join(ROOT, 'scripts/build-bundle.mjs'), 'utf8');
 
 const position = (needle) => {
   const found = source.indexOf(needle);
@@ -42,6 +43,15 @@ describe('release publication is bound to one candidate', () => {
     expect(source).toContain('const assets = [zip, `${zip}.sig`, `${zip}.sha256`]');
     expect(source).toContain('signed release asset missing');
     expect(source).toContain("'release', 'create', tag, ...assets");
+  });
+
+  it('rebuilds and audits the exact extracted archive before the signer can run', () => {
+    expect(bundleSource).toContain('fs.rmSync(ZIP, { force: true })');
+    expect(bundleSource).toContain("await import('../kb/zip-extract.mjs')");
+    expect(bundleSource).toContain('const packagedAudit = await auditRvfIndexes(packagedRvfs)');
+    expect(bundleSource).toContain('exact archive proof:');
+    expect(position("runOrDie('build release bundle'"))
+      .toBeLessThan(position("runOrDie('sign release bundle'"));
   });
 
   it('is retryable without moving an existing tag or duplicating assets', () => {

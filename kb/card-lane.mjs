@@ -35,6 +35,7 @@ import { requiresImplementationProof } from './implementation-evidence.mjs';
 
 export const CARDS_FILE = 'capability-cards.md';
 export const REPO_ALIASES_FILE = 'repo-aliases.json';
+export const PACKAGE_OWNERS_FILE = 'package-owners.json';
 
 export function loadRepoAliases(dir) {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,24 @@ export function loadRepoAliases(dir) {
           canonical && Array.isArray(stores) && stores.every((store) => typeof store === 'string')));
     } catch {
       // A partial/older bundle may not carry the registry. Try the module-local copy, then use none.
+    }
+  }
+  return {};
+}
+
+export function loadPackageOwners(dir) {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [dir && path.join(dir, PACKAGE_OWNERS_FILE), path.join(moduleDir, PACKAGE_OWNERS_FILE)]
+    .filter(Boolean);
+  for (const file of candidates) {
+    try {
+      const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      return Object.fromEntries(Object.entries(value)
+        .filter(([packageName, repo]) =>
+          /^@[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(packageName) && typeof repo === 'string' && repo));
+    } catch {
+      // Older bundles may not carry package ownership metadata.
     }
   }
   return {};
@@ -153,6 +172,10 @@ function normalizePhrases(text) {
     .replace(
       /\bthe\s+same\s+vector\s+queries\s+hit\s+(?:our|the)\s+store\s+thousands\s+of\s+times\s+an\s+hour\b/g,
       'repeated vector queries vector cache read cache',
+    )
+    .replace(
+      /\b(?:hundreds?|thousands?|\d+)\s+users?\s+each\s+need\s+their\s+own\s+agent\s+memory[\s\S]*?\bfull\s+copies\b[\s\S]*?\bstorage\s+bill\b/g,
+      'copy-on-write agent memory branch constant time size tiny storage overhead',
     )
     .replace(
       /\bcached\s+reads\s+we\s+can\s+cryptographically\s+verify\b/g,
@@ -294,10 +317,57 @@ export function routeReposFromCards(query, dir, availableRepos, { limit = 3 } = 
     return phrase.length >= 3
       && new RegExp(`(?:^|\\s)${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\s)`).test(qIdentityPhrase);
   };
-  const explicitlyNamed = new Set();
+  const canonicalNamed = new Set();
+  const aliasNamed = new Set();
   for (const repo of available) {
-    if (repositoryNames(repo, dir).some((name) =>
-      qIdentity.has(name.toLowerCase()) || namesRepo(name))) explicitlyNamed.add(repo);
+    if (qIdentity.has(repo.toLowerCase()) || namesRepo(repo)) canonicalNamed.add(repo);
+    if (repositoryNames(repo, dir)
+      .filter((name) => name.toLowerCase() !== repo.toLowerCase())
+      .some((name) => qIdentity.has(name.toLowerCase()) || namesRepo(name))) {
+      aliasNamed.add(repo);
+    }
+  }
+  const namedPackage = q.match(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/i)?.[0]?.toLowerCase();
+  const packageOwner = namedPackage ? loadPackageOwners(dir)[namedPackage] : null;
+  if (packageOwner && available.has(packageOwner)) canonicalNamed.add(packageOwner);
+  const rawNamed = new Set([...canonicalNamed, ...aliasNamed]);
+  const explicitAliasComparison = rawNamed.size > 1
+    && /\b(?:compare|comparison|versus|vs\.?|between|across|difference|differ)\b/i.test(q);
+  const aliasesDominatedByContext = Boolean(
+    !canonicalNamed.size
+    && aliasNamed.size
+    && !explicitAliasComparison
+    && (() => {
+      const registry = loadRepoAliases(dir);
+      const resolveCardStore = (cardRepo) =>
+        available.has(cardRepo)
+          ? cardRepo
+          : (registry[cardRepo] || []).find((store) => available.has(store)) || null;
+      const overlaps = cards
+        .map((card) => {
+          const repo = resolveCardStore(card.repo);
+          const overlap = qTokens.filter((token) => card.tokenSet.has(token)).length;
+          return { repo, overlap, coverage: qTokens.length ? overlap / qTokens.length : 0 };
+        })
+        .filter(({ repo }) => repo);
+      const bestAlias = Math.max(0, ...overlaps
+        .filter(({ repo }) => aliasNamed.has(repo))
+        .map(({ overlap }) => overlap));
+      const bestContext = overlaps
+        .filter(({ repo }) => !aliasNamed.has(repo))
+        .sort((a, b) => b.overlap - a.overlap || b.coverage - a.coverage)[0];
+      return bestContext?.overlap >= MIN_OVERLAP
+        && bestContext.coverage >= MIN_COVERAGE
+        && bestContext.overlap > bestAlias + 1;
+    })()
+  );
+  // A short store alias can also be ordinary product vocabulary: "RVF cognitive container"
+  // names a format inside an AgentDB/RuView question; it does not ask for a second repository.
+  // Prefer an explicitly named canonical repo unless the user actually compares products. When
+  // no canonical repo is named, aliases remain first-class ("What is RVF?" still routes RuVector).
+  const explicitlyNamed = new Set(canonicalNamed);
+  if ((!canonicalNamed.size && !aliasesDominatedByContext) || explicitAliasComparison) {
+    for (const repo of aliasNamed) explicitlyNamed.add(repo);
   }
   const implicitProductQuestion =
     /\b(?:i\s+am\s+lost|installed\s+this|chatbot|settings\s+screen|version\s+4|asking\s+claude\s+from\s+memory|source\s+question|question\s+to\s+a\s+cited\s+answer|hallucinat\w*|evidence\s+is\s+thin|search\s+(?:has\s+been\s+)?spinning|source\s+worker|query\s+routing|cross-encoder|release-proof|npm\s+package|ready\s+to\s+ship|storage\s+split|capabilit\w*\s+described\s+in\s+an?\s+adr|reranks?\s+candidates?)\b/i.test(q)
@@ -307,7 +377,7 @@ export function routeReposFromCards(query, dir, availableRepos, { limit = 3 } = 
   // "Which code path reranks candidates after RVF retrieval?" is about Brain's retrieval pipeline,
   // not RuVector's storage engine. Add Brain even when RVF/Ruflo/AgentDB is also named; the
   // primary-product rule below then removes dependency scopes unless the user explicitly compares.
-  if (implicitProductQuestion && available.has('ruvnet-brain')) {
+  if (implicitProductQuestion && canonicalNamed.size === 0 && available.has('ruvnet-brain')) {
     explicitlyNamed.add('ruvnet-brain');
   }
   // Product-scoped questions often name the implementation tools used by RuvNet Brain
@@ -439,7 +509,7 @@ export function answerFromCards(query, dir, { allowGuideAnswers = false } = {}) 
     return { hit: false, reason: `scoped package detail requires source retrieval (${scopedPackage})` };
   }
   const sourceDetail =
-    /\b(?:adr[-\s_]?\d+|api|sdk|backends?|exports?|registered|source code|code path|package names?|crate names?|workspace|supersedes?|deployment\s+process|exact[-\s]+artifact|github\s+checks?|independent\s+graders?)\b/i;
+    /\b(?:adr[-\s_]?\d+|api|sdk|backends?|exports?|registered|source code|code path|(?:code|working)\s+example|(?:three|\d+)\s+lines?\s+of\s+code|snippet|actually\s+mutate|supported?\s+topolog(?:y|ies)|topolog(?:y|ies)\s+does\s+it\s+support|package names?|crate names?|workspace|supersedes?|deployment\s+process|exact[-\s]+artifact|github\s+checks?|independent\s+graders?)\b/i;
   const claimValidation =
     /\b(?:validate|benchmark(?:ed|ing)?)\b[\s\S]{0,80}\b(?:claim|performance)\b|\b(?:claim|performance)\b[\s\S]{0,80}\b(?:validate|benchmark(?:ed|ing)?)\b/i;
   const costQualityTradeoff =
@@ -475,7 +545,12 @@ export function answerFromCards(query, dir, { allowGuideAnswers = false } = {}) 
     } else {
       const namedByPosition = cards
         .flatMap((card) => repositoryNames(card.repo, dir)
-          .map((name) => ({ repo: card.repo, at: q.toLowerCase().indexOf(name.toLowerCase()) })))
+          .map((name) => ({
+            repo: card.repo,
+            at: qIdentity.has(name.toLowerCase())
+              ? q.toLowerCase().indexOf(name.toLowerCase())
+              : -1,
+          })))
         .filter(({ at }) => at >= 0)
         .sort((a, b) => a.at - b.at);
       preferredGuideRepo = namedByPosition[0]?.repo || null;

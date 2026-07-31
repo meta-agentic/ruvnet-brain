@@ -1,6 +1,6 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-30T12:00:41.900Z",
+  "builtUtc": "2026-07-31T03:23:58.243Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
@@ -157,8 +157,19 @@
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
       "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruvnet-brain-kb-bundle.zip",
       "selfUpdate": "node forge-update.mjs ruvnet-brain"
+    },
+    "synthlang": {
+      "kbName": "synthlang",
+      "sourceRepo": "https://github.com/stuinfla/ruvnet-brain.git",
+      "sourceCommit": "6959956375073c333b6a57bb9b2ff70ccd8b86ea",
+      "sourceDescribe": "v4.0.1-9-g6959956",
+      "builtUtc": "2026-07-31T03:23:58.243Z",
+      "builder": "rvf-kb-forge",
+      "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
+      "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/synthlang-kb-bundle.zip",
+      "selfUpdate": "node forge-update.mjs synthlang"
     }
   },
-  "brainVersion": "4.0.1",
-  "releaseTag": "v4.0.1"
+  "brainVersion": "4.0.2",
+  "releaseTag": "v4.0.2"
 }

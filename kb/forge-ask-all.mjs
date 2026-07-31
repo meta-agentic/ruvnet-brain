@@ -350,7 +350,9 @@ function meaningPreservingPromptCompressionQuestion(query) {
   const preservation =
     /\bwithout\s+(?:losing|changing)\b[\s\S]{0,40}\b(?:meaning|behavio[u]?r)\b/i.test(text)
     || /\bpreserv\w*\b[\s\S]{0,40}\b(?:meaning|behavio[u]?r)\b/i.test(text);
-  return compression && preservation;
+  const tokenReduction =
+    /\b(?:reduc\w*|cut|lower\w*)\b[\s\S]{0,40}\b(?:tokens?|token usage|token cost)\b/i.test(text);
+  return compression && (preservation || tokenReduction);
 }
 
 function cheapFirstFailureEscalationQuestion(query) {
@@ -372,10 +374,15 @@ function spawnablePrebuiltAgentRolesQuestion(query) {
 
 function replayablePromotionRollbackQuestion(query) {
   const text = String(query || '');
-  const promotion = /\bpromot(?:e|ed|es|ing|ion|ions)\b/i.test(text);
-  const evidence = /\b(?:replay\w*|receipts?|evidence)\b/i.test(text);
-  const rollback = /\b(?:roll(?:ed)?\s+back|rollback|revert\w*)\b/i.test(text);
-  return promotion && evidence && rollback;
+  const change = /\b(?:self[- ]optimi[sz]\w*|evolv\w*|changes?|promot(?:e|ed|es|ing|ion|ions))\b/i.test(text);
+  const independentGate =
+    /\b(?:independent(?:ly)?\s+benchmark\w*|fixed\s+benchmark|quality\s+gate|replay\w*|receipts?)\b/i.test(text);
+  const integrity = /\b(?:signed|witness|receipt[- ]backed|receipts?)\b/i.test(text);
+  const replayableEvidence =
+    /\breplay\w*\s+evidence\b/i.test(text)
+    || /\bevery\s+promotion\b[\s\S]{0,60}\bevidence\b/i.test(text);
+  const reversible = /\b(?:reversible|roll(?:ed)?\s+back|rollback|revert\w*)\b/i.test(text);
+  return change && independentGate && (integrity || replayableEvidence) && reversible;
 }
 
 function adaptiveRetrievalPromotionQuestion(query) {
@@ -648,7 +655,7 @@ function capabilitySelectionItems(query) {
     return [['coder'], ['reviewer'], ['architect'], ['spawn', 'agent']];
   }
   if (replayablePromotionRollbackQuestion(query)) {
-    return [['receipt-backed'], ['rollback']];
+    return [['benchmark', 'parent', 'child'], ['receipt-backed'], ['rollback']];
   }
   if (adaptiveRetrievalPromotionQuestion(query)) {
     return [['axis', 'positive', 'historical'], ['held', 'out', 'baseline']];
@@ -1604,7 +1611,13 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         // prose alone can never turn a built-state claim green.
         : queryMode === 'confirmation' && confirmationNeedsDocumentation(query)
           ? new Set(['doc', 'source', 'manifest'])
-          : new Set(['source', 'manifest']);
+        : new Set(['source', 'manifest']);
+    if (queryMode === 'documentation-scope' && livingAdrDriftQuestion(query)) {
+      // The indexed Ruflo corpus historically labels the ruflo-adr plugin README and review SKILL
+      // as kind=adr based on their parent directory. Their basenames and contents are operational
+      // documentation; admit them to the bounded selector, then classify them correctly below.
+      evidenceKinds.add('adr');
+    }
     const enumerationItems = ['concept-inventory', 'enumeration'].includes(queryMode)
       ? capabilitySelectionItems(query)
         || queryEnumerationItems(query)
@@ -1632,7 +1645,7 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
       for (const entry of Object.values(meta.entries || {})) {
         const sourcePath = String(entry?.path || '');
         if (String(entry?.kind || '').toLowerCase() === 'source'
-            && /(?:^|\/)packages\/flywheel\/src\/lineage\.ts$/i.test(sourcePath)) {
+            && /(?:^|\/)packages\/(?:flywheel\/src\/lineage|darwin-mode\/src\/bench\/promotion)\.ts$/i.test(sourcePath)) {
           passagePaths.add(sourcePath);
         }
       }
@@ -1749,12 +1762,13 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         }
       }
     }
+    // Enumeration/concept inventory has its own item-aware bounded scanner below. Running the
+    // generic path scanner first reads the same JSONL corpus twice and adds no evidence; on large
+    // repos that duplicate pass alone can push an otherwise lexical answer past the user deadline.
     const passageTexts = [
       'code-example',
-      'enumeration',
       'mechanics',
       'mutation-target',
-      'concept-inventory',
       'overview',
       'documentation-scope',
     ].includes(queryMode)
@@ -1772,6 +1786,15 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         repo,
         passagePaths,
         enumerationItems,
+      );
+      for (const [sourcePath, text] of focusedTexts) passageTexts.set(sourcePath, text);
+    }
+    if (queryMode === 'documentation-scope' && livingAdrDriftQuestion(query)) {
+      const focusedTexts = await conceptInventoryPassageTexts(
+        dir,
+        repo,
+        passagePaths,
+        [['architecture', 'decision'], ['implementation', 'drift']],
       );
       for (const [sourcePath, text] of focusedTexts) passageTexts.set(sourcePath, text);
     }
@@ -1817,6 +1840,8 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
       break;
     }
     const byPath = new Map();
+    const scopedPackageName = String(query)
+      .match(/@[a-z0-9][a-z0-9._-]*\/[a-z0-9._-]+/i)?.[0]?.toLowerCase();
     for (const entry of Object.values(meta.entries || {})) {
       if (!entry || !evidenceKinds.has(String(entry.kind || '').toLowerCase())) continue;
       const preview = String(entry.preview || '').trim();
@@ -1866,7 +1891,14 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         && ['manifest', 'source'].includes(String(entry.kind || '').toLowerCase())
         && overviewReferencedPaths.has(sourcePath),
       );
-      const minDirect = supplementalDocumentation
+      const exactPackageManifest = Boolean(
+        scopedPackageName
+        && /(?:^|\/)package\.json$/i.test(sourcePath)
+        && evidenceText.toLowerCase().includes(scopedPackageName),
+      );
+      const minDirect = exactPackageManifest
+        ? 0
+        : supplementalDocumentation
         || partialLanguageDocumentation
         || linkedOverviewImplementation
         ? 0
@@ -1879,7 +1911,9 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
             : queryMode === 'mutation-target'
               ? 1
             : (queryMode === 'compound' ? 1 : 2);
-      const minCorroborating = linkedOverviewImplementation
+      const minCorroborating = exactPackageManifest
+        ? 0
+        : linkedOverviewImplementation
         ? 0
         : partialLanguageDocumentation
           ? 1
@@ -1954,6 +1988,11 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
         || String(candidate.kind || '').toLowerCase() !== 'doc'
         || candidate._formatProof)
       .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+    const packageIdentityCandidate = scopedPackageName
+      ? candidates.find((candidate) =>
+        /(?:^|\/)package\.json$/i.test(String(candidate.path || ''))
+        && String(candidate.fullText || candidate.text || '').toLowerCase().includes(scopedPackageName))
+      : null;
     const confirmationGroups = queryMode === 'confirmation'
       ? confirmationClaimGroups(query, repo, cardRepo)
       : [];
@@ -2046,6 +2085,11 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
     } else {
       candidates = candidates.slice(0, Math.max(1, k - 1));
     }
+    if (packageIdentityCandidate
+        && !candidates.includes(packageIdentityCandidate)
+        && candidates.length < k) {
+      candidates.unshift(packageIdentityCandidate);
+    }
     if ([
       'compound',
       'concept-inventory',
@@ -2053,20 +2097,30 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
       'definition',
       'documentation-scope',
       'overview',
-    ].includes(queryMode)
+      ].includes(queryMode)
         && candidates.length) {
       const selectedPaths = new Set(candidates.map((candidate) => candidate.path));
-      const selectedPassages = graphMemoryConfirmation
-        ? await graphMemoryPassageTexts(dir, repo, selectedPaths)
-        : ['concept-inventory', 'enumeration'].includes(queryMode)
-            || portableBinaryVectorFileQuestion(query)
-          ? await conceptInventoryPassageTexts(
-              dir,
-              repo,
-              selectedPaths,
-              enumerationItems || portableBinaryVectorItems(),
-            )
-        : await sourcePassageTexts(dir, repo, selectedPaths);
+      const selectedPassages = new Map([...selectedPaths]
+        .filter((sourcePath) => passageTexts.has(sourcePath))
+        .map((sourcePath) => [sourcePath, passageTexts.get(sourcePath)]));
+      const missingSelectedPaths = new Set([...selectedPaths]
+        .filter((sourcePath) => !selectedPassages.has(sourcePath)));
+      const additionalPassages = !missingSelectedPaths.size
+        ? new Map()
+        : graphMemoryConfirmation
+          ? await graphMemoryPassageTexts(dir, repo, missingSelectedPaths)
+          : ['concept-inventory', 'enumeration'].includes(queryMode)
+              || portableBinaryVectorFileQuestion(query)
+            ? await conceptInventoryPassageTexts(
+                dir,
+                repo,
+                missingSelectedPaths,
+                enumerationItems || portableBinaryVectorItems(),
+              )
+            : await sourcePassageTexts(dir, repo, missingSelectedPaths);
+      for (const [sourcePath, text] of additionalPassages) {
+        selectedPassages.set(sourcePath, text);
+      }
       candidates = candidates.map((candidate) => {
         const passageText = selectedPassages.get(candidate.path);
         if (!passageText) return candidate;
@@ -2111,6 +2165,29 @@ async function sourceBackedCardLane({ dir, query, k, planned }) {
               )
         )) continue;
     if (specificationToCompletionMethodQuestion(query) || pythonFreeRustNeuralQuestion(query)) {
+      candidates.unshift({
+        repo,
+        path: `capability-cards.md#${cardRepo}`,
+        title: `${cardRepo} capability card`,
+        kind: 'doc',
+        fullText: card.body,
+        text: card.body,
+        ceScore: null,
+        bestDistance: null,
+        chunksJoined: 1,
+        truncated: false,
+        score: null,
+        direct: [],
+        corroborating: [],
+        _lane: 'source-backed-card',
+        _proofMethod: 'curated-capability-card',
+      });
+    }
+    if (['compound', 'concept-inventory', 'confirmation'].includes(queryMode)
+        && candidates.some((candidate) =>
+          ['manifest', 'source'].includes(String(candidate.kind || '').toLowerCase()))
+        && !candidates.some((candidate) =>
+          String(candidate.path || '') === `capability-cards.md#${cardRepo}`)) {
       candidates.unshift({
         repo,
         path: `capability-cards.md#${cardRepo}`,

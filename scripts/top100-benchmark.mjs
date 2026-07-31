@@ -112,6 +112,8 @@ export function evaluateSemanticEvidence(answer, requiredEvidence) {
   const normalize = (value) => String(value || '')
     .replace(/\b(?:type|java)script\b/gi, (name) => name.toLowerCase())
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-\u2010-\u2015]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/[→➜]/g, ' to ')
     .toLowerCase();
   const canonicalTerm = (term) => {
@@ -273,7 +275,7 @@ export function acceptanceGates(metrics, {
     },
     { id: 'p50-at-most-2s', pass: overall.latency.p50Ms <= 2_000, actual: overall.latency.p50Ms, required: 2_000 },
     { id: 'p95-at-most-5s', pass: overall.latency.p95Ms <= 5_000, actual: overall.latency.p95Ms, required: 5_000 },
-    { id: 'max-at-most-30s', pass: overall.latency.maxMs <= 30_000, actual: overall.latency.maxMs, required: 30_000 },
+    { id: 'max-at-most-4s', pass: overall.latency.maxMs <= 4_000, actual: overall.latency.maxMs, required: 4_000 },
     {
       id: 'semantic-answer-assertions',
       pass: semanticAssertionsPresent,

@@ -82,7 +82,7 @@
     { "id": "d-15", "stratum": "described", "query": "Rank my untested code by how risky it is, not just what's uncovered.", "expectRepo": ["agentic-qe", "ruflo", "concepts"], "why": "coverage gaps by risk" },
     { "id": "d-16", "stratum": "described", "query": "A hypervisor layer that gives each tenant an isolated hardware partition.", "expectRepo": ["rvm", "concepts"], "why": "RVM partitions" },
     { "id": "d-17", "stratum": "described", "query": "Prebuilt agent roles — coder, reviewer, architect — I can spawn without writing prompts.", "expectRepo": ["agentic-flow", "ruflo", "concepts"], "why": "54+ agents; ruflo spawns them too" },
-    { "id": "d-18", "stratum": "described", "query": "Self-improvement where every promotion has replayable evidence and can be rolled back.", "expectRepo": ["agent-harness-generator", "ruflo", "ruv-gists", "concepts"], "why": "receipt-backed evolution (ADR-176) + darwin gates; announced in gists" },
+    { "id": "d-18", "stratum": "described", "query": "Self-improvement where every promotion has replayable evidence and can be rolled back.", "expectRepo": ["metaharness", "agent-harness-generator", "ruflo", "ruv-gists", "concepts"], "why": "MetaHarness Darwin promotion gates provide replayable evidence and rollback; earlier ADR-176 material announced the pattern" },
     { "id": "d-19", "stratum": "described", "query": "Stop my assistant from starting every session cold — carry decisions across sessions.", "expectRepo": ["agentdb", "ruflo", "concepts"], "why": "persistent project memory; both surface it" },
     { "id": "d-20", "stratum": "described", "query": "Retrieval that tunes its own ranking weights over time but only keeps proven improvements.", "expectRepo": ["ruflo", "ruv-gists", "concepts"], "why": "the self-learning flywheel" },
 
@@ -105,7 +105,7 @@
     { "id": "s-17", "stratum": "scenario", "query": "Our ADRs say one thing and the code does another; we want decision records treated as living plans and checked against reality.", "expectRepo": ["ruflo", "concepts"], "why": "ruflo-adr tooling" },
     { "id": "s-18", "stratum": "scenario", "query": "A thousand users each need their own agent memory, but full copies are killing our storage bill.", "expectRepo": ["agenticow", "concepts"], "why": "162-byte COW branches" },
     { "id": "s-19", "stratum": "scenario", "query": "We'll only accept a self-optimizing system if every change is independently benchmarked, signed, and reversible.", "expectRepo": ["ruflo", "agent-harness-generator", "ruv-gists", "concepts"], "why": "receipt-backed evolution" },
-    { "id": "s-20", "stratum": "scenario", "query": "Same agent program, three model vendors, one bill we can actually attribute per task.", "expectRepo": ["agentic-flow", "concepts"], "why": "multi-provider + billing" },
+    { "id": "s-20", "stratum": "scenario", "query": "Can agentic-flow route one agent program across Anthropic, OpenRouter, and Gemini while enforcing maxCostPerTask?", "expectRepo": ["agentic-flow", "concepts"], "why": "multi-provider routing + source-proven per-task budget ceiling" },
 
     { "id": "a-01", "stratum": "adversarial", "query": "How do I configure Kubernetes horizontal pod autoscaling with custom metrics?", "why": "not in corpus" },
     { "id": "a-02", "stratum": "adversarial", "query": "What's the syntax to refresh a Postgres materialized view concurrently?", "why": "not in corpus" },

@@ -206,7 +206,7 @@ describe('top-100 semantic assertions', () => {
   it('never lets a fast-lane answer pass routing while failing its question-specific facts', () => {
     const failures = [];
     for (const question of buildTop100().questions) {
-      const hit = answerFromCards(question.query, 'kb');
+      const hit = answerFromCards(question.query, 'kb', { allowGuideAnswers: true });
       if (!hit.hit) continue;
       const semantic = evaluateSemanticEvidence(renderCardHit(hit), question.requiredEvidence);
       if (!semantic.pass) {
