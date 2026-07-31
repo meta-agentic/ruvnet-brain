@@ -29,6 +29,7 @@ import { rmHome } from '../helpers/reap-detached.mjs';
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 const GROUND_HOOK = path.join(REPO_ROOT, 'plugin/scripts/ground-ruvnet.sh');
 const SESSION_HOOK = path.join(REPO_ROOT, 'plugin/scripts/session-start.sh');
+const DETACH = path.join(REPO_ROOT, 'plugin/scripts/detach.mjs');
 const PLUGIN_ROOT = path.join(REPO_ROOT, 'plugin');
 
 // The RUNNING plugin version, read live from the same file the hook reads — never hardcoded.
@@ -273,6 +274,14 @@ describe('ground-ruvnet.sh — gate behavior battery', () => {
 });
 
 describe('session-start.sh — greeting + one-time star-ask', () => {
+  it('severs both Windows supervisor streams at the native Start-Process boundary', () => {
+    const source = fs.readFileSync(DETACH, 'utf8');
+    expect(source).toContain("'-RedirectStandardOutput'");
+    expect(source).toContain("'-RedirectStandardError'");
+    expect(source).toContain('.supervisor.stdout');
+    expect(source).toContain('.supervisor.stderr');
+  });
+
   it('runs twice with the same HOME: sane greeting both times, exit 0, empty stderr', () => {
     const run1 = runSessionHook();
     const run2 = runSessionHook();

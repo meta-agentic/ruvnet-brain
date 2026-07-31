@@ -59,6 +59,7 @@ const RESERVED = new Set(['repair:memory-index', 'purge:shadows']);
 export const REMEDIES = [
   {
     key: 'memory-index',
+    autoEligible: true,
     summary: 'REINDEX a corrupt AgentDB store',
     match: (id) => (id === 'repair:memory-index' ? {} : null),
     plan: () => ({ script: 'scripts/health-repair.mjs', args: ['--repair-memory'] }),
@@ -108,6 +109,7 @@ export const REMEDIES = [
     // `ruflo memory distill run`: the wrapper snapshots first, fails closed on a receipt-write
     // failure, and its `--restore` is the tested inverse (proven 644→648→644→648, 2026-07-24).
     key: 'enable-memory-distillation',
+    autoEligible: true,
     summary: "mine this project's stored memories into reusable patterns (snapshots first; reversible)",
     match: (id) => (id === 'enable:memory-distillation' ? {} : null),
     // This console instance is always scoped to ONE project — the directory it was started in — the
@@ -145,6 +147,7 @@ export const REMEDIES = [
   },
   {
     key: 'reconcile-project',
+    autoEligible: true,
     summary: 'rewire a project from npx to the global binary',
     match: (id) => {
       const m = /^reconcile:(.+)$/.exec(id);
@@ -183,6 +186,7 @@ export function planFor(id) {
   return {
     key: remedy.key,
     summary: remedy.summary,
+    autoEligible: remedy.autoEligible === true,
     exec: remedy.plan(params),
     undo: remedy.inverse(params),
     params,

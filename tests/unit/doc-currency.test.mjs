@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import {
   evaluateDoc, evaluate, listDocs, parseFrontmatter, normativeBody, resolveGoverned,
   computeDigest, deriveImpl, deriveDrift, weakest, planFix, applyFix, blockingFindings,
-  countReferents, main, IMPL_LADDER,
+  changedDocumentScope, countReferents, main, IMPL_LADDER,
 } from '../../scripts/doc-currency.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -724,17 +724,29 @@ describe('CLI contract', () => {
     expect(quiet(() => main(['--check', '--root', notRepo]))).toBe(0);
   });
 
-  it('--changed scopes blocking to documents touched in the change set', () => {
+  it('--changed follows governed paths while leaving unrelated pre-existing debt out of scope', () => {
     const r = newRepo();
-    write(r, 'docs/adr/0001-preexisting.md', '---\nid: ADR-001\nstatus: Accepted\ndate: 2026-07-01\n---\n\n# body\n');
+    write(r, 'scripts/thing.mjs', 'export const t = 1;\n');
+    write(r, 'docs/adr/0001-preexisting.md', adr({ governs: ['scripts/thing.mjs'] }));
     commit(r, 'baseline', '2026-07-01T12:00:00');
     const base = sh(r, 'git', ['rev-parse', 'HEAD']);
-    write(r, 'scripts/unrelated.mjs', '//\n');
-    commit(r, 'unrelated change', '2026-07-02T12:00:00');
+
+    for (let i = 2; i <= 5; i++) {
+      write(r, 'scripts/thing.mjs', `export const t = ${i};\n`);
+      commit(r, `governed change ${i}`, `2026-07-0${i}T12:00:00`);
+    }
 
     const { docs } = evaluate(r);
-    expect(blockingFindings(docs).length).toBeGreaterThan(0);              // pre-existing debt is real
-    expect(blockingFindings(docs, { scope: new Set() })).toHaveLength(0);  // ...and out of this push's scope
+    const governedScope = changedDocumentScope(docs, new Set(['scripts/thing.mjs']));
+    expect(governedScope).toEqual(new Set(['docs/adr/0001-preexisting.md']));
+    expect(quiet(() => main(['--check', '--root', r, '--changed', base, '--json']))).toBe(1);
+
+    const unrelatedBase = sh(r, 'git', ['rev-parse', 'HEAD']);
+    write(r, 'scripts/unrelated.mjs', '//\n');
+    commit(r, 'unrelated change', '2026-07-06T12:00:00');
+
+    expect(blockingFindings(evaluate(r).docs).length).toBeGreaterThan(0); // pre-existing debt is real
+    expect(quiet(() => main(['--check', '--root', r, '--changed', unrelatedBase, '--json']))).toBe(0);
     expect(base).toMatch(/^[0-9a-f]{40}$/);
   });
 

@@ -3,10 +3,10 @@ id: ADR-054
 title: Brain on/off and per-part scope — a user-controlled brain that can never silently lie about being off
 status: Accepted
 date: 2026-07-26
-updated: 2026-07-29
+updated: 2026-07-31
 impl: verified
-verified: 2026-07-29
-verified_digest: b5b3ea58d448
+verified: 2026-07-31
+verified_digest: f6d3dce9ad77
 authors: [Stuart Kerr, Claude Code]
 tags: [settings, console, scope, retrieval, hooks, honesty]
 supersedes: []
@@ -183,6 +183,10 @@ failure. v1 draft's Decision + risks register superseded above; Context stands.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-31 | Re-verified the brain on/off and storage-profile contract after closing the release-oracle regressions. | Commit `14f654e` changes governed `kb/forge-ask-all.mjs` only in source-backed query classification, capability-card supplementation, and replayable-promotion evidence selection. It does not change `brainEnabled`, sentinel precedence, profile selection, or off-state behavior. The impacted broad gate passed 273/273, the production Top-100 gate passed 100/100 semantic and grounded/routed with 0 errors and a 3.723s maximum, and the exact rebuilt archive audited 63/63 RVFs with zero index failures; computed digest `f6d3dce9ad77`. |
+| 2026-07-30 | Re-verified the brain on/off and storage-profile contract after source-grounded retrieval and release-artifact hardening. | Commit `8d20687` changes governed `kb/forge-ask-all.mjs` only in query classification, evidence selection, and bounded source retrieval. It does not change `brainEnabled`, sentinel precedence, profile selection, or off-state behavior. The production Top-100 gate passed 100/100 semantic and 100/100 grounded/routed; focused release tests passed 143/143 and `npm test` passed 60/60; computed digest `49285cc2b9d2`. |
+| 2026-07-30 | Re-verified the master-off and profile authority after the Fix All validator was narrowed by remedy family. | `scripts/onboarding-console.mjs` changes only which recommendation builder revalidates a selected remedy; it does not change `brainEnabled`, sentinel precedence, storage profiles, or off-state behavior. Focused console acceptance and `npm test` passed at candidate `ba53fc9`; computed digest `1d7ac1da0d47`. |
+| 2026-07-30 | Re-verified the sentinel master-off and per-plane authority after 4.0.2 preferences, project-default seeding, Console persistence, and MCP readiness warmup. | `scripts/user-settings.mjs`, `plugin/scripts/hook-shim.mjs`, and `kb/brain-profile.mjs` retain sentinel authority. New preference controls are subordinate runtime choices; `plugin/scripts/session-start.sh` seeds nonsecrets once and never copies or overrides the sentinel. `bin/install.mjs` Console persistence and `plugin/mcp/server.mjs` readiness warmup do not change off-state authority. |
 | 2026-07-29 | Re-verified the complete governed set for the 4.0.0 release candidate and refreshed the machine-derived digest; the brain-off, sentinel-authority, storage-profile, and maintenance boundaries are unchanged. | Commit `e20cdf2` changed governed runtime files for worker retirement, host parity, and release hardening. The contract remains exercised by `tests/unit/brain-off.test.mjs`, the live console inspection, and the release QE evidence in `docs/qe/AGENTIC-QE-4.0-MASTER-PLAN.md`; computed digest `b5b3ea58d448`. |
 | 2026-07-29 | Re-verified ADR-054 after the three governed-code commits since `4ad464e`; no architecture change required. | Commit `79573ff` changes only quiet-prompt classification/dispatch in `plugin/scripts/hook-shim.mjs`; the brain-off silence exit remains before the new fast path. Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores. Commit `ebe51a5` makes Codex wiring honor `CODEX_HOME` and decode quoted server paths; neither installer change touches sentinel lifecycle or profile reapplication. `tests/unit/brain-off.test.mjs`, `tests/unit/hook-shim-ground-fast.test.mjs`, `tests/unit/codex-wiring.test.mjs`, and `tests/integration/install-smoke.mjs` passed on 2026-07-29. |
 | 2026-07-28 | Re-read the installer after making stale/current integration tests independent of GitHub API quota; the brain-state contract is unchanged. | Commit `2f420e7` adds a `RUVNET_BRAIN_TEST_LATEST_TAG` seam that is reachable only with the existing `RUVNET_BRAIN_TEST=1` guard. Production release resolution, the OFF sentinel, profile selection, and uninstall behavior are unchanged; `tests/integration/stale-install-trap.test.mjs` now proves stale/current behavior without a live unauthenticated API call. |

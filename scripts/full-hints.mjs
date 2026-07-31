@@ -18,6 +18,7 @@
 
 export const FULL_HINTS = {
   'ruflo': 'v3/@claude-flow,v3/mcp,ruflo/src',
+  'synthlang': 'proxy/src/cli/synthlang,proxy/src/app/synthlang',
   'agentdb': 'src',
   'rulake': 'crates',
   'daa': 'crates/daa-ai,crates/daa-chain,crates/daa-economy,crates/daa-rules,daa-ai/src,daa-chain/src,daa-cli/src,daa-compute/benches,daa-compute/build.rs,daa-compute/src,daa-compute/tests,daa-economy/src,daa-mcp/src,daa-orchestrator/daa-napi,daa-orchestrator/src,daa-orchestrator/tests,daa-rules/src,daa-sdk/crates,examples/agents,examples/basic-crypto.ts,examples/decentralized-task-scheduler.ts,examples/federated-learning.ts,examples/full-stack-agent.ts,examples/orchestrator.ts,examples/performance-benchmark.ts,prime-rust/crates,prime-rust/prime-napi,prime-rust/tests,src/main.rs,src/security',

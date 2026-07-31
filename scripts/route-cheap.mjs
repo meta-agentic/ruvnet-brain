@@ -27,6 +27,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { loadRuntimePreferences, runtimeChildEnv } from '../plugin/scripts/runtime-preferences.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -90,20 +91,15 @@ export function receiptLine(model, costs) {
   return `\x1b[2m⚡ MetaHarness: routed to ${model} — ~${pct}% cheaper (est. ${fmt$(costs.cost)} vs ${fmt$(costs.frontier)} ${ref}, saved ~${fmt$(costs.saved)})\x1b[0m`;
 }
 
-// Load OPENROUTER_API_KEY from ruvnet-brain/.env if not already in env. Value never printed/logged.
-function ensureOpenRouterKey() {
-  if (process.env.OPENROUTER_API_KEY) return true;
+function agenticFlowExecutable(env) {
+  const home = env.HOME || os.homedir();
+  const global = path.join(home, '.npm-global', 'bin', process.platform === 'win32' ? 'agentic-flow.cmd' : 'agentic-flow');
   try {
-    const envFile = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
-    const m = envFile.match(/^OPENROUTER_API_KEY=(.+)$/m);
-    if (m && m[1].trim()) {
-      process.env.OPENROUTER_API_KEY = m[1].trim().replace(/^["']|["']$/g, '');
-      return true;
-    }
+    fs.accessSync(global, fs.constants.X_OK);
+    return global;
   } catch {
-    /* no .env — fall through */
+    return 'agentic-flow';
   }
-  return false;
 }
 
 function parseArgs(argv) {
@@ -125,16 +121,25 @@ function main() {
     console.error(`Unknown model "${args.model}" — no verified pricing, refusing to invent savings. Known: ${Object.keys(PRICING).join(', ')}`);
     process.exit(2);
   }
-  if (!ensureOpenRouterKey()) {
-    console.error('OPENROUTER_API_KEY not found in env or ruvnet-brain/.env — cannot route. (Key value is never printed.)');
+  const policy = loadRuntimePreferences();
+  if (policy.values.routing !== 'auto') {
+    console.error(policy.values.routing === 'off'
+      ? 'Token-smart routing is off in RuvNet Brain Console — nothing was dispatched.'
+      : 'Token-smart routing has not been enabled in RuvNet Brain Console — nothing was dispatched.');
+    process.exit(1);
+  }
+  const childEnv = runtimeChildEnv();
+  if (!childEnv.OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY is not configured in the environment or encrypted Brain credential store — cannot route. (Key value is never printed.)');
     process.exit(1);
   }
 
   const started = Date.now();
-  const run = spawnSync('npx', ['agentic-flow@latest', '--agent', args.agent, '--model', args.model, '--task', args.task], {
+  const run = spawnSync(agenticFlowExecutable(childEnv), ['--agent', args.agent, '--model', args.model, '--task', args.task], {
     encoding: 'utf8',
     timeout: 180_000,
-    env: process.env,
+    env: childEnv,
+    shell: false,
   });
 
   if (run.error || run.status !== 0) {

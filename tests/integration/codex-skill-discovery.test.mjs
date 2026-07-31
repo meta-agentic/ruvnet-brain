@@ -37,6 +37,7 @@ describe('installed Codex skill discovery', () => {
       expect(rendered).toContain('ruvnet-brain:rvbc');
       expect(rendered).toContain('ruvnet-brain:brain-console');
       expect(rendered).toContain('ruvnet-brain:whats-new');
+      expect(rendered).toContain('Configure RuvNet Brain');
       expect(rendered).not.toMatch(
         /source-command-(?:brain-console|rvcb)[\s\S]{0,1600}rvbc\.md[\s\S]{0,120}same directory/,
       );

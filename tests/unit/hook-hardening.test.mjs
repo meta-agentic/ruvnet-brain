@@ -62,6 +62,10 @@ const env = (extra = {}) => ({
   CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT,
   RUVNET_BRAIN_METER: '0',
   RUVNET_AUTONOMOUS: '',
+  // These legacy hardening cases intentionally assert the user-scope queue under
+  // HOME. The product default is now project scope, so name the scope instead of
+  // letting an unrelated preference change silently redirect the fixture.
+  RUVNET_LEARNING_SCOPE: 'user',
   ...extra,
 });
 

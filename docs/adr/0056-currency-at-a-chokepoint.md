@@ -3,7 +3,7 @@ id: ADR-056
 title: Pay the debt, then wire the gate — document currency without a ratchet
 status: Proposed
 date: 2026-07-27
-updated: 2026-07-28
+updated: 2026-07-30
 impl: wired
 governs:
   - scripts/wired-check.mjs
@@ -19,7 +19,9 @@ relates: [ADR-034, ADR-024, ADR-037, ADR-009, ADR-020]
 # ADR-056: Pay the debt, then wire the gate
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-27 · **Why**: v2 after adversarial duel — v1's design was
+**Date**: 2026-07-27 · **Last updated**: 2026-07-30 · **Why**: v3 closes a changed-scope escape that
+let governed code move without bringing its ADR into the blocking set; v2 followed an adversarial
+duel in which v1 scored
 scored 33/100 and 52/100 by two independent models and largely rewritten; record in §Duel
 **Implementation**: wired (DERIVED, not claimed — §§1, 2, 5, 7 are built, wired and tested; §8's
 session-start notice and §3's opt-in hook widening are NOT) · **Verified in sync**: never
@@ -177,8 +179,11 @@ sync" remains a separate, derived, expiring claim available only to Governed Doc
 ### 5. Wire the gate plain: one line, `--changed`, no ratchet
 
 After §1, `scripts/git-hooks/pre-push` gains one invocation of the currency check scoped with the
-tool's existing `--changed` flag. No baseline, no state, no new mechanism. `--changed` is only safe
-*because* the debt is zero: a touched document that is red really is your fault.
+tool's existing `--changed` flag. No baseline, no state, no new mechanism. A document is in that
+scope when either the document itself changed **or any resolved path in its `governs:` set changed**.
+Scoping only to directly touched ADR filenames is an escape hatch: code can invalidate the claim
+without the claim ever being evaluated. `--changed` is only safe *because* the debt is zero: a
+touched document, or a document governing touched code, that is red really is your fault.
 
 ### 6. `governs:` grows one document at a time — the corpus-wide backfill is CUT
 
@@ -301,6 +306,7 @@ fix** — which is the one section that was already built.
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-30 | Closed the `--changed` governed-path escape and corrected the pre-push success message boundary. | `scripts/doc-currency.mjs` previously intersected the diff only with ADR filenames, so changed governed code could print global BLOCK findings yet leave the scoped set empty and return 0. The scope now includes documents whose resolved `governs:` paths intersect the diff; `tests/unit/doc-currency.test.mjs` pins both governed-path failure and unrelated-change pass. `scripts/verify-channels.mjs` now reports only channel-check success before currency runs, while `scripts/git-hooks/pre-push` owns the final whole-gate success. |
 | 2026-07-28 | Removed the obsolete `ground-before-write` and `grounding-stamp` exemptions from `scripts/wired-check.mjs`. | Both hooks are now shipped through `plugin/hooks/hooks.json` and `plugin/hooks/codex-hooks.json`; retaining the inert exemptions made the same report call them both exempt and wired. `npm run wired:check` now reports 0 unwired without that contradiction. |
 | 2026-07-27 | Initial draft (v1) | Owner's three rules. Audit found all three pre-existing and unfired: `md-stamp.mjs:11`, missing `~/.claude/hooks/ascii-svg-auto-sync.sh`, `package.json:35` defined-but-uncalled. ADR-034's `impl: unbuilt` refuted by `scripts/doc-currency.mjs` |
 | 2026-07-27 | **Re-read after its own governed code moved.** Commits `00dd34a` (Rejected/Superseded exempted from drift) and `936c6b4` (stamp-sweep classified STANDALONE) both changed `scripts/wired-check.mjs` / `scripts/doc-currency.mjs` without touching this document, which re-staled it minutes after it reached zero findings. Both changes were made UNDER this ADR and conform to it: §7's third state and §1's debt-paydown. Restamped, and §1 now carries the general rule — an ADR is stamped in the SAME commit as the governed code it describes | The mechanism catching its own author is the strongest evidence it works; recorded rather than quietly restamped |

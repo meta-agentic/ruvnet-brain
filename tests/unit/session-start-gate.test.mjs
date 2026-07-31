@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { measureFirings, runSessionStartGate } from '../../scripts/qe/session-start-gate.mjs';
+import { loadBudget, measureFirings, runSessionStartGate } from '../../scripts/qe/session-start-gate.mjs';
 
 const resolved = {
   surface: { source: 'checkout', root: path.resolve('plugin') },
@@ -51,5 +51,26 @@ describe('session-start hard gate', () => {
     expect(result.p95).toBe(10);
     expect(result.pass).toBe(false);
     expect(result.reasons.join('\n')).toMatch(/COLD-START FAIL/);
+  });
+
+  it('fails when the cold first fire exceeds absoluteFailMs without timing out', async () => {
+    const budget = loadBudget();
+    const coldMs = budget.absoluteFailMs + 1;
+    expect(coldMs).toBeLessThan(resolved.reg.timeout * 1000);
+
+    let calls = 0;
+    const result = await runSessionStartGate({
+      resolved,
+      fireFn: async () => {
+        calls += 1;
+        return measurement(calls === 1 ? coldMs : 10);
+      },
+    });
+
+    expect(result.warmupTimedOut).toBe(false);
+    expect(result.warmupMs).toBe(coldMs);
+    expect(result.p95).toBe(10);
+    expect(result.pass).toBe(false);
+    expect(result.reasons.join('\n')).toMatch(/COLD-START ABSOLUTE FAIL/);
   });
 });

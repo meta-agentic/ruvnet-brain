@@ -75,7 +75,7 @@ async function run() {
     console.log(`\n  ${c.b('pre-push gate')} ${c.dim('· shipping ' + V + ' · (npm/explainer are verified post-publish by `release.mjs --publish`)')}`);
     for (const r of results) console.log(`   ${r.pass ? c.g('✓') : c.r('✗')} ${r.name}  ${c.dim(r.detail || '')}`);
     if (failed.length) { console.log(`\n  ${c.r('✗ pre-push gate FAILED — push refused. Fix the above; do not --no-verify around it.')}\n`); process.exit(1); }
-    console.log(`\n  ${c.g('✓ pre-push gate passed — nothing in this push strands a user.')}\n`);
+    console.log(`\n  ${c.g('✓ version/channel checks passed — document currency runs next.')}\n`);
     process.exit(0);
   }
 

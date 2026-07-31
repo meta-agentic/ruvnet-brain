@@ -45,6 +45,8 @@ rl.on('line', (line) => {
   }) + '\\n');
   if (request.method === 'initialize') {
     send({ protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'qe-stub', version: '0' } });
+  } else if (request.method === 'brain/warmup') {
+    send({ ready: true });
   } else if (request.method === 'tools/list') {
     send({ tools: [{ name: 'search_ruvnet', inputSchema: { type: 'object' } }] });
   } else if (request.method === 'tools/call') {

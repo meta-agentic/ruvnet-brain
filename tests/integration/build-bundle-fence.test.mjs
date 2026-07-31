@@ -12,7 +12,8 @@
 //
 // WHY A CLONED ROOT, NOT node_modules/tmp COPY OF THE WHOLE REPO: build-bundle.mjs computes
 // ROOT = path.dirname(script's own location).."/..", so copying just
-// {scripts/build-bundle.mjs, scripts/version.mjs, kb/, data/registry.tiers.json} into a fresh tmpdir
+// {scripts/build-bundle.mjs, scripts/version.mjs, a scoped index-audit stub, kb/,
+// data/registry.tiers.json} into a fresh tmpdir
 // gives it a fully isolated ROOT — no risk of mutating the real repo's kb/ or dist/.
 //
 // discoverBuilt() (line 79) matches repos by FILENAME PATTERN ONLY (`<name>.rvf`) — it never opens
@@ -36,6 +37,13 @@ beforeEach(() => {
   fs.mkdirSync(path.join(tmp, 'plugin/.claude-plugin'), { recursive: true });
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/build-bundle.mjs'), path.join(tmp, 'scripts/build-bundle.mjs'));
   fs.copyFileSync(path.join(REPO_ROOT, 'scripts/version.mjs'), path.join(tmp, 'scripts/version.mjs'));
+  fs.copyFileSync(path.join(REPO_ROOT, 'kb/zip-extract.mjs'), path.join(tmp, 'kb/zip-extract.mjs'));
+  // This suite measures only the private-store fence. The production bundle builder's independent
+  // RVF-index gate is covered by rvf-index-audit.test.mjs and build-bundle release tests; using
+  // empty placeholder RVFs here cannot exercise the native reader. Keep the dependency present and
+  // explicitly pass it so a missing import cannot prevent these fence assertions from running.
+  fs.writeFileSync(path.join(tmp, 'scripts/rvf-index-audit.mjs'),
+    'export async function auditRvfIndexes(paths) { return paths.map((path) => ({ path, state: "PASS" })); }\n');
   // Minimal registry: build-bundle.mjs reads this before it ever reaches the fence.
   fs.writeFileSync(path.join(tmp, 'data/registry.tiers.json'), JSON.stringify({ tiers: {} }));
   // version.mjs's single source of truth — build-bundle.mjs resolves the version tag before the fence.
@@ -59,10 +67,11 @@ describe('build-bundle.mjs — private-store fence (fail-closed)', () => {
     expect(r.stderr).toMatch(/FATAL.*private-store fence missing/i);
   });
 
-  it('proceeds with an empty fence ONLY when ALLOW_NO_PRIVATE_FENCE=1 is explicit', () => {
+  it('accepts an empty fence ONLY when ALLOW_NO_PRIVATE_FENCE=1 is explicit, then applies the independent RVF gate', () => {
     const r = runBuildBundle({ ALLOW_NO_PRIVATE_FENCE: '1' });
-    expect(r.code).toBe(0);
+    expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/ALLOW_NO_PRIVATE_FENCE=1.*proceeding with NO fence/i);
+    expect(r.stderr).toMatch(/FATAL.*zero public RVF/i);
   });
 
   it('FATALs (exit 1) when PRIVATE-STORES.json is present but corrupt JSON', () => {
@@ -92,5 +101,30 @@ describe('build-bundle.mjs — private-store fence (fail-closed)', () => {
     expect(names).toContain('public-repo');
     const readme = fs.readFileSync(path.join(tmp, 'dist/ruvnet-brain/README.md'), 'utf8');
     expect(readme).not.toMatch(/cognitum-seed/i);
+  });
+});
+
+describe('build-bundle.mjs — publishable artifact gate (fail-closed)', () => {
+  it('FATALs when discovery yields zero public RVFs, including a private-only KB', () => {
+    fs.writeFileSync(path.join(tmp, 'kb/PRIVATE-STORES.json'), JSON.stringify({ privateStores: ['private-repo'] }));
+    fs.writeFileSync(path.join(tmp, 'kb/private-repo.big.rvf'), '');
+
+    const r = runBuildBundle();
+
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/FATAL.*zero public RVF/i);
+    expect(fs.existsSync(path.join(tmp, 'dist/ruvnet-brain.zip'))).toBe(false);
+  });
+
+  it('FATALs instead of publishing a ZIP when any required bundle file is missing', () => {
+    fs.writeFileSync(path.join(tmp, 'kb/PRIVATE-STORES.json'), JSON.stringify({ privateStores: [] }));
+    fs.writeFileSync(path.join(tmp, 'kb/public-repo.big.rvf'), '');
+
+    const r = runBuildBundle();
+
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/FATAL.*missing required bundle files/i);
+    expect(r.stderr).toContain('public-repo.big.rvf.idmap.json');
+    expect(fs.existsSync(path.join(tmp, 'dist/ruvnet-brain.zip'))).toBe(false);
   });
 });

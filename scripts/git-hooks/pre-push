@@ -120,4 +120,7 @@ if [ -n "$CURRENCY_BASE" ]; then
     exit 1
   fi
 fi
+echo ""
+echo "  ✓ pre-push gate passed — version, channels, secrets, and document currency are clean."
+echo ""
 exit 0

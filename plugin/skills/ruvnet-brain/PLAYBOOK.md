@@ -1,6 +1,6 @@
 # THE PLAYBOOK — the standing build playbook, in full
 
-Updated: 2026-07-27 | Version 1.0.0
+Updated: 2026-07-30 | Version 1.0.1
 Created: 2026-07-27
 
 **Read this before your first build response in a session.** `plugin/scripts/session-start.sh`
@@ -41,6 +41,10 @@ the exact lie that makes people distrust rUv's code.
   token exchange", not "does RuvNet apply") — the useful hit can be in ANY of the 32 repos, never
   trust memory about what the corpus does or doesn't have.
 - Check project memory (ruflo memory search / AgentDB) for prior decisions on this area.
+- Diagnose memory only through one canonical absolute path: store a unique key with
+  `ruflo memory store --path <project>/.swarm/memory.db`, retrieve that exact key with the same
+  `--path`, then confirm the exact row through SQLite. A semantic-search miss, DB/WAL mtime,
+  daemon startup, or `[OK] Data stored successfully` alone proves neither failure nor success.
 - Invoke Ruflo MCP tools first for capabilities they already expose. For a CLI-only interface,
   use the brain's `ruvnet_cli_help` then `ruvnet_cli_run` tools with literal argv; never guess flags
   by reconstructing a raw shell command.

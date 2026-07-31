@@ -13,8 +13,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readStdinBounded } from './hook-input.mjs';
+import { loadRuntimePreferences } from './runtime-preferences.mjs';
 
 const HOME = os.homedir();
+const PROJECT = process.env.RUVNET_BRAIN_PROJECT_DIR || process.cwd();
+const configuredScope = process.env.RUVNET_LEARNING_SCOPE
+  || loadRuntimePreferences({ cwd: PROJECT }).values.learningScope;
+const LEARNING_SCOPE = ['off', 'project', 'user'].includes(configuredScope)
+  ? configuredScope : 'project';
+if (LEARNING_SCOPE === 'off') process.exit(0);
 
 // THE SESSION ID COMES OFF THE PAYLOAD, exactly as it does in learn-capture.sh (fixed 2026-07-27).
 //
@@ -37,8 +44,12 @@ async function payloadSessionId() {
 }
 // A filename COMPONENT, never a path — the payload is untrusted input.
 const SID = ((await payloadSessionId()) || process.env.CLAUDE_SESSION_ID || '').replace(/[^A-Za-z0-9_-]/g, '') || 'default';
-const QUEUE = process.env.LEARN_QUEUE || path.join(HOME, '.cache/ruvnet-brain/learn', `session-${SID}.jsonl`);
+const QUEUE_ROOT = LEARNING_SCOPE === 'user'
+  ? path.join(HOME, '.cache', 'ruvnet-brain', 'learn')
+  : path.join(PROJECT, '.swarm', 'ruvnet-brain-learn');
+const QUEUE = process.env.LEARN_QUEUE || path.join(QUEUE_ROOT, `session-${SID}.jsonl`);
 const RUFLO = path.join(HOME, '.npm-global/bin/ruflo');
+const RUFLO_ENV = { ...process.env, RUFLO_DAEMON_AUTOSTART: '0' };
 const MAX_ACTIONS = 8; // bound the work so SessionEnd stays fast
 
 // THE DEADLINE. SessionEnd's registered timeout is 30s (plugin/hooks/hooks.json) and this hook fires
@@ -100,8 +111,14 @@ for (let i = 0; i < actions.length; i++) {
     ? ['hooks', 'post-command', '-c', s.action, '-s', 'true']
     : ['hooks', 'post-edit', '-f', s.action, '-s', 'true', '-o', 'session edit'];
   try {
-    // cwd: HOME → writes the GLOBAL per-user learner (cross-project), not a project-local one.
-    execFileSync(RUFLO, args, { cwd: HOME, stdio: 'ignore', timeout: Math.min(6000, remaining) });
+    // One command, two real Ruflo scopes: project cwd keeps patterns local; HOME retains the
+    // cross-project SONA learner for users who explicitly chose `user`.
+    execFileSync(RUFLO, args, {
+      cwd: LEARNING_SCOPE === 'user' ? HOME : PROJECT,
+      env: RUFLO_ENV,
+      stdio: 'ignore',
+      timeout: Math.min(6000, remaining),
+    });
     fed++;
   } catch { /* best-effort — one slow/failed record must not stall session end */ }
 }
@@ -129,7 +146,7 @@ if (fed > 0 || allDistinct.length === 0) {
   console.log(`learn-flush: 0/${actions.length} fed (ruflo hooks failing?) — queue KEPT for retry next session-end`);
 }
 if (process.argv.includes('--sync')) {
-  console.log(`learn-flush: fed ${fed}/${actions.length} distinct actions to the global learner`
+  console.log(`learn-flush: fed ${fed}/${actions.length} distinct actions to the ${LEARNING_SCOPE} learner`
     // Say the deadline out loud when it fires. A budget that silently truncates reads as "that was
     // all there was", which is the same lie as the count cap that preceded it.
     + (stoppedAt < actions.length ? `; STOPPED at ${stoppedAt}/${actions.length} on the ${DEADLINE_MS}ms deadline` : '')

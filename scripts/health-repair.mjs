@@ -49,6 +49,7 @@ function resolveRuflo() {
   return found && fs.existsSync(found) ? found : null;
 }
 const RUFLO = resolveRuflo();
+const RUFLO_ENV = { ...process.env, RUFLO_DAEMON_AUTOSTART: '0' };
 
 const sqlite = (db, sql) => execFileSync('sqlite3', [db, sql], { encoding: 'utf8', timeout: 120_000 }).trim();
 
@@ -117,7 +118,7 @@ function flushLearning() {
 function trainLearning() {
   if (!RUFLO) return { ok: false, log: 'ruflo is not on this machine — install it with `npm i -g ruflo@latest` to enable learning' };
   try {
-    execFileSync(RUFLO, ['hooks', 'intelligence', '--train'], { cwd: HOME, stdio: 'ignore', timeout: 600_000 });
+    execFileSync(RUFLO, ['hooks', 'intelligence', '--train'], { cwd: HOME, env: RUFLO_ENV, stdio: 'ignore', timeout: 600_000 });
   } catch (e) { return { ok: false, log: `training cycle failed: ${e.message}` }; }
   return { ok: true, log: 'ran one training cycle in the cross-project learner' };
 }
@@ -194,7 +195,7 @@ function distillFleet() {
 
   for (const t of targets) {
     const dir = path.join(path.dirname(t.db), 'backups');
-    try { execFileSync(RUFLO, ['memory', 'backup', '--db', t.db, '--dir', dir], { stdio: 'ignore', timeout: 300_000 }); }
+    try { execFileSync(RUFLO, ['memory', 'backup', '--db', t.db, '--dir', dir], { env: RUFLO_ENV, stdio: 'ignore', timeout: 300_000 }); }
     catch (e) { failed.push(`${t.name}: refused to distill — snapshot failed (${String(e.message).slice(0, 80)})`); continue; }
     // Record the snapshot BEFORE distilling, and flush after every store. If the process is killed
     // mid-fleet, the receipt still names every store already modified — a partial receipt is
@@ -204,7 +205,7 @@ function distillFleet() {
 
     try {
       execFileSync(RUFLO, ['memory', 'distill', 'run', '--db', t.db, '--judge', 'structural', '--budget-usd', '0'],
-        { stdio: 'ignore', timeout: 1_800_000 });
+        { env: RUFLO_ENV, stdio: 'ignore', timeout: 1_800_000 });
     } catch (e) { failed.push(`${t.name}: distill failed (${String(e.message).slice(0, 80)}); snapshot kept in ${dir.replace(HOME, '~')}`); continue; }
 
     // PROVE it moved. An exit code of 0 is not evidence that anything was learned.

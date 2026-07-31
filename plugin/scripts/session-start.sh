@@ -38,6 +38,16 @@ if [ "$HOOK_DIR" = "$0" ]; then
 fi
 DETACH="$HOOK_DIR/detach.mjs"
 
+# Apply opted-in defaults exactly once when this is genuinely a new project. Avoid starting Node at
+# all for the default-off case on the latency-critical SessionStart path; the helper remains the
+# authority and re-validates the file before copying any project-scoped, non-secret choices.
+RUVNET_PREFS_FILE="${RUVNET_SETTINGS_FILE:-${HOME}/.config/ruvnet-brain/settings.json}"
+if [ -f "$HOOK_DIR/runtime-preferences.mjs" ] \
+  && [ -f "$RUVNET_PREFS_FILE" ] \
+  && grep -Eq '"newProjectDefaults"[[:space:]]*:[[:space:]]*true([[:space:],}]|$)' "$RUVNET_PREFS_FILE"; then
+  node "$HOOK_DIR/runtime-preferences.mjs" --seed-project >/dev/null 2>&1 || true
+fi
+
 # ── TOKEN METER (ADR-0011 token_cost_efficiency) — same meter as ground-ruvnet.sh. Everything this
 # hook prints synchronously is captured, replayed verbatim at the end, and its REAL byte count is
 # appended as {source:"hook", class:"session-start"} to .ruvnet-brain/token-ledger.jsonl in the
@@ -478,6 +488,7 @@ fi
 
 # ── STABLE SPINE (ADR-023): seed on first run; honest restart notice only when the SHELL changed ──
 SPINE_HOME="$HOME/.cache/ruvnet-brain"
+SEED_DISPATCHED=0
 trace_stage "spine-block-start"
 if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
   if [ ! -f "$SPINE_HOME/active.json" ]; then
@@ -516,8 +527,16 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
       if [ "$SEED_NOW" -gt 0 ] && [ $((SEED_NOW - SEED_LAST)) -gt 300 ]; then
         mkdir -p "$SPINE_HOME" 2>/dev/null
         echo "$SEED_NOW" > "$SEED_STAMP" 2>/dev/null
-        [ -f "$DETACH" ] && node "$DETACH" 120 "$SPINE_HOME/.seed.log" \
-          node "$HOOK_DIR/update-apply.mjs" --seed
+        FIRST_SESSION_WORKER="$HOOK_DIR/first-session-worker.mjs"
+        VERSION_LOG="$STATE_DIR/.last-version-check.log"
+        if [ -f "$DETACH" ] && [ -f "$FIRST_SESSION_WORKER" ] && [ -f "$HOOK_DIR/host-update.mjs" ] \
+          && node "$DETACH" 120 "$SPINE_HOME/.seed.log" node "$FIRST_SESSION_WORKER" \
+            "$HOOK_DIR/update-apply.mjs" "$HOOK_DIR/host-update.mjs" "$VERSION_LOG"; then
+          SEED_DISPATCHED=1
+          # The detached worker now owns BOTH seed and heartbeat. Stamp the heartbeat here so a
+          # burst of virgin sessions cannot launch duplicate checks while that worker is active.
+          echo "$SEED_NOW" > "$STAMP" 2>/dev/null
+        fi
         trace_stage "seed-dispatch-returned"
       fi
     fi
@@ -537,7 +556,21 @@ if command -v node >/dev/null 2>&1 && [ -f "$HOOK_DIR/update-apply.mjs" ]; then
     BOOT_V="$PLUGIN_VERSION"
     if [ "$SHELL_CHANGED" = "1" ] && [ -n "$BOOT_V" ] && [ -n "$SPINE_V" ] && [ "$BOOT_V" != "$SPINE_V" ]; then
       echo "[RuvNet Brain — v$SPINE_V changed boot-level declarations (the rare case); this session booted v$BOOT_V's]"
-      echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V changed a boot-level declaration — one restart picks it up (\`claude --continue\` keeps this whole conversation). Everything else already updated live.\""
+      HOST_NAME="${RUVNET_HOOK_HOST:-claude}"
+      HOST_READY=$(node -e '
+        try {
+          const fs=require("fs"); const [file, version, host]=process.argv.slice(1);
+          const s=JSON.parse(fs.readFileSync(file,"utf8"));
+          if (s.desiredVersion===version && s.hosts?.[host]?.state==="ready" && s.hosts[host].version===version) process.stdout.write("yes");
+        } catch {}
+      ' "$SPINE_HOME/host-convergence.json" "$SPINE_V" "$HOST_NAME" 2>/dev/null)
+      if [ "$HOST_READY" != "yes" ]; then
+        echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V runtime is live, but this host's exact boot snapshot is not yet verified — do not restart for this update yet; automatic host repair will retry.\""
+      elif [ "$HOST_NAME" = "codex" ]; then
+        echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V is already installed and verified for Codex; restart Codex to load its boot-level declarations, then run /hooks and trust only ruvnet-brain@ruvnet-brain if Codex shows the changed definitions as pending. Runtime behavior already updated live.\""
+      else
+        echo "Tell the user ONE line: \"🧠 RuvNet Brain v$SPINE_V is already installed and verified for Claude Code; one restart picks up its boot-level declarations (\`claude --continue\` keeps this conversation). Runtime behavior already updated live.\""
+      fi
     fi
   fi
 fi
@@ -554,7 +587,11 @@ NOW=$(date +%s 2>/dev/null || echo 0)
 LAST=0
 [ -f "$STAMP" ] && IFS= read -r LAST < "$STAMP"
 [ -n "$LAST" ] || LAST=0
-if [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
+# A virgin install must not launch two independent lifecycle workers in the same SessionStart.
+# Seeding and the immediate version heartbeat run sequentially inside first-session-worker.mjs.
+# On Git-for-Windows, launching them as TWO detached workers pushed the real hook to 4597ms. The
+# composite worker preserves ADR-054 maintenance while keeping the foreground to one detacher.
+if [ "$SEED_DISPATCHED" != "1" ] && [ "$NOW" -gt 0 ] && [ $((NOW - LAST)) -gt 900 ]; then
   trace_stage "heartbeat-block-start"
   echo "$NOW" > "$STAMP" 2>/dev/null
 

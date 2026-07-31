@@ -1,7 +1,7 @@
 {
-  "brainVersion": "4.0.1",
-  "generated": "2026-07-24T20:09:02.443Z",
-  "generatedHuman": "Fri, 24 Jul 2026 20:09:02 GMT",
+  "brainVersion": "4.0.2",
+  "generated": "2026-07-30T07:24:51.903Z",
+  "generatedHuman": "Thu, 30 Jul 2026 07:24:51 GMT",
   "coverage": {
     "built": 69,
     "catalogued": 192,
@@ -13,7 +13,7 @@
       "name": "RuView",
       "tier": "T0",
       "stars": 75658,
-      "builtFromSha": "a70ca90525b9f724d9356c4cf75e10476550024c",
+      "builtFromSha": "90b29595fbebf5c7b0356fa260332fcc674760ef",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -21,7 +21,7 @@
       "name": "ruflo",
       "tier": "T0",
       "stars": 61698,
-      "builtFromSha": "a158418a8b774f678dd36831be4ad1d5619b3395",
+      "builtFromSha": "503b647325f6e0a98bd1d771ae6bca6def331d30",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -37,7 +37,7 @@
       "name": "agentic-flow",
       "tier": "T1",
       "stars": 762,
-      "builtFromSha": "d069fff77063f0fb537a9f9b8fdeb4fa39a1484f",
+      "builtFromSha": "d3735a33533da2e12a68439177a791bf1c5c91e1",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -61,7 +61,7 @@
       "name": "metaharness",
       "tier": "T1",
       "stars": 330,
-      "builtFromSha": "072b95c0a74610de008dca5473343a81619cef20",
+      "builtFromSha": "87b6c517c7e6bb021762b002bfa54c4f5b4acd65",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -157,7 +157,7 @@
       "name": "agentdb",
       "tier": "T1",
       "stars": 70,
-      "builtFromSha": "04968e3fba3bf01ef4e9978d0446485452365a86",
+      "builtFromSha": "6cdefe451f6afe7395bc88d3587a0225d161089b",
       "latestRemoteSha": null,
       "status": "built"
     },
@@ -389,7 +389,7 @@
       "name": "cognitum-cogs",
       "tier": "T2",
       "stars": 14,
-      "builtFromSha": "f896ef19ffe147b2e0fe400829ff5b4bd3dfabe8",
+      "builtFromSha": "eaf7e9081c854135be69808214eb915a90e96d09",
       "latestRemoteSha": null,
       "status": "built"
     },

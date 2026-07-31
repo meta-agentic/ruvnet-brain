@@ -19,19 +19,50 @@ export function modelCacheReady(modelCache, model, revision = null) {
   ].every((file) => fs.existsSync(file));
 }
 
+function acquireMaterializeLock(destination, timeoutMs = 30_000) {
+  const lock = `${destination}.materialize-lock`;
+  const started = Date.now();
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  while (true) {
+    try {
+      fs.mkdirSync(lock);
+      return () => fs.rmSync(lock, { recursive: true, force: true });
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      try {
+        const ageMs = Date.now() - fs.statSync(lock).mtimeMs;
+        if (ageMs > timeoutMs) {
+          fs.rmSync(lock, { recursive: true, force: true });
+          continue;
+        }
+      } catch { /* another process released it between checks */ }
+      if (Date.now() - started >= timeoutMs) {
+        throw new Error(`timed out waiting to materialize model cache: ${destination}`);
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+}
+
 // Revision-pinned downloads live below <model>/<revision>/, while strict offline reads resolve
 // <model>/ directly. Promote only the exact pinned files into that canonical offline location.
 export function materializeModelRevision(modelCache, model, revision) {
   if (!revision || !modelCacheReady(modelCache, model, revision)) return false;
   const source = path.join(modelPath(modelCache, model), revision);
   const destination = modelPath(modelCache, model);
-  for (const entry of fs.readdirSync(source)) {
-    fs.cpSync(path.join(source, entry), path.join(destination, entry), {
-      recursive: true,
-      force: true,
-    });
+  const release = acquireMaterializeLock(destination);
+  try {
+    if (modelCacheReady(modelCache, model)) return true;
+    for (const entry of fs.readdirSync(source)) {
+      fs.cpSync(path.join(source, entry), path.join(destination, entry), {
+        recursive: true,
+        force: true,
+      });
+    }
+    return modelCacheReady(modelCache, model);
+  } finally {
+    release();
   }
-  return modelCacheReady(modelCache, model);
 }
 
 // The RVF sidecar is the source of truth for the query embedder. Only sidecars with a matching

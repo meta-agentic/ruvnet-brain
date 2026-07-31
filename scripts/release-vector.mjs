@@ -53,7 +53,7 @@ const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch { return null; } };
 
 /** Run a command; UNKNOWN (not FAIL) when the runner itself could not execute. */
-function run(cmd, args, timeoutMs = 120_000) {
+function run(cmd, args, timeoutMs = 120_000, env = process.env) {
   // npm installs `npm.cmd` / `npx.cmd` command shims on Windows. Direct spawn does not resolve the
   // extension through PATHEXT, and .cmd files require cmd.exe, so a healthy detector otherwise
   // reads UNKNOWN with ENOENT. Invoke the command interpreter explicitly rather than `shell:true`;
@@ -65,6 +65,7 @@ function run(cmd, args, timeoutMs = 120_000) {
     cwd: ROOT,
     encoding: 'utf8',
     timeout: timeoutMs,
+    env,
   });
   if (r.error || r.status === null) return { state: 'UNKNOWN', why: `runner did not complete: ${r.error?.code || 'killed/timeout'}` };
   return { state: r.status === 0 ? 'PASS' : 'FAIL', why: r.status === 0 ? 'exit 0' : `exit ${r.status}`, out: r.stdout };
@@ -217,9 +218,23 @@ export const INVARIANTS = [
     detect() {
       const ci = read('.github/workflows/ci.yml');
       if (ci === null) return { state: 'UNKNOWN', why: 'ci.yml unreadable' };
-      return /REQUIRE_BRAIN/.test(ci)
-        ? { state: 'PASS', why: 'REQUIRE_BRAIN wired in ci.yml — a skipped battery fails' }
-        : { state: 'FAIL', why: 'REQUIRE_BRAIN set nowhere; the guarantee skips' };
+      if (!/REQUIRE_BRAIN/.test(ci)) {
+        return { state: 'FAIL', why: 'REQUIRE_BRAIN set nowhere; the guarantee skips' };
+      }
+      const live = run(
+        'npx',
+        [
+          'vitest', 'run',
+          '--config', 'tests/qe/gpt56/vitest.config.mjs',
+          'tests/qe/gpt56/live-brain-search.test.mjs',
+          '--reporter=dot',
+        ],
+        90_000,
+        { ...process.env, REQUIRE_BRAIN: '1', RUVNET_QE_LIVE: '1' },
+      );
+      return live.state === 'PASS'
+        ? { state: 'PASS', why: 'REQUIRE_BRAIN is wired and the real search_ruvnet MCP returns cited source under concurrency' }
+        : { ...live, why: `live search_ruvnet guarantee: ${live.why}` };
     },
   },
 ];

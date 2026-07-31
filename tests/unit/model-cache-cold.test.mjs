@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import {
   resolveModelCache,
   requiredEmbedderModels,
@@ -150,6 +151,28 @@ describe('configureTransformersModel — reads and downloads through the same ca
     expect(materializeModelRevision(tmp, model, revision)).toBe(true);
     expect(modelCacheReady(tmp, model)).toBe(true);
     expect(fs.readFileSync(path.join(tmp, BGE_EMBEDDER_REL, 'tokenizer.json'), 'utf8')).toBe('pinned:tokenizer.json');
+  });
+
+  it('serializes concurrent process materialization of one shared model cache', async () => {
+    const model = 'Xenova/bge-base-en-v1.5';
+    const revision = 'exact-sha';
+    for (const file of ['tokenizer.json', 'config.json', path.join('onnx', 'model_quantized.onnx')]) {
+      const target = path.join(tmp, BGE_EMBEDDER_REL, revision, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `pinned:${file}`);
+    }
+    const moduleUrl = new URL('../../kb/model-requirements.mjs', import.meta.url).href;
+    const code = [
+      `import { materializeModelRevision } from ${JSON.stringify(moduleUrl)};`,
+      `if (!materializeModelRevision(${JSON.stringify(tmp)}, ${JSON.stringify(model)}, ${JSON.stringify(revision)})) process.exit(1);`,
+    ].join('\n');
+    const exits = await Promise.all(Array.from({ length: 4 }, () => new Promise((resolve) => {
+      const child = spawn(process.execPath, ['--input-type=module', '--eval', code], { stdio: 'ignore' });
+      child.once('exit', resolve);
+    })));
+    expect(exits).toEqual([0, 0, 0, 0]);
+    expect(modelCacheReady(tmp, model)).toBe(true);
+    expect(fs.existsSync(path.join(tmp, BGE_EMBEDDER_REL) + '.materialize-lock')).toBe(false);
   });
 });
 

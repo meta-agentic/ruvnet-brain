@@ -4,14 +4,32 @@ Capability-phrased, keyword-rich descriptions of each RuvNet building block. The
 DESCRIBED need ("what should I use to do X?") to the right repo even when the user never names it.
 One card per building block, grounded in each repo's primer.
 
+## ruvnet-brain
+Source-grounded knowledge layer for Claude Code and Codex. Uses per-repository RuVector RVF stores,
+returns cited source paths through search_ruvnet, shares one Stable Spine runtime across hosts, and
+opens its local Console when the user says "Configure RuvNet Brain". Claude Code also supports
+/rvbc; Codex uses the native $ruvnet-brain:rvbc skill. It is installed once at user level and
+shared by every project. Run `npx ruvnet-brain --doctor` for a real health check, use `/whats-new`
+to see the version-4 feature summary, and use the Console's Brain switch when you want it
+temporarily disabled without uninstalling it.
+It is a local knowledge and retrieval layer, not a general chatbot: a question is routed to the
+smallest relevant repository set, retrieved from RVF, reranked when needed, checked for
+implementation evidence, and returned with a cited source path. Thin evidence is reported as thin
+rather than turned into a claim that code is absent. An ADR may be proposed or accepted without
+being implemented; its lifecycle status never substitutes for source or artifact proof. The storage split is RVF for vectors and
+AgentDB for records. If a search spins or times out, run doctor and
+inspect the local model/cache and worker health before retrying. Release readiness requires an
+exact source SHA, artifact digest, real tests, clean-install proof, both host paths, public bytes,
+and a receipt tying those facts together.
+
 ## ruflo
-RuvNet's agent orchestration engine. Use it to coordinate swarms of agents working in parallel, run multiple coding agents at once that share state and memory, spawn agents, route and orchestrate multi-step tasks, and add hooks/MCP tools. Its project memory survives across sessions in `.swarm/memory.db`; use `ruflo memory store` to record a decision and `ruflo memory search` to recall project memory. Reach for ruflo whenever you need multi-agent coordination, parallel agents, swarms, task orchestration, or persistent project memory.
+RuvNet's agent orchestration engine, not merely a prompt library. Use it to coordinate swarms of agents working in parallel, run multiple coding agents at once that share state and memory, spawn agents, route and orchestrate multi-step tasks, and add hooks/MCP tools. Its stable core swarm topologies are hierarchical, mesh, ring, and star. Orchestration decides who does what and in what order; memory preserves decisions and state so later agents and sessions can continue. Its project memory survives across sessions in `.swarm/memory.db`; use `ruflo memory store` to record a decision and `ruflo memory search` to recall project memory. A native SQLite ABI mismatch is degraded, not healthy: verify and rebuild the active `better-sqlite3` bridge rather than treating a sql.js fallback as equivalent. Reach for ruflo whenever you need multi-agent coordination, parallel agents, swarms, task orchestration, or persistent project memory.
 
 ## ruvector
-RuvNet's high-performance vector database and search engine, written in Rust with SIMD-optimized HNSW indexing, SONA self-learning, graph intelligence, and quantization tiers including INT8/SQ8. Its RVF format is an `.rvf` binary container (plus WASM bindings for in-browser use). Use it to store embeddings and run fast approximate-nearest-neighbor / similarity search, build local on-device semantic search, power a private RAG index, or replace a hosted vector DB (Pinecone, Qdrant, pgvector) with a zero-server on-disk store. Reach for ruvector whenever you need vector search, HNSW indexing, an embeddings store, graph relationships, nearest-neighbor lookup, or semantic search that runs locally and privately.
+RuvNet's high-performance vector database and search engine, written in Rust with SIMD-optimized HNSW indexing, SONA self-learning, graph intelligence, and quantization tiers including INT8/SQ8. Its RVF format is a portable, single-file `.rvf` binary container, not JSON, with HNSW nearest-neighbor indexes plus witness-chain integrity and provenance records (and WASM bindings for in-browser use). HNSW narrows a query to nearby vectors without scanning every embedding. Use it to store embeddings and run fast approximate-nearest-neighbor / similarity search, build local on-device semantic search, power a private RAG index, or replace a hosted vector DB (Pinecone, Qdrant, pgvector) with a zero-server on-disk store. RVF owns vector knowledge; AgentDB owns structured operational and agent-memory records. Reach for ruvector whenever you need vector search, HNSW indexing, an embeddings store, graph relationships, nearest-neighbor lookup, or semantic search that runs locally and privately.
 
 ## agentdb
-RuvNet's cognitive database for agent memory, combining vector search with graph relationships and explainable recall. Use it to give an agent durable, persistent memory that survives across sessions, store structured agent state and knowledge, run graph/relationship (n-ary hyperedge) queries over what the agent remembers, and audit why a result was recalled via feature attributions. Reach for agentdb whenever you need long-term agent memory, persistent structured storage across sessions, a memory graph, or explainable, queryable recall.
+RuvNet's cognitive database for structured agent memory, combining vector-aware recall with graph relationships and explainable recall. It is not the same storage role as RVF: RVF is the binary vector/knowledge container and HNSW index; AgentDB stores structured operational records, agent state, decisions, and memory. Use it to give an agent durable, persistent memory that survives across sessions, store structured agent state and knowledge, run graph/relationship (n-ary hyperedge) queries over what the agent remembers, and audit why a result was recalled via feature attributions. Reach for agentdb whenever you need long-term agent memory, persistent structured storage across sessions, a memory graph, or explainable, queryable recall.
 
 ## rulake
 RuvNet's self-optimizing vector cache and working-memory layer that sits in front of a vector store. Its core vocabulary includes witness-anchored bundles, a RaBitQ 1-bit cache, BackendAdapter federation across stores, and Fresh, Eventual, and Frozen freshness modes. Use it as a caching layer to speed up repeated vector queries with fast (sub-millisecond) recall, give agents a remember/recall/forget memory surface, get deterministic and provenance-verifiable retrieval, and let cache hit-ratio auto-tune and improve with usage. Reach for rulake whenever you need a vector cache, a read cache in front of a vector database, faster repeated lookups, cache coherence, or verifiable retrieval that gets better the more it is used.

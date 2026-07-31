@@ -9,6 +9,21 @@
 
 set -uo pipefail
 
+# One policy source for both capture and flush. `off` means zero bytes written. `project` keeps the
+# trajectory queue under this project's .swarm directory; `user` preserves the cross-project learner
+# introduced by ADR-0017. Tests and managed hosts may pass an already-resolved snapshot in
+# RUVNET_LEARNING_SCOPE so the two halves cannot disagree during one hook invocation.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+SCOPE="${RUVNET_LEARNING_SCOPE:-}"
+if [ -z "$SCOPE" ] && [ -f "$HERE/runtime-preferences.mjs" ] && command -v node >/dev/null 2>&1; then
+  SCOPE=$(node "$HERE/runtime-preferences.mjs" --learning-scope 2>/dev/null) || SCOPE=""
+fi
+case "$SCOPE" in
+  off) exit 0 ;;
+  user|project) ;;
+  *) SCOPE="project" ;;
+esac
+
 # BOUNDED READ. An unqualified `read` waits forever on a stdin that is opened and never closed, and
 # an unbounded accumulator turns a large payload into an unbounded regex scan. Claude Code always
 # writes the payload and closes, so neither costs a normal turn — which is exactly why a hook that
@@ -104,7 +119,11 @@ re_s='"session_id"[[:space:]]*:[[:space:]]*"([^"\]*)"'
 # keeping `.` would let a crafted id survive as `..`-shaped debris in a filename for no benefit.
 SID="${SID//[^A-Za-z0-9_-]/}"           # a filename COMPONENT, never a path
 [ -n "$SID" ] || SID="default"
-DIR="$HOME/.cache/ruvnet-brain/learn"
+if [ "$SCOPE" = "user" ]; then
+  DIR="$HOME/.cache/ruvnet-brain/learn"
+else
+  DIR="$PWD/.swarm/ruvnet-brain-learn"
+fi
 # Owner-only (0700 dir / 0600 file). This queue was 0644 inside a 0755 dir: on macOS every local
 # account is normally in `staff`, so any other user on a shared or corporate machine could read it.
 ( umask 077 && mkdir -p "$DIR" ) 2>/dev/null || exit 0
@@ -147,8 +166,8 @@ if [ "$LINES" -ge "$HEARTBEAT_EVERY" ]; then
   LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
   if [ $((NOW - LAST)) -ge 60 ]; then
     echo "$NOW" > "$STAMP" 2>/dev/null || true
-    FLUSH="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/marketplaces/ruvnet-brain/plugin}/scripts/learn-flush.mjs"
-    [ -f "$FLUSH" ] && (nohup node "$FLUSH" >/dev/null 2>&1 &) || true
+    FLUSH="$HERE/learn-flush.mjs"
+    [ -f "$FLUSH" ] && (RUVNET_LEARNING_SCOPE="$SCOPE" nohup node "$FLUSH" >/dev/null 2>&1 &) || true
   fi
 fi
 exit 0

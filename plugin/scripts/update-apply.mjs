@@ -317,7 +317,7 @@ function gc() {
 }
 
 // ── sources ─────────────────────────────────────────────────────────────────────────────────────
-function newestStagedCC() {
+function newestStagedCC(expectedVersion = null) {
   const semverish = (v) => v.split(/[.-]/).map((x) => (Number.isFinite(+x) ? +x : x));
   const cmp = (a, b) => { const A = semverish(a), B = semverish(b); for (let i = 0; i < Math.max(A.length, B.length); i++) { if ((A[i] ?? 0) === (B[i] ?? 0)) continue; if (typeof A[i] === 'number' && typeof B[i] === 'number') return A[i] - B[i]; return String(A[i] ?? '') < String(B[i] ?? '') ? -1 : 1; } return 0; };
   const candidates = [];
@@ -325,7 +325,9 @@ function newestStagedCC() {
     if (!fs.existsSync(cache)) continue;
     for (const version of fs.readdirSync(cache)) {
       if (!version.startsWith('.') && fs.existsSync(path.join(cache, version, 'scripts'))) {
-        candidates.push({ version, dir: path.join(cache, version) });
+        const dir = path.join(cache, version);
+        const payloadVersion = versionOfPayload(dir, version);
+        if (!expectedVersion || payloadVersion === expectedVersion) candidates.push({ version: payloadVersion, dir });
       }
     }
   }
@@ -393,9 +395,17 @@ function main() {
     // --auto (default): unattended — newest CC-staged version, only if newer than active.
     const dev = readJSON(DEV);
     if (dev) { receipt('AutoSkippedDev', {}); console.log('dev mode is ON — --auto never flips away from a checkout (finding 24).'); return 0; }
-    const staged = newestStagedCC();
+    const expectedVersion = val('--expected-version', null);
+    const staged = newestStagedCC(expectedVersion);
     const active = readJSON(ACTIVE);
-    if (!staged) { console.log('no CC-staged version found — nothing to apply.'); return 0; }
+    if (!staged) {
+      if (expectedVersion) {
+        console.error(`✗ no staged host payload exactly matches expected version ${expectedVersion} — spine unchanged`);
+        return 1;
+      }
+      console.log('no host-staged version found — nothing to apply.');
+      return 0;
+    }
     const stagedVersion = versionOfPayload(staged.dir, staged.version);
     if (active && active.version === stagedVersion) { console.log(`already on ${stagedVersion} — nothing to do.`); return 0; }
     receipt('UpdateChecked', { active: active?.version ?? null, staged: stagedVersion });

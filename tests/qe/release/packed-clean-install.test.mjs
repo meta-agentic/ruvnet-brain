@@ -37,9 +37,15 @@ describe('npm artifact boundary', () => {
       'plugin/hooks/codex-hooks.json',
       'plugin/mcp/server.mjs',
       'plugin/mcp/managed-cli-interface.mjs',
+      'plugin/scripts/runtime-preferences.mjs',
       'plugin/scripts/host-update.mjs',
       'plugin/scripts/update-apply.mjs',
       'plugin/skills/rvbc/SKILL.md',
+      'console/index.html',
+      'console/app.js',
+      'scripts/onboarding-console.mjs',
+      'scripts/nightly-controller.mjs',
+      'docs/RELEASE-NOTES-4.0.md',
     ]) expect(files).toContain(required);
   });
 
@@ -63,8 +69,11 @@ describe('clean host installation from only the packed artifact', () => {
     const marketplace = JSON.parse(fs.readFileSync(path.join(artifact, '.claude-plugin/marketplace.json'), 'utf8'));
     const plugin = JSON.parse(fs.readFileSync(path.join(artifact, 'plugin/.claude-plugin/plugin.json'), 'utf8'));
     const hooks = JSON.parse(fs.readFileSync(path.join(artifact, 'plugin/hooks/hooks.json'), 'utf8'));
+    expect(marketplace.description).toMatch(/RuvNet Brain/i);
     expect(marketplace.plugins.some((entry) => entry.name === plugin.name)).toBe(true);
+    expect(plugin).not.toHaveProperty('updated');
     expect(hooks.hooks).toBeTypeOf('object');
+    expect(Object.keys(hooks).sort()).toEqual(['description', 'hooks']);
     expect(fs.existsSync(path.join(artifact, 'plugin/.mcp.json'))).toBe(true);
   });
 
@@ -85,5 +94,15 @@ describe('clean host installation from only the packed artifact', () => {
     expect(retry.changed).toBe(false);
     expect(fs.readFileSync(config)).toEqual(before);
     expect(install.codexStatus({ codexDir, configPath: config }).wired).toBe(true);
+  });
+
+  it('persists a runnable /rvbc runtime with no source checkout', async () => {
+    const kb = fs.mkdtempSync(path.join(temp, 'clean-kb-'));
+    const entry = install.installConsoleRuntime(kb, artifact);
+    expect(entry).toBe(path.join(kb, '.console-runtime', 'scripts', 'onboarding-console.mjs'));
+    expect(fs.existsSync(path.join(kb, '.console-runtime', 'console', 'index.html'))).toBe(true);
+    const consoleModule = await import(`${pathToFileURL(entry).href}?clean=${Date.now()}`);
+    expect(consoleModule.gatherState).toBeTypeOf('function');
+    expect(consoleModule.saveConfig).toBeTypeOf('function');
   });
 });

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { persistAndVerifyRvfIndex } from './rvf-index.mjs';
 
 export const INCREMENTAL_LEDGER_SCHEMA = 2;
 
@@ -187,6 +188,7 @@ export async function stageRvfDelta({
   stagePath,
   deleteIds = [],
   inserts = [],
+  dimensions,
   RvfDatabase,
 }) {
   if (!RvfDatabase) throw new TypeError('RvfDatabase is required');
@@ -208,7 +210,12 @@ export async function stageRvfDelta({
       ? await db.ingestBatch(inserts)
       : { accepted: 0, rejected: 0 };
     const status = await db.status();
-    await db.close();
+    await persistAndVerifyRvfIndex({
+      db,
+      dimensions,
+      rvfPath: stagePath,
+      RvfDatabase,
+    });
     db = null;
     return {
       deleted: deletion.deleted,

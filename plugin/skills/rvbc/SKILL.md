@@ -1,17 +1,20 @@
 ---
 name: rvbc
-description: Open the RuvNet Brain Console in Codex when the user mentions "rvbc", asks for the Brain Console, or wants to configure or inspect RuvNet Brain. This is the native Codex alias for the Claude-only /rvbc command.
-updated: 2026-07-29
+description: Open the RuvNet Brain Console in Claude Code and Codex when the user says "Configure RuvNet Brain", mentions "rvbc", asks for the Brain Console, or wants to configure or inspect RuvNet Brain. Claude Code supports /rvbc; Codex invokes the native $ruvnet-brain:rvbc skill.
+updated: 2026-07-30
 ---
 
 # RuvNet Brain Console
 
-Codex invokes this skill as `$ruvnet-brain:rvbc`; custom plugin slash commands are not part of the
-Codex CLI slash-command surface.
+“Configure RuvNet Brain” opens this Console in Claude Code and Codex. Claude Code also supports
+`/rvbc`; Codex invokes this skill as `$ruvnet-brain:rvbc` because custom plugin slash commands are
+not part of the Codex CLI slash-command surface.
 
 1. Say one short sentence: "Opening it now; it scans live while you watch."
-2. Locate `scripts/onboarding-console.mjs` from the current repository. If it is not present,
-   check `~/Code/ruvnet-brain/scripts/onboarding-console.mjs`. Do not invent another path.
+2. Resolve the installed runtime at
+   `${RUVNET_BRAIN_KB:-$HOME/.cache/ruvnet-brain/kb}/.console-runtime/scripts/onboarding-console.mjs`.
+   A current-repository `scripts/onboarding-console.mjs` is allowed only for an explicit developer
+   checkout. Never fall back to a guessed `~/Code` path.
 3. Run `node <resolved-script> --serve --open` in the background.
 4. Give the URL immediately. Do not promise a duration; the page reports its own scan progress.
 

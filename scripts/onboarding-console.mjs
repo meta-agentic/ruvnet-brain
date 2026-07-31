@@ -60,6 +60,11 @@ import {
 // Lessons: read model + the two user verbs. Every mutation goes through lesson-store's own
 // updateLessons/ratify/demote/restore — this file adds a SURFACE, never a second writer.
 import { loadLessons, updateLessons, ratify, demote, restore, pending, weightOf, TRIGGERS, ENFORCEMENT, ORIGIN, STATUS } from './lesson-store.mjs';
+import {
+  openRouterCredentialStatus,
+  saveOpenRouterCredential,
+} from '../plugin/scripts/runtime-preferences.mjs';
+import { applyNightlyChoice, nightlyStatus } from './nightly-controller.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(__dirname);
@@ -362,6 +367,17 @@ const CONFIG_SCHEMA = [
   { key: 'routing', label: 'Token-smart routing', type: 'enum', options: ['auto', 'off'], help: 'Send cheap, mechanical tasks to smaller, cheaper models automatically.' },
   { key: 'qeFleet', label: 'On-demand QE test fleet', type: 'bool', help: 'Let RuvNet Brain spin up an Agentic-QE test fleet when you ask it to.' },
 ];
+
+// Every field below has a runtime owner. Platform-specific controls (currently the macOS nightly
+// scheduler) are removed from the editable schema when that owner is unavailable and are reported
+// honestly through `unavailable`.
+const CONFIG_CONTROL_SUPPORT = Object.freeze({});
+
+function unsupportedConfigControls() {
+  return CONFIG_SCHEMA
+    .filter((field) => Object.hasOwn(CONFIG_CONTROL_SUPPORT, field.key))
+    .map((field) => ({ key: field.key, label: field.label, reason: CONFIG_CONTROL_SUPPORT[field.key] }));
+}
 /**
  * NOT-CHOSEN IS ITS OWN ANSWER, and collapsing it into "on" was this file's version of the exact lie
  * the whole console was built to kill.
@@ -387,22 +403,38 @@ const CONFIG_SCHEMA = [
  */
 function gatherConfig() {
   const cfg = readJSON(CONFIG_PATH) || {};
-  const hasKey = !!(cfg.openrouterKey && String(cfg.openrouterKey).length > 8) || !!process.env.OPENROUTER_API_KEY;
+  const credential = openRouterCredentialStatus({ cwd: process.cwd() });
+  const schedule = nightlyStatus();
   const bool = (v) => (v === true ? true : v === false ? false : null);
+  const unavailable = unsupportedConfigControls();
+  if (!schedule.artifact.supported) {
+    unavailable.push({
+      key: 'nightly',
+      label: 'Nightly brain refresh',
+      reason: schedule.evidence,
+    });
+  }
   return {
     path: CONFIG_PATH.replace(HOME, '~'),
     exists: fs.existsSync(CONFIG_PATH),
     values: {
-      openrouterKey: hasKey,                               // boolean only — never the secret itself
+      openrouterKey: credential.configured,                // boolean only — never the secret itself
       provider: typeof cfg.provider === 'string' && cfg.provider ? cfg.provider : null,
-      nightly: bool(cfg.nightly),
+      nightly: schedule.state === 'on' ? true : schedule.state === 'off' ? false : null,
       routing: cfg.routing === 'off' ? 'off' : cfg.routing === 'auto' ? 'auto' : null,
       qeFleet: bool(cfg.qeFleet),
     },
     // What the project would pick FOR you, kept separate from what you actually picked. The form can
     // then say "recommended: on" without ever claiming that is the current state.
     defaults: { provider: 'auto', nightly: true, routing: 'auto', qeFleet: false },
-    schema: CONFIG_SCHEMA,
+    schema: CONFIG_SCHEMA.filter((field) =>
+      !Object.hasOwn(CONFIG_CONTROL_SUPPORT, field.key)
+      && (field.key !== 'nightly' || schedule.artifact.supported)),
+    unavailable,
+    runtime: {
+      openrouterKey: credential,
+      nightly: schedule,
+    },
   };
 }
 
@@ -416,11 +448,11 @@ function gatherConfig() {
  * user-settings.mjs's own `loadSettings`/`saveSettings` — the same functions its CLI (`node
  * user-settings.mjs`) and its test suite already exercise — rather than growing a second writer.
  *
- * Only `advocacy` is served. The other three entries in SETTINGS_SCHEMA (learningScope, autoApply,
- * newProjectDefaults) stay off this page until each has its own real caller — wiring them in ahead of
- * that is the exact "light switch to nothing" user-settings.mjs's own header warns against.
+ * All four ordinary user preferences are served now. Their consumers are: learning capture/flush,
+ * the advocacy hook, the console's guarded remedy loop, and SessionStart project-default seeding.
  */
-const ADVOCACY_FIELD = USER_SETTINGS_SCHEMA.find((s) => s.key === 'advocacy');
+const LIVE_USER_SETTING_KEYS = Object.freeze(['learningScope', 'advocacy', 'autoApply', 'newProjectDefaults']);
+const LIVE_USER_FIELDS = USER_SETTINGS_SCHEMA.filter((field) => LIVE_USER_SETTING_KEYS.includes(field.key));
 
 function gatherAdvocacy() {
   const state = loadSettings(); // validated: respects RUVNET_SETTINGS_FILE, degrades on corrupt/future files
@@ -429,14 +461,18 @@ function gatherAdvocacy() {
   // way to tell "the user picked the default on purpose" apart from "the user never touched this key"
   // is to peek at what was actually written, the same way gatherConfig() reads CONFIG_PATH raw.
   const raw = readJSON(state.path);
-  const chosen = !!(raw && typeof raw === 'object' && raw.settings && typeof raw.settings === 'object'
-    && Object.hasOwn(raw.settings, 'advocacy'));
+  const chosen = raw && typeof raw === 'object' && raw.settings && typeof raw.settings === 'object'
+    ? raw.settings : {};
   return {
     path: state.path.replace(HOME, '~'),
     exists: state.exists,
-    values: { advocacy: chosen ? state.values.advocacy : null },
-    defaults: { advocacy: ADVOCACY_FIELD.default },
-    schema: [ADVOCACY_FIELD],
+    values: Object.fromEntries(LIVE_USER_FIELDS.map((field) => [
+      field.key,
+      Object.hasOwn(chosen, field.key) ? state.values[field.key] : null,
+    ])),
+    defaults: Object.fromEntries(LIVE_USER_FIELDS.map((field) => [field.key, field.default])),
+    schema: LIVE_USER_FIELDS,
+    unavailable: [],
   };
 }
 
@@ -449,21 +485,35 @@ function gatherAdvocacy() {
  * to either endpoint with identical client code — only the URL and the target file differ.
  */
 function saveAdvocacy(values) {
-  const supplied = values && typeof values === 'object' ? values.advocacy : undefined;
-  if (supplied === undefined) {
+  const supplied = values && typeof values === 'object'
+    ? Object.fromEntries(Object.entries(values).filter(([key]) => LIVE_USER_SETTING_KEYS.includes(key)))
+    : {};
+  if (!Object.keys(supplied).length) {
     return { ok: false, log: 'nothing was saved — no recognised settings were supplied' };
   }
-  const value = ADVOCACY_FIELD.legacy?.[supplied] ?? supplied;
-  if (!ADVOCACY_FIELD.options.includes(value)) {
-    const reason = `expected one of ${ADVOCACY_FIELD.options.join(', ')}, got ${JSON.stringify(supplied)}`;
-    return { ok: false, rejected: [{ key: 'advocacy', reason }], log: `nothing was saved — advocacy: ${reason}` };
+  const rejected = [];
+  for (const [key, value] of Object.entries(supplied)) {
+    const field = LIVE_USER_FIELDS.find((candidate) => candidate.key === key);
+    if (field.type === 'bool' && typeof value !== 'boolean') {
+      rejected.push({ key, reason: `expected true or false, got ${JSON.stringify(value)}` });
+    } else if (field.type === 'enum' && !field.options.includes(value)) {
+      rejected.push({ key, reason: `expected one of ${field.options.join(', ')}, got ${JSON.stringify(value)}` });
+    }
   }
-  const result = saveSettings({ advocacy: value });
-  if (!result.ok) return { ok: false, log: result.log };
+  if (rejected.length) {
+    return {
+      ok: false,
+      rejected,
+      log: `nothing was saved — ${rejected.map((entry) => `${entry.key}: ${entry.reason}`).join('; ')}`,
+    };
+  }
+  const result = saveSettings(supplied);
+  if (!result.ok) return { ok: false, rejected: result.errors || [], log: result.log };
+  publishSettingsToCache();
   return {
     ok: true,
     backup: result.backup ? result.backup.replace(HOME, '~') : null,
-    values: { advocacy: result.values.advocacy },
+    values: Object.fromEntries(LIVE_USER_SETTING_KEYS.map((key) => [key, result.values[key]])),
     log: result.log,
   };
 }
@@ -653,6 +703,25 @@ function publishBrainPowerToCache() {
     c.data.sections.brainPower = gatherBrainPower();
     writeCache(STATE_CACHE, new Date(0).toISOString(), c.data, c.scope ?? null);
   } catch { /* a cache we cannot rewrite is one the next refresh replaces anyway */ }
+}
+
+/**
+ * Publish the two ordinary settings read-models immediately after their writers succeed.
+ *
+ * `/api/state` is intentionally cache-first, so a successful save followed by reload otherwise
+ * repaints the previous choices until a background measurement lands. A live browser test caught
+ * exactly that failure for provider and advocacy. Patch the fields whose authoritative stores were
+ * just written, retain the project scope, and withdraw the surrounding measurement so the detached
+ * refresh still replaces every other section.
+ */
+function publishSettingsToCache() {
+  try {
+    const c = readJSON(STATE_CACHE);
+    if (!c || !c.data || !c.data.sections) return;
+    c.data.sections.config = gatherConfig();
+    c.data.sections.userSettings = gatherAdvocacy();
+    writeCache(STATE_CACHE, new Date(0).toISOString(), c.data, c.scope ?? null);
+  } catch { /* the authoritative stores are already correct; refresh will replace an unreadable cache */ }
 }
 
 /**
@@ -1055,6 +1124,7 @@ function writeCache(file, at, data, scope = null) {
 let REFRESH_CHILD = null;
 const REFRESH_WEDGED_MS = 5 * 60 * 1000;
 function kickRefresh({ force = false } = {}) {
+  if (process.env.RUVNET_CONSOLE_DISABLE_BACKGROUND_REFRESH === '1') return false;
   const now = Date.now();
   if (REFRESH_CHILD && now - LAST_REFRESH_KICK < REFRESH_WEDGED_MS) return false;  // one at a time
   if (!force && now - LAST_REFRESH_KICK < 15000) return false;   // debounce: at most one background refresh / 15s
@@ -1866,7 +1936,12 @@ function observeLearning() {
   try {
     const r = spawnSync(path.join(os.homedir(), '.npm-global/bin/ruflo'),
       ['hooks', 'intelligence', '--status'],
-      { cwd: os.homedir(), encoding: 'utf8', timeout: 20_000 });
+      {
+        cwd: os.homedir(),
+        env: { ...process.env, RUFLO_DAEMON_AUTOSTART: '0' },
+        encoding: 'utf8',
+        timeout: 20_000,
+      });
     const out = `${r.stdout || ''}`;
     const t = out.match(/Last Training:\s*(\d+)s ago/);
     const j = out.match(/Trajectories\s*\|\s*(\d+)/);
@@ -1887,31 +1962,53 @@ function observeLearning() {
   return { queueDepth, lastTrainSeconds, trajectories, fleet };
 }
 
-function currentValidIds() {
+function currentValidIds(onlyId = null) {
   const ids = new Set();
-  for (const r of buildWiringRecommendations({ sites: wiringSurvey().sites })) ids.add(r.id);
-  const a = auditModel();
-  for (const r of buildStackRecommendations({ rows: a.rows, stale: a.stale })) ids.add(r.id);
+  const wiringOnly = typeof onlyId === 'string' && onlyId.startsWith('reconcile:');
+  const stackOnly = typeof onlyId === 'string'
+    && (onlyId === 'purge:shadows'
+      || onlyId.startsWith('sync:')
+      || (onlyId.startsWith('repair:') && onlyId !== 'repair:memory-index'));
+  const healthOnly = onlyId === 'repair:memory-index'
+    || (typeof onlyId === 'string' && onlyId.startsWith('learning:'));
+  const capabilityOnly = typeof onlyId === 'string' && onlyId.startsWith('enable:');
+  const validateAll = !wiringOnly && !stackOnly && !healthOnly && !capabilityOnly;
+
+  if (validateAll || wiringOnly) {
+    for (const r of buildWiringRecommendations({ sites: wiringSurvey().sites })) ids.add(r.id);
+  }
+  let auditRows = [];
+  if (validateAll || stackOnly) {
+    const a = auditModel();
+    auditRows = a.rows;
+    for (const r of buildStackRecommendations({ rows: a.rows, stale: a.stale })) ids.add(r.id);
+  }
   // Health + learning. Previously the console could SEE a corrupt store and score it 49/100 while
   // offering nothing to do about it — detection without a remedy, which ADR-027 prohibits.
-  try {
-    const project = process.cwd();
-    const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
-    for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
-  } catch { /* an advisory surface must never break the apply path */ }
+  if (validateAll || healthOnly) {
+    try {
+      const project = process.cwd();
+      const health = scoreMemoryHealth({ project: path.basename(project), probes: probeMemory(project) });
+      for (const r of buildHealthRecommendations({ memory: health, learning: observeLearning() })) ids.add(r.id);
+    } catch { /* an advisory surface must never break the apply path */ }
+  }
   // Capability recs (e.g. `enable:memory-distillation`) — without this, clicking the one recommended
   // capability checkbox would always report "already resolved / your machine changed", because apply()
   // only ever accepts ids this function has vouched for. Separate try from the health block above so a
   // failure in one surface never silently hides the other's ids too.
-  try {
-    for (const r of buildCapabilityRecommendations({ capabilities: capabilityAuditAll({ project: process.cwd() }) })) ids.add(r.id);
-  } catch { /* an advisory surface must never break the apply path */ }
-  return { ids, auditRows: a.rows };
+  if (validateAll || capabilityOnly) {
+    try {
+      for (const r of buildCapabilityRecommendations({ capabilities: capabilityAuditAll({ project: process.cwd() }) })) ids.add(r.id);
+    } catch { /* an advisory surface must never break the apply path */ }
+  }
+  return { ids, auditRows };
 }
 function apply(ids) {
-  const { ids: validNow, auditRows } = currentValidIds();
   const results = [];
   for (const id of ids) {
+    // Re-read immediately before EACH fix. A batch can change the validity of the next item; one
+    // pre-flight snapshot for the whole list would let item 2 run against the world item 1 changed.
+    const { ids: validNow } = currentValidIds(id);
     if (!validNow.has(id)) { results.push({ id, ok: false, skipped: true, error: 'worldMoved', log: 'Skipped — this is already resolved, or your machine changed since the page loaded. Nothing was done. Reload to see the current state.' }); continue; }
 
     // ONE dispatch, through the registry (scripts/remedy-registry.mjs). This used to be a chain of
@@ -1963,6 +2060,16 @@ function apply(ids) {
     results.push({ id, ...res, undoToken });
   }
   return { results };
+}
+
+function autoEligibleIds(recommendations = []) {
+  return recommendations
+    .filter((rec) => rec?.scope === 'project')
+    .filter((rec) => {
+      const plan = planFor(rec.id);
+      return plan?.autoEligible === true && plan.undo?.kind !== 'none';
+    })
+    .map((rec) => rec.id);
 }
 /**
  * VALIDATE AGAINST THE SCHEMA THAT IS ALREADY DECLARED. Without this, `/api/save-config` wrote
@@ -2039,6 +2146,36 @@ function saveConfig(values) {
     };
   }
 
+  // Credential and scheduler changes are real effects, not JSON preferences. Execute their existing
+  // owners, remember their inverses, then commit the ordinary config. If the final config write
+  // fails, both effects are rolled back before the error is returned.
+  const requestedSecret = clean.openrouterKey;
+  delete clean.openrouterKey;
+  const requestedNightly = clean.nightly;
+  let credentialChange = null;
+  let nightlyChange = null;
+  const rollbackCredential = () => {
+    if (!credentialChange?.ok) return;
+    try {
+      if (credentialChange.backup) {
+        fs.copyFileSync(credentialChange.backup, credentialChange.path);
+      } else if (!credentialChange.existed) {
+        fs.rmSync(credentialChange.path, { force: true });
+      }
+    } catch { /* reported by the caller as a partial rollback below */ }
+  };
+  if (requestedSecret !== undefined) {
+    credentialChange = saveOpenRouterCredential(requestedSecret, { cwd: process.cwd() });
+    if (!credentialChange.ok) return { ok: false, rejected, log: credentialChange.log };
+  }
+  if (requestedNightly !== undefined) {
+    nightlyChange = applyNightlyChoice(requestedNightly);
+    if (!nightlyChange.ok) {
+      rollbackCredential();
+      return { ok: false, rejected, log: nightlyChange.log };
+    }
+  }
+
   const held = withLock(CONFIG_PATH, () => {
     const existed = fs.existsSync(CONFIG_PATH);
     const prev = readJSON(CONFIG_PATH) || {};
@@ -2053,23 +2190,44 @@ function saveConfig(values) {
     }
 
     const next = { ...prev, ...clean };
+    // A successfully encrypted credential retires the legacy plaintext field on this same commit.
+    if (credentialChange?.ok) delete next.openrouterKey;
     try { writeAtomic(CONFIG_PATH, JSON.stringify(next, null, 2) + '\n'); }
     catch (e) { return { ok: false, backup, log: `write failed: ${e.message}${backup ? `; your previous settings are at ${backup.replace(HOME, '~')}` : ''}` }; }
     try { fs.chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort on non-posix */ }
 
     // The undo token is journalled only AFTER the write succeeded. Recording an undo for a save that
     // never happened hands the user a button that would revert a change they never made.
-    const undoToken = journalUndo({ kind: 'restore-config', backup, existed });
+    const undoToken = journalUndo({
+      kind: 'restore-config',
+      backup,
+      existed,
+      nightlyBefore: nightlyChange?.before?.state ?? null,
+      secretBackup: credentialChange?.backup ?? null,
+      secretPath: credentialChange?.path ?? null,
+      secretExisted: credentialChange?.existed ?? null,
+    });
     return { ok: true, backup: backup ? backup.replace(HOME, '~') : null, undoToken, rejected };
   });
 
   if (held.timedOut) {
+    if (nightlyChange?.ok && ['on', 'off'].includes(nightlyChange.before?.state)) {
+      applyNightlyChoice(nightlyChange.before.state === 'on');
+    }
+    rollbackCredential();
     return {
       ok: false,
       rejected,
       log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — nothing was written; try again`,
     };
   }
+  if (!held.value?.ok) {
+    if (nightlyChange?.ok && ['on', 'off'].includes(nightlyChange.before?.state)) {
+      applyNightlyChoice(nightlyChange.before.state === 'on');
+    }
+    rollbackCredential();
+  }
+  if (held.value?.ok) publishSettingsToCache();
   return held.value;
 }
 /** Read the append-only undo journal. Malformed lines are skipped; they are not entries. */
@@ -2088,6 +2246,23 @@ function readUndoJournal() {
 function markUndoConsumed(token) {
   try { fs.appendFileSync(UNDO_JOURNAL, JSON.stringify({ consumed: token, at: new Date().toISOString() }) + '\n'); }
   catch { /* the restore already happened; failing to record it must not un-happen it */ }
+}
+
+function restoreConfigEffects(entry) {
+  const failures = [];
+  if (entry.secretPath) {
+    try {
+      if (entry.secretBackup && fs.existsSync(entry.secretBackup)) fs.copyFileSync(entry.secretBackup, entry.secretPath);
+      else if (entry.secretExisted === false) fs.rmSync(entry.secretPath, { force: true });
+    } catch (error) {
+      failures.push(`encrypted credential restore failed: ${error.message}`);
+    }
+  }
+  if (entry.nightlyBefore === 'on' || entry.nightlyBefore === 'off') {
+    const restored = applyNightlyChoice(entry.nightlyBefore === 'on');
+    if (!restored.ok) failures.push(restored.log);
+  }
+  return failures;
 }
 
 function undo(undoToken) {
@@ -2129,6 +2304,10 @@ function undo(undoToken) {
       } catch (e) { return { ok: false, log: `restore failed: ${e.message} — your backup at ${entry.backup.replace(HOME, '~')} is intact` }; }
       if (held.timedOut) return { ok: false, log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — NOTHING was restored and your backup is intact; try again` };
       try { fs.chmodSync(CONFIG_PATH, 0o600); } catch { /* best effort on non-posix */ }
+      const effectFailures = restoreConfigEffects(entry);
+      if (effectFailures.length) {
+        return { ok: false, log: `the settings file was restored, but ${effectFailures.join('; ')}. The undo remains available.` };
+      }
       markUndoConsumed(undoToken);
       return { ok: true, log: 'restored your previous settings' };
     }
@@ -2141,6 +2320,10 @@ function undo(undoToken) {
       try { held = withLock(CONFIG_PATH, () => { fs.rmSync(CONFIG_PATH); return true; }); }
       catch (e) { return { ok: false, log: `could not remove the settings file: ${e.message}` }; }
       if (held.timedOut) return { ok: false, log: `another process is writing your settings and did not finish within ${LOCK_WAIT_MS}ms — nothing was removed; try again` };
+      const effectFailures = restoreConfigEffects(entry);
+      if (effectFailures.length) {
+        return { ok: false, log: `the settings file was removed, but ${effectFailures.join('; ')}. The undo remains available.` };
+      }
       markUndoConsumed(undoToken);
       return { ok: true, log: 'removed the settings file (there was none before this save)' };
     }
@@ -2434,7 +2617,9 @@ function startServer({ port = Number(process.env.CONSOLE_PORT) || 7411, open = f
     // precise moment a first-time user is deciding whether this thing works. The child does that
     // scan now (see --refresh-cache), and gatherActivity reports `warming` until it lands.
     if (open) openBrowser(url);
-    kickRefresh({ force: true });   // measure everything in a detached child, off the request path
+    // Browser acceptance pre-warms a disposable HOME and disables only this redundant second scan.
+    // The production default is unchanged: every ordinary console start refreshes in the background.
+    if (process.env.RUVNET_CONSOLE_DISABLE_BACKGROUND_REFRESH !== '1') kickRefresh({ force: true });
   });
   return server;
 }
@@ -2448,7 +2633,23 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('onboarding-consol
     // Runs as a DETACHED CHILD of the server (kickRefresh) — or standalone to pre-warm. Computes the
     // heavy read-models HERE, in a separate process, so the server's event loop is never blocked, and
     // writes each cache the moment it is ready (state first — it is what the page paints first).
-    try { const st = gatherState(process.cwd(), { fleet: false }); const { token, ...safe } = st; writeCache(STATE_CACHE, st.generatedAt, safe, process.cwd()); } catch { /* leave the old cache in place */ }
+    try {
+      let st = gatherState(process.cwd(), { fleet: false });
+      const autoApplyOn = loadSettings().values.autoApply === true;
+      const eligible = autoApplyOn ? autoEligibleIds(st.sections.recommendations) : [];
+      if (eligible.length) {
+        const receipt = apply(eligible);
+        // Re-measure after the mutations. A pre-apply read model must never be stamped as current.
+        st = gatherState(process.cwd(), { fleet: false });
+        st.sections.autoApply = {
+          at: new Date().toISOString(),
+          requested: eligible,
+          results: receipt.results,
+        };
+      }
+      const { token, ...safe } = st;
+      writeCache(STATE_CACHE, st.generatedAt, safe, process.cwd());
+    } catch { /* leave the old cache in place */ }
     // TASK 3: function-call arguments are evaluated left-to-right, so the previous
     // `writeCache(STACK_CACHE, new Date().toISOString(), gatherStack())` evaluated the timestamp
     // BEFORE gatherStack()'s ~22s scan ran — the same bug as the /api/stack handler above, duplicated
@@ -2541,6 +2742,7 @@ export {
   saveBrainPower,
   gatherBrainProfile,
   saveBrainProfile,
+  autoEligibleIds,
 };
 // Exported for the cross-project cache-isolation test (console-cache-scope.test.mjs). serveCached's
 // scopeKey is the guard that stops one project's cached state being served for another.

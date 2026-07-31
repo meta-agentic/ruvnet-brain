@@ -163,8 +163,8 @@ describe('card lane — a REAL caller in invocation shape, and consulted BEFORE 
   });
 
   it('the card-lane check appears BEFORE searchAll( in source order — the pre-empt is real, not cosmetic', () => {
-    const cardIdx = src.indexOf('answerFromCards(query, KB_DIR)');
-    const searchAllIdx = src.indexOf('await searchAll({ dir: KB_DIR');
+    const cardIdx = src.indexOf('answerFromCards(query, KB_DIR');
+    const searchAllIdx = src.indexOf('} = await searchAll({');
     expect(cardIdx).toBeGreaterThan(-1);
     expect(searchAllIdx).toBeGreaterThan(-1);
     expect(cardIdx).toBeLessThan(searchAllIdx);

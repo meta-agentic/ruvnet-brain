@@ -240,6 +240,23 @@ describe('the copy respects the reader', () => {
     expect(lower).toContain('without the others');
   });
 
+  it('gives 3.x upgraders the concrete 4.0 capabilities and a full-details command', () => {
+    const lower = notice.toLowerCase();
+    for (const capability of [
+      'source-grounded',
+      'claude code',
+      'codex',
+      'stable spine',
+      'console',
+      'agentdb',
+      'agentic-qe',
+      'harness scoring',
+    ]) {
+      expect(lower).toContain(capability);
+    }
+    expect(notice).toContain('npx ruvnet-brain --whats-new');
+  });
+
   it('recommends per-user AND states plainly that the user decides', () => {
     expect(notice).toContain('per-user');
     expect(notice).toContain('per-project');
@@ -251,12 +268,14 @@ describe('the copy respects the reader', () => {
   it('gives the exact command, and both commands really exist in this repo', () => {
     expect(notice).toContain('npx ruvnet-brain@latest --update');
     expect(notice).toContain('npx ruvnet-brain --what-changed');
+    expect(notice).toContain('npx ruvnet-brain --whats-new');
 
     // Not a lexical check on the notice — a check that the flags it tells people to run are real.
     // A notice that recommends a flag which does not exist destroys more trust than it earns.
     const installer = fs.readFileSync(path.join(process.cwd(), 'bin', 'install.mjs'), 'utf8');
     expect(installer).toContain("argv.includes('--update')");
     expect(installer).toContain("argv.includes('--what-changed')");
+    expect(installer).toContain("argv.includes('--whats-new')");
   });
 
   it('tells the reader how to make it stop, inside the notice itself', () => {

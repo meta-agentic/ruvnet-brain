@@ -1,24 +1,28 @@
 # RuvNet-Brain 4.0 line — what's new (the major-release highlights)
 
-Updated: 2026-07-25
+Updated: 2026-07-30
 
 > **Source of truth** for the `/whats-new` command and the first-run upgrade message. Curated, honest,
 > major-only — not the point-release churn. If a claim here isn't true of the shipping build, it does not
 > belong here. The self-measurement claims are deliberately hedged: they are *new and filling*, not
 > *proven*.
 >
-> **⚠️ VERSION STATUS (ADR-042, owner decision 2026-07-25):** these enhancements are shipping **now, in
-> the `3.9.x` line** — the version is NOT `4.0.0` yet, and deliberately so. Per Accepted ADR-042, the
-> number stays `3.9.x-dev` until the work is field-verified (real advocacy outcomes at n≥29 + an
-> independent re-grade). So this file describes **the 4.0-line enhancements you already have**, with the
-> `4.0.0` *stamp* pending verification — never "you are on 4.0." A cross-model duel (GPT-5.6, 2026-07-25,
-> `docs/reviews/0042-gpt56-4.0-go-no-go.md`) reached HOLD on a premature stamp; this framing is the
-> honest result.
+> **VERSION STATUS:** the public release line is now 4.x. Publication does not erase the remaining
+> acceptance obligations: the exact public artifact must still pass the fail-closed release contract
+> through fresh Claude Code and Codex hosts. Anything not proven through that boundary is listed as a
+> limitation, never converted into a capability claim.
 
 **One line:** the 4.0 line is where the brain got **honest, legible, fast, and self-measuring** — and
 it's landing now.
 
 ## The big things
+
+### Release proof is fail-closed
+The 4.0 release path now separates a clean candidate seal from a post-publication seal. Dirty
+lineage, zero/skipped/todo tests, open issues, red or pending exact-SHA workflows, a missing
+`ruvnet-brain` self-RVF store, weak query-deadline margin, missing independent graders,
+host/artifact mismatches, and public-byte drift are release failures rather than warnings.
+`npm run release:proof -- --status --quick` shows the current live blockers.
 
 ### 1. The Console is the front door
 Type `/rvbc` and your whole RuvNet stack is on one live local page: what's installed, what the AI has
@@ -55,16 +59,30 @@ now **survives an update** (tested against the real updater, not argued).
 The QE suite and model routing use **your Claude account, not an API key**, at the least-powerful model
 that does the job. Nothing bills silently.
 
+### 7. Claude Code and Codex share one active runtime
+Both hosts are wired to the same Stable Spine generation: the MCP search shell, lifecycle hooks,
+skills and update behavior advance as one versioned runtime instead of being installed as unrelated
+copies.
+
+### 8. Source grounding is an RVF-native product surface
+The Brain searches per-repository RuVector RVF stores, joins hits to their source passages, and
+returns cited repository paths. Model memory is not accepted as evidence for rUv-stack claims.
+
+### 9. Quality and harness workflows are explicit
+Agentic-QE is the testing fleet. Harness scoring evaluates the orchestration layer, and cost-aware
+routing can select cheaper capable models when the required provider access is configured. These are
+named workflows a user can request, not silent substitutes.
+
 ## What 4.0 deliberately does NOT claim
 Stated up front because overclaiming is the one thing this product cannot do:
 - **Not** "proven X% better" — the outcome ledger is still filling (see #4).
 - **Not** "fully proactive / anticipatory" — the brain still mostly speaks when you open the console or
   ask; the in-session, unprompted surface is the next frontier, not a shipped 4.0 guarantee.
-- **Not** independently graded ≥95 — the last independent grade was in the low 70s, honestly recorded in
-  `docs/4.0-READINESS.md`. 4.0 earns its number on *substance and honesty*, not a score.
+- **Not** independently graded ≥95 on the exact public artifact. A score is not a release substitute.
+- **Not** fully accepted while any critical exact-artifact, host, retrieval, version-convergence or
+  recovery invariant is FAIL, UNKNOWN, skipped or mocked-only.
 
 ## For upgraders
-Most people will meet 4.0 by waking up to it — the auto-update lands and the version reads `4.0`. You did
-not have to visit a web page to find out what changed: the brain tells you itself on the first session
-after the upgrade, and offers to open the Console so you can *see* it. That's the point of this release —
-the brain manages the relationship, honestly.
+On the first real major-version transition, the installer/session experience presents the concise
+highlights once. Run `npx ruvnet-brain --whats-new` at any time to read this full list again, or
+`npx ruvnet-brain --what-changed` to inspect the exact machine footprint and undo path for each piece.

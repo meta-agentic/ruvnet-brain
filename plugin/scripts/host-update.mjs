@@ -40,6 +40,7 @@ const result = spawnSync(npx, [
   '--yes',
   'ruvnet-brain@latest',
   '--update',
+  '--host-sync-only',
   '--no-nightly-prompt',
 ], {
   // The downloaded package must not inherit unrelated API keys, cloud credentials, or tokens from

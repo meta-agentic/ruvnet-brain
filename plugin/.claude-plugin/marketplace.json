@@ -1,5 +1,6 @@
 {
   "name": "ruvnet-brain",
+  "description": "Source-grounded RuvNet Brain integrations for Claude Code and Codex.",
   "owner": {
     "name": "Stuart Kerr"
   },

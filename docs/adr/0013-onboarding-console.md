@@ -3,7 +3,7 @@ id: ADR-013
 title: The Onboarding Console — RuvNet Brain becomes a mirror, an advisor, and only then a configurator
 status: Implemented
 date: 2026-07-14
-updated: 2026-07-27
+updated: 2026-07-30
 updated_source: derived-from-git
 authors: [Stuart Kerr, Claude Code]
 tags: [onboarding, ux, config, stack, memory-health, savings, safety]
@@ -19,6 +19,10 @@ related: [ADR-0012 (grounding gate), ruflo/plugins/ruflo-ruvector ADR-0001 (pin 
 shipped and is live (`/configure` / `/rvbc`, served from `scripts/onboarding-console.mjs`). The body had
 been left at `Proposed` while the frontmatter said `Implemented` — a file disagreeing with itself, exactly
 the ADR-drift this project's own hooks warn about.
+
+**Updated 2026-07-30** — the Settings surface now distinguishes a working control from a persisted
+preference. A choice is interactive only when a runtime consumes it and the effect can be verified;
+declared-but-unenforced choices remain named with the missing path instead of appearing as switches.
 
 ## Context
 

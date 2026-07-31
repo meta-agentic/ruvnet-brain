@@ -43,7 +43,10 @@ import { runSessionStartGate } from './session-start-gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RENDER_PROBE = path.resolve(HERE, '../../tests/ux/render-probe.mjs');
-const RENDER_PROBE_TIMEOUT_MS = 30_000;
+// The child now performs seven acceptance assertions, two real settings writes + reload, one real
+// batch remedy and one real undo in addition to paint timings. Its total wall clock is test-runtime,
+// not user-visible latency; each user action has its own hard 4s assertion inside the probe.
+const RENDER_PROBE_TIMEOUT_MS = 60_000;
 
 function stopProcessTree(child) {
   if (!child?.pid) return;
@@ -205,6 +208,12 @@ export async function runUxSuite() {
     if (failure) hardFailures.push(failure);
   }
   for (const n of render.notes) { console.log(`  ! ${n}`); hardFailures.push(`render: ${n}`); }
+  console.log('\n  ── console control acceptance ──');
+  for (const row of render.acceptance || []) {
+    console.log(`  ${row.pass ? '✓' : '✗'} ${row.label}: ${row.detail}`);
+    if (!row.pass) hardFailures.push(`console control acceptance: ${row.label} — ${row.detail}`);
+  }
+  if (!(render.acceptance || []).length) hardFailures.push('console control acceptance: NOT RUN');
   // Any expected render row missing entirely = not run = hard fail.
   const gotConsole = render.results.some((r) => r.label === 'console time-to-visible' && r.ms != null);
   if (!gotConsole) hardFailures.push('console time-to-visible: NOT RUN');

@@ -109,6 +109,7 @@ describe('wireCodexHost from the unpacked tarball — the exact path issue #43 p
     expect(r1.action).toBe('added');
     expect(fs.existsSync(r1.serverPath)).toBe(true);
     expect(fs.existsSync(path.join(serverDir, 'managed-cli-interface.mjs'))).toBe(true);
+    expect(fs.existsSync(r1.runtimePreferencesPath)).toBe(true);
     expect(codexStatus({ codexDir, configPath })).toMatchObject({ host: true, wired: true });
 
     const bytes1 = fs.readFileSync(configPath, 'utf8');

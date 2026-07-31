@@ -31,6 +31,27 @@ let chromium = null, playwrightLoadError = null;
 try { ({ chromium } = require('playwright')); }
 catch (e) { try { ({ chromium } = require('@playwright/test')); } catch (e2) { playwrightLoadError = e.message; } }
 
+async function launchChromium() {
+  try {
+    return await chromium.launch({ headless: true });
+  } catch (bundledError) {
+    // Local contributors often have system Chrome but not Playwright's matching downloaded Chromium.
+    // CI still installs the pinned browser. Exercising the real DOM through system Chrome is stronger
+    // than silently skipping the browser gate on a developer machine.
+    const candidates = process.platform === 'darwin'
+      ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+      : process.platform === 'win32'
+        ? [
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          ]
+        : ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
+    const executablePath = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!executablePath) throw bundledError;
+    return chromium.launch({ headless: true, executablePath });
+  }
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const CONSOLE_MJS = path.join(REPO, 'scripts', 'onboarding-console.mjs');
@@ -79,9 +100,15 @@ function waitForReady(port, timeoutMs = 20000) {
 }
 
 /** Start the console server on `port` with an isolated HOME, and pre-warm its cache if requested. */
-function startConsole(port, home) {
-  const env = { ...process.env, HOME: home, CONSOLE_PORT: String(port) };
-  const child = spawn(process.execPath, [CONSOLE_MJS, '--serve'], { env, stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO });
+function startConsole(port, home, cwd = REPO) {
+  const env = {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    CONSOLE_PORT: String(port),
+    RUVNET_CONSOLE_DISABLE_BACKGROUND_REFRESH: '1',
+  };
+  const child = spawn(process.execPath, [CONSOLE_MJS, '--serve'], { env, stdio: ['ignore', 'pipe', 'pipe'], cwd });
   // Drain and mirror the isolated fixture's startup output to stderr. The parent UX runner captures
   // only the last stages on failure, so a bind/import crash is diagnosable without polluting JSON.
   child.stdout.on('data', (chunk) => process.stderr.write(`[render-console:stdout] ${String(chunk)}`));
@@ -91,20 +118,33 @@ function startConsole(port, home) {
 }
 
 /** Pre-warm the cache in the temp HOME by running --refresh-cache once, so the render is warm-path. */
-function prewarm(home) {
+function prewarm(home, cwd = REPO) {
   return new Promise((resolve) => {
-    const env = { ...process.env, HOME: home };
-    const child = spawn(process.execPath, [CONSOLE_MJS, '--refresh-cache'], { env, stdio: 'ignore', cwd: REPO });
+    const env = { ...process.env, HOME: home, USERPROFILE: home };
+    const child = spawn(process.execPath, [CONSOLE_MJS, '--refresh-cache'], { env, stdio: 'ignore', cwd });
     let settled = false;
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearInterval(poll);
       resolve();
     };
     child.on('exit', finish);
     child.on('error', finish);
-    const timer = setTimeout(() => { try { child.kill(); } catch {} finish(); }, 60000);
+    // State is the only cache this browser control gate needs. It is written first; waiting for the
+    // later machine-wide fleet scan made a nominal 30s browser gate depend on a permitted 60s setup
+    // operation. Stop the disposable fixture child as soon as state is ready.
+    const stateCache = path.join(home, '.claude', 'ruvnet-brain', 'state-cache.json');
+    const poll = setInterval(() => {
+      if (!fs.existsSync(stateCache)) return;
+      try { child.kill(process.platform === 'win32' ? undefined : 'SIGKILL'); } catch {}
+      finish();
+    }, 50);
+    const timer = setTimeout(() => {
+      try { child.kill(process.platform === 'win32' ? undefined : 'SIGKILL'); } catch {}
+      finish();
+    }, 10_000);
   });
 }
 
@@ -125,22 +165,33 @@ export async function runRenderProbe() {
   }
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'uxqe-home-'));
   fs.mkdirSync(path.join(home, '.claude', 'ruvnet-brain'), { recursive: true });
+  const fixtureProject = path.join(home, 'Code', 'dirty-console-fixture');
+  fs.mkdirSync(path.join(fixtureProject, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(fixtureProject, '.claude', 'settings.json'), `${JSON.stringify({
+    hooks: {
+      PreToolUse: [{
+        matcher: '*',
+        hooks: [{ type: 'command', command: 'npx ruflo@latest hooks pre-task' }],
+      }],
+    },
+  }, null, 2)}\n`);
   const port = 7500 + (process.pid % 400);   // avoid the user's live 7411; vary per run without Date/random
   let server, browser;
   const results = [];
   const notes = [];
+  const acceptance = [];
   try {
     stage('prewarm:start');
-    await prewarm(home);   // make the render measure the WARM common case
+    await prewarm(home, fixtureProject);   // make the render measure the WARM common case
     stage('prewarm:done');
-    server = startConsole(port, home);
+    server = startConsole(port, home, fixtureProject);
     stage('server:spawned');
     const readyMs = await waitForReady(port);
     stage('server:ready');
     results.push({ label: 'server-ready', selector: 'GET / → 200', ms: readyMs });
     const base = `http://127.0.0.1:${port}`;
 
-    browser = await chromium.launch({ headless: true });
+    browser = await launchChromium();
     stage('browser:launched');
     // Chromium's first renderer process is a browser-startup cost, not console render time. On a
     // loaded Windows runner it added 7.9s to one otherwise 376–1031ms page series. Prime one blank
@@ -153,6 +204,110 @@ export async function runRenderProbe() {
     // 1a — console time-to-visible: #card-capabilities painted
     results.push(await timeToSelector(browser, `${base}/`, '#card-capabilities', 'console time-to-visible'));
     stage('console:visible');
+
+    // The release contract is behavioral, not a source-string check: load the rendered console,
+    // exercise both ordinary settings through their real HTTP handlers, reload, and prove the
+    // chosen values survived. The HOME above is disposable, so this never touches user state.
+    const consolePage = await browser.newPage();
+    await consolePage.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await consolePage.waitForSelector('#field-provider', { state: 'attached' });
+    await consolePage.locator('#card-settings > summary').click();
+    await consolePage.waitForSelector('#field-provider', { state: 'visible' });
+    await consolePage.waitForSelector('#field-advocacy', { state: 'visible' });
+    const surface = await consolePage.evaluate(() => ({
+      fieldIds: [...document.querySelectorAll('.field[id^="field-"]')].map((node) => node.id).sort(),
+      unavailable: [...document.querySelectorAll('.settings-unavailable-list li b')].map((node) => node.textContent.trim()),
+      brainSwitches: document.querySelectorAll('.bp-switch[role="switch"]').length,
+      profileChoices: [...document.querySelectorAll('input[name="brain-profile"]')].map((node) => node.value).sort(),
+    }));
+    const expectedFields = [
+      'field-advocacy',
+      'field-autoApply',
+      'field-learningScope',
+      'field-newProjectDefaults',
+      'field-openrouterKey',
+      'field-provider',
+      'field-qeFleet',
+      'field-routing',
+    ];
+    if (process.platform === 'darwin') expectedFields.push('field-nightly');
+    expectedFields.sort();
+    acceptance.push({
+      label: 'only consumer-backed settings are actionable',
+      pass: JSON.stringify(surface.fieldIds) === JSON.stringify(expectedFields),
+      detail: surface.fieldIds.join(', '),
+    });
+    acceptance.push({
+      label: 'all unsupported settings are visibly disclosed',
+      pass: JSON.stringify(surface.unavailable)
+        === JSON.stringify(process.platform === 'darwin' ? [] : ['Nightly brain refresh']),
+      detail: `${surface.unavailable.length}: ${surface.unavailable.join(', ')}`,
+    });
+    acceptance.push({
+      label: 'brain power and both RVF profiles are surfaced',
+      pass: surface.brainSwitches === 1
+        && JSON.stringify(surface.profileChoices) === JSON.stringify(['complete', 'ruvector']),
+      detail: `${surface.brainSwitches} switch; profiles ${surface.profileChoices.join(', ')}`,
+    });
+
+    const settingsStarted = Date.now();
+    await consolePage.locator('#field-provider input[value="codex"]').check();
+    await consolePage.locator('form:has(#field-provider) button[type="submit"]').click();
+    await consolePage.locator('form:has(#field-provider) .form-note.n-ok').waitFor();
+    await consolePage.locator('#field-advocacy input[value="5"]').check();
+    await consolePage.locator('form:has(#field-advocacy) button[type="submit"]').click();
+    await consolePage.locator('form:has(#field-advocacy) .form-note.n-ok').waitFor();
+    await consolePage.reload({ waitUntil: 'domcontentloaded' });
+    await consolePage.waitForSelector('#field-provider input[value="codex"]:checked', { state: 'attached' });
+    await consolePage.waitForSelector('#field-advocacy input[value="5"]:checked', { state: 'attached' });
+    acceptance.push({
+      label: 'provider and advocacy choices persist through real handlers and reload',
+      pass: Date.now() - settingsStarted < 4_000,
+      detail: `codex + advocacy 5 saved and read back in ${Date.now() - settingsStarted}ms`,
+    });
+    stage('console:settings-accepted');
+
+    // The isolated fixture carries one real npx-wiring defect on every OS. HOME and USERPROFILE
+    // point to the same fixture root above, so a missing card is a product failure, not a platform
+    // condition the oracle may silently accept.
+    await consolePage.waitForSelector('article.rec', { state: 'attached' });
+    stage('console:recommendation-attached');
+    const recommendations = await consolePage.locator('article.rec').count();
+    await consolePage.locator('#card-recs').evaluate((node) => { node.open = true; });
+    const fixAllButton = consolePage.getByRole('button', { name: /^Fix all \(/ });
+    if (recommendations > 0) await fixAllButton.waitFor();
+    stage('console:fix-all-visible');
+    const fixAll = await fixAllButton.count();
+    acceptance.push({
+      label: 'Fix all is present whenever verified recommendations exist',
+      pass: recommendations === 0 || fixAll === 1,
+      detail: `${recommendations} recommendations; ${fixAll} Fix all button`,
+    });
+    if (recommendations > 0) {
+      const fixAllStarted = Date.now();
+      await fixAllButton.click();
+      await consolePage.getByRole('button', { name: 'Yes, fix all verified items' }).click();
+      await consolePage.getByText(/applied; .* skipped or failed\./).waitFor();
+      const applied = await consolePage.getByText('Applied by Fix all — and reversible.').count();
+      const undoButtons = await consolePage.getByRole('button', { name: 'Undo this change' }).count();
+      acceptance.push({
+        label: 'Fix all executes the real batch endpoint and returns per-item undo',
+        pass: applied > 0 && undoButtons === applied && Date.now() - fixAllStarted < 4_000,
+        detail: `${applied} applied cards; ${undoButtons} undo buttons; ${Date.now() - fixAllStarted}ms`,
+      });
+      if (undoButtons > 0) {
+        await consolePage.getByRole('button', { name: 'Undo this change' }).first().click();
+        await consolePage.getByText('Reverted').first().waitFor();
+        acceptance.push({
+          label: 'Fix all per-item undo restores the disposable fixture',
+          pass: true,
+          detail: 'first applied item reverted through /api/undo',
+        });
+      }
+    }
+    stage('console:fix-all-accepted');
+    await consolePage.close();
+    stage('console:controls-accepted');
     // 1b — tips time-to-visible: hero + first section painted (grounded selectors from console/tips.html)
     results.push(await timeToSelector(browser, `${base}/tips`, '.hero-scene', 'tips time-to-visible (hero)'));
     stage('tips-hero:visible');
@@ -167,7 +322,7 @@ export async function runRenderProbe() {
     try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
     stage('cleanup:done');
   }
-  return { results, notes };
+  return { results, acceptance, notes };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]).endsWith('render-probe.mjs')) {

@@ -257,7 +257,7 @@ if (!fs.existsSync(path.join(KB, 'forge-mcp-all.mjs'))) {
       // The permanent zero-ML card lane is a real grounded answer too. It deliberately does not
       // impersonate the heavy lane's `#1 ... relevance` format, so the QE oracle must recognize
       // both response contracts or every fast answer is mislabeled "(no hit)".
-      const fast = text.match(/FAST LANE[^\n]*\brepo="([^"]+)"/);
+      const fast = text.match(/FAST LANE[\s\S]*?#1\s+repo=(\S+)\s+evidence=/);
       const repo = m?.[1] || fast?.[1];
       const rel = m && m[2] !== 'n/a' ? parseFloat(m[2]) : null;
       const exp = q.expectRepo;

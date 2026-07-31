@@ -81,7 +81,7 @@ function buildFixtureDir({ includeRvf }) {
 function buildScratchRoot({ mutateTo, includeRvf }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutant-installer-'));
   scratchDirs.push(root);
-  for (const d of ['bin', 'scripts', 'kb', 'dist']) fs.mkdirSync(path.join(root, d), { recursive: true });
+  for (const d of ['bin', 'scripts', 'kb', 'dist', 'console', 'plugin']) fs.mkdirSync(path.join(root, d), { recursive: true });
 
   const source = fs.readFileSync(REAL_INSTALLER, 'utf8');
   expect(source.includes(ANCHOR), 'mutation anchor not found in bin/install.mjs — the target moved').toBe(true);
@@ -97,6 +97,12 @@ function buildScratchRoot({ mutateTo, includeRvf }) {
   for (const rel of ['kb/verify-citation.mjs', 'kb/brain-profile.mjs', 'kb/model-requirements.mjs']) {
     fs.copyFileSync(path.join(REPO, rel), path.join(root, rel));
   }
+  // installConsoleRuntime() is now part of the real installer contract. Mirror its
+  // required source surface so this mutation still reaches the self-check verdict
+  // it is designed to test instead of failing earlier on an incomplete fake package.
+  fs.cpSync(path.join(REPO, 'console'), path.join(root, 'console'), { recursive: true });
+  fs.cpSync(path.join(REPO, 'plugin', 'scripts'), path.join(root, 'plugin', 'scripts'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'package.json'), path.join(root, 'package.json'));
 
   fs.cpSync(buildFixtureDir({ includeRvf }), path.join(root, 'dist', 'ruvnet-brain'), {
     recursive: true,

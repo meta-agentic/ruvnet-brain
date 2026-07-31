@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   acceptanceGates,
   aggregate,
+  benchmarkExitCode,
   evaluateSemanticEvidence,
 } from '../../scripts/top100-benchmark.mjs';
 
@@ -53,6 +54,29 @@ describe('Top-100 acceptance is stricter than the legacy routing proxy', () => {
     expect(release).not.toContain("['scripts/top100-benchmark.mjs']");
   });
 
+  it('runs the candidate worker code through the stable spine while keeping installed KB data', () => {
+    const benchmark = fs.readFileSync(path.join(ROOT, 'scripts/top100-benchmark.mjs'), 'utf8');
+    const server = fs.readFileSync(path.join(ROOT, 'plugin/mcp/server.mjs'), 'utf8');
+    expect(benchmark).toContain(
+      "RUVNET_BRAIN_CHILD_MCP: path.join(ROOT, 'kb', 'forge-mcp-all.mjs')",
+    );
+    expect(server).toContain(
+      "process.env.RUVNET_BRAIN_CHILD_MCP || path.join(KB, 'forge-mcp-all.mjs')",
+    );
+  });
+
+  it('lets the supervised worker own cancellation before the benchmark transport deadline', () => {
+    const benchmark = fs.readFileSync(path.join(ROOT, 'scripts/top100-benchmark.mjs'), 'utf8');
+    const server = fs.readFileSync(path.join(ROOT, 'plugin/mcp/server.mjs'), 'utf8');
+    const benchmarkTimeout = Number(
+      benchmark.match(/TOP100_RPC_TIMEOUT_MS\)\s*\|\|\s*([\d_]+)/)?.[1]?.replaceAll('_', ''),
+    );
+    const workerTimeout = Number(
+      server.match(/RUVNET_BRAIN_CALL_TIMEOUT_MS\)\s*\|\|\s*([\d_]+)/)?.[1]?.replaceAll('_', ''),
+    );
+    expect(benchmarkTimeout).toBeGreaterThan(workerTimeout);
+  });
+
   it('fails a superficially well-routed run that has an outage and no semantic assertions', () => {
     const rows = Array.from({ length: 100 }, (_, i) => row(i === 0
       ? { error: true, grounded: false, routed: false, sufficientEvidence: false, latencyMs: 120_001 }
@@ -63,7 +87,7 @@ describe('Top-100 acceptance is stricter than the legacy routing proxy', () => {
     const acceptance = acceptanceGates(metrics, { semanticAssertionsPresent: false });
     expect(acceptance.pass).toBe(false);
     expect(acceptance.gates.find((g) => g.id === 'no-errors')?.pass).toBe(false);
-    expect(acceptance.gates.find((g) => g.id === 'max-at-most-30s')?.pass).toBe(false);
+    expect(acceptance.gates.find((g) => g.id === 'max-at-most-4s')?.pass).toBe(false);
     expect(acceptance.gates.find((g) => g.id === 'semantic-answer-assertions')?.pass).toBe(false);
   });
 
@@ -103,5 +127,11 @@ describe('Top-100 acceptance is stricter than the legacy routing proxy', () => {
     });
     expect(acceptance.pass).toBe(false);
     expect(acceptance.gates.find((g) => g.id === 'full-corpus-100')?.pass).toBe(false);
+  });
+
+  it('fails a full benchmark process on rejected acceptance but keeps diagnostics inspectable', () => {
+    expect(benchmarkExitCode({ pass: true }, { diagnostic: false })).toBe(0);
+    expect(benchmarkExitCode({ pass: false }, { diagnostic: false })).toBe(1);
+    expect(benchmarkExitCode({ pass: false }, { diagnostic: true })).toBe(0);
   });
 });

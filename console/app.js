@@ -24,6 +24,7 @@ const MOCK = new URLSearchParams(location.search).has('mock'); // dev only, neve
 let preStateHash = null;          // echoed on /api/apply so the server can refuse a moved world
 let lastMemory = null;            // last rendered memory card, so the late fleet scan can merge into it
 const renderedRecIds = new Set();
+const renderedRecommendations = new Map();
 let stateRecsSettled = false;
 let stackRecsSettled = false;
 // Health advocacy (ADR-027) hydrates from /api/memory, the slowest source. Until it has answered,
@@ -1543,6 +1544,100 @@ function updateRecsChip() {
   } else {
     setChips('chips-recs', [chip(`${n} proposal${n === 1 ? '' : 's'}`, n ? 'amber' : 'wait')]);
   }
+  renderFixAll();
+}
+
+function fixAllEligible() {
+  return [...renderedRecommendations.values()].filter((rec) =>
+    rec && Array.isArray(rec.evidence) && rec.evidence.length && rec.cost && rec.undo);
+}
+
+function renderFixAll() {
+  const slot = $('#recs-batch');
+  if (!slot) return;
+  const eligible = fixAllEligible();
+  if (!eligible.length) { slot.replaceChildren(); return; }
+
+  const openConfirm = () => {
+    const list = el('ul', { class: 'evidence-list' },
+      eligible.map((rec) => el('li', {},
+        el('b', {}, rec.title || rec.id),
+        ` — ${rec.change?.human || 'apply the verified recommendation'}`,
+        rec.undo?.human ? `; undo: ${rec.undo.human}` : '')));
+    slot.replaceChildren(el('div', { class: 'confirm', role: 'group', 'aria-label': 'Confirm every verified recommendation' },
+      el('p', { class: 'confirm-q' }, `Apply all ${eligible.length} verified fixes?`),
+      el('p', { class: 'confirm-detail' },
+        'Each item is re-checked immediately before it runs. Resolved or changed items are skipped. ',
+        'Every successful item records its own undo before mutation.'),
+      list,
+      el('div', { class: 'confirm-btns' },
+        el('button', { class: 'btn btn-apply', type: 'button', onclick: () => void applyAllVerified(eligible) }, 'Yes, fix all verified items'),
+        el('button', { class: 'btn btn-ghost', type: 'button', onclick: renderFixAll }, 'Cancel'))));
+  };
+
+  slot.replaceChildren(el('div', { class: 'save-row' },
+    el('button', { class: 'btn btn-apply', type: 'button', onclick: openConfirm },
+      `Fix all (${eligible.length})`),
+    el('p', { class: 'save-note' },
+      'Only the evidence-backed, reversible proposals listed below. Unsupported settings and secrets are never included.')));
+}
+
+async function undoBatchResult(result, btn) {
+  if (!result.undoToken) return;
+  btn.disabled = true;
+  const response = await postJSON('/api/undo', { undoToken: result.undoToken });
+  if (response.ok && response.data?.ok) {
+    btn.replaceWith(el('span', { class: 'reverted' }, 'Reverted'));
+    recheckMachine();
+  } else {
+    btn.disabled = false;
+    announce(response.status === 403 ? TOKEN_MSG : 'Undo did not complete; the backup remains available.');
+  }
+}
+
+async function applyAllVerified(recs) {
+  const slot = $('#recs-batch');
+  slot.replaceChildren(el('p', { class: 'pending-note', role: 'status' }, `Applying ${recs.length} verified fixes…`));
+  try {
+    const response = await postJSON('/api/apply', { ids: recs.map((rec) => rec.id), preStateHash });
+    if (response.status === 403) {
+      slot.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' }, TOKEN_MSG));
+      return;
+    }
+    const results = Array.isArray(response.data?.results) ? response.data.results : [];
+    const ok = results.filter((result) => result.ok);
+    const skipped = results.filter((result) => !result.ok);
+    slot.replaceChildren(el('div', { class: `form-note ${skipped.length ? 'n-err' : 'n-ok'}`, role: 'status' },
+      el('div', { class: 'fn-body' },
+        el('b', {}, `${ok.length} applied; ${skipped.length} skipped or failed.`),
+        ' Every applied item has its own undo below.')));
+    for (const result of results) {
+      const card = document.getElementById(`rec-${result.id}`);
+      const actions = card?.querySelector('.rec-actions');
+      if (!actions) continue;
+      if (result.ok) {
+        card.classList.add('is-applied');
+        const undoButton = el('button', {
+          class: 'btn btn-undo',
+          type: 'button',
+          disabled: !result.undoToken,
+          onclick: (event) => void undoBatchResult(result, event.currentTarget),
+        }, 'Undo this change');
+        actions.replaceChildren(el('div', { class: 'applied' },
+          el('p', { class: 'applied-title' }, 'Applied by Fix all — and reversible.'),
+          result.log ? el('pre', { class: 'log' }, String(result.log)) : null,
+          undoButton));
+      } else {
+        actions.replaceChildren(el('div', { class: 'world-moved', role: 'alert' },
+          el('p', {}, result.log || 'Skipped because the machine changed or the fix no longer applies.')));
+      }
+    }
+    announce(`${ok.length} verified fixes applied; ${skipped.length} skipped or failed.`);
+    recheckMachine();
+  } catch (error) {
+    slot.replaceChildren(el('div', { class: 'form-note n-err', role: 'alert' },
+      `Fix all could not reach the console server: ${error.message || error}.`));
+  }
 }
 
 function maybeRecsEmpty() {
@@ -1601,6 +1696,7 @@ function addRecommendations(recs, source) {
     // The DDD invariant, honored in the UI too: no evidence/cost/undo → not rendered.
     if (!Array.isArray(rec.evidence) || !rec.evidence.length || !rec.cost || !rec.undo) { dropped += 1; continue; }
     renderedRecIds.add(rec.id);
+    renderedRecommendations.set(rec.id, rec);
     nodes.push(buildRecCard(rec));
   }
   // Ordering is by BLAST RADIUS, not arrival time — the slow sources arrive last and matter most.
@@ -2624,7 +2720,7 @@ function buildSettingsForm(cfg, { endpoint }) {
     saveBtn,
     el('p', { class: 'save-note' },
       'Saves to ', el('code', {}, cfg.path || '~/.claude/ruvnet-brain/config.json'),
-      ' in your user folder. It does not change how your computer runs anything else.')),
+      ' in your user folder. Each choice is enforced by its named runtime; encrypted secrets and scheduler state never live in this browser response.')),
     resultSlot);
 
   form.addEventListener('submit', async (e) => {
@@ -2714,6 +2810,8 @@ function renderSettings(cfg, us, bp) {
   // `bp` is NOT counted here any more: its field is rendered by #card-brain at the top of the page,
   // and counting a control this card does not show would make the "N options" chip a lie by one.
   const groups = [cfg, us].filter((c) => c && Array.isArray(c.schema) && c.schema.length);
+  const unavailable = [cfg, us]
+    .flatMap((c) => (c && Array.isArray(c.unavailable) ? c.unavailable : []));
   if (!groups.length) {
     setChips('chips-settings', [chip('no schema', 'grey')]);
     body.replaceChildren(el('p', { class: 'muted' }, 'No editable settings were received.'));
@@ -2727,6 +2825,7 @@ function renderSettings(cfg, us, bp) {
       && (values[f.key] === null || values[f.key] === undefined)).length;
   }, 0);
   setChips('chips-settings', [chip(`${totalOptions} option${totalOptions === 1 ? '' : 's'}`, 'grey'),
+    unavailable.length ? chip(`${unavailable.length} unavailable here`, 'wait') : null,
     unsetCount ? chip(`${unsetCount} not chosen yet`, 'wait') : null,
     groups.some((c) => c.exists === false) ? chip('not created yet', 'wait') : null].filter(Boolean));
 
@@ -2751,6 +2850,17 @@ function renderSettings(cfg, us, bp) {
   }
   if (cfg && Array.isArray(cfg.schema) && cfg.schema.length) main.push(buildSettingsForm(cfg, { endpoint: '/api/save-config' }));
   if (us && Array.isArray(us.schema) && us.schema.length) main.push(buildSettingsForm(us, { endpoint: '/api/save-advocacy' }));
+  if (unavailable.length) {
+    main.push(el('section', { class: 'settings-unavailable', 'aria-labelledby': 'settings-unavailable-h' },
+      el('h3', { id: 'settings-unavailable-h' }, 'Unavailable on this machine'),
+      el('p', { class: 'fineprint' },
+        'These choices have runtime enforcement, but that runtime is not supported or reachable on this machine. ',
+        'They stay visible with the measured reason instead of becoming a dead switch.'),
+      el('ul', { class: 'settings-unavailable-list' },
+        unavailable.map((item) => el('li', {},
+          el('b', {}, item.label || item.key),
+          el('span', {}, ` — ${item.reason || 'No runtime consumer is implemented.'}`))))));
+  }
 
   body.replaceChildren(withIllo('settings', ...main));
 }

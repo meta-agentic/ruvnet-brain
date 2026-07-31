@@ -1,19 +1,15 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { classifyRufloOperationalHealth } from '../../bin/install.mjs';
 
-let classifyRufloOperationalHealth;
-beforeAll(async () => {
-  process.env.RUVNET_BRAIN_IMPORT_ONLY = '1';
-  ({ classifyRufloOperationalHealth } = await import('../../bin/install.mjs'));
-});
-
-describe('Ruflo operational health is derived from behavior, not presence', () => {
-  it('rejects the misleading green state: stopped runtime, real memory, zero learning', () => {
+describe('Ruflo operational health is derived from the configured execution mode', () => {
+  it('accepts zero-daemon direct mode without trusting daemon-owned summaries', () => {
     expect(classifyRufloOperationalHealth({
       status: 'RuFlo V3 [STOPPED]\nBackend | none\nEntries | 0\nSwarm not running',
       memory: 'Total Entries | 1,504\nBackend | sql.js + HNSW',
       metrics: 'Total Patterns | 0\nTotal Routes | 0\nTotal Executed | 0',
     })).toMatchObject({
-      healthy: false,
+      healthy: true,
+      directMode: true,
       stopped: true,
       memoryContradiction: true,
       zeroLearning: true,

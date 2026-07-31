@@ -75,6 +75,14 @@ async function loadCE() {
   return _ce;
 }
 
+// Stable-Spine readiness hook; see warmQueryEmbedder in forge-ask.mjs.
+export async function warmReranker() {
+  const ce = await loadCE();
+  // Prime the first ONNX forward pass, not merely weight loading. Without this, the first real
+  // question still paid 5-6 seconds even though the parent had received a warmup acknowledgement.
+  await ceScoreBatch(ce, 'readiness', ['source-grounded readiness'], 64);
+}
+
 // score one (query, passage) pair → relevance logit (higher = more relevant). Used as the per-pair
 // fallback when a batched call fails (see ceScoreBatch below) — kept isolated so one bad passage in a
 // batch degrades to -Infinity for just that item instead of losing the whole batch's scores.
@@ -225,7 +233,7 @@ async function ceScoreParallel(query, passages, maxLength) {
   const ranges = shardRanges(passages.length, _pool.length);
   const used = _pool.slice(0, ranges.length);
   if (used.some((w) => w.__ceDead)) throw new Error('CE worker pool degraded (a worker exited)');
-  for (const w of used) w.ref(); // keep the event loop alive while tasks are in flight
+  for (const w of used) w.ref();
   try {
     const parts = await Promise.all(ranges.map((r, i) => callWorker(used[i], query, passages.slice(r.start, r.end), maxLength)));
     const scores = new Array(passages.length);
