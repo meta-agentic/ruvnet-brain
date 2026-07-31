@@ -1,6 +1,6 @@
 {
   "builder": "rvf-kb-forge",
-  "builtUtc": "2026-07-31T03:23:58.243Z",
+  "builtUtc": "2026-07-31T04:39:28.414Z",
   "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
   "selfUpdate": "node forge-update.mjs",
   "stores": {
@@ -149,10 +149,10 @@
     },
     "ruvnet-brain": {
       "kbName": "ruvnet-brain",
-      "sourceRepo": "/Users/stuartkerr/Code/ruvnet-brain/.",
-      "sourceCommit": "cd0ed16ab3dc7199d0bb2e8c65b6c37887606192",
-      "sourceDescribe": "v4.0.1",
-      "builtUtc": "2026-07-30T12:00:41.900Z",
+      "sourceRepo": "https://github.com/stuinfla/ruvnet-brain.git",
+      "sourceCommit": "0f68737ae8521a5ad56b33b591b8f757c7029d2d",
+      "sourceDescribe": "v4.0.1-16-g0f68737",
+      "builtUtc": "2026-07-31T04:39:28.414Z",
       "builder": "rvf-kb-forge",
       "canonicalManifestUrl": "https://api.github.com/repos/stuinfla/ruvnet-brain/releases/latest",
       "canonicalBundleUrl": "https://raw.githubusercontent.com/stuinfla/ruvnet-brain/main/kb/ruvnet-brain-kb-bundle.zip",

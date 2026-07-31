@@ -132,6 +132,14 @@ describe('issue #64 — exact dual-host convergence', () => {
     expect(source).toContain('do not restart for this update yet');
   });
 
+  it('does not launch the update heartbeat in the same SessionStart that seeds the Stable Spine', () => {
+    const source = fs.readFileSync(SESSION, 'utf8');
+    expect(source).toContain('SEED_DISPATCHED=0');
+    expect(source).toContain('SEED_DISPATCHED=1');
+    expect(source).toContain('first-session-worker.mjs');
+    expect(source).toContain('if [ "$SEED_DISPATCHED" != "1" ] && [ "$NOW" -gt 0 ]');
+  });
+
   it('the installer binds host sync and Spine activation to one exact package version', () => {
     const source = fs.readFileSync(path.join(ROOT, 'bin/install.mjs'), 'utf8');
     expect(source).toContain('wirePlugin({ expectedVersion: PACKAGE_VERSION, requireManaged: true })');

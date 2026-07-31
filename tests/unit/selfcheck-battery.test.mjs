@@ -630,8 +630,10 @@ describe('mutation proof — every assertion is load-bearing', () => {
   });
 
   it('MUTANT: disable the latency-margin check → a hook at 95% of its timeout goes GREEN', async () => {
-    const m = { regime: 'valid', timedOut: false, status: 0, elapsedMs: 4750, stdoutBytes: 10, stdout: '', stderr: '', survivors: false };
+    const m = { regime: 'valid', timedOut: false, status: 0, elapsedMs: 4750, stdoutBytes: 10, stdout: '', stderr: 'SESSION_TRACE stage=spine-block elapsed_ms=4600\n', survivors: false };
     expect(assertContract({ rec: REC, measurement: m, mode: 'advisory', timeoutSec: 5 }).map((v) => v.kind)).toContain('slow');
+    expect(assertContract({ rec: REC, measurement: m, mode: 'advisory', timeoutSec: 5 }).find((v) => v.kind === 'slow').detail)
+      .toContain('SESSION_TRACE stage=spine-block elapsed_ms=4600');
     const { mod, file } = await mutant("} else if (measurement.elapsedMs > budgetMs * TIMEOUT_MARGIN) {", "} else if (false) {");
     try {
       expect(mod.assertContract({ rec: REC, measurement: m, mode: 'advisory', timeoutSec: 5 }).map((v) => v.kind)).not.toContain('slow');

@@ -3,7 +3,7 @@ id: ADR-058
 title: The 95 contract — one observable per dimension, one mutant per observable, and the external-signal watch plane
 status: Proposed
 date: 2026-07-27
-updated: 2026-07-30
+updated: 2026-07-31
 impl: wired
 authors: [Stuart Kerr, Claude Fable 5, GPT-5.6-Sol (codex)]
 tags: [qa, gen2-qe, grading, external-signals, ci-watch, release-gate, mutation]
@@ -37,7 +37,7 @@ governs:
 # ADR-058: The 95 contract
 
 **Status**: Proposed
-**Date**: 2026-07-27 · **Last updated**: 2026-07-30 · **Why**: the public 4.0.1 artifact exposed
+**Date**: 2026-07-27 · **Last updated**: 2026-07-31 · **Why**: the public 4.0.1 artifact exposed
 that QE-BRN-001 existed in the written master plan but was absent from the executable critical-risk
 map and release vector; the live `search_ruvnet` worker consequently timed out without blocking
 publication.
@@ -62,6 +62,21 @@ remote main, five issues remain open, remote CI/Windows UX are red, the installe
 lacks the Brain self-store, WSL2 and the published artifact remain unproven, Agentic QE currently
 reports a vacuous 0-test pass through its CLI, and both external graders have not re-run on one clean
 published candidate.
+
+The post-merge run of PR #70 then caught another oracle defect before publication: the Windows
+PowerShell stranger path measured a real cold SessionStart at 4597ms, but D6's dedicated gate only
+rejected the cold sample at the full five-second watchdog. Commit `cd28e28` makes the checked-in
+4000ms absolute limit apply to the cold sample too, defers the redundant heartbeat when the same
+first session already dispatched Stable-Spine seeding, preserves stage traces in stranger receipts,
+and makes bundle assembly refuse zero RVFs, missing required files, or a stale ZIP. This is still a
+candidate repair—not a release verdict—until exact-SHA cross-platform CI, rebuilt artifact,
+clean-install, installed-MCP latency, and publication checks pass.
+
+The first PR #71 core run then rejected the initial implementation because it deferred maintenance
+on a Brain-OFF machine. Commit `0f68737` preserves both contracts without restoring the latency
+race: one detached first-session worker seeds the Stable Spine and then performs the heartbeat
+sequentially. A seed failure prevents the check; a network-check failure cannot undo a successful
+seed and the normal 15-minute retry remains armed.
 
 Extends ADR-057's build order. ADR-057's diagnosis — the three concealment mechanisms, the five
 converged classes — is the incident record and is not restated.
@@ -314,6 +329,8 @@ correct: **the strong claim was the defect.**
 
 | Date | What changed | Why (with referents) |
 |---|---|---|
+| 2026-07-31 | Replaced the first cold-start fix's deferred heartbeat with one composite seed-then-heartbeat worker, and refreshed the self-knowledge RVF to the exact code commit. | PR #71 core job `91073195901` correctly failed `tests/unit/brain-off.test.mjs`: the heartbeat stamp stayed at `1`, violating ADR-054's rule that Brain OFF still receives fixes. Commit `0f68737` introduces `plugin/scripts/first-session-worker.mjs`, which serializes seed and heartbeat behind one detacher. Focused acceptance passed 70/70 and the real registered gate measured cold 249ms, p95 182ms, max 192ms. The refreshed `ruvnet-brain.big.rvf` contains 2157 passages, passed 3/3 round trips, and `kb/RVF-GENERATIONS.json` binds it to `0f68737`. |
+| 2026-07-31 | Closed the cold-start oracle gap exposed by the exact post-merge Windows stranger run and made release bundle assembly fail closed. | Main run `30603476401`, Windows job `91070872621`, measured the valid SessionStart at 4597ms while `scripts/qe/session-start-gate.mjs` rejected only a full timeout. Commit `cd28e28` applies `absoluteFailMs=4000` to the cold sample, makes `plugin/scripts/session-start.sh` avoid launching both seed and heartbeat workers in one virgin session, emits `SESSION_TRACE` in the stranger path, and makes `scripts/build-bundle.mjs` refuse zero public RVFs or missing required files before creating a ZIP. Focused verification passed 141/141 tests; the real registered command measured cold 244ms, p95 190ms, max 242ms. |
 | 2026-07-30 | Removed the isolated unit-test module from `governs:`; the executable release authority and its live-QE caller remain governed. | `tests/unit/release-proof.test.mjs` is an acceptance observer, not a production caller. Treating an intentionally test-only module as an unwired runtime surface capped the implemented authority at `built` and made D7 fail for the wrong reason. The runtime path remains `scripts/release-vector.mjs` → `tests/qe/gpt56/live-brain-search.test.mjs` plus `scripts/release-proof.mjs`. |
 | 2026-07-29 | Re-read the complete governed set after the prompt-hook timeout repair; the vector-minimum contract is unchanged, and D6 now states the real 5s pre-tool / 10s prompt-host envelope rather than the obsolete uniform-5s claim. | PR #65 / commit `6734597` changes only the two UserPromptSubmit declarations in `plugin/hooks/hooks.json` and `plugin/hooks/codex-hooks.json`; their inner runtime remains bounded at 4s and the new regression caps the host declaration at 10s. The exact candidate's release vector and cross-platform CI passed before merge; this is release evidence, not a two-grader 95 claim. |
 | 2026-07-29 | Reviewed the complete governed-path history since `7709c67` and re-read the only changed governed path; both post-document installer fixes strengthen D8 and leave the 95 contract unchanged. | Commit `c2d5ef0` makes `bin/install.mjs` count canonical `*.big.rvf` stores; commit `ebe51a5` makes Codex status honor `CODEX_HOME` and decode Windows TOML paths. Focused installer smoke passed 22 tests (1 skipped, 3 todo), and Codex wiring passed 42/42. Neither commit proves a published candidate or both external grades. |
