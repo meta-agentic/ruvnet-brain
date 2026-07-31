@@ -37,8 +37,8 @@
 //      real first-run offers.
 //   3. COLD + STEADY — ONE cold fire before the steady-state window. The first-ever fire in a virgin
 //      HOME emits once-per-machine offers, but it is still a real user wait: it must finish inside
-//      the hook's declared timeout and a timeout hard-fails the gate. The following samples measure
-//      the common steady state without allowing a failed cold start to disappear into a percentile.
+//      both absoluteFailMs and the hook's declared timeout. The following samples measure the common
+//      steady state without allowing a failed cold start to disappear into a percentile.
 //   4. SEQUENTIAL — never concurrent. Concurrency would measure the runner's core count.
 //
 // THE THRESHOLDS ARE NOT HARDCODED HERE. They live in kb/card-lane-budget.json under `sessionStart`,
@@ -166,6 +166,9 @@ export async function runSessionStartGate(opts = {}) {
   const reasons = [];
   if (warmupTimedOut) {
     reasons.push(`COLD-START FAIL — the first SessionStart fire exceeded its declared ${timeoutSec}s timeout (${warmupMs.toFixed(0)}ms); first-run latency is user-felt and may not be hidden as an untimed warm-up`);
+  }
+  if (warmupMs > budget.absoluteFailMs) {
+    reasons.push(`COLD-START ABSOLUTE FAIL — the first SessionStart fire took ${warmupMs.toFixed(0)}ms > absoluteFailMs=${budget.absoluteFailMs}ms, even though the command timeout is ${timeoutSec}s; first-run latency may not bypass the absolute limit as an untimed warm-up`);
   }
   if (p95 > budget.absoluteFailMs || max > budget.absoluteFailMs) {
     reasons.push(`ABSOLUTE FAIL — the hook has no margin left inside its own declared ${timeoutSec}s timeout: max=${max.toFixed(0)}ms p95=${p95.toFixed(0)}ms > absoluteFailMs=${budget.absoluteFailMs}ms (= TIMEOUT_MARGIN 0.8 x ${timeoutSec}s, the same wall scripts/selfcheck.mjs already enforces on a stranger's machine)`);

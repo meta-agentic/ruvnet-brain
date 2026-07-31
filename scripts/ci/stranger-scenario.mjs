@@ -132,6 +132,10 @@ function runInstaller(args, extraEnv = {}) {
       HOME: HOME_DIR,
       USERPROFILE: HOME_DIR,
       RUVNET_BRAIN_TEST: '1',
+      // Preserve stage timing in the exact stranger path. The Windows cold-start miss that
+      // escaped PR #70 was visible only as one aggregate 4597ms number; future failures must
+      // identify the slow lifecycle stage in the same CI receipt.
+      RUVNET_SESSION_TRACE: '1',
       ...extraEnv,
     },
     input: '',

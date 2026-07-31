@@ -67,10 +67,11 @@ describe('build-bundle.mjs — private-store fence (fail-closed)', () => {
     expect(r.stderr).toMatch(/FATAL.*private-store fence missing/i);
   });
 
-  it('proceeds with an empty fence ONLY when ALLOW_NO_PRIVATE_FENCE=1 is explicit', () => {
+  it('accepts an empty fence ONLY when ALLOW_NO_PRIVATE_FENCE=1 is explicit, then applies the independent RVF gate', () => {
     const r = runBuildBundle({ ALLOW_NO_PRIVATE_FENCE: '1' });
-    expect(r.code).toBe(0);
+    expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/ALLOW_NO_PRIVATE_FENCE=1.*proceeding with NO fence/i);
+    expect(r.stderr).toMatch(/FATAL.*zero public RVF/i);
   });
 
   it('FATALs (exit 1) when PRIVATE-STORES.json is present but corrupt JSON', () => {
@@ -100,5 +101,30 @@ describe('build-bundle.mjs — private-store fence (fail-closed)', () => {
     expect(names).toContain('public-repo');
     const readme = fs.readFileSync(path.join(tmp, 'dist/ruvnet-brain/README.md'), 'utf8');
     expect(readme).not.toMatch(/cognitum-seed/i);
+  });
+});
+
+describe('build-bundle.mjs — publishable artifact gate (fail-closed)', () => {
+  it('FATALs when discovery yields zero public RVFs, including a private-only KB', () => {
+    fs.writeFileSync(path.join(tmp, 'kb/PRIVATE-STORES.json'), JSON.stringify({ privateStores: ['private-repo'] }));
+    fs.writeFileSync(path.join(tmp, 'kb/private-repo.big.rvf'), '');
+
+    const r = runBuildBundle();
+
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/FATAL.*zero public RVF/i);
+    expect(fs.existsSync(path.join(tmp, 'dist/ruvnet-brain.zip'))).toBe(false);
+  });
+
+  it('FATALs instead of publishing a ZIP when any required bundle file is missing', () => {
+    fs.writeFileSync(path.join(tmp, 'kb/PRIVATE-STORES.json'), JSON.stringify({ privateStores: [] }));
+    fs.writeFileSync(path.join(tmp, 'kb/public-repo.big.rvf'), '');
+
+    const r = runBuildBundle();
+
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/FATAL.*missing required bundle files/i);
+    expect(r.stderr).toContain('public-repo.big.rvf.idmap.json');
+    expect(fs.existsSync(path.join(tmp, 'dist/ruvnet-brain.zip'))).toBe(false);
   });
 });

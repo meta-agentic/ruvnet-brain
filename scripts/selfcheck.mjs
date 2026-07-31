@@ -424,7 +424,13 @@ export function assertContract({ rec, measurement, mode, timeoutSec }) {
   if (measurement.timedOut) {
     v.push({ kind: 'hang', where, regime: measurement.regime, detail: `${tag} did not exit within its declared timeout of ${timeoutSec}s — the watchdog had to kill the process group` });
   } else if (measurement.elapsedMs > budgetMs * TIMEOUT_MARGIN) {
-    v.push({ kind: 'slow', where, regime: measurement.regime, detail: `${tag} took ${measurement.elapsedMs}ms — over ${Math.round(TIMEOUT_MARGIN * 100)}% of its ${timeoutSec}s timeout (no margin left)` });
+    const stageTrace = String(measurement.stderr || '')
+      .split('\n')
+      .filter((line) => line.includes('SESSION_TRACE'))
+      .map((line) => line.trim())
+      .join(' | ');
+    const traceDetail = stageTrace ? `; stage trace: ${stageTrace}` : '';
+    v.push({ kind: 'slow', where, regime: measurement.regime, detail: `${tag} took ${measurement.elapsedMs}ms — over ${Math.round(TIMEOUT_MARGIN * 100)}% of its ${timeoutSec}s timeout (no margin left)${traceDetail}` });
   }
 
   // 2. EXIT CODE within the declared contract for this mode.

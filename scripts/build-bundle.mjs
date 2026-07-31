@@ -141,10 +141,17 @@ function cpDir(srcDir, destDir, skipNames) {
 }
 
 // ---- assemble ----------------------------------------------------------------------------------
+const ZIP = path.join(path.dirname(OUT), `${path.basename(OUT)}.zip`);
 fs.rmSync(OUT, { recursive: true, force: true });
+// A failed rebuild must not leave an older archive looking like this invocation's output.
+fs.rmSync(ZIP, { force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
 const built = discoverBuilt();
+if (built.length === 0) {
+  console.error('[build-bundle] FATAL: zero public RVF stores are eligible for release. Refusing to publish an empty brain bundle.');
+  process.exit(1);
+}
 const rvfIndexAudit = await auditRvfIndexes(
   built.map((name) => path.join(KB, `${name}.big.rvf`)),
 );
@@ -446,12 +453,17 @@ node forge-ask.mjs --dir . --name ruvector --variant big --q "what is the RVF co
 - See \`manifest.json\` for per-repo chunk counts, variants, grades, and pinned source SHAs.
 `);
 
+if (missing.length) {
+  const requiredMissing = [...new Set(missing)];
+  console.error(`[build-bundle] FATAL: missing required bundle files:\n  ${requiredMissing.join('\n  ')}`);
+  process.exit(1);
+}
+
 // ---- exact release artifact -------------------------------------------------------------------
 // The release signer signs dist/ruvnet-brain.zip, not this assembly directory. Rebuilding only the
 // directory can therefore sign stale bytes left by an older run—the source tree is green while
 // users receive an old brain. Build the exact ZIP here, then extract it through the same safe
 // extractor users run and audit the RVF indexes in those extracted bytes before signing is allowed.
-const ZIP = path.join(path.dirname(OUT), `${path.basename(OUT)}.zip`);
 const archiveFiles = [];
 function collectArchiveFiles(dir, prefix = '') {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -462,7 +474,6 @@ function collectArchiveFiles(dir, prefix = '') {
 }
 collectArchiveFiles(OUT);
 archiveFiles.sort();
-fs.rmSync(ZIP, { force: true });
 const zipped = process.platform === 'win32'
   ? spawnSync('powershell.exe', [
     '-NoProfile',
